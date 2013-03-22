@@ -1,0 +1,943 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc strict="yes" ?>
+
+<rfc category="std" ipr="trust200811" docName="draft-stewart-tsvwg-sctpstrrst-01.txt">
+<front>
+<title abbrev="SCTP Stream Reconfiguration">
+Stream Control Transmission Protocol (SCTP) Stream Reconfiguration
+</title>
+
+<!-- ************** RANDALL STEWART ***************-->
+<author initials="R. R." surname="Stewart" fullname="Randall R. Stewart">
+<organization>Researcher</organization>
+<address>
+    <postal>
+        <street></street>
+        <street></street>
+        <city>Chapin</city> <region>SC</region>
+        <code>29036</code>
+        <country>USA</country>
+    </postal>
+    <phone></phone>
+    <email>randall@lakerest.net</email>
+</address>
+</author>
+<!-- ************** PETER LEI ***************-->
+<author initials="P." surname="Lei" fullname="Peter Lei">
+<organization>Cisco Systems, Inc.</organization>
+<address>
+    <postal>
+        <street>8735 West Higgins Road</street>
+        <street>Suite 300</street>
+        <city>Chicago</city> <region>IL</region>
+        <code>60631</code>
+        <country>USA</country>
+    </postal>
+    <phone></phone>
+    <email>peterlei@cisco.com</email>
+</address>
+</author>
+<!-- ************** MICHAEL TUEXEN *************** -->
+<author initials="M." surname="Tuexen" fullname="Michael Tuexen">
+<organization>Muenster Univ. of Applied Sciences</organization>
+<address>
+    <postal>
+        <street>Stegerwaldstr. 39</street>
+        <city>48565 Steinfurt</city>
+        <country>Germany</country>
+    </postal>
+    <email>tuexen@fh-muenster.de</email>
+</address>
+</author>
+
+
+<date year="2009" />
+<keyword>Internet-Draft</keyword>
+
+<abstract>
+<t>
+Many applications that desire to use SCTP  
+have requested the ability to "reset" a stream.
+The intention of resetting a stream is to start the numbering sequence
+of the stream back at 'zero' with a corresponding notification to 
+the upper layer that this act as been performed. The applications 
+that have requested this feature normally desire it so that they 
+can "re-use" streams for different purposes but still utilize 
+the stream sequence number for the application to track the 
+message flows. Thus, without this feature, a new use on an old stream 
+would result in message numbers larger than expected without a 
+protocol mechanism to "start the streams back at zero".
+This documents presents also a method for resetting the transport
+sequence numbers and all stream sequence numbers.
+</t>
+</abstract>
+</front>
+
+<middle>
+<section title="Introduction">
+<t>
+Many applications that desire to use <xref target="RFC4960"/>  
+have requested the ability to "reset" a stream.
+The intention of resetting a stream is to start the numbering sequence
+of the stream back at 'zero' with a corresponding notification to 
+the upper layer that this act as been performed. The applications 
+that have requested this feature normally desire it so that they 
+can "re-use" streams for different purposes but still utilize 
+the stream sequence number for the application to track the 
+message flows. Thus, without this feature, a new use of an old stream 
+would result in message numbers larger than expected without a 
+protocol mechanism to "start the streams back at zero".
+This documents presents also a method for resetting the transport
+sequence numbers and all stream sequence numbers.
+</t>
+<t>
+[ Editors note: We probably need to add more text here ]
+</t>
+</section>
+
+<section title="Conventions">
+<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+document are to be interpreted as described in
+<xref target="RFC2119"/>.</t>
+</section>
+
+<!-- LEVEL 1 -->
+<section title="Data Formats">
+<t>
+This section examines all new data formats defined by
+this document. All transported integer numbers are in "network byte
+order" a.k.a., Big Endian, unless otherwise noted.
+</t>
+
+<!-- LEVEL 2 -->
+<section title="STREAM RESET Chunk">
+
+<t>This document adds one new chunk type to SCTP. The suggested
+value for this chunk is 0x82 hex or 130 decimal. The range 
+selected by IANA must have the upper bit (or ignore bit) set and the 
+next to highest bit (or the report bit) cleared. The chunk has
+the following format:</t>
+
+<figure>
+<artwork>
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Type = 0x82   |  Chunk Flags  |      Chunk Length             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                    Stream Reset Parameter                     |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                    Stream Reset Parameter (optional)          |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork>
+</figure>
+
+<t><list style="hanging">
+<t hangText="Chunk Type: 1 byte (unsigned integer)">
+<vspace blankLines="0"/>
+This field holds the IANA defined chunk type for the STREAM RESET
+chunk.</t>
+
+<t hangText="Chunk Flags: 1 byte (unsigned integer)">
+<vspace blankLines="0"/>
+This field is set to 0 by the sender and ignored by the receiver.</t>
+
+<t hangText="Chunk Length: 2 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field holds the length of the chunk, including the Chunk Type, 
+Chunk Flags and Chunk Length.</t>
+
+<t hangText="Stream Reset Parameter">
+<vspace blankLines="0"/>
+This field holds a Stream Reset Request Parameter or a 
+Stream Reset Response Parameter.</t>
+
+</list></t>
+
+<t>Note each STREAM RESET chunk holds at least one parameter and at most
+two parameters.
+Only the following combinations are allowed:
+<list style='numbers'>
+<t>Outgoing SSN Reset Request Parameter.</t>
+<t>Incoming SSN Reset Request Parameter.</t>
+<t>Outgoing SSN Reset Request Parameter, Incoming SSN Reset Request Parameter.</t>
+<t>SSN/TSN Reset Request Parameter.</t>
+<t>Stream Reset Response Parameter.</t>
+<t>Stream Reset Response Parameter, Outgoing SSN Reset Request Parameter.</t>
+<t>Stream Reset Response Parameter, Stream Reset Response Parameter.</t>
+</list></t>
+</section>
+<!-- END LEVEL 2 -->
+
+<!-- LEVEL 2 -->
+<section title="New Parameters">
+<t>
+This section identifies four new parameters, their formats, and
+in what chunk type these parameters may appear.
+</t>
+
+<!-- LEVEL 3 -->
+<section title="Outgoing SSN Reset Request Parameter">
+
+<t>This parameter is used by the sender to request some outgoing
+streams to be reset.</t>
+
+<figure>
+<artwork>
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |     Parameter Type = 0x000d   |      Parameter Length         |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |             Stream Reset Request Sequence Number              |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |             Stream Reset Response Sequence Number             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                Senders Last Assigned TSN                      |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |  Stream Number 1 (optional)   |    Stream Number 2 (optional) |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    /                            ......                             /
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |  Stream Number N-1 (optional) |    Stream Number N (optional) |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork>
+</figure>
+
+<t><list style="hanging">
+
+<t hangText="Parameter Type: 2 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field holds the IANA defined parameter type for Stream Reset Request
+Parameter. The suggested value of this field for IANA is 0x000d.</t>
+
+<t hangText="Parameter Length: 2 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field holds the length of the parameter.</t>
+
+<t hangText="Stream Reset Request Sequence Number: 4 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field is used to identify the request. It is a monotonically
+increasing number that is initialized to the same value as the
+Initial TSN number. It is increased by 1.</t>
+
+<t hangText="Stream Reset Response Sequence Number: 4 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+In case that this Outgoing SSN Reset Request Parameter is sent in response
+to an Incoming SSN Reset Request Parameter this parameter is also an implicit
+response to the incoming request. Then this field holds the
+Stream Reset Request Sequence Number of the incoming request. In the other
+case it holds the next expected Stream Reset Request Sequence Number - 1.</t>
+
+<t hangText="Senders last assigned TSN: 4 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This value holds the next TSN minus 1, in other words the last
+TSN that this sender assigned.</t>
+
+<t hangText="Stream Number N: 2 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This optional field, if included, is used to
+indicates specific streams that are to be reset. If no streams
+are listed, then ALL streams are to be reset.</t>
+</list></t>
+
+<t>This parameter can appear in a STREAM RESET chunk. This parameter
+MUST NOT appear in any other chunk type.</t>
+</section>
+
+<!-- END LEVEL 3 -->
+
+<!-- LEVEL 3 -->
+<section title="Incoming SSN Reset Request Parameter">
+
+<t>This parameter is used by the sender to request that the
+peer requests some of its outgoing streams to be reset.</t>
+
+<figure>
+<artwork>
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |     Parameter Type = 0x000e   |      Parameter Length         |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |            Stream Reset Request Sequence Number               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |  Stream Number 1 (optional)   |    Stream Number 2 (optional) |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    /                            ......                             /
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |  Stream Number N-1 (optional) |    Stream Number N (optional) |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork>
+</figure>
+
+<t><list style="hanging">
+
+<t hangText="Parameter Type: 2 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field holds the IANA defined parameter type for Stream Reset Request
+Parameter. The suggested value of this field for IANA is 0x000e.</t>
+
+<t hangText="Parameter Length: 2 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field holds the length of the parameter.</t>
+
+<t hangText="Stream Reset Request Sequence Number: 4 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field is used to identify the request. It is a monotonically
+increasing number that is initialized to the same value as the
+Initial TSN number. It is increased by 1.</t>
+
+<t hangText="Stream Number N: 2 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This optional field, if included, is used to
+indicate specific streams that are to be reset. If no streams
+are listed, then ALL streams are to be reset.</t>
+</list></t>
+
+<t>This parameter can appear in a STREAM RESET chunk. This parameter
+MUST NOT appear in any other chunk type.</t>
+</section>
+
+<!-- END LEVEL 3 -->
+
+<!-- LEVEL 3 -->
+<section title="SSN/TSN Reset Request Parameter">
+
+<t>This parameter is used by the sender to request to reset the
+TSN and SSN numbering of all streams.</t>
+<figure>
+<artwork>
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |     Parameter Type = 0x000f   |      Parameter Length         |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |           Stream Reset Request Sequence Number                |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork>
+</figure>
+
+<t><list style="hanging">
+
+<t hangText="Parameter Type: 2 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field holds the IANA defined parameter type for Stream Reset Request
+Parameter. The suggested value of this field for IANA is 0x000f.</t>
+
+<t hangText="Parameter Length: 2 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field holds the length of the parameter.</t>
+
+<t hangText="Stream Reset Request Sequence Number: 4 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field is used to identify the request. It is a monotonically
+increasing number that is initialized to the same value as the
+Initial TSN number. It is increased by 1.</t>
+
+</list>
+</t>
+
+<t>This parameter can appear in a STREAM RESET chunk. This parameter
+MUST NOT appear in any other chunk type.</t>
+</section>
+
+<!-- END LEVEL 3 -->
+
+<!-- LEVEL 3 -->
+<section title="Stream Reset Response Parameter">
+
+<t>This parameter is used by the receiver of a stream reset request
+parameter to respond to the stream reset request.</t>
+
+<figure>
+<artwork>
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |     Parameter Type = 0x0010   |      Parameter Length         |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |           Stream Reset Response Sequence Number               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                            Result                             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                   Sender's next TSN (optional)                |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                 Receiver's next TSN   (optional)              |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork>
+</figure>
+
+<t><list style="hanging">
+
+<t hangText="Parameter Type: 2 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field holds the IANA defined parameter type for Stream Reset Response
+Parameter. The suggested value of this field for IANA is 0x0010.</t>
+
+<t hangText="Parameter Type Length: 2 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field holds the length of the parameter.</t>
+
+<t hangText="Stream Reset Response Sequence Number: 4 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This value is copied from the request parameter and is used by the receiver of
+the Stream Reset Response Parameter to tie the response to the request.</t>
+
+<t hangText="Result: 4 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This value describes the result of the processing of the request.
+It is encoded as given by the following table</t>
+</list></t>
+<texttable anchor="resulttable">
+<ttcol align='left'>Result</ttcol>
+<ttcol align='left'>Description</ttcol>
+<c>0</c>          <c>Nothing to do</c>
+<c>1</c>          <c>Performed</c>
+<c>2</c>          <c>Denied</c>
+<c>3</c>          <c>Error - Wrong SSN</c>
+<c>4</c>          <c>Error - Request already in progress</c>
+<c>5</c>          <c>Error - Bad Sequence Number</c>
+</texttable>
+
+<t><list style="hanging">
+<t hangText="Sender's next TSN: 4 bytes (unsigned integer)">
+This field holds the TSN the sender of the Response will use to
+send the next DATA chunk. The field is only applicable in responses
+to SSN/TSN reset requests.</t>
+
+<t hangText="Receiver's next TSN: 4 bytes (unsigned integer)">
+This field holds the TSN the receiver of the response must use to
+send the next DATA chunk. The field is only applicable in responses
+to SSN/TSN reset requests.</t>
+
+</list></t>
+
+<t>This parameter can appear in a STREAM RESET chunk. This parameter
+MUST NOT appear in any other chunk type.</t>
+
+</section>
+
+<!-- END LEVEL 3 -->
+
+
+<!-- LEVEL 3 -->
+<section title="Add Streams">
+
+<t>
+This parameter is used by the sender to request that the peer
+add the requested number of streams to the association.
+</t>
+<figure>
+<artwork>
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |     Parameter Type = 0x0011   |      Parameter Length=12      |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |            Stream Reset Request Sequence Number               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |      Number of new streams    |         Reserved              |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork>
+</figure>
+
+<t><list style="hanging">
+
+<t hangText="Parameter Type: 2 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field holds the IANA defined parameter type for the Add Streams
+Parameter. The suggested value of this field for IANA is 0x0011.</t>
+
+<t hangText="Parameter Length: 2 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field holds the length of the parameter, a fixed value of 12 MUST be
+found in this field.
+</t>
+
+<t hangText="Stream Reset Request Sequence Number: 4 bytes (unsigned integer)">
+<vspace blankLines="0"/>
+This field is used to identify the request. It is a monotonically
+increasing number that is initialized to the same value as the
+Initial TSN number. It is increased by 1.
+</t>
+<t hangText="Number of new streams: 2 bytes (unsigned integer)">
+This value holds the number of additional streams the sender
+would like added to the association. Streams are added in
+order and are consecutive, e.g. if an association has four
+streams (0-3) and a requested is made to add 3 streams then
+the new streams will be 4, 5 and 6.
+</t>
+
+<t hangText="Reserved: 2 bytes (unsigned integer)">
+This field is reserved. It SHOULD be set to 0 by the sender
+and ignored by the receiver.
+</t>
+</list>
+</t>
+
+<t>This parameter can appear in a STREAM RESET chunk. This parameter
+MUST NOT appear in any other chunk type.</t>
+</section>
+
+<!-- END LEVEL 3 -->
+
+
+
+
+</section>
+<!-- END LEVEL 2 -->
+</section>
+<!-- END LEVEL 1 -->
+
+<!-- LEVEL 1 -->
+<section title="Procedures">
+
+<t>This section defines the procedures used by both the sender and
+receiver of a stream reset. We also give various example stream reset
+scenarios.</t>
+
+<!-- LEVEL 2 -->
+<section title="Sender side procedures">
+
+<t>This section describes the procedures related to the sending of
+Stream Reset Chunks. A Stream Reset Chunk is a composition of
+a Type Length Value (TLV) parameters.</t>
+
+<section anchor="strrstchunksendproc"
+         title="Sender side procedures for the Stream Reset Chunk">
+
+<t>Note that before sending a Stream Reset Chunk the sender MUST
+ensure that the peer advertised support for the stream reset
+extension. The indication for support of the extensions MUST
+be determined using the Supported Extensions Parameter in either
+the INIT or INIT-ACK. This parameter is defined in 
+<xref target="RFC5061"/>. 
+If the chunk value '0x82' does NOT appear in
+the supported extensions list of chunks, then the sender MUST
+NOT send any stream reset request to the peer and any request
+by the application for such service SHOULD be responded
+to with an appropriate error indicating the peer SCTP stack
+does not support the stream reset extension. 
+</t>
+
+<t>After packaging the Stream Reset Chunk and sending it to the peer
+the sender MUST  start a 'Stream Reset Timer' when the STREAM RESET chunk
+contains at least one request parameter. If it contains no request parameter,
+the Stream Reset Timer MUST NOT be started. This timer MUST use the same
+value as SCTP's Data transmission timer (i.e. the RTO timer)
+and MUST use exponential backoff doubling the value at every expiration.
+If the timer does expire, besides doubling the value, the sender MUST
+retransmit the Stream Reset Chunk, increment the appropriate
+error counts (both for the association and the destination), and do
+threshold management possibly destroying the association if SCTP
+retransmission thresholds are surpassed.</t>
+
+</section>
+
+<!-- LEVEL 3 -->
+<section anchor="ostrrstreq" 
+         title="Sender side procedures for the Outgoing SSN Reset Request Parameter">
+
+<t>When an SCTP sender wants to reset the SSNs of some or all outgoing streams
+it can send an Outgoing SSN Reset Request Parameter if the Stream Reset
+Timer is not running.
+The following steps MUST be followed:
+<list style='format A%d:'>
+<t>The sender MUST stop assigning new SSNs to new user data provided by the
+upper layer. This is because it is unknown as to if the receiver of the
+request will accept or deny it and more so, a lost request might cause an
+out-of-sequence error in a stream that the receiver is not yet prepared to
+handle.</t>
+<t>The sender MUST assign the next stream reset request sequence number and
+put it into the Stream Reset Request Sequence Number field of the
+Outgoing SSN Reset Request Parameter. After assigning it the next stream reset
+request sequence number MUST be incremented by '1'.</t>
+<t>If this Outgoing SSN Reset Request Parameter is sent in response
+to an Incoming SSN Request Parameter the Stream Reset Request Sequence Number
+of the Incoming SSN Request Parameter is copied into the Stream Reset Response
+Sequence Number field of the Outgoing SSN Reset Request Parameter.
+If the Outgoing SSN Reset Request Parameter is sent on request of the upper
+layer the Stream Reset Response Sequence Number is the next expected Stream
+Reset Request Sequence Number of the peer - 3.</t>
+<t>The sender fills in the TSN it has assigned last.</t>
+<t>If this Outgoing SSN Reset Request Parameter is sent in response to an
+Incoming SSN Request Parameter the Stream Numbers are copied from the
+Incoming SSN Request Parameter to the Outgoing SSN Reset Request Parameter.
+If this Outgoing SSN Reset Request Parameter is sent on request of the
+upper layer and the sender wants all outgoing streams to be reset no Stream Numbers
+MUST be put into the Outgoing SSN Reset Request Parameter. If the sender
+wants only some outgoing streams to be reset these Stream Numbers MUST be
+filled in the Outgoing SSN Reset Request Parameter.</t>
+<t>The Outgoing SSN Reset Request Parameter is put into a STREAM RESET Chunk.
+It MAY be put together with an Incoming SSN Reset Request Parameter or
+an Stream Reset Response Parameter and MUST NOT be put together with any
+other parameter.</t>
+<t>The STREAM RESET Chunk is sent following the rules given in
+<xref target='strrstchunksendproc' /></t>
+</list></t>
+
+</section>
+<!--  END LEVEL 3 -->
+
+<section anchor="issnrstproc" 
+         title="Sender side procedures for the Incoming SSN Reset Request Parameter">
+<t>When an SCTP sender wants to reset the SSNs of some or all incoming streams
+it can send an Incoming SSN Reset Request Parameter if the Stream Reset
+Timer is not running.
+The following steps MUST be followed:
+<list style='format B%d:'>
+<t>The sender MUST assign the next stream reset request sequence number and
+put it into the Stream Reset Request Sequence Number field of the
+Incoming SSN Reset Request Parameter. After assigning it the next stream reset
+request sequence number MUST be incremented by '1'.</t>
+<t>If the sender wants all incoming streams to be reset no Stream Numbers
+MUST be put into the Incoming SSN Reset Request Parameter. If the sender
+wants only some incoming streams to be reset these Stream Numbers MUST be
+filled in the Incoming SSN Reset Request Parameter.</t>
+<t>The Incoming SSN Reset Request Parameter is put into a STREAM RESET Chunk.
+It MAY be put together with an Outgoing SSN Reset Request Parameter and MUST
+NOT be put together with any other parameter.</t>
+<t>The STREAM RESET Chunk is sent following the rules given in
+<xref target='strrstchunksendproc' /></t>
+</list></t>
+</section>
+
+<section anchor="tsnrstproc" 
+         title="Sender side procedures for the SSN/TSN Reset Request Parameter">
+
+<t>When an SCTP sender wants to reset the SSNs and TSNs it can send a
+SSN/TSN Reset Request Parameter if the Stream Reset Timer is not running.
+The following steps MUST be followed:
+<list style='format C%d:'>
+<t>The sender MUST assign the next stream reset request sequence number and
+put it into the Stream Reset Request Sequence Number field of the
+SSN/TSN Reset Request Parameter. After assigning it the next stream reset
+request sequence number MUST be incremented by '1'.</t>
+<t>The sender MUST queue any user data.</t>
+<t>The SSN/TSN Reset Request Parameter is put into a STREAM RESET Chunk. There
+MUST NOT be any other parameter in this chunk.</t>
+<t>The STREAM RESET Chunk is sent following the rules given in
+<xref target='strrstchunksendproc' /></t>
+</list></t>
+</section>
+
+<!-- LEVEL 3 -->
+<section anchor="strrstresp" title="Sender side procedures for the Stream Reset Response Parameter">
+
+<t>When an implementation receives a request parameter it MUST respond with 
+a Stream Reset Response Parameter in the following manner:
+
+<list style="format D%d">
+<t>The Stream Reset Request Sequence number of the incoming request is copied
+to the Stream Reset Response Sequence Number field of the Stream Reset
+Response Parameter.</t>
+<t>The result of the processing of the incoming request is filled in the Result
+field of the Stream Reset Response Parameter</t>
+<t>If the incoming request is a SSN/TSN reset requests, the Sender's next TSN
+field is filled with the next TSN the sender of this Stream Reset Response Parameter
+will assign. For other requests the Sender's next TSN field is not filled.</t>
+<t>If the incoming request is a SSN/TSN reset request, the Receiver's next TSN
+field is filled with a TSN such that the sender of the Stream Reset
+Response Parameter can be sure it can discard received DATA chunks with smaller
+TSNs. A good value for this is the highest TSN it has seen plus some delta.
+For other requests the Sender's next TSN field is not filled.</t>
+</list></t>
+</section>
+
+<!-- LEVEL 3 -->
+<section anchor="stradd" title="Sender side procedures for addition of streams">
+<t>
+When an SCTP sender wants to increase the number of outbound streams it is
+able to send to, it may add a Add Streams parameter to the STREAM RESET
+chunk. Upon sending the request the sender MUST await a positive acknowledgment
+(Success) before using any additional stream added by this request. Note that
+new streams are added adjacent to the previous steams with no gaps. This means
+that if a request is made to add 2 streams to an association that has
+already 5 (0-4) then the new streams, upon successful completion, are streams 5 and
+6. Any new stream MUST number its first message to be stream sequence 0.
+</t>
+</section>
+
+<!--  END LEVEL 3 -->
+</section>
+<!--  END LEVEL 2 -->
+
+<!-- LEVEL 2 -->
+<section title="Receiver side procedures">
+
+<section title="Receiver side procedures for the Stream Reset Chunk">
+<t>Upon reception of a Stream Reset Chunk each parameter within
+it should be processed. If some parameters have to be sent back, they
+MUST all be put into one STREAM RESET chunk. If the received STREAM RESET
+chunk contains at least one request parameter, a SACK chunk MUST be sent
+back and MAY be bundled with the STREAM RESET chunk.
+If the received STREAM RESET chunk contains at least one request and
+based on the analysis of the Stream Reset Request Sequence Numbers this
+is the last received STREAM RESET chunk, the same STREAM RESET chunk
+has to be sent back in response as earlier.</t>
+</section>
+
+<!-- LEVEL 3 -->
+<section title="Receiver side procedures for the Outgoing SSN Reset Request Parameter">
+
+<t>The decision to deny a stream reset request is an administrative 
+decision and may be user configurable even after the association
+has formed. If for whatever reason the endpoint does NOT wish to reset
+any streams it MUST send a stream reset response as described 
+in <xref target="strrstresp"/> with an appropriate Result field.</t>
+
+<t>In the case that the endpoint is willing to perform a stream reset
+the following steps SHOULD be followed:
+<list style="format E%d">
+<t>
+If the Senders Last Assigned TSN number is greater than
+the cumulative acknowledgment point, then the endpoint must enter "deferred
+reset processing". In this mode, any data arriving with a TSN number larger
+than the 'senders last assigned TSN' for the effected stream(s) MUST be 
+queued locally and held until the Cumulative Acknowledgment point reaches 
+the 'senders last assigned TSN number'. When the Cumulative Acknowledgment point
+reaches the last assigned TSN number then proceed to the next step.
+Note that the receiver of a stream reset that causes it to entered
+deferred reset processing does NOT withhold the stream reset acknowledgment
+from the peer. This also means that the receiver will need to queue
+up any additional stream reset requests received including the one that
+caused the receiver to enter deferred reset processing.
+</t>
+<t>
+If the Stream Reset Timer is running for the Stream Reset Request Sequence
+Number indicated in the Stream Reset Response Sequence Number field, mark
+the Stream Reset Request Sequence Number as acknowledged. 
+If all Stream Reset Request Sequence Numbers the Stream Reset Timer is running
+for are acknowledged, stop the Stream Reset Timer.
+</t>
+<t> If no Stream Numbers are listed in the parameter,
+then all incoming streams MUST be reset to '0' as the next expected stream
+sequence number. If specific Stream Numbers are listed, then only these
+specific streams MUST be reset to '0' and all other non-listed stream
+sequence numbers remain unchanged.</t>
+<t>Optionally an Upper Layer Notification SHOULD be
+sent to inform the local endpoint that the inbound streams have been reset.</t>
+<t>Any queued TSN's (queued at step D3) should now be released
+and processed normally.</t>
+<t>A Stream Reset Response Parameter is put into a STREAM RESET chunk indicating
+successful processing.</t>
+<t>The STREAM RESET chunk is sent after the incoming STREAM RESET chunk is
+processed completely.</t>
+</list></t>
+</section>
+
+
+<!-- END LEVEL 3 -->
+<section title="Receiver side procedures for the Incoming SSN Reset Request Parameter">
+<t>The decision to deny a stream reset request is an administrative 
+decision and may be user configurable even after the association
+has formed. If for whatever reason the endpoint does NOT wish to reset
+any streams it MUST send a stream reset response as described 
+in <xref target="strrstresp"/> with an appropriate Result field.</t>
+
+<t>In the case that the endpoint is willing to perform a stream reset
+the following steps SHOULD be followed:
+<list style="format F%d">
+<t>An Outgoing Stream Reset Request Parameter MUST be put into an STREAM RESET
+chunk according to <xref target="ostrrstreq"/>.</t>
+<t>The STREAM RESET chunk is sent after the incoming STREAM RESET chunk is
+processed completely.</t>
+</list></t>
+</section>
+
+<section title="Receiver side procedures for the SSN/TSN Reset Request Parameter">
+<t>The decision to deny a stream reset request is an administrative 
+decision and may be user configurable even after the association
+has formed. If for whatever reason the endpoint does NOT wish to reset
+any streams it MUST send a stream reset response as described 
+in <xref target="strrstresp"/> with an appropriate Result field.</t>
+
+<t>In the case that the endpoint is willing to perform a SSN/TSN reset
+the following steps SHOULD be followed:
+<list style="format G%d">
+<t>Compute an appropriate value for the Receiver's next TSN, the TSN the peer
+should use to send the next DATA chunk. Note that an appropriate value
+should be larger than the highest TSN last received plus a delta of at
+least 500 additional TSN's.
+</t>
+<t>
+Compute an appropriate value for the local endpoints next TSN, i.e.
+the receiver of the SSN/TSN reset chunks next TSN to be assigned. Note that
+an appropriate value should be larger than the endpoints current next
+TSN to send by at least one TSN.
+</t>
+<t>Do the same processing as if a SACK chunk with no gap report and a
+cumulative TSN ACK of Sender's next TSN - 1 was received.</t>
+<t>Do the same processing as if an FWD-TSN chunk with all streams affected and a
+new cumulative TSN ACK of Receiver's next TSN - 1 was received.</t>
+<t>All incoming and outgoing streams MUST be reset to '0' as the next expected
+and outgoing stream sequence numbers, respectively.</t>
+<t>A Stream Reset Response Parameter is put into a STREAM RESET chunk indicating
+successful processing.</t>
+<t>The STREAM RESET chunk is sent after the incoming STREAM RESET chunk is
+processed completely.</t>
+</list></t>
+</section>
+<!-- LEVEL 3 -->
+<section anchor="rcvstradd" title="Receiver side procedures for addition of streams">
+<t>
+When an SCTP endpoint receives a stream reset request adding additional streams, it
+MUST send a response parameter either acknowledging or rejecting the request. If
+the response is successful the receiver MUST add the requested number of 
+inbound streams to the association, initializing the next expected 
+stream sequence number to be 0.
+</t>
+</section>
+
+<!-- LEVEL 3 -->
+
+<section title="Receiver side procedures for the Stream Reset Response Parameter">
+
+<t>On receipt of a Stream Reset Response Parameter the following MUST be
+performed:
+<list style="format H%d">
+
+<t>If the Stream Reset Timer is running for the Stream Reset Request Sequence
+Number indicated in the Stream Reset Response Sequence Number field, mark
+the Stream Reset Request Sequence Number as acknowledged. 
+If all Stream Reset Request Sequence Numbers the Stream Reset Timer is running
+for are acknowledged, stop the Stream Reset Timer.
+If the timer was not running for the Stream Reset Request Sequence
+Number, the processing of the Stream Reset Response Parameter is complete.</t>
+
+<t>If the Result field does not indicate successful processing
+an Upper Layer Notification SHOULD be sent to inform the
+local endpoint of the failure to reset its outbound streams.
+Afterwards processing of this response is complete.</t>
+
+<t>If the request was an Outgoing Stream Reset Request the affected streams
+should now be reset and all queued data should be processed now and assigning
+of stream sequence numbers is allowed again. Optionally an
+Upper Layer Notification SHOULD be sent to inform the local endpoint that the
+outbound streams have been reset.</t>
+
+<t>If the request was a SSN/TSN Reset Request new DATA should be sent from
+Receiver's next TSN and beginning with stream sequence number '0' for all
+outgoing streams. All incoming streams are also reset to '0' as the next
+expected stream sequence number. The peer will
+send DATA chunks starting with Sender's next TSN.</t>
+</list></t>
+</section>
+<!--  END LEVEL 3 -->
+
+</section>
+
+<!-- LEVEL 2 -->
+<section title="Various Examples of the Stream Reset procedures">
+<t>
+The following example illustrates an Endpoint A resetting all
+streams in both directions. 
+</t>
+<t>
+<figure>
+<artwork>
+
+
+E-A                                                       E-Z
+----------[STR_RESET(IN-REQ:X|OUT-REQ:X+1,Y-3)]-------&gt;
+&lt;-[STR_RESET(RESP:Y|OUT-REQ:Y+1,X+1))]---------
+-------[STR_RESET(RESP:Y)]-----------------&gt;
+
+</artwork>
+</figure>
+</t>
+<t>
+The following example illustrates an Endpoint A resetting
+stream 1 and 2 for just its outgoing streams.
+</t>
+<t>
+<figure>
+<artwork>
+
+
+E-A                                                       E-Z
+-------[STR_RESET(OUT-REQ:X/1,2]------------------&gt;
+&lt;---[STR_RESET(RESP:X/1,2)]------------
+
+</artwork>
+</figure>
+</t>
+
+<t>
+The following example illustrates an Endpoint A resetting
+stream 1 and 2 for just its incoming streams. 
+</t>
+<t>
+<figure>
+<artwork>
+
+E-A                                               E-Z
+------[STR_RESET(IN-REQ:X/1,2]-----------&gt;
+&lt;---[STR_RESET(RESP:X/1,2]-------
+
+</artwork>
+</figure>
+</t>
+<t>
+The following example illustrates an Endpoint A requesting
+the streams and TSN's be reset. At the completion E-A has
+the new sending TSN (selected by the peer) of B and E-Z has
+the new sending TSN of A (also selected by the peer).
+</t>
+<t>
+<figure>
+<artwork>
+E-A                                               E-Z
+------[STR_RESET(TSN-REQ:X]-----------&gt;
+&lt;---[STR_RESET(RESP:X/S-TSN=A, R-TSN=B]-------
+
+</artwork>
+</figure>
+</t>
+</section>
+<!--  END LEVEL 2 -->
+</section>
+<!-- END LEVEL 1 -->
+<section title="Security Considerations">
+<t>
+Having the ability to reset a stream should not pose
+any additional security risk to SCTP. An attacker that
+can successfully inject a stream reset would also be
+able to inject data or other malicious information into
+an association such as an ABORT.
+</t>
+</section>
+<section title="Iana Considerations">
+<t>
+This document defines one new chunk type and four
+new parameter types. This document recommends the
+values of 0x82 for the chunk type and 0x000d, 0x000e, 0x000f,
+0x0010 and 0x0011  for the new parameter types. However IANA
+may assign any free chunk or parameter type as long
+it is from the same chunk or parameter pool. In the
+case of the chunk, it MUST be from the pool of
+chunks with the upper two bits set to '10'. In the
+case of the parameters, it MUST be from the pool
+whose upper bits are set to '00'.
+</t>
+</section>
+<section anchor="acks" title="Acknowledgments">
+<t>The authors wish to thank
+Paul Aitken and Irene Ruengeler 
+for there invaluable comments.</t>
+</section>
+</middle>
+<back>
+<references title='Normative References'>
+<?rfc include="reference.RFC.2119" ?>
+<?rfc include="reference.RFC.4960" ?>
+<?rfc include="reference.RFC.5061" ?>
+</references>
+</back>
+</rfc>

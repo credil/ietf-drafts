@@ -1,0 +1,662 @@
+<?xml version="1.0" encoding="US-ASCII" ?>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+
+<?rfc compact="yes" ?>
+<?rfc subcompact="yes" ?>
+<?rfc toc="yes" ?>
+<?rfc tocindent="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc iprnotified="yes" ?>
+<?rfc autobreaks="no"?>
+<?rfc strict="yes" ?>
+
+<rfc category="std" docName="draft-otis-smtp-tbr-ext-00" ipr="full3978">
+  <front>
+    <title abbrev="SMTP-TBR">SMTP Transferred-By-Reference (TBR) Extension</title>
+    <author fullname="Douglas Otis" initials="D." surname="Otis">
+      <organization>Trend Micro, NSSG</organization>
+      <address>
+        <postal>
+          <street>10101 N. De Anza Blvd</street>
+          <city>Cupertino</city>
+          <region>CA</region>
+          <code>95014</code>
+          <country>USA</country>
+        </postal>
+        <phone>+1.408.257-1500</phone>
+        <email>doug_otis@trendmicro.com</email>
+      </address>
+    </author>
+
+    <author fullname="John Leslie" initials="J." surname="Leslie">
+      <organization>JLC.net</organization>
+      <address>
+        <postal>
+          <street>10 Souhegan Street</street>
+          <city>Milford</city>
+          <region>NH</region>
+          <code>03055</code>
+          <country>USA</country>
+        </postal>
+        <phone>+1.603.673.6132</phone>
+        <email>john@jlc.net</email>
+      </address>
+    </author>
+
+    <date month="September" year="2007"/>
+    <area>Internet Area</area>
+    <workgroup>SMTP</workgroup>
+    <keyword>TBR-EXT</keyword>
+    <keyword>Draft</keyword>
+
+    <abstract>
+      <t>This document describes an extension to SMTP that allows email to be exchanged as a storage
+        system immutable XAM (eXtensible Access Method) reference. When MTAs employ the TBR mode,
+        message origination can not be spoofed, and message acceptance is not asserted until
+        retrieval of the referenced message. This strategy ensures a minimal SMTP overhead,
+        increasing the responsibility of senders in order to limit the load of unwanted messages
+        upon receivers.</t>
+
+      <t>In addition, the TBR extension requires an [RFC2821] MAIL FROM address in the same domain
+        as the server from which the XAM will be fetched, so that a dependable status-reporting path
+        is assured.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>This document defines an extension to Simple Mail Transfer Protocol (SMTP) that permits
+        messages to be Transferred-By-Reference (TBR) using HTTP and eXtensible Access Method (XAM)
+        infrastructure.</t>
+
+      <t>The TBR command changes the responsibility for storing an email message in transit such
+        that a Message Transmission Agent (normally the Message Submission Agent) retains
+        responsibility for storing the message instead of handing off responsibility at each SMTP
+        step.</t>
+
+      <t>A Message Submission Agent (MSA) or subsequent MTA, upon initial receipt, stores messages
+        using XAM infrastructure and provides XAM access via HTTP or HTTPS. Conversion from TBR mode
+        is expected to be performed by Message Delivery Agents. This extension MAY be used in
+        conjunction with a command PIPELINING mechanism <xref target="RFC2920"/>.</t>
+
+      <t>Once published, the message can be fetched from a publicly accessible HTTP or HTTPS server
+        using the eXAM-URI reference. Within the eXAM-URI reference, two parameters indirectly
+        identify the originator and intended recipient. HTTP server logs permit identifying which
+        messages have been retrieved by their recipient. By using the intended recipient reference
+        parameters, publishing domains are able to identify messages which have not been delivered
+        without reliance on SMTP feedback.</t>
+
+      <t>Upon receiving a TBR eXAM-URI email reference, the receiving SMTP server MAY perform any
+        domain-reputation and/or IP-address-reputation checks called for by their policies. The TBR
+        mode allows reputation checks to be done on the actual originator of an email (rather than
+        merely the last-hop) before formal handoff, thus greatly simplifying and reducing the
+        computational/network load on the receiver.</t>
+
+      <t>The TBR mode eliminates any need to send "unknown recipient" notifications to dubious
+        sources, thwarting the "harvesting" of known-good email addresses.</t>
+
+      <t>Failure to receive a request to fetch the eXAM-URI should be logged by the TBR originator
+        after a suitable delay, and a notice of failure SHOULD be forwarded to the original sender.
+        Likewise, failure to complete fetching should be logged by the Message Delivery Agent, and a
+        notice of failure MAY be sent to the recipient if such an option is requested. The number
+        and timing of attempts to fetch the TBR eXAM-URI is a local option, but SHOULD follow an
+        exponential backoff algorithm if more than one attempt is made.</t>
+
+      <t>Since a high percentage of current email is unwanted, it is expected that only a minority
+        of TBR eXAM-URIs will actually be fetched. This is good in that it reduces network traffic.
+        Intentional failures to fetch behaves very much like graylisting, in that it may benefit the
+        sender to keep the message queued, but the sender gets no indication of why the fetching is
+        delayed.</t>
+
+      <t>TBR provides an alternative strategy that reduces the overhead in handling high levels of
+        undesired messages. The TBR option offers a safe and immediate means to exchange messages.
+        TBR messages can be processed for patterns of abuse prior to formally accepting the
+        obligation to deliver by fetching the message. A message not being retrieved might be due to
+        the source itself being considered abusive, or the recipient being invalid. When the content
+        of a message is found to be undesired after fetching, the address for a DSN will have been
+        assured. TBR protects the identify of valid recipients and eliminates any need for inbound
+        email services to maintain a list of valid recipients. This strategy enables TBR to restore
+        the integrity of email delivery.</t>
+    </section>
+
+    <section title="Conventions Used in this Document">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+        "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in
+          <xref target="RFC2119"/>.</t>
+
+      <t>The formal syntax uses the Augmented Backus-Naur Form (ABNF) <xref target="RFC4234"/>
+        notation including the core rules defined in Appendix B of RFC 4234.</t>
+    </section>
+
+    <section title="TBR SMTP Extension">
+      <t>This section defines the TBR SMTP Extension. </t>
+
+      <section title="SMTP TBR Extension Registration">
+        <t>
+          <list style="numbers">
+            <t>The name of this submission extension is "TBR". This extends regular SMTP <xref
+                target="RFC2821"/> server on port 25, and SHOULD NOT be advertised for Message
+              Submission protocol on port 587 per <xref target="RFC4409"/>.</t>
+
+            <t>The EHLO keyword value associated with the extension is "TBR".</t>
+
+            <t>An MTA which supports TBR will respond to EHLO with a TBR keyword. Clients MUST
+              ignore arguments after the TBR EHLO keyword, unless defined by a subsequent IETF
+              specification.</t>
+
+            <t>This extension adds the TBR SMTP verb. This verb is used as a replacement for the
+              DATA command and is only permitted during a mail transaction after at least one RCPT
+              TO which was not rejected.</t>
+          </list>
+        </t>
+      </section>
+
+      <section title="TBR Transaction">
+        <t>The TBR command supports transfer of http or https eXAM-URIs, instead of message content
+          using the DATA command.</t>
+
+        <t>A simple TBR transaction will consist of MAIL FROM, one or more RCPT TO commands, and a
+          TBR command terminating with the End-Mark tag. The TBR command takes the place of the DATA
+          command, and includes three, or four arguments:<list style="symbols">
+
+            <t>Forwarding Count (mandatory)<vspace/> Starting at zero, this count is expressed as a
+              decimal integer representing the number of times the TBR eXAM-URI has been transferred
+              by SMTP.</t>
+
+            <t>eXAM URI (mandatory)<vspace/> This is a URI pointing to a fully formed message ready
+              for injection into SMTP infrastructure.</t>
+
+            <t>Additional Trace Headers (optional)<vspace/> Each MTA after the one which first
+              encodes the eXAM-URI MAY include trace headers to be prepended when the eXAM URI is
+              retrieved; however there is no assurance that they will be passed on through the chain
+              of MTAs. Each MTA receiving these optional headers MAY log them instead of passing
+              them on. If present, trace header(s) will be preceded and followed by CRLF, and a line
+              containing only the End-Mark tag will follow the last trace header. Trace headers MUST
+              follow the format defined in <xref target="RFC2822"/>.</t>
+
+            <t>End-Mark tag (mandatory)<vspace/> The End-Mark tag is a line containing only the
+              character "." (period or full stop) followed by CRLF.</t>
+          </list></t>
+
+        <t>If PIPELINING <xref target="RFC2920"/> is advertised, the client MAY send the entire
+          transaction in one round trip. If no valid RCPT TO address is supplied, the TBR command
+          will simply fail. If at least one valid RCPT TO address is supplied, then the TBR eXAM-URI
+          argument will be accepted.</t>
+
+        <t>Trace Headers can call for large amounts of storage which serves no useful purpose in the
+          case where eXAM-URI retrieval will not be done. Thus, storage of Trace Headers included
+          within the TBR command is entirely optional (even on a message-by-message basis).</t>
+
+        <t>When Trace Headers are not saved for passing on to succeeding MTAs, storage requirements
+          per TBR command SHOULD be limited to the 512 bytes as specified by <xref target="RFC2821"
+          /> for SMTP commands. The TBR command includes the TBR verb and line containing the
+          eXAM-URI, in addition to the terminating line containing the End-Mark tag.</t>
+
+        <t>When validation of message acceptance by each recipient is desired, this necessitates
+          separate messages containing one recipient and an eXAM-URI containing a corresponding
+          'rcpt-ref' field.</t>
+
+        <t>If PIPELINING <xref target="RFC2920"/> is also advertised, then the client may pipeline
+          the entire transaction in one round-trip. However, the client MUST wait for the results of
+          the End-Mark tag in the TBR command prior to initiating a new transaction. The TBR command
+          does not direct the server to fetch the message to which the eXAM-URI refers, nor to
+          replace the eXAM-URI.</t>
+
+        <t>The Forwarding count (fwd-cnt) is initially set to zero. Every time the eXAM-URI is
+          forwarded, the count is incremented. When the forwarding count exceeds 100, as recommended
+          by <xref target="RFC2821"/> in Section 6.2 Loop Detection, a routing loop has been
+          detected, and should be handled accordingly.</t>
+
+        <t>Prior to being fetched, TBR messages are not required to generate Delivery Status
+          Notifications when being dropped. Instead, fetching the referenced message offers the
+          indication of message acceptance.</t>
+
+        <t>When an MTA has accepted a TBR message and must forward it to an MTA which does not
+          support TBR, it MAY (after all appropriate checking) retrieve the replacement message
+          content from the eXAM-URI, prepend any additional trace headers, and forward it as a
+          non-TBR message. As an alternative, instead of retrieving the replacement message content,
+          it MAY prepend any additional trace headers to a notification sent to the recipient
+          containing the eXAM-URI itself, along with any other appropriate information.</t>
+      </section>
+
+      <section title="TBR Requirements">
+        <t>The domain part of the <xref target="RFC2821"/> MAIL FROM address MUST exactly match the
+          domain part of the URI, in order to assure that recipients do not generate "backscatter"
+          to forged return addresses at domains which do not support TBR. A domain which supports
+          TBR SHOULD employ methods of coding the localpart so as to recognize (and discard)
+          backscatter DSNs. The MX server for the TBR domain SHOULD coordinate with the encoding MTA
+          to properly decode and check the localpart of the return address.</t>
+
+        <t>The assurance that a domain supports TBR is proven by the DNS records for a domain
+          starting with _tbr.* returning both MX and address records (adequate for fetching the
+          URI). Ideally, address record(s) will be present for each address family (such as IPv4 and
+          IPv6) currently in use: if it turns out there's a mismatch, the MTA attempting retrieval
+          should generate a DSN (after performing these validity checks).</t>
+
+        <t>Fetching the message SHOULD occur after the Mail Delivery Agent has finished all
+          processing prior to placing the email into a mailbox or forwarding it to a processing
+          program.</t>
+
+        <t> Removal of published messages should be delayed for a short period to accommodate a
+          retry resulting from possible message storage related failures.</t>
+
+        <section title="Examples">
+          <t>In examples, "C:" and "S:" indicate lines sent by the client and server, respectively.
+            If a single "C:" or "S:" label applies to multiple lines, then the line breaks between
+            those lines are for editorial clarity only and are not part of the actual protocol
+            exchange. To simplify the example, an abbreviated XUID is used. Two successful
+            submissions (without and with pipelining) follow:</t>
+
+          <figure title="">
+            <artwork name="" type="" height="" width="" xml:space="preserve">
+  (non-pipelined transaction)
+  C: EHLO client.example.com
+  S: 250-server.example.com
+  S: 250-TBR
+  S: 250-ENHANCEDSTATUSCODES
+  S: 250-PIPELINING
+  S: 250-8BITMIME
+  S: 250-SIZE 30000000
+  S: 250-DSN
+  S: 250-ETRN
+  S: 250-AUTH PLAIN LOGIN
+  S: 250-STARTTLS
+  S: 250-DELIVERBY
+  S: 250 HELP
+  C: MAIL FROM:&lt;prvs=02460E6DB6=tom@_tbr.example.com&gt;
+  S: 250 2.5.0 Address Ok.
+  C: RCPT TO:&lt;dick@users.example.com&gt;
+  S: 250 2.1.5 dick@users.example.com OK.
+  C: TBR 0 https://_tbr.example.com/~Q012?XUID=A42L0M726P&amp;RCPT=R012
+  C: .
+  S: 250 2.5.0 Ok.
+ 
+  (pipelined transaction)
+  C: EHLO client.example.com
+  S: 250-server.example.com
+  S: 250-TBR
+  S: 250-ENHANCEDSTATUSCODES
+  S: 250-PIPELINING
+  S: 250-8BITMIME
+  S: 250-SIZE 30000000
+  S: 250-DSN
+  S: 250-ETRN
+  S: 250-AUTH PLAIN LOGIN
+  S: 250-STARTTLS
+  S: 250-DELIVERBY
+  S: 250 HELP
+  C: MAIL FROM:&lt;prvs=02460E6DB6=tom@_tbr.example.com&gt;
+  C: RCPT TO:&lt;dick@users.example.com&gt;
+  C: TBR 0 https://_tbr.example.com/~Q012?XUID=A42L0M726P&amp;RCPT=R012
+  C: .
+  S: 235 2.7.0 PLAIN authentication successful.
+  S: 250 2.5.0 Address Ok.
+  S: 250 2.1.5 dick@users.example.com OK.
+  S: 250 2.5.0 Ok.
+          </artwork>
+          </figure>
+
+          <t>Some examples of failure cases:</t>
+
+          <figure title="">
+            <artwork name="" type="" height="" width="" xml:space="preserve">
+  C: MAIL FROM:&lt;prvs=02460E6DB6=tom@_tbr.example.com&gt;
+  C: RCPT TO:&lt;harry@users.example.com&gt;
+  C: TBR 0 https://_tbr.example.com/~Q012?XUID=A42L0M726P&amp;RCPT=R012
+  C: .
+  S: 250 2.5.0 Address Ok.
+  S: 550 5.7.1 Relaying not allowed: harry@users.example.com
+  S: 554 5.5.0 No recipients have been specified.
+          </artwork>
+          </figure>
+        </section>
+      </section>
+
+      <section title="Formal Syntax">
+        <t>This specification inherits ABNF <xref target="RFC4234"/>, Uniform Resource Identifiers
+            <xref target="RFC3986"/> and Internet Message Format <xref target="RFC2822"/>.</t>
+        <figure title="">
+          <artwork name="" type="" height="" width="" xml:space="preserve">
+
+  dash          = %d45  ; "-"
+  dot           = %d46  ; "."
+  slash         = %d47  ; "/"
+  underscore    = %d95  ; "_"
+  tilde         = %d126 ; "~"
+
+  tbr-ref       = *(ALPHA      /
+                    DIGIT      /
+                    dash       /
+                    dot        /
+                    underscore /
+                    tilde      /
+                    slash      /
+                    pct-encoded)
+ 
+  pct-encoded   = "%" HEXDIG HEXDIG
+  dns-char      = ALPHA / DIGIT / dash
+  id-prefix     = ALPHA / DIGIT
+  label         = id-prefix [*61dns-char id-prefix]
+  sldn          = label dot label 
+
+  hostname      = *(label dot) sldn
+                ; not to exceed 249 characters
+                ; excluding "_tbr."
+
+  tbr-prot      = "http" / "https"   
+
+  tbr-host      = "_tbr." hostname
+
+  port          = 1*5DIGIT
+
+  base-char     = (dns-char / "_")
+
+  rcpt-ref      = *43(base-char) *2("=")
+
+  orig-ref      = *43(base-char) *2("=")
+
+  con-id        = 1*107(base-char) *2("=")   ; url safe base64
+
+  tbr-cmd       = "TBR" SP fwd-cnt SP eXAM-URI FWS tbr-end
+
+  tbr-end       = [trace] end-mark CRLF
+
+  fwd-cnt       = 1*3DIGIT
+
+  end-mark      = dot
+
+  tbr-pub       = tbr-prot"://"tbr-host[":" port]
+
+  tbr-ref       = orig-ref"?XUID="con-id"&amp;RCPT="rcpt-ref
+
+  eXAM-URI      = tbr-pub "/" tbr-ref
+
+  eXAM-ref      = "TBR" SP fwd-cnt SP eXAM-URI
+          </artwork>
+        </figure>
+      </section>
+    </section>
+
+    <section title="8-Bit and Binary">
+      <t>A submit server that advertises TBR MUST also advertise 8BITMIME <xref target="RFC1652"/>
+        and MUST perform the down conversion described in that specification on the resulting
+        complete message if 8-bit data is obtained after replacing the eXAM-URI with the referenced
+        message and passed to a 7-bit server. If the eXAM-URI argument to TBR refers to binary data,
+        then the submit server MUST down convert as described in Binary SMTP <xref target="RFC3030"
+        />. The correct character repertoire MUST be asserted when offering 8-bit data. See <xref
+          target="RFC4646"/> and <xref target="RFC4647"/>.</t>
+    </section>
+
+    <section title="Handoff of responsibility to deliver or report errors">
+      <t>When a TBR command is given, the formal handoff of responsibility does not occur during the
+        SMTP session, but is delayed until the eXAM-URI is fetched. The formal handoff of
+        responsibility to deliver or report problems comes when the command to fetch the URI is
+        sent. There MAY be no failure report when TBR messages are undesired and thus never fetched.
+        When an attempt to fetch a message is made, the fetching agent thereby accepts
+        responsibility for either delivering the message or properly reporting a failure to do so.</t>
+
+      <t>The SMTP server receiving a TBR reference MAY reject invalid recipients during the SMTP
+        session, or it may quietly ignore recipients which turn out to be invalid. It MUST NOT
+        generate Delivery Status Notification messages before it verifies that the MAIL FROM domain
+        exactly matches the domain part of the URI, and that the same domain also publishes an MX
+        record. Having verified that, it MAY report any conditions via DSNs, but is not required to
+        report any errors until it finishes reputation checks and fetches the URI.</t>
+
+      <t>Postponing the formal handoff of responsibility requires the originating MSA to obtain
+        notification when an eXAM-URI has not been fetched after some period. This period is
+        determined by local option, but should be set to suppress most failure notifications which
+        might occur while delivery of the eXAM-URI is still pending.</t>
+    </section>
+
+    <section title="Additional Enhanced Status Codes (RFC3463)">
+      <t>SMTP or Submit servers that advertise ENHANCEDSTATUSCODES <xref target="RFC2034"/> use
+        enhanced status codes defined in <xref target="RFC3463"/>. The TBR extension introduces new
+        error cases that RFC 3463 did not consider. The following additional enhanced status codes
+        are defined by this specification:</t>
+
+      <t>451 4.7.8 TBR HTTP/HTTPS mode requested for immediate acceptance</t>
+      <t>451 4.7.9 TBR HTTP mode requested for immediate acceptance</t>
+      <t>451 4.7.10 TBR HTTPS mode requested for immediate acceptance</t>
+
+      <t>Where a receiving SMTP server implements greylisting due to low trust in the sending SMTP
+        server or the originating domain, this temporary error may be given, committing the receiver
+        to accepting a TBR email without further temporary errors for greylisting.</t>
+
+      <t>550 5.1.9 MAIL FROM not within eXAM-URI domain</t>
+
+      <t>The domain publishing the message MUST receive all Delivery Status Notifications and MAY
+        redirect them to the original RFC2821 MAIL FROM address, or otherwise process them in
+        accordance with directives agreed to by the originator and MSA.</t>
+
+      <t>504 5.5.6 eXAM-URI protocol not supported</t>
+
+      <t>The domain fetching the message does not support the protocol indicated within the
+        eXAM-URI. This status code can also extend a response code of 504 (504 Command parameter not
+        implemented).</t>
+
+      <t>504 5.5.7 eXAM-URI IP address not supported</t>
+
+      <t>The domain fetching the message does not support the IP address returned for the eXAM-URI
+        host.</t>
+    </section>
+
+    <section title="Response Codes">
+      <t>This section includes example response codes to the TBR command. Other text may be used
+        with the same response codes. This list is not exhaustive, and TBR clients MUST tolerate any
+        valid SMTP response code. Most of these examples include the appropriate enhanced status
+        code <xref target="RFC3463"/>.</t>
+
+      <t>554 5.5.0 No recipients have been specified</t>
+
+      <t>This response code occurs when TBR is used (for example, with PIPELINING) and all RCPT TOs
+        failed.</t>
+
+      <t>503 5.5.0 Valid RCPT TO required before TBR</t>
+
+      <t>This response code is an alternative to the previous one when TBR is used (for example,
+        with PIPELINING) and all RCPT TOs failed.</t>
+
+      <t>503 5.5.0 TBR command not terminated</t>
+
+      <t>A TBR command without the "." End-Mark tag was sent. The eXAM-URI may have been received,
+        but will not be forwarded.</t>
+
+      <t>554 5.3.4 Message too big for system</t>
+
+      <t>The message (subsequent to eXAM-URI message replacement) is larger than the per-message
+        size limit for this server.</t>
+
+      <t>552 5.2.2 Mailbox full</t>
+
+      <t>The recipient is local, the submit server supports direct delivery, and the recipient has
+        exceeded his quota and any grace period for delivery attempts.</t>
+
+      <t>554 5.6.7 eXAM-URI resolution failed</t>
+
+      <t>Obtaining the message from the HTTP server returned an error or no data.</t>
+
+      <t>250 2.5.0 Ok.</t>
+
+      <t>The eXAM-URI was accepted.</t>
+    </section>
+
+    <section anchor="Reputation" title="Reputation Checking">
+      <t>The TBR mode of operation allows greater emphasis to be placed upon the reputation of the
+        originator. Messages containing malware or undesired content can be substantially reduced
+        without risking ever-growing burdens upon the receiving server. The TBR mode of operation is
+        able to ensure that application of message security remains scalable, and does so by
+        imposing a greater burden upon the sender.</t>
+
+      <t>Upon receiving a TBR email reference, the receiving SMTP server MAY perform any
+        domain-reputation and/or IP-address-reputation checks called for by their policies. The TBR
+        mode allows reputation checks to be done on the actual originator of an email (rather than
+        merely the last-hop) before formal handoff, thus greatly simplifying the
+        computational/network load on the receiver.</t>
+
+      <t>Since a high percentage of current email is unwanted, it is expected that only a minority
+        of TBR URIs will actually be fetched. This is good in that it reduces network traffic.
+        Intentional failure to fetch behaves very much like graylisting, in that it may benefit the
+        sender to keep the message queued, but the sender gets no indication of why the fetching is
+        delayed.</t>
+
+      <t>The TBR mode eliminates any need to send "unknown recipient" notifications to dubious
+        sources, thwarting the "harvesting" of known-good email addresses.</t>
+    </section>
+
+    <section anchor="Handoff" title="Handoff of responsibility to deliver or report errors">
+      <t>The SMTP server receiving a TBR reference does not immediately accept responsibility for
+        delivery or reporting problems. It MAY reject invalid recipients during the SMTP session, or
+        it may quietly ignore recipients which turn out to be invalid. It MUST NOT generate Delivery
+        Status Notification messages before it verifies that the MAIL FROM domain exactly matches
+        the domain part of the URI, and that the same domain also publishes an MX record. Having
+        verified that, it MAY report any conditions via DSNs, but is not required to report any
+        errors until it finishes reputation checks and fetches the URI.</t>
+
+      <t>There may be no failure report if TBR messages are undesired and thus not fetched. If the
+        message is fetched, the fetching agent accepts responsibility for either delivering the
+        message or properly reporting a failure to do so. The formal handoff of responsibility to
+        deliver or report problems comes when the command to fetch the URI is sent.</t>
+
+      <t>Defining formal handoff this way replaces a single race-condition (whether the 250 response
+        to DATA is received) with a more complicated set of race-conditions. We define the sending
+        of the command to fetch the URI as formal handoff, without regard to whether the command is
+        received, or even whether a server exists to receive it. While the RFC2821 race-condition
+        could theoretically generate duplicate messages, the TBR race-conditions cannot. It is
+        critical, of course, that the validity tests for the DSN path be performed before the
+        command to fetch is issued, so that a DSN may be issued if fetching fails.</t>
+
+      <t>Postponing the formal handoff of responsibility requires the originating MSA to obtain
+        notification when an eXAM-URI has not been fetched after some period. This period is
+        determined by local option, but should be set to suppress most failure notifications which
+        might occur while delivery of the eXAM-URI is still pending.</t>
+    </section>
+
+    <section anchor="IANA" title="IANA Considerations">
+      <t>The "TBR" SMTP extension as described in Section 3 needs to be registered. This
+        registration should be marked in the registry as not intended for message submission <xref
+          target="RFC4409"/>.</t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>Messages published on HTTP servers could in principle be subject to URI-guessing attacks.
+        Protective schemes SHOULD be employed to discourage testing large numbers of generated URIs
+        in hopes of obtaining a private email; this issue has been addressed in systems that depend
+        upon confidential responses prior to granting access. Often protective schemes log an IP
+        address and related CIDR with invalid reference attempts where delays are introduced to
+        rate-limit guessing.</t>
+
+      <t>In addition to the XUID obscuring valid message locations, the eXAM-URI should
+        cryptographically encode a valid recipient and a path component that represents the
+        originator. This added protection further ensures message access is not obtained through
+        guessing.</t>
+
+      <t>The TBR mode of operation requires greater emphasis be placed upon the reputation of the
+        originator. Detection of messages containing malware or undesired content can be defeated
+        with polymorphic techniques which place ever growing burdens upon the receiving server. Only
+        the TBR mode of operation is able to ensure that application of message security remains
+        scalable, and does so by imposing a greater burden upon the sender.<vspace blankLines="100"
+        />
+      </t>
+    </section>
+
+    <section anchor="Acknowledgements" title="Acknowledgements">
+      <t>This document follows the general structure of Message Submission BURL Extension <xref
+          target="RFC4468"/>.<vspace blankLines="5"/></t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <reference anchor="XAM_Arch" target="http://www.snia.org/xam">
+        <front>
+          <title>XAM Architecture Specification version 0.64</title>
+          <author>
+            <organization abbrev="SNIA">Storage Networking Industry Association</organization>
+            <address>
+              <postal>
+                <street>500 Sansome Street, Suite #504</street>
+                <city>San Francisco</city>
+                <region>CA</region>
+                <code>94111</code>
+                <country>USA</country>
+              </postal>
+              <phone>+ 1 415 402-0006 x 103</phone>
+              <facsimile>+ 1 415 402-0009</facsimile>
+              <email>leo.leger@snia.org</email>
+              <uri>http://www.snia.org</uri>
+            </address>
+          </author>
+          <date month="August 6" year="2007"/>
+        </front>
+        <seriesInfo name="XAM" value="Arch-S"/>
+      </reference>
+      <?rfc include="reference.RFC.1652" ?>
+      <?rfc include="reference.RFC.2034" ?>
+      <?rfc include="reference.RFC.2119" ?>
+      <?rfc include="reference.RFC.2387" ?>
+      <?rfc include="reference.RFC.2821" ?>
+      <?rfc include="reference.RFC.2822" ?>
+      <?rfc include="reference.RFC.2920" ?>
+      <?rfc include="reference.RFC.3030" ?>
+      <?rfc include="reference.RFC.3463" ?>
+      <?rfc include="reference.RFC.3629" ?>
+      <?rfc include="reference.RFC.3986" ?>
+      <?rfc include="reference.RFC.4234" ?>
+      <?rfc include="reference.RFC.4646" ?>
+      <?rfc include="reference.RFC.4647" ?>
+      <?rfc include="reference.RFC.4648" ?>
+    </references>
+
+    <references title="Informative References">
+      <?rfc include="reference.I-D.crocker-email-arch" ?>
+      <?rfc include="reference.RFC.2045" ?>
+      <?rfc include="reference.RFC.2046" ?>
+      <?rfc include="reference.RFC.2231" ?>
+      <?rfc include="reference.RFC.2578" ?>
+      <?rfc include="reference.RFC.2616" ?>
+      <?rfc include="reference.RFC.3676" ?>
+      <?rfc include="reference.RFC.3798" ?>
+      <?rfc include="reference.RFC.3987" ?>
+      <?rfc include="reference.RFC.4346" ?>
+      <?rfc include="reference.RFC.4366" ?>
+      <?rfc include="reference.RFC.4409" ?>
+      <?rfc include="reference.RFC.4468" ?>
+    </references>
+
+    <section title="Change Log">
+      <t/>
+    </section>
+
+    <section title="XUID overview">
+      <t>An XSet (data and metadata storage entity) is identified by a XUID. The XUID (XSet Unique
+        Identifier, pronounced zoo'id) is created by the XAM storage system. The XUID conforms to a
+        defined format. See http://www.snia.org/xam. The native format of a XUID is a
+        variable-length byte string, with a maximum length of 80 bytes. XAM applications are
+        expected to treat XUIDs as opaque byte strings. However, the XUID format is defined such
+        that the XUID integrity can be validated, and that vendors are able to assign XUID values
+        independently.</t>
+
+      <t>An OID field is contained within the XUID. The OID field represents the SNMP enterprise
+        number of the XAM Storage System vendor that created the XUID, in network byte order. See
+          <xref target="RFC2578"/> and http://www.iana.org/assignments/enterprisenumbers. An OID of
+        0 is reserved.</t>
+
+      <t>The native format for a XUID is binary. The XUID textual representation will be "URL and
+        Filename safe" base64-encoded, as described in <xref target="RFC4648"/>, which uses
+        US-ASCII. The XUID is able to contain a hash as large as 576 bits allowing as many as 2.47 x
+        10^173 different values.</t>
+    </section>
+    <section title="Meeting regulatory requirements">
+      <t>Government agencies are introducing new requirements for retention of email, such as United
+        State's SEC rule 17a-4 which defines preservation requirements. Archiving and preservation
+        of email is satisfied by XAM Storage. Rule 17a-4 contains at least three important
+        requirements accommodated by XAM storage:</t>
+
+      <t> (1) immutable storage,</t>
+      <t> (2) verifiable accuracy, and </t>
+      <t> (3) deterministic retention.</t>
+    </section>
+  </back>
+</rfc>

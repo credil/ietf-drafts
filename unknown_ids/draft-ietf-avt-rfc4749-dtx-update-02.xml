@@ -1,0 +1,285 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?xml-stylesheet type="text/xsl" href="rfc2629.xslt"?>
+<?rfc compact="yes"?>
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+
+<rfc ipr="full3978" category="std" updates="4749">
+	<front>
+		<title abbrev="G.729.1 DTX support in RTP">G.729.1 RTP Payload Format update: DTX support</title>
+		<author initials="A." surname="Sollaud" fullname="Aurelien Sollaud">
+			<organization>France Telecom</organization>
+			<address>
+				<postal>
+					<street>2 avenue Pierre Marzin</street>
+					<code>22307</code>
+					<city>Lannion Cedex</city>
+					<country>France</country>
+				</postal>
+				<phone>+33 2 96 05 15 06</phone>
+				<email>aurelien.sollaud@orange-ftgroup.com</email>
+			</address>
+		</author>
+		<date month="September" year="2008"/>
+		<abstract>
+			<t>This document updates the Real-time Transport Protocol (RTP) payload format to be used for the International Telecommunication Union (ITU-T) Recommendation G.729.1 audio codec. It adds Discontinuous Transmission (DTX) support to the RFC 4749 specification, in a backward-compatible way. An updated media type registration is included for this payload format.</t>
+		</abstract>
+	</front>
+	
+	<middle>
+
+		<section title="Introduction">
+
+			<t>The International Telecommunication Union (ITU-T) Recommendation G.729.1 <xref target="ITU-G.729.1"/> is a scalable and wideband extension of the Recommendation G.729 <xref target="ITU-G.729"/> audio codec. <xref target="RFC4749"/> specifies the payload format for packetization of G.729.1 encoded audio signals into the Real-time Transport Protocol (RTP) <xref target="RFC3550"/>.</t>
+			<t>The Annex C of G.729.1 <xref target="ITU-G.729.1-C"/> adds Discontinuous Transmission (DTX) support to G.729.1. This document updates the RTP payload format to allow usage of this Annex.</t>
+			<t>Only changes or additions to <xref target="RFC4749"/> will be described in the following sections.</t>
+			<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT","RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target="RFC2119"/>.</t>
+
+		</section>
+
+		<section title="Background">
+
+			<t>G.729.1 supports Discontinuous Transmission (DTX), a.k.a. "silence suppression". It means that the coder includes a Voice Activity Detection (VAD) algorithm, to determine if an audio frame contains silence or actual audio. During silence periods, the coder may significantly decrease the transmitted bit rate by sending a small frame called Silence Insertion Descriptor (SID), and then stop transmission. The receiver's decoder will generate comfort noise (CNG) according to the parameters contained in the SID. This DTX/CNG scheme is specified in <xref target="ITU-G.729.1-C"/>.</t>
+			<t>G.729.1 SID has an embedded structure. The core SID is the same as the legacy G.729 SID <xref target="ITU-G.729-B"/>. A first enhancement layer adds some parameters for narrowband comfort noise, while a second enhancement layer adds wideband information. G.729.1 SID can be 2, 3, or 6 octets long.</t>
+
+		</section>
+
+		<section title="RTP Header Usage">
+
+			<t>The fields of the RTP header must be used as described in <xref target="RFC4749"/>, except for the Marker (M) bit.</t>
+			<t>If DTX is used, the first packet of a talkspurt, that is, the first packet after a silence period during which packets have not been transmitted contiguously, MUST be distinguished by setting the M bit in the RTP data header to one. The M bit in all other packets MUST be set to zero. The beginning of a talkspurt MAY be used to adjust the playout delay to reflect changing network delays.</t>
+			<t>If DTX is not used, the M bit MUST be set to zero in all packets.</t>
+
+		</section>
+
+		<section anchor="format" title="Payload Format">
+
+			<t>The payload format is the same as in <xref target="RFC4749"/>, with the option to add a SID at the end.</t>
+			<t>So the complete payload consists of a payload header of 1 octet (MBS and FT fields), followed by zero or more consecutive audio frames at the same bit rate, followed by zero or one SID.</t>
+			<t><list>
+				<t>Note that it is consistent with the payload format of G.729 described in section 4.5.6 of <xref target="RFC3551"/>.</t>
+			</list></t>
+			<t>To be able to transport a SID alone, that is, without actual audio frames, we assign the FT value 14 to SID. The actual SID size (2, 3, or 6 octets) is inferred from the payload size: it is the size of what is left after the payload header.</t>
+			<t>When a SID is appended to actual audio frames, the FT value remains the one describing the encoding rate of the audio frames. Since the SID is much smaller than any other frame, it can be easily detected at the receiver side, and it will not hinder the calculation of the number of frames. The actual SID size is inferred from the payload size: it is the size of what is left after the audio frames.</t>
+
+			<t>The full FT table is given for convenience:</t>
+			<texttable>
+				<ttcol align="center">FT</ttcol>
+				<ttcol align="center">encoding rate</ttcol>
+				<ttcol align="center">frame size</ttcol>
+				<c>0</c><c>8 kbps</c><c>20 octets</c>
+				<c>1</c><c>12 kbps</c><c>30 octets</c>
+				<c>2</c><c>14 kbps</c><c>35 octets</c>
+				<c>3</c><c>16 kbps</c><c>40 octets</c>
+				<c>4</c><c>18 kbps</c><c>45 octets</c>
+				<c>5</c><c>20 kbps</c><c>50 octets</c>
+				<c>6</c><c>22 kbps</c><c>55 octets</c>
+				<c>7</c><c>24 kbps</c><c>60 octets</c>
+				<c>8</c><c>26 kbps</c><c>65 octets</c>
+				<c>9</c><c>28 kbps</c><c>70 octets</c>
+				<c>10</c><c>30 kbps</c><c>75 octets</c>
+				<c>11</c><c>32 kbps</c><c>80 octets</c>
+				<c>12-13</c><c>(reserved)</c><c>-</c>
+				<c>14</c><c>SID</c><c>2, 3, or 6 octets</c>
+				<c>15</c><c>NO_DATA</c><c>0</c>
+			</texttable>
+
+			<t>DTX has no impact on the MBS definition and use.</t>
+
+		</section>
+			
+		<section anchor="param" title="Payload Format Parameters">
+
+			<t>Parameters defined in <xref target="RFC4749"/> are not modified. We add a new optional parameter to configure DTX.</t>
+
+			<section anchor="media-type" title="Media Type Registration Update">
+
+				<t>We add a new optional parameter to the audio/G7291 media subtype:</t>
+				<t>
+					<list style="hanging">
+						<t hangText="dtx:">indicates that discontinuous transmission (DTX) is used or preferred. Permissible values are 0 and 1. 0 means no DTX. 1 means DTX support, as described in Annex C of ITU-T Recommendation G.729.1. 0 is implied if this parameter is omitted.
+						</t>
+					</list>
+				</t>
+				<t>When DTX is turned off, the RTP payload MUST NOT contain SID, and the FT value 14 MUST NOT be used.</t>
+
+			</section>
+
+			<section anchor="sdp" title="Mapping to SDP Parameters">
+
+				<t>The information carried in the media type specification has a specific mapping to fields in the Session Description Protocol (SDP) <xref target="RFC4566"/>, which is commonly used to describe RTP sessions.</t>
+				<t>The mapping described in <xref target="RFC4749"/> remains unchanged.</t>
+				<t>The "dtx" parameter goes in the SDP "a=fmtp" attribute.</t>
+				<t>Some example partial SDP session descriptions utilizing G.729.1 encodings follow.</t>
+				<t>Example 1: default parameters (DTX off)</t>
+				<t>
+					<list>
+						<t>m=audio 57586 RTP/AVP 96</t>
+						<t>a=rtpmap:96 G7291/16000</t>
+					</list>
+				</t>
+				<t>Example 2: recommended packet duration of 40 ms (=2 frames), maximum bit rate is 20 kbps, DTX supported and preferred.</t>
+				<t>
+					<list>
+						<t>m=audio 49987 RTP/AVP 97</t>
+						<t>a=rtpmap:97 G7291/16000</t>
+						<t>a=fmtp:97 maxbitrate=20000; dtx=1</t>
+						<t>a=ptime:40</t>
+					</list>
+				</t>
+
+				<section title="DTX Offer-Answer Model Considerations">
+
+					<t>The offer-answer model considerations of <xref target="RFC4749"/> fully apply. In this section we only define the management of the "dtx" parameter.</t>
+					<t>The "dtx" parameter concerns both sending and receiving, so both sides of a bi-directional session MUST have the same DTX setting. If one party indicates it does not support DTX, DTX must be deactivated both ways. In other words, DTX is actually activated if, and only if, "dtx=1" in the offer and in the answer.</t>
+					<t>A special rule applies for multicast: the "dtx" parameter becomes declarative and MUST NOT be negotiated. This parameter is fixed, and a participant MUST use the configuration that is provided for the session.</t>
+
+				</section>
+				
+				<section title="DTX Declarative SDP Considerations">
+
+					<t>The "dtx" parameter is declarative and provides the parameter that SHALL be used when receiving and/or sending the configured stream.</t>
+
+				</section>
+				
+			</section>
+
+		</section>
+
+		<section anchor="congestion" title="Congestion Control">
+
+			<t>The congestion control considerations of <xref target="RFC4749"/> apply.</t>
+			<t>The use of DTX can help congestion control by reducing the number of transmitted RTP packets and the average bandwidth of audio streams.</t>
+
+		</section>
+
+		<section anchor="security" title="Security Considerations">
+
+			<t>The security considerations of <xref target="RFC4749"/> apply.</t>
+			<t>DTX introduces no new security issue. The ability to interrupt transmission during silence periods is a well-known feature in RTP.</t>
+
+		</section>
+
+		<section title="IANA Considerations">
+
+			<t>It is requested that one new parameter for media subtype (audio/G7291) is registered by IANA, see <xref target="media-type"/>.</t>
+
+		</section>
+
+	</middle>
+	
+	<back>
+		<references title="Normative References">
+
+			<reference anchor="ITU-G.729.1">
+				<front>
+					<title>G.729 based Embedded Variable bit-rate coder: An 8-32 kbit/s scalable wideband coder bitstream interoperable with G.729</title>
+					<author>
+						<organization>International Telecommunications Union</organization>
+					</author>
+					<date month="May" year="2006" />
+				</front>
+				<seriesInfo name="ITU-T" value="Recommendation G.729.1" />
+			</reference>
+
+			<reference anchor="ITU-G.729.1-C">
+				<front>
+					<title>G.729.1 DTX/CNG scheme</title>
+					<author>
+						<organization>International Telecommunications Union</organization>
+					</author>
+					<date month="May" year="2008" />
+				</front>
+				<seriesInfo name="ITU-T" value="Recommendation G.729.1 Annex C" />
+			</reference>
+
+			<reference anchor='RFC2119'>
+				<front>
+					<title abbrev='RFC Key Words'>Key words for use in RFCs to Indicate Requirement Levels</title>
+					<author initials='S.' surname='Bradner' fullname='Scott Bradner'><organization/></author>
+					<date year='1997' month='March' />
+				</front>
+				<seriesInfo name='BCP' value='14' />
+				<seriesInfo name='RFC' value='2119' />
+				<format type='TXT' octets='4723' target='http://www.ietf.org/rfc/rfc2119.txt' />
+			</reference>
+
+			<reference anchor='RFC4749'>
+				<front>
+					<title>RTP Payload Format for the G.729.1 Audio Codec</title>
+					<author initials='A.' surname='Sollaud' fullname='A. Sollaud'><organization /></author>
+					<date year='2006' month='October' />
+				</front>
+				<seriesInfo name='RFC' value='4749' />
+				<format type='TXT' octets='28838' target='http://www.ietf.org/rfc/rfc4749.txt' />
+			</reference>
+			
+			<reference anchor='RFC3550'>
+				<front>
+					<title>RTP: A Transport Protocol for Real-Time Applications</title>
+					<author initials='H.' surname='Schulzrinne' fullname='Henning Schulzrinne'><organization /></author>
+					<author initials='S.' surname='Casner' fullname='Stephen Casner'><organization /></author>
+					<author initials='R.' surname='Frederick' fullname='Ron Frederick'><organization /></author>
+					<author initials='V.' surname='Jacobson' fullname='Van Jacobson'><organization /></author>
+					<date year='2003' month='July' />
+				</front>
+				<seriesInfo name='STD' value='64' />
+				<seriesInfo name='RFC' value='3550' />
+				<format type='TXT' octets='259985' target='http://www.ietf.org/rfc/rfc3550.txt' />
+			</reference>
+			
+			<reference anchor='RFC4566'>
+				<front>
+					<title>SDP: Session Description Protocol</title>
+					<author initials='M' surname='Handley' fullname='Mark Handley'><organization /></author>
+					<author initials='V.' surname='Jacobson' fullname='Van Jacobson'><organization/></author>
+					<author initials='C.' surname='Perkins' fullname='Colin Perkins'><organization/></author>
+					<date year='2006' month='July' />
+				</front>
+				<seriesInfo name='RFC' value='4566' />
+				<format type='TXT' octets='108820' target='http://www.ietf.org/rfc/rfc4566.txt' />
+			</reference>
+
+		</references>
+		
+		<references title="Informative References">
+
+			<reference anchor="ITU-G.729">
+				<front>
+					<title>Coding of speech at 8 kbit/s using conjugate-structure algebraic-code-excited linear-prediction (CS-ACELP)</title>
+					<author>
+						<organization>International Telecommunications Union</organization>
+					</author>
+					<date month="March" year="1996" />
+				</front>
+				<seriesInfo name="ITU-T" value="Recommendation G.729" />
+			</reference>
+
+			<reference anchor="ITU-G.729-B">
+				<front>
+					<title>A silence compression scheme for G.729 optimized for terminals conforming to Recommendation V.70</title>
+					<author>
+						<organization>International Telecommunications Union</organization>
+					</author>
+					<date month="October" year="1996" />
+				</front>
+				<seriesInfo name="ITU-T" value="Recommendation G.729 Annex B" />
+			</reference>
+
+			<reference anchor='RFC3551'>
+				<front>
+					<title>RTP Profile for Audio and Video Conferences with Minimal Control</title>
+					<author initials='H.' surname='Schulzrinne' fullname='Henning Schulzrinne'><organization /></author>
+					<author initials='S.' surname='Casner' fullname='Stephen Casner'><organization /></author>
+					<date year='2003' month='July' />
+				</front>
+				<seriesInfo name='STD' value='65' />
+				<seriesInfo name='RFC' value='3551' />
+				<format type='TXT' octets='106621' target='http://www.ietf.org/rfc/rfc3551.txt' />
+			</reference>
+			
+		</references>
+ 
+	</back>
+</rfc>

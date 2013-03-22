@@ -1,0 +1,1394 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY rfc2119 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+<!ENTITY rfc2327 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2327.xml">
+<!ENTITY rfc2434 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2434.xml">
+<!ENTITY rfc3550 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3550.xml">
+<!ENTITY rfc4346 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4346.xml">
+<!ENTITY rfc4366 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4366.xml">
+<!ENTITY rfc4347 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4347.xml">
+<!ENTITY rfc3711 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3711.xml">
+<!ENTITY rfc4568 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4568.xml">
+<!ENTITY rfc4961 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4961.xml">
+<!ENTITY I-D.ietf-behave-rfc3489bis SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-behave-rfc3489bis.xml">
+<!ENTITY I-D.ietf-sip-dtls-srtp-framework SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-sip-dtls-srtp-framework.xml">
+<!ENTITY I-D.mcgrew-srtp-big-aes SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.mcgrew-srtp-big-aes.xml">
+<!ENTITY I-D.ietf-avt-rtp-and-rtcp-mux SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-avt-rtp-and-rtcp-mux.xml">
+<!ENTITY I-D.ietf-tls-extractor SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-tls-extractor.xml">
+
+]>
+<!-- $Id -->
+<?rfc inline="yes"?>
+<?rfc toc="yes" ?>
+<?rfc symrefs="no" ?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc sortrefs="no" ?>
+<?rfc colonspace='yes' ?>
+<rfc category="std" docName="draft-ietf-avt-dtls-srtp-02.txt" ipr="full3978">
+  <front>
+    <title abbrev="SRTP Extension for DTLS">Datagram Transport Layer Security
+    (DTLS) Extension to Establish Keys for Secure Real-time Transport Protocol
+    (SRTP)</title>
+
+    <author fullname="David McGrew" initials="D." surname="McGrew">
+      <organization>Cisco Systems</organization>
+
+      <address>
+        <postal>
+          <street>510 McCarthy Blvd.</street>
+
+          <city>Milpitas</city>
+
+          <region>CA</region>
+
+          <code>95305</code>
+
+          <country>USA</country>
+        </postal>
+
+        <email>mcgrew@cisco.com</email>
+      </address>
+    </author>
+
+    <author fullname="Eric Rescorla" initials="E." surname="Rescorla">
+      <organization>Network Resonance</organization>
+
+      <address>
+        <postal>
+          <street>2064 Edgewood Drive</street>
+
+          <city>Palo Alto</city>
+
+          <region>CA</region>
+
+          <code>94303</code>
+
+          <country>USA</country>
+        </postal>
+
+        <email>ekr@networkresonance.com</email>
+      </address>
+    </author>
+
+    <date day="25" month="February" year="2008" />
+
+    <abstract>
+    <t>
+     This document describes a Datagram Transport Layer Security (DTLS)
+     extension to establish keys for secure RTP (SRTP) and secure RTP
+     Control Protocol (SRTCP) flows. DTLS keying happens on the media
+     path, independent of any out-of-band signalling channel present.
+     </t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+     <t>The Secure RTP profile (SRTP) [6] can provide confidentiality,
+     message authentication, and replay protection to RTP data and
+     RTP Control (RTCP) traffic. SRTP does not provide key management
+     functionality, but instead depends on external key management to
+     exchange secret master keys, and to negotiate the algorithms and
+     parameters for use with those keys.</t>
+
+      <t>Datagram Transport Layer Security (DTLS) <xref
+      target="RFC4347"></xref> is a channel security protocol that offers
+      integrated key management, parameter negotiation, and secure data
+      transfer. Because DTLS's data transfer protocol is generic, it is less
+      highly optimized for use with RTP than is SRTP, which has been
+      specifically tuned for that purpose.</t>
+
+      <t>This document describes DTLS-SRTP, an SRTP extension for DTLS which
+      combine the performance and encryption flexibility benefits of SRTP with
+      the flexibility and convenience of DTLS's integrated key and association
+      management. DTLS-SRTP can be viewed in two equivalent ways: as a new key
+      management method for SRTP, and a new RTP-specific data format for
+      DTLS.</t>
+
+      <t>The key points of DTLS-SRTP are that: <list style="symbols">
+          <t>application data is protected using SRTP,</t>
+
+          <t>the DTLS handshake is used to establish keying material,
+          algorithms, and parameters for SRTP,</t>
+
+          <!--
+        EKT works by encrypting a 'master key' from which the other keys are derived.  With 
+        the DTLS-PRF approach, we're incompatible with EKT unless we're careful about it
+      -->
+
+          <!--
+   <t>The DTLS pseudo-random function (PRF) is used to generate the
+   SRTP encryption and authentication keys.</t>
+-->
+
+          <t>a DTLS extension used to negotiate SRTP algorithms, and</t>
+
+          <t>other DTLS record layer content types are protected using the
+          ordinary DTLS record format.</t>
+
+          <!-- I deleted the following because I didn't understand it and the  other points in the list seemed complete to me
+
+	<t>New mode negotiated via DTLS extension mechanism.</t>
+
+	-->
+        </list> </t>
+     <t>The remainder of this memo is structured as follows. <xref
+     target="sec-conv"/>
+     describes conventions used to indicate normative requirements.
+     <xref target="sec-overview"/>
+     provides an overview of DTLS-SRTP operation. 
+     <xref target="sec-extension"/>
+     specifies the DTLS extensions, while 
+     <xref target="sec-data-prot"/> discusses how
+     RTP and RTCP are transported over a DTLS-SRTP channel.
+     <xref target="sec-multiparty"/>
+     describes use with multi-party sessions. 
+     <xref target="section.sec"/> and <xref target="section.iana"/>
+     describe Security and IANA considerations.
+     </t>
+    </section>
+
+    <section anchor="sec-conv" title="Conventions Used In This Document">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119"></xref>.</t>
+    </section>
+
+    <section anchor="sec-overview" title="Overview of DTLS-SRTP Operation">
+        <t>
+        DTLS-SRTP is defined for point-to-point media sessions, in
+        which there are exactly two participants.  Each DTLS-SRTP
+        session contains a single DTLS association (called a
+        "connection" in TLS jargon), and an SRTP context.  
+        A single DTLS-SRTP session only protects data 
+        carried over a single UDP source and destination port pair.
+        </t>
+	<t>
+	The general pattern of DTLS-SRTP is as follows. For each
+	RTP or RTCP flow the peers do a DTLS handshake on the same source
+	and destination port pair to establish a DTLS association.
+	The keying material from that handshake is fed into the
+	SRTP stack. Once that association is established, RTP packets
+	are protected (becoming SRTP) using that keying material.</t>
+        <t>
+     RTP and RTCP traffic is usually sent on two separate UDP ports.
+     When symmetric RTP <xref target="RFC4961"/> is used, two bidirectional DTLS-SRTP
+     sessions are needed, one for the RTP port, one for the RTCP port.
+     When RTP flows are not symmetric, four unidirectional DTLS-SRTP
+     sessions are needed (for inbound and outbound RTP, and inbound
+     and outbound RTCP).
+     </t>
+        <t>
+          Symmetric RTP <xref target="RFC4961"/> is the case in which there are two RTP
+          sessions that have their source and destination ports
+          and addresses reversed, in a manner similar to the way
+          that a TCP connection uses its ports.  Each participant
+          has an inbound RTP session and an outbound RTP session.
+          When symmetric RTP is used, a single DTLS-SRTP session
+          can protect both of the RTP sessions.  
+         </t>
+     <t>
+     RTP and RTCP traffic MAY be multiplexed on a single UDP port [7].
+     In this case, both RTP and RTCP packets may be sent over the same
+     DTLS-SRTP session, halving the number of DTLS-SRTP sessions needed.
+     It is RECOMMENDED that symmetric RTP is used, with RTP and RTCP
+     multiplexed on a single UDP port; this requires only a single
+     DTLS-SRTP session.
+        </t>
+          <t> Between a single pair of participants, there may be
+          multiple media sessions.  There MUST be a separate DTLS-SRTP
+          session for each distinct pair of source and destination
+          ports used by a media session (though the sessions can
+	  share a single DTLS session and hence amortize the initial
+	  public key handshake!).</t>
+
+
+
+        <t>A DTLS-SRTP session MAY be indicated by an external signaling
+        protocol like SIP. When the signaling exchange is integrity-protected
+        (e.g when SIP Identity protection via digital signatures is used),
+        DTLS-SRTP can leverage this integrity guarantee to provide complete
+        security of the media stream. A description of how to indicate
+        DTLS-SRTP sessions in SIP and SDP, and how to authenticate the
+        endpoints using fingerprints can be found in <xref
+        target="I-D.ietf-sip-dtls-srtp-framework"/>.
+	</t>
+        <t>In a naive implementation, when there are multiple media
+        sessions, there is a new DTLS session establishment (complete
+        with public key cryptography) for each media channel. For
+        example, a videophone may be sending both an audio stream and
+        a video stream, each of which would use a separate DTLS
+        session establishment exchange, which would proceed in
+        parallel. As an optimization, the DTLS-SRTP implementation
+        SHOULD use the following strategy: a single DTLS association is
+        established, and all other DTLS associations wait until that
+        connection is established before proceeding with their 
+	handshakes establishment exchanges. This strategy allows the later
+        sessions to use DTLS session resumption, which allows the
+        amortization of the expensive public key cryptography
+        operations over multiple DTLS handshakes.</t>
+
+        <t><!--
+    One issue that arises in this context is multiple RTP sender over
+    the same DTLS channel. 
+    -->The SRTP keys used to protect packets originated by the client are
+        distinct from the SRTP keys used to protect packets originated by the
+        server. All of the RTP sources originating on the client use the same
+        SRTP keys, and similarly, all of the RTP sources originating on the
+        server over the same channel use the same SRTP keys. The SRTP
+        implementation MUST ensure that all of the SSRC values for all of the
+        RTP sources originating from the same device over the same channel
+	are distinct, in order to
+        avoid the "two-time pad" problem (as described in Section 9.1 of RFC
+        3711).</t>
+      </section>
+      
+      <section anchor="sec-extension" title="DTLS Extensions for SRTP Key Establishment">
+      <section title="The use_srtp Extension">
+
+        <t>In order to negotiate the use of SRTP data protection, clients 
+        include an extension of type "use_srtp" in the DTLS extended client hello. 
+        This extension MUST only be used when the data being transported is
+        RTP and RTCP <xref target="RFC3550"></xref>.
+        The "extension_data" field of this extension contains the list of
+        acceptable SRTP protection profiles, as indicated below.</t>
+
+        <t>Servers that receive an extended hello containing a "use_srtp"
+        extension can agree to use SRTP by including an extension of type
+        "use_srtp", with the chosen protection profile in the extended server
+        hello. This process is shown below.</t>
+
+        <figure>
+          <artwork><![CDATA[	
+      Client                                               Server
+
+      ClientHello + use_srtp       -------->
+                                           ServerHello + use_srtp
+                                                     Certificate*
+                                               ServerKeyExchange*
+                                              CertificateRequest*
+                                   <--------      ServerHelloDone
+      Certificate*
+      ClientKeyExchange
+      CertificateVerify*
+      [ChangeCipherSpec]
+      Finished                     -------->
+                                               [ChangeCipherSpec]
+                                   <--------             Finished
+      SRTP packets                 <------->      SRTP packets
+]]></artwork>
+        </figure>
+	
+	<t>Note that '*' indicates messages which are not always
+	sent in DTLS. The CertificateRequest, client Certificate,
+	and CertificateVerify will be sent in DTLS-SRTP.</t> 
+        <t>
+         Once the "use_srtp" extension is negotiated, the RTP or RTCP
+         application data is protected solely using SRTP. Application
+         data is never sent in DTLS record-layer "application_data"
+         packets. Rather, complete RTP or RTCP packets are passed to
+         the DTLS stack which passes them to the SRTP stack which
+         protects them appropriately. Note that if RTP/RTCP
+         multiplexing <xref target="I-D.ietf-avt-rtp-and-rtcp-mux"/>
+         is in use, this means that RTP and RTCP packets may both be
+         passed to the DTLS stack. Because the DTLS layer
+	 does not process the packets, it does need to distinguish
+	 them. The SRTP stack can use the procedures of 
+	 <xref	
+         target="I-D.ietf-avt-rtp-and-rtcp-mux"/> to
+	 distinguish RTP from RTCP. 
+	 </t>
+	 <t>
+	 When the "use_srtp" extension is in
+         effect, implementations MUST NOT place more than one 
+	 application data "record"
+         per datagram. (This is only meaningful from the perspective of
+         DTLS because SRTP is inherently oriented towards one payload
+         per packet, but is stated purely for clarification.)</t>
+	 <t>Records of type other than "application_data" MUST
+         use ordinary DTLS framing.</t>
+	 
+        <section title="use_srtp Extension Definition">
+          <t>The client MUST fill the extension_data field of the "use_srtp"
+          extension with an UseSRTPData value (see <xref target="section.iana"/>  for the registration):</t>
+
+          <figure>
+            <artwork><![CDATA[
+   uint8 SRTPProtectionProfile[2];
+
+   struct {
+      SRTPProtectionProfiles SRTPProtectionProfiles;
+      uint8 srtp_mki<0..255>;
+   } UseSRTPData;
+
+   SRTPProtectionProfile SRTPProtectionProfiles<2^16-1>;
+   ]]></artwork>
+          </figure>
+
+          <t>The SRTPProtectionProfiles list indicates the SRTP protection
+          profiles that the client is willing to support, listed in descending
+          order of preference. The srtp_mki value contains the SRTP
+          MasterKeyIdentifier (MKI) value (if any) which the client will use
+          for his SRTP messages. If this field is of zero length,
+	  then no MKI will be used.</t>
+
+          <t>If the server is willing to accept the use_srtp extension, it
+          MUST respond with its own "use_srtp" extension in the
+          ExtendedServerHello. The extension_data field MUST contain a
+          UseSRTPData value with a single SRTPProtectionProfile value which
+          the server has chosen for use with this connection. The server MUST
+          NOT select a value which the client has not offered. If there is no
+          shared profile, the server SHOULD not return the use_srtp extension
+          at which point the connection falls back to the negotiated DTLS
+          cipher suite. If that is not acceptable the server SHOULD return an
+          appropriate DTLS alert.</t>
+        </section>
+
+        <section anchor="section.propro" title="SRTP Protection Profiles">
+          <t>A DTLS-SRTP SRTP Protection Profile defines the parameters and
+          options that are in effect for the SRTP processing. This document
+          defines the following SRTP protection profiles.</t>
+
+          <figure>
+            <artwork>
+   SRTPProtectionProfile SRTP_AES128_CM_SHA1_80 = {0x00, 0x01};
+   SRTPProtectionProfile SRTP_AES128_CM_SHA1_32 = {0x00, 0x02};
+   SRTPProtectionProfile SRTP_AES256_CM_SHA1_80 = {0x00, 0x03};
+   SRTPProtectionProfile SRTP_AES256_CM_SHA1_32 = {0x00, 0x04};
+   SRTPProtectionProfile SRTP_NULL_SHA1_80      = {0x00, 0x05};
+   SRTPProtectionProfile SRTP_NULL_SHA1_32      = {0x00, 0x06};
+   </artwork>
+          </figure>
+<!--
+   SRTPProtectionProfile SRTP_AES128_F8_SHA1_80 = {0x00, 0x03};
+   SRTPProtectionProfile SRTP_AES128_F8_SHA1_32 = {0x00, 0x04};
+  -->
+
+          <t>The following list indicates the SRTP transform
+          parameters for each protection profile. The parameters
+          cipher_key_length, cipher_salt_length, auth_key_length, and
+          auth_tag_length express the number of bits in the values to
+          which they refer. The maximum_lifetime parameter indicates
+          the maximum number of packets that can be protected with
+          each single set of keys when the parameter profile is in
+          use.  All of these parameters apply to both RTP and RTCP,
+          unless the RTCP parameters are separately specified.
+	  </t>
+	  <t>
+	    All of the crypto algorithms in these profiles are from
+	    <xref target="RFC3711"/>, except for the AES256_CM cipher,
+	    which is specified in
+	    <xref target="I-D.mcgrew-srtp-big-aes"/>.
+	    </t>
+
+          <!--   
+   <texttable>
+     <ttcol align="left">Profile</ttcol>
+     <ttcol align="right">Cipher</ttcol>
+     <ttcol align="right">Integrity</ttcol>
+     
+     <c>SRTP_AES128_CM_SHA1_80</c> 
+     <c>AES128_CM</c>
+     <c>HMAC-SHA1 (80 bit)</c>
+
+     <c>SRTP_AES128_CM_SHA1_32</c> 
+     <c>AES128_CM</c>
+     <c>HMAC-SHA1 (32 bit)</c>
+
+     <c>SRTP_AES128_F8_SHA1_80</c> 
+     <c>AES128_F8</c>
+     <c>HMAC-SHA1 (80 bit)</c>
+
+     <c>SRTP_AES128_F8_SHA1_32</c> 
+     <c>AES128_F8</c>
+     <c>HMAC-SHA1 (32 bit)</c>
+
+
+     <c>SRTP_NULL_SHA1_80</c> 
+     <c>NULL</c>
+     <c>HMAC-SHA1 (80 bit)</c>
+
+     <c>SRTP_NULL_SHA1_32</c> 
+     <c>NULL</c>
+     <c>HMAC-SHA1 (32 bit)</c>
+
+   </texttable>
+-->
+
+          <t><list style="hanging">
+              <t hangText="SRTP_AES128_CM_HMAC_SHA1_80"><list>
+                  <t>cipher: AES_128_CM</t>
+
+                  <t>cipher_key_length: 128</t>
+
+                  <t>cipher_salt_length: 112</t>
+
+                  <t>maximum_lifetime: 2^31</t>
+
+                  <t>auth_function: HMAC-SHA1</t>
+
+                  <t>auth_key_length: 160</t>
+
+                  <t>auth_tag_length: 80</t>
+                </list></t>
+
+              <t hangText="SRTP_AES128_CM_HMAC_SHA1_32">
+		<list>
+                  <t>cipher: AES_128_CM</t>
+
+                  <t>cipher_key_length: 128</t>
+
+                  <t>cipher_salt_length: 112</t>
+
+                  <t>maximum_lifetime: 2^31</t>
+
+                  <t>auth_function: HMAC-SHA1</t>
+
+                  <t>auth_key_length: 160</t>
+
+                  <t>auth_tag_length: 32</t>
+
+                  <t>RTCP auth_tag_length: 80</t>
+                </list></t>
+
+              <t hangText="SRTP_AES256_CM_HMAC_SHA1_80"><list>
+                  <t>cipher: AES_256_CM</t>
+
+                  <t>cipher_key_length: 256</t>
+
+                  <t>cipher_salt_length: 112</t>
+
+                  <t>maximum_lifetime: 2^31</t>
+
+                  <t>auth_function: HMAC-SHA1</t>
+
+                  <t>auth_key_length: 160</t>
+
+                  <t>auth_tag_length: 80</t>
+                </list></t>
+
+              <t hangText="SRTP_AES256_CM_HMAC_SHA1_32">
+		<list>
+                  <t>cipher: AES_256_CM</t>
+
+                  <t>cipher_key_length: 256</t>
+
+                  <t>cipher_salt_length: 112</t>
+
+                  <t>maximum_lifetime: 2^31</t>
+
+                  <t>auth_function: HMAC-SHA1</t>
+
+                  <t>auth_key_length: 160</t>
+
+                  <t>auth_tag_length: 32</t>
+
+                  <t>RTCP auth_tag_length: 80</t>
+                </list></t>
+
+              <!--
+       <t hangText="SRTP_AES128_F8_HMAC_SHA1_80">	 
+	 <list>
+	   <t> cipher: AES_128_F8  </t>
+	   <t> cipher_key_length: 128</t>
+	   <t> cipher_salt_length: 112 </t>
+	   <t> maximum_lifetime:   2^48 </t>
+	   <t> auth_function: HMAC-SHA1 </t>
+	   <t> auth_key_length: 160 </t>
+	   <t> auth_tag_length: 80 </t>
+	 </list>
+       </t>
+       <t hangText="SRTP_AES128_F8_HMAC_SHA1_32">
+	   	 Because the short authentication tag provides limited authentication, this
+	 profile SHOULD NOT be used with RTCP.
+	 <list>
+	   <t> cipher: AES_128_F8  </t>
+	   <t> cipher_key_length: 128</t>
+	   <t> cipher_salt_length: 112 </t>
+	   <t> maximum_lifetime:   2^48 </t>
+	   <t> auth_function: HMAC-SHA1 </t>
+	   <t> auth_key_length: 160 </t>
+	   <t> auth_tag_length: 32 </t>
+	 </list>
+       </t>
+       -->
+
+              <t hangText="SRTP_NULL_HMAC_SHA1_80"><list>
+                  <t>cipher: NULL</t>
+
+                  <t>cipher_key_length: 0</t>
+
+                  <t>cipher_salt_length: 0</t>
+
+                  <t>maximum_lifetime: 2^31</t>
+
+                  <t>auth_function: HMAC-SHA1</t>
+
+                  <t>auth_key_length: 160</t>
+
+                  <t>auth_tag_length: 80</t>
+                </list></t>
+
+              <t hangText="SRTP_NULL_HMAC_SHA1_32">
+		<list>
+                  <t>cipher: NULL</t>
+
+                  <t>cipher_key_length: 0</t>
+
+                  <t>cipher_salt_length: 0</t>
+
+                  <t>maximum_lifetime: 2^31</t>
+
+                  <t>auth_function: HMAC-SHA1</t>
+
+                  <t>auth_key_length: 160</t>
+
+                  <t>auth_tag_length: 32</t>
+
+                  <t>RTCP auth_tag_length: 80</t>
+                </list></t>
+            </list> 
+	    </t>
+	    <t>
+	    With all of these SRTP Parameter profiles, the following
+          SRTP options are in effect:
+	  </t>
+	  <t><list style="symbols">
+              <t>The TLS Key Derivation Function (KDF) is used to generate
+              keys to feed into the SRTP KDF.</t>
+
+              <t>The Key Derivation Rate (KDR) is equal to zero. Thus, keys
+              are not re-derived based on the SRTP sequence number.</t>
+
+              <t>For all other parameters, the default values are used.</t>
+            </list></t><t> All SRTP parameters that are not determined by the SRTP
+          Protection Profile MAY be established via the signaling system. In
+          particular, the relative order of Forward Error Correction and SRTP
+          processing, and a suggested SRTP replay window size SHOULD be
+          established in this manner. An example of how these parameters can
+          be defined for SDP by is contained in <xref
+          target="RFC4568"></xref>. If they are not otherwise signalled,
+	  they take on their default values from <xref target="RFC3711"/>.</t>
+	  
+	  <t>
+	    Applications using DTLS-SRTP SHOULD coordinate the SRTP
+	    Protection Profiles between the DTLS-SRTP session that
+	    protects an RTP flow and the DTLS-SRTP session that
+	    protects the associated RTCP flow (in those case in which
+	    the RTP and RTCP are not multiplexed over a common port).
+	    In particular, identical ciphers SHOULD be used.
+	    </t>
+
+          <t>New SRTPProtectionProfile values must be defined by RFC 2434
+          Standards Action. See  <xref target="section.iana"></xref>
+          for IANA Considerations.</t>
+        </section>
+
+        <section title="srtp_mki value">
+          <t>The srtp_mki value MAY be used to indicate the capability and
+          desire to use the SRTP Master Key Indicator (MKI) field in the SRTP
+          and SRTCP packets. The MKI field indicates to an SRTP receiver which
+          key was used to protect the packet that contains that field. The
+          srtp_mki field contains the value of the SRTP MKI which is
+          associated with the SRTP master keys derived from this handshake.
+          Each SRTP session MUST have exactly one master key that is used to
+          protect packets at any given time. The client MUST choose the MKI
+          value so that it is distinct from the last MKI value that was used,
+          and it SHOULD make these values unique.</t>
+
+          <t>Upon receipt of a "use_srtp" extension containing a "srtp_mki"
+          field, the server MUST either (assuming it accepts the extension at
+          all):</t>
+
+          <t><list style="numbers">
+              <t>include a matching "srtp_mki" value in its "use_srtp"
+              extension to indicate that it will make use of the MKI, or</t>
+
+              <t>return an empty "srtp_mki" value to indicate that it cannot
+              make use of the MKI.</t>
+            </list></t>
+
+          <t>If the client detects a nonzero-length MKI in the server's
+          response that is different than the one the client offered MUST
+          abort the handshake and SHOULD send an invalid_parameter alert. If
+          the client and server agree on an MKI, all SRTP packets protected
+          under the new security parameters MUST contain that MKI.</t>
+        </section>
+      </section>
+
+      <section anchor="keyDeriv" title="Key Derivation">
+        <t>When SRTP mode is in effect, different keys are used for ordinary
+        DTLS record protection and SRTP packet protection. These keys are
+        generated using a TLS extractor <xref target="I-D.ietf-tls-extractor"/> to generate 
+	2 * (SRTPSecurityParams.master_key_len + SRTPSecurityParams.master_salt_len) bytes of data, which are assigned as shown below.</t>
+
+        <figure>
+          <artwork><![CDATA[
+client_write_SRTP_master_key[SRTPSecurityParams.master_key_len];    
+server_write_SRTP_master_key[SRTPSecurityParams.master_key_len];   
+client_write_SRTP_master_salt[SRTPSecurityParams.master_salt_len];
+server_write_SRTP_master_salt[SRTPSecurityParams.master_salt_len];
+]]></artwork>
+
+          <!--
+This artwork is too big to fit in an RFC!  Should we rename SRTPSecurityParameters
+to SRTPparameters?
+-->
+        </figure>
+	
+	<t>The extractor label for this usage is "EXTRACTOR-dtls_srtp".
+	</t>
+        <t>The four keying material values
+	are provided as inputs to the SRTP key
+        derivation mechanism, as shown in <xref target="KeyFig"></xref> and
+        detailed below. By default, the mechanism defined in Section 4.3 of
+        <xref target="RFC3711"></xref> is used, unless another key derivation
+        mechanism is specified as part of an SRTP Protection Profile.</t>
+
+        <t>The client_write_SRTP_master_key and client_write_SRTP_master_salt
+        are provided to one invocation of the SRTP key derivation function, to
+        generate the SRTP keys used to encrypt and authenticate packets sent
+        by the client. The server MUST only use these keys to decrypt and to
+        check the authenticity of inbound packets.</t>
+
+        <t>The server_write_SRTP_master_key and server_write_SRTP_master_salt
+        are provided to one invocation of the SRTP key derivation function, to
+        generate the SRTP keys used to encrypt and authenticate packets sent
+        by the server. The client MUST only use these keys to decrypt and to
+        check the authenticity of inbound packets.</t>
+
+        <figure anchor="KeyFig" title="The derivation of the SRTP keys.">
+          <artwork><![CDATA[
+    +------- TLS master secret   
+    |                                
+    v    +-> client_write_MAC_secret          
++-----+  |                           
+| TLS |--+-> server_write_MAC_secret         
+| KDF |  |        
++-----+  +-> client_write_key                
+         |                           
+         +-> server_write_key             
+         |                                       +------+   SRTP 
+         +-> client_write_SRTP_master_key  ----->| SRTP |-> client
+         |                                  +--->|  KDF |   write 
+         +-> server_write_SRTP_master_key --|-+  +------+   keys
+         |                                  | |  
+         +-> client_write_SRTP_master_salt -+ |  +------+   SRTP
+         |                                    +->| SRTP |-> server
+         +-> server_write_SRTP_master_salt ----->|  KDF |   write
+                                                 +------+   keys  
+]]></artwork>
+        </figure>
+
+	<t>
+	  When both RTCP and RTP use the same source and destination
+	  ports, then both the SRTP and SRTCP keys are need.
+	  Otherwise, there are two DTLS-SRTP sessions, one of which
+	  protects the RTP packets and one of which protects the RTCP
+	  packets; each DTLS-SRTP session protects the part of an SRTP
+	  session that passes over a single source/destination
+	  transport address pair, as shown in
+	  <xref target="SessionFig"/>.  When a DTLS-SRTP session is
+	  protecting RTP, the SRTCP keys derived from the DTLS
+	  handshake are not needed and are discarded.  When a
+	  DTLS-SRTP session is protecting RTCP, the SRTP keys derived
+	  from the DTLS handshake are not needed and are discarded.
+	  </t>
+        <figure anchor="SessionFig" title="A DTLS-SRTP session protecting RTP (1) and another one protecting RTCP (2), showing the transport addresses and keys used.">
+          <artwork><![CDATA[
+   Client            Server
+  (Sender)         (Receiver)
+(1)   <----- DTLS ------>    src/dst = a/b and b/a
+      ------ SRTP ------>    src/dst = a/b, uses client write keys   
+	    	   
+(2)   <----- DTLS ------>    src/dst = c/d and d/c
+      ------ SRTCP ----->    src/dst = c/d, uses client write keys
+      <----- SRTCP ------    src/dst = d/c, uses server write keys
+]]></artwork>
+        </figure>
+
+        <!--
+   <t>
+   The following table shows the mapping in the client
+   to server direction:
+   </t>
+      <texttable>
+        <ttcol align="left">DTLS Value</ttcol>
+        <ttcol align="right">SRTP Value</ttcol>
+
+	<c>srtp_client_write_MAC_secret</c>
+	<c>k_a</c>
+	
+	<c>srtp_client_write_key</c>
+	<c>k_e</c>
+
+	<c>srtp_client_write_salt</c>
+	<c>k_s</c>
+      </texttable>
+-->
+
+        <t></t>
+      </section>
+
+      <section title="Key Scope">
+        <!--
+     <t>
+     The SRTP cipher and authentication function keys provided by DTLS-SRTP 
+     are used as follows.
+     <list>       
+       <t>
+	 The srtp_client_write_key is used to encrypt traffic that is
+	 sent by the client.  It MUST NOT be used in encryption by the
+	 server.
+       </t>
+       <t>
+	 The srtp_client_write_salt_secret is used to randomize IV by some SRTP
+	 ciphers; may be used as input to the encryption of traffic that is
+	 sent by the client.  It MUST NOT be used in encryption by the
+	 server.
+       </t>
+       <t>
+	 The srtp_client_write_MAC_secret is used to generate authentication
+	 tags for traffic that is sent by the client.  It MUST NOT be used
+	 to generate tags for traffic that is sent by the server.
+       </t>
+       <t>
+	 The srtp_server_write_key is used to encrypt traffic that is sent by
+	 the server.  It MUST NOT be used in encryption by the client.
+       </t>
+       <t>
+	 The srtp_server_write_salt_secret is used to randomize IV by some SRTP
+	 ciphers; may be used as input to the encryption of traffic that is
+	 sent by the server.  It MUST NOT be used in encryption by the
+	 client.
+       </t>
+       <t>	 
+	 The srtp_server_write_MAC_secret is used to generate authentication
+	 tags for traffic that is sent by the server.  It MUST NOT be used
+	 to generate tags for traffic that is sent by the client.
+       </t>
+     </list>
+     </t>
+     -->
+
+        <t><!--
+       The "use_srtp" extension conveys the RTP sequence number at
+       which the SRTP keys derived after a DTLS handshake will be
+       used.  
+       -->Because of the possibility of packet reordering, DTLS-SRTP
+        implementations SHOULD store multiple SRTP keys sets during a re-key
+        in order to avoid the need for receivers to drop packets for which
+        they lack a key.</t>
+      </section>
+
+      <section title="Key Usage Limitations">
+        <t>The maximum_lifetime parameter in the SRTP protection
+        profile indicates the maximum number of packets that can be
+        protected with each single encryption and authentication
+        key. (Note that, since RTP and RTCP are protected with
+        independent keys, those protocols are counted separately for
+        the purposes of determining when a key has reached the end of
+        its lifetime.) Each profile defines its own limit. When this
+        limit is reached, a new DTLS session SHOULD be used to
+        establish replacement keys, and SRTP implementations MUST NOT
+        use the existing keys for the processing of either outbound or
+        inbound traffic.</t>
+      </section>
+      </section>
+
+      <section anchor="sec-data-prot" title="Use of RTP and RTCP over a DTLS-SRTP Channel">
+      <section  title="Data Protection">
+        <t>Once the DTLS handshake has completed the peers can send RTP or
+        RTCP over the newly created channel. We describe the transmission
+        process first followed by the reception process.</t>
+
+        <t>Within each RTP session, SRTP processing MUST NOT take place before
+        the DTLS handshake completes.</t>
+
+        <section anchor="section.transmit" title="Transmission">
+          <t>DTLS and TLS define a number of record content types. In ordinary
+          TLS/DTLS, all data is protected using the same record encoding and
+          mechanisms. When the mechanism described in this document is in
+          effect, this is modified so that data of type "application_data"
+          (used to transport data traffic) is encrypted using SRTP rather than
+          the standard TLS record encoding.</t>
+
+          <t>When a user of DTLS wishes to send an RTP packet in SRTP mode it
+          delivers it to the DTLS implementation as a single write of type
+          "application_data". The DTLS implementation then invokes the
+          processing described in RFC 3711 Sections 3 and 4. The resulting
+          SRTP packet is then sent directly on the wire as a single datagram
+          with no DTLS framing. This provides an encapsulation of the data
+          that conforms to and interoperates with SRTP. Note that the RTP
+          sequence number rather than the DTLS sequence number is used for
+          these packets.</t>
+        </section>
+
+        <section title="Reception" anchor="section.reception">
+          <t>When DTLS-SRTP is used to protect an RTP session, the RTP
+          receiver needs to demultiplex packets that are arriving on the RTP
+          port. Arriving packets may be of types RTP, DTLS, or STUN<xref
+          target="I-D.ietf-behave-rfc3489bis"></xref>. The type of a packet
+          can be determined by looking at its first byte.</t>
+
+          <t>The process for demultiplexing a packet is as
+          follows. The receiver looks at the first byte of the
+          packet. If the value of this byte is 0 or 1, then the packet
+          is STUN. If the value is in between 128 and 191 (inclusive),
+          then the packet is RTP (or RTCP, if both RTCP and RTP are
+          being multiplexed over the same destination port). If the
+          value is between 20 and 63 (inclusive), the packet is
+          DTLS. This processes is summarized
+          in <xref target="demuxFig"></xref>.</t>
+
+          <figure anchor="demuxFig"
+                  title="The DTLS-SRTP receiver's packet demultiplexing     algorithm.  Here the field B denotes the leading byte of the packet.">
+            <artwork><![CDATA[
+                +----------------+
+                | 127 < B < 192 -+--> forward to RTP
+                |                |
+    packet -->  |  19 < B < 64  -+--> forward to DTLS
+                |                |
+                |       B < 2   -+--> forward to STUN
+                +----------------+
+]]></artwork>
+          </figure>
+
+   <t>
+   In some cases there will be
+   multiple DTLS-SRTP associations for a given SRTP endpoint.
+   For instance, if Alice makes a call which is SIP forked to
+   both Bob and Charlie, she will use the same local host/port
+   pair for both of them, as shown in <xref target="forkFig"/>.
+   (The SSRCs shown are the ones for data flowing to Alice).
+   </t>
+
+        <figure anchor="forkFig" title="RTP sessions with SIP forking">
+          <artwork><![CDATA[	
+                                       Bob (192.0.2.1:6666)
+                                      /
+                                     /
+                                    / SSRC=1
+                                   /  DTLS-SRTP=XXX
+                                  /
+                                 v
+            Alice (192.0.2.0:5555)
+                                 ^
+                                  \
+                                   \  SSRC=2
+                                    \ DTLS-SRTP=YYY
+                                     \ 
+                                      \
+                                       Charlie (192.0.2.1:6666)   	 
+]]></artwork>
+          </figure>
+   <t>
+   Because DTLS operates on the host/port
+   quartet, the DTLS association will still complete correctly,
+   with the foreign host/port pair being used to distinguish
+   the associations. However, in RTP the source host/port is
+   not used and sessions are identified by the destination	  
+   host/port and the SSRC. Thus, some mechanism is needed
+   to determine which SSRCs correspond to which DTLS associations.
+   The following method SHOULD be used.
+   </t>
+   <t>
+   For each local host/port pair, the DTLS-SRTP implementation
+   maintains a table listing all the SSRCs it knows about 
+   and the DTLS-SRTP associations they correspond to.
+   Initially, this table is empty. When an SRTP 
+   packet is received, the following procedure is used:
+   </t>
+   <t>
+   <list style="numbers">
+   <t>If the SSRC is already known, then the corresponding
+      DTLS-SRTP association and its keying material is used
+      to decrypt the packet.</t>
+   <t>If the SSRC is not known, then the receiver tries to
+      decrypt it with the keying material corresponding
+      to each DTLS-SRTP association.</t>
+   <t>If the decryption succeeds (the authentication tag
+      verifies) then an entry is placed in the table
+      mapping the SSRC to that association.</t>
+   <t>If the decryption fails, then the packet is silently 
+      discarded.</t>
+   <t>When a DTLS-SRTP association
+      is closed (for instance because the fork is abandoned)
+      its entries MUST be removed from the mapping table.</t>
+  </list>
+   </t>
+   <t>
+   The average cost of this algorithm for a single SSRC is
+   the decryption time of a single packet times the number
+   valid DTLS-SRTP associations corresponding to a single
+   receiving port on the host. In practice, this means the
+   number of forks, so in the case shown in <xref target="forkFig"/>,
+   that would be two. This cost is only incurred once for any
+   given SSRC, since afterwards that SSRC is placed in the map
+   table and looked up immediately. As with normal RTP,
+   this algorithm allows new SSRCs to be introduced by the
+   source at any time. They will automatically be mapped
+   to the correct DTLS association. 
+   </t>
+   <t>
+   Note that this algorithm explicitly allows multiple SSRCs
+   to be sent from the same address/port pair. One way
+   in which this can happen is an RTP translator. This
+   algorithm will automatically assign the SSRCs to the
+   correct associations. Note that because the SRTP packets
+   are cryptographically protected, such a translator must
+   either share keying material with one endpoint in or
+   refrain from modifying the packets in a way which would
+   cause the integrity check to fail. This is a general
+   property of SRTP and is not specific to DTLS-SRTP.
+   </t>
+   <t>
+   There are two error cases that should be considered. First,
+   if an SSRC collision occurs, then only the packets from
+   the first source will be processed. When the packets from
+   the second source arrive, the DTLS association with the
+   first source will be used for decryption, which will fail,
+   and the packet will be discarded. This is consistent
+   with <xref target="RFC3550"/>, which permits the
+   receiver to keep the packets from one source and discard
+   those from the other. Of course the RFC 3550 SSRC collision
+   detection and handling procedures MUST also be followed.
+   </t>
+   <t>
+   Second, there may be cases where a malfunctioning source
+   is sending corrupt packets which cannot be decrypted.
+   In this case, the SSRC will never be entered into the
+   mapping table, because the decryption always fails. 
+   Receivers MAY keep records of unmapped 
+   SSRCs which consistently fail decryption and abandon
+   attempts to decrypt them once they reach some limit.
+   That limit MUST be large enough to account for the
+   effects of transmission errors. 
+   </t>
+<!--
+   <section title="Opportunistic Probing">
+   <t>[[Open Issue
+   In discussions of media-level security, some have suggested
+   that a desirable property is to allow the endpoints to automatically
+   detect the capability to do security at the media layer without
+   interaction from the signalling. This issue is primarily out of 
+   scope for this document, however because of the demuxing mentioned
+   above, it is possible for an implementation to 
+   "probe" by sending DTLS handshake packets
+   and seeing if they are answered. A DTLS-SRTP implementation can
+   demux the packets, detect that a handshake has been requested
+   and notify the application to potentially initiate a DTLS-SRTP
+   association. It is, however, necessary to have a rule to break
+   the symmetry as to which side is client and which server. In
+   applications where the media channel is established via SDP,
+   the offeror should be the server and the answerer the client.]]
+   </t>   
+   </section>   
+   -->
+
+        </section>
+      </section>
+      
+      <section anchor="section.rehandshake" title="Rehandshake and Re-key">
+        <t>Rekeying in DTLS is accomplished by performing a new handshake over
+        the existing DTLS channel. This handshake can be performed in parallel
+        with data transport, so no interruption of the data flow is required.
+        Once the handshake is finished, the newly derived set of keys is used
+        to protect all outbound packets, both DTLS and SRTP.</t>
+
+        <!--
+   <t>
+   Because of packet reordering, data from the previous association
+   can appear on the wire after the handshake has completed. This
+   means that receivers must maintain both sets of keys for some
+   time in order to be able to decrypt and verify older data records. In
+   the ordinary DTLS record layer, this is accomplished by having
+   an "epoch" value in each record that indicates which handshake
+   the record is from. However, no such explicit field is present in SRTP.
+   </t>
+   <t>
+   One approach would be to simply place the DTLS epoch value in
+   the Master Key Identifier, but this would add two bytes to 
+   every packet, which seems undesirable, given that rekeying is
+   an infrequent event. Instead, we propose adapting the 
+   rollover counter management algorithm of Section 3.3.1 of 
+   RFC 3711. When a handshake has just been performed (during
+   the MSL period after the handshake), the implementation
+   SHOULD retain the pre-handshake set of keys. When a new
+   packet arrives, it should try decrypting/authenticating
+   with both sets of keys (using the sequence number to guess
+   which key to try first). If either set succeeds, it should
+   pass on the packet, otherwise it should be rejected.
+   Once the MSL has expired, the previous keys can be discarded.
+   This algorithm is easily extensible to the case where
+   several handshakes happen in close succession, but such
+   practice is NOT RECOMMENDED.
+   </t>
+-->
+
+        <t>Because of packet reordering, packets protected by the previous set
+        of keys can appear on the wire after the handshake has completed. To
+        compensate for this fact, receivers SHOULD maintain both sets of keys
+        for some time in order to be able to decrypt and verify older packets.
+        The keys should be maintained for the duration of the maximum segment
+        lifetime (MSL).</t>
+	
+        <t>If an MKI is used, then the receiver should use the
+        corresponding set of keys to process an incoming
+        packet. Otherwise, when a packet arrives after the handshake
+        completed, a receiver SHOULD use the newly derived set of keys
+        to process that packet unless there is an MKI (If the packet
+        was protected with the older set of keys, this fact will
+        become apparent to the receiver as an authentication failure
+        will occur.) <!--
+      <t>[DAM]  But what about the case where no SRTP authentication is used?
+         [EKR] Doesn't apply here since we only specify ones that have auth.
+--> 
+	If the authentication check on the packet fails and no MKI is being
+	used, then the receiver MAY
+        process the packet with the older set of keys. If that authentication
+        check indicates that the packet is valid, the packet should be
+        accepted; otherwise, the packet MUST be discarded and rejected.</t>
+
+        <t>Receivers MAY use the SRTP packet sequence number to aid in the
+        selection of keys. After a packet has been received and authenticated
+        with the new key set, any packets with sequence numbers that are
+        greater will also have been protected with the new key set.</t>
+      </section>
+    </section>
+    <section anchor="sec-multiparty" title="Multi-party RTP Sessions">
+      <t>Since DTLS is a point-to-point protocol, DTLS-SRTP is intended only
+      to protect unicast RTP sessions. 
+      This does not preclude its use with RTP mixers. For example, a
+      conference bridge may use DTLS-SRTP to secure the communication to and
+      from each of the participants in a conference. However, because
+      each flow between an endpoint and a mixer has its own key,
+      the mixer has to decrypt and then reencrypt the traffic for each
+      recipient.</t>
+
+      <t>A future specification
+      may describe methods for sharing a single key between multiple
+      DTLS-SRTP associations which would allow conferencing systems
+      to avoid the decrypt/reencrypt stage. However, any system in
+      which the media is modified (e.g., for level balancing or
+      transcoding) will generally need to be performed on the plaintext
+      and will certainly break the authentication tag and therefore
+      will require a decrypt/reencrypt stage.</t>
+    </section>
+
+    <section anchor="section.sec" title="Security Considerations">
+      <t>The use of multiple data protection framings negotiated in the same
+      handshake creates some complexities, which are discussed here.</t>
+
+      <section title="Security of Negotiation">
+        <t>One concern here is that attackers might be able to implement a
+        bid-down attack forcing the peers to use ordinary DTLS rather than
+        SRTP. However, because the negotiation of this extension is performed
+        in the DTLS handshake, it is protected by the Finished messages.
+        Therefore, any bid-down attack is automatically detected, which
+        reduces this to a denial of service attack - which any attacker who
+        can control the channel can always mount.</t>
+      </section>
+
+      <section title="Framing Confusion">
+        <t>Because two different framing formats are used, there is concern
+        that an attacker could convince the receiver to treat an SRTP-framed
+        RTP packet as a DTLS record (e.g., a handshake message) or vice versa.
+        This attack is prevented by using different keys for MAC verification
+        for each type of data. Therefore, this type of attack reduces to being
+        able to forge a packet with a valid MAC, which violates a basic
+        security invariant of both DTLS and SRTP.</t>
+
+        <t>As an additional defense against injection into the DTLS handshake
+        channel, the DTLS record type is included in the MAC. Therefore, an
+        SRTP record would be treated as an unknown type and ignored. (See
+        Section 6 of <xref target="RFC4346"></xref>).</t>
+      </section>
+
+      <section title="Sequence Number Interactions">
+        <t>As described in  <xref target="section.transmit"></xref>,
+        the SRTP and DTLS sequence number spaces are distinct. This means that
+        it is not possible to unambiguously order a given DTLS control record
+        with respect to an SRTP packet. In general, this is relevant in two
+        situations: alerts and rehandshake.</t>
+
+        <section title="Alerts">
+          <t>Because DTLS handshake and change_cipher_spec messages share the
+          same sequence number space as alerts, they can be ordered correctly.
+          Because DTLS alerts are inherently unreliable and SHOULD NOT be
+          generated as a response to data packets, reliable sequencing between
+          SRTP packets and DTLS alerts is not an important feature. However,
+          implementations which wish to use DTLS alerts to signal problems
+          with the SRTP encoding SHOULD simply act on alerts as soon as they
+          are received and assume that they refer to the temporally contiguous
+          stream. Such implementations MUST check for alert retransmission and
+          discard retransmitted alerts to avoid overreacting to replay
+          attacks.</t>
+        </section>
+
+        <section title="Renegotiation">
+          <t>Because the rehandshake transition algorithm specified in Section
+          <xref target="section.rehandshake"></xref> requires trying multiple
+          sets of keys if no MKI is used, it slightly weakens the authentication. For instance,
+          if an n-bit MAC is used and k different sets of keys are present,
+          then the MAC is weakened by log_2(k) bits to n - log_2(k). In
+          practice, since the number of keys used will be very small and the
+          MACs in use are typically strong (the default for SRTP is 80 bits)
+          the decrease in security involved here is minimal.</t>
+
+          <t>Another concern here is that this algorithm slightly increases
+          the work factor on the receiver because it needs to attempt multiple
+          validations. However, again, the number of potential keys will be
+          very small (and the attacker cannot force it to be larger) and this
+          technique is already used for rollover counter management, so the
+          authors do not consider this to be a serious flaw.</t>
+        </section>
+      </section>
+      <section title="Decryption Cost">
+	<t>An attacker can impose computational costs on the receiver
+	by sending superficially valid SRTP packets which do not decrypt
+	correctly. In general, encryption algorithms are so fast that
+	this cost is extremely small compared to the bandwidth consumed.
+	The SSRC-DTLS mapping algorithm
+	described in <xref target="section.reception"/> gives the
+	attacker a slight advantage here because he can force the 
+	receiver to do more then one decryption per packet. However,
+	this advantage is modest because the number of decryptions
+	that the receiver does is limited by the number of associations
+	he has corresponding to a given destination host/port, which
+	is typically quite small. For comparison, a single 1024-bit 
+	RSA private key operation (the typical minimum cost to establish
+	a DTLS-SRTP association) is hundreds of times as expensive
+	as decrypting an SRTP packet.
+	</t>
+	<t>
+	Implementations can detect this form of attack by keeping
+	track of the number of SRTP packets observed with unknown
+	SSRCs which fail the authentication tag check. If under
+	such attack, implementations SHOULD prioritize decryption
+	and verification of packets which either have known
+	SSRCs or come from source addresses which match those 
+	of peers with which it has DTLS-SRTP associations.
+	</t>
+      </section>
+    </section>
+
+    <section title="Session Description for RTP/SAVP over DTLS">
+            <t> This specification defines new tokens to describe the protocol
+                used in SDP media descriptions ('m' lines and their associated
+                parameters). The new values defined for the proto field are:
+                <list style="symbols">
+                    <t> When a RTP/SAVP stream is transported over DTLS with DCCP, then
+                        the token SHALL be DCCP/TLS/RTP/SAVP.</t>
+                    
+                    <t> When a RTP/SAVP stream is transported over DTLS with UDP, the
+                        token SHALL be UDP/TLS/RTP/SAVP.</t>
+
+                    <t> When a RTP/SAVP stream is transported over DTLS with TCP, the token
+                        SHALL be TCP/TLS/RTP/SAVP. Note that even though TCP is being
+			used, the PDUs carried over the TCP connection are the
+			same as would be carried over DCCP or UDP.</t>
+                </list>
+	    </t>
+	    <t>
+	    The "fmt" parameter SHALL be as defined for RTP/SAVP.
+	    </t>
+    </section>
+
+    <section anchor="section.iana" title="IANA Considerations">
+      <t>This document a new extension for DTLS, in accordance with <xref
+      target="RFC4366"></xref>:</t>
+
+      <figure>
+        <artwork><![CDATA[     enum { use_srtp (??) } ExtensionType;
+]]></artwork>
+      </figure>
+
+      <t>[[ NOTE: This value needs to be assigned by IANA ]]</t>
+
+      <t>This extension MUST only be used with DTLS, and not with TLS.</t>
+
+      <t> <xref target="section.propro"></xref> requires that all
+      SRTPProtectionProfile values be defined by RFC 2434 Standards Action.
+      IANA SHOULD create a DTLS SRTPProtectionProfile registry initially
+      populated with values from  <xref target="section.propro"></xref>
+      of this document. Future values MUST be allocated via Standards Action
+      as described in <xref target="RFC2434"></xref></t>
+
+      <t>This specification updates the "Session Description Protocol (SDP) Parameters"
+      registry as defined in Appendix B of <xref target="RFC2327">RFC 2327</xref>.
+      Specifically it adds the following values to the table for the "proto" field. </t>
+      <figure>
+	<artwork><![CDATA[
+        Type            SDP Name                     Reference
+        ----            ------------------           ---------
+        proto           TCP/TLS/RTP/SAVP             [RFC-XXXX]
+        proto           UDP/TLS/RTP/SAVP             [RFC-XXXX]
+        proto           DCCP/TLS/RTP/SAVP            [RFC-XXXX]
+	]]></artwork>
+      </figure>
+      <t> Note to RFC Editor: Please replace RFC-XXXX with the RFC number of this specification.</t>
+
+    </section>
+
+    <section title="Acknowledgments">
+      <t>Special thanks to Flemming Andreasen, Francois Audet,
+      Jason Fischl, Cullen
+      Jennings, Colin Perkins, and Dan Wing, 
+      for input, discussions, and guidance.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      &rfc2119;
+
+      &rfc2327;
+
+      &rfc2434;
+
+      <!--      &rfc3280; -->
+
+      &rfc3550;
+
+      &rfc4346;
+
+      &rfc4347;
+
+      &rfc4366;
+
+      &rfc3711;
+      &rfc4568;
+
+      &rfc4961;
+      &I-D.ietf-tls-extractor;
+
+    </references>
+
+    <references title="Informational References">
+      
+      &I-D.ietf-avt-rtp-and-rtcp-mux;
+
+      &I-D.ietf-sip-dtls-srtp-framework;
+
+      &I-D.ietf-behave-rfc3489bis;
+
+      &I-D.mcgrew-srtp-big-aes;
+    </references>
+
+    <section anchor="appendix" title="Performance of Multiple DTLS Handshakes">
+      <t>Standard practice for security protocols such as TLS, DTLS, and SSH
+      which do inline key management is to create a separate security
+      association for each underlying network channel (TCP connection, UDP
+      host/port quartet, etc.). This has dual advantages of simplicity and
+      independence of the security contexts for each channel.</t>
+
+      <t>Three concerns have been raised about the overhead of this strategy
+      in the context of RTP security. The first concern is the additional
+      performance overhead of doing a separate public key operation for each
+      channel. The conventional procedure here (used in TLS and DTLS) is to
+      establish a master context which can then be used to derive fresh
+      traffic keys for new associations. In TLS/DTLS this is called "session
+      resumption" and can be transparently negotiated between the peers.
+      </t>
+
+      <t>The second concern is network bandwidth overhead for the
+      establishment of subsequent connections and for rehandshake (for
+      rekeying) for existing connections. In particular, there is a concern
+      that the channels will have very narrow capacity requirements allocated
+      entirely to media which will be overflowed by the rehandshake.
+      Measurements of the size of the rehandshake (with resumption) in TLS
+      indicate that it is about 300-400 bytes if a full selection of cipher
+      suites is offered. (the size of a full handshake is approximately 1-2k
+      larger because of the certificate and keying material exchange).</t>
+
+      <t>The third concern is the additional round-trips associated with
+      establishing the 2nd, 3rd, ... channels. In TLS/DTLS these can all be
+      done in parallel but in order to take advantage of session resumption
+      they should be done after the first channel is established. For two
+      channels this provides a ladder diagram something like this
+      (parenthetical #s are media channel #s)</t>
+
+      <figure>
+        <artwork><![CDATA[
+Alice                                   Bob
+-------------------------------------------
+                   <-       ClientHello (1)
+ServerHello (1)    ->
+Certificate (1)
+ServerHelloDone (1) 
+                   <- ClientKeyExchange (1)           
+                       ChangeCipherSpec (1) 
+                               Finished (1)
+ChangeCipherSpec (1)->
+Finished         (1)->
+                                             <--- Channel 1 ready
+
+                   <-       ClientHello (2)
+ServerHello (2)    ->
+ChangeCipherSpec(2)->
+Finished(2)        -> 
+                   <-  ChangeCipherSpec (2)
+                               Finished (2)
+                                             <--- Channel 2 ready
+]]></artwork>
+      </figure>
+
+      <t>So, there is an additional 1 RTT after Channel 1 is ready before
+      Channel 2 is ready. If the peers are potentially willing to forego
+      resumption they can interlace the handshakes, like so:</t>
+
+      <figure>
+        <artwork><![CDATA[
+Alice                                   Bob
+-------------------------------------------
+                   <-       ClientHello (1)
+ServerHello (1)    ->
+Certificate (1)
+ServerHelloDone (1) 
+                   <- ClientKeyExchange (1)           
+                       ChangeCipherSpec (1) 
+                               Finished (1)
+                   <-       ClientHello (2)
+ChangeCipherSpec (1)->
+Finished         (1)->
+                                             <--- Channel 1 ready
+ServerHello (2)    ->
+ChangeCipherSpec(2)->
+Finished(2)        -> 
+                   <-  ChangeCipherSpec (2)
+                               Finished (2)
+                                             <--- Channel 2 ready
+]]></artwork>
+      </figure>
+
+      <t>In this case the channels are ready contemporaneously, but if a
+      message in handshake (1) is lost then handshake (2) requires either a
+      full rehandshake or that Alice be clever and queue the resumption
+      attempt until the first handshake completes. Note that just dropping the
+      packet works as well since Bob will retransmit.</t>
+    </section>
+
+
+  </back>
+</rfc>
+<!-- Keep this comment at the end of the file
+Local variables:
+mode: xml
+sgml-omittag:nil
+sgml-shorttag:nil
+sgml-namecase-general:nil
+sgml-general-insert-case:lower
+sgml-minimize-attributes:nil
+sgml-always-quote-attributes:t
+sgml-indent-step:2
+sgml-indent-data:nil
+sgml-parent-document:nil
+sgml-exposed-tags:nil
+sgml-local-catalogs:nil
+sgml-local-ecat-files:nil
+End:
+-->

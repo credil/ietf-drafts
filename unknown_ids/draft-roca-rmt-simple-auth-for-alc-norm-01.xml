@@ -1,0 +1,1108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+
+<rfc category="exp" ipr="full3978" docName="draft-roca-rmt-simple-auth-for-alc-norm-01.txt">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+    <front>
+        <title abbrev='TESLA in ALC and NORM'>
+            Simple Authentication Schemes for the ALC and NORM Protocols
+        </title>
+        <author initials='V.R.' surname="Roca" fullname='Vincent Roca'>
+            <organization>INRIA</organization>
+            <address>
+                <postal>
+                    <street>655, av. de l'Europe</street>
+                    <street>Zirst; Montbonnot</street>
+                    <city>ST ISMIER cedex</city>
+                    <code>38334</code>
+                    <country>France</country>
+                </postal>
+		<!--
+                <phone></phone>
+		-->
+                <email>vincent.roca@inrialpes.fr</email>
+                <uri>http://planete.inrialpes.fr/~roca/</uri>
+            </address>
+        </author>
+        <date month="November" year="2007"/>
+        <area>Transport</area>
+        <workgroup>RMT</workgroup>
+        <keyword>TESLA</keyword>
+        <keyword>FLUTE</keyword>
+        <keyword>ALC</keyword>
+        <keyword>NORM</keyword>
+        <abstract>
+                <t>
+                This document introduces two schemes that provide a per-packet authentication and 
+		integrity service in the context of the ALC and NORM protocols.
+		The first scheme is based on digital signatures.
+		Because it relies on asymmetric cryptography, this scheme generates a high processing
+		load at the sender and to a lesser extent at a receiver, as well as a significant
+		transmission overhead.
+		It is therefore well suited to low data rate sessions.
+		The second scheme relies on a group Message Authentication Code (MAC).
+		Because this scheme relies symmetric cryptography, MAC calculation and verification
+		are fast operations, which makes it suited to high data rate sessions.
+		However it only provides a group authentication and integrity service, which means
+		that it only protects against attackers that are not group members.
+                </t>
+        </abstract>
+    </front>
+
+    <middle>
+
+<section anchor="intro" title="Introduction">
+<!-- ==================================== -->
+
+<t>
+Many applications using multicast and broadcast communications
+require that each receiver be able to authenticate the source of any
+packet it receives as well as its integrity.
+For instance, ALC <xref target="draft-ietf-rmt-pi-alc-revised"/> and NORM <xref target="draft-ietf-rmt-pi-norm-revised"/>
+are two Content Delivery Protocols (CDP) designed to transfer reliably
+objects (e.g. files) between a session's sender and several receivers.
+</t>
+
+<t>
+The NORM protocol is based on bidirectional transmissions.
+Each receiver acknowledges data received or, in case of packet erasures,
+asks for retransmissions.
+The ALC protocol defines unidirectional transmissions.
+Reliability can be achieved by means of cyclic transmissions of the content
+within a carousel, or by the use of proactive Forward Error Correction codes
+(FEC), or by the joint use of these mechanisms.
+Being purely unidirectional, ALC is massively scalable, while NORM is
+intrinsically limited in terms of the number of receivers that can
+be handled in a session.
+Both protocols have in common the fact that they operate at application
+level, on top of an erasure channel (e.g. the Internet) where packets
+can be lost (erased) during the transmission.
+With some use case, an attacker might impersonate the ALC or NORM
+session's sender and inject forged packets to the receivers, thereby
+corrupting the objects reconstructed by the receivers.
+</t>
+
+<t>
+In case of group communications, several solutions exist to provide
+the receiver some guaranties on the integrity of the packets it
+receives and on the identity of the sender of these packets.
+These solutions have different features that make them more or
+less suited to a given use case:
+<list style='symbols'> 
+	<t>digital signatures <xref target="RFC4359"/>:
+		this scheme is well suited to low data rate flows, when a
+		true packet sender authentication and packet integrity service
+		is needed.
+		However this solution is limited by high computational costs
+		and high transmission overheads.
+	</t>
+	<t>group Message Authentication Codes (MAC):
+		this scheme is well suited to high data rate flows, when
+		transmission overheads must be minimized.
+		However this scheme cannot protect against attacks coming from
+		inside the group, where a group member impersonates the sender
+		and sends forged messages to other receivers.
+	</t>
+	<t>TESLA (Timed Efficient Stream Loss-tolerant Authentication)
+		<xref target="RFC4082"/>:
+		this scheme is well suited to high data rate flows, when
+		transmission overheads must be minimized, and when a
+		true packet sender authentication and packet integrity service
+		is needed.
+		The price to pay is an increased complexity, in particular the
+		need to loosely synchronize the receivers and the sender, as
+		well as the need to wait for the key to be disclosed before
+		being able to authenticate a packet.
+	</t>
+</list>
+</t>
+
+<t>
+The following table summarizes the pros/cons of each scheme:
+</t>
+<texttable>
+	<preamble></preamble>
+	<ttcol align='left'></ttcol>
+	<ttcol align='center'>Digital Signature</ttcol>
+	<ttcol align='center'>Group MAC</ttcol>
+	<ttcol align='center'>TESLA</ttcol>
+	<c>True authentication and integrity service</c>
+		<c>Yes</c>	<c>No (group security)</c>	<c>Yes</c>
+	<c>Immediate authentication</c>
+		<c>Yes</c>	<c>Yes</c>	<c>No</c>
+	<c>Processing load</c>	
+		<c>--</c>	<c>++</c>	<c>+</c>
+	<c>Transmission overhead</c>
+		<c>--</c>	<c>++</c>	<c>+</c>
+	<c>Protocol complexity</c>
+		<c>++</c>	<c>++</c>	<c>--</c>
+</texttable>
+
+<t>
+<xref target="draft-ietf-msec-tesla-for-alc-norm"/> explains how to
+use TESLA in the context of ALC and NORM protocols.
+The current document specifies the use of the first two schemes, namely
+the Digital Signature and Group MAC schemes, in the ALC and NORM 
+content delivery protocols.
+Since the FLUTE application <xref target="RFC3926"/> is built on top of ALC,
+it will directly benefit from the services offered by TESLA at the transport layer.
+Unlike the TESLA scheme, this specification considers the authentication/integrity
+of the packets generated by the session's sender as well as those generated
+by the receivers (NORM).
+</t>
+
+
+<section title="Conventions Used in this Document">
+<!-- ------------------------------------ -->
+
+<t>
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+"SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+and "OPTIONAL" in this document are to be interpreted as
+described in <xref target="RFC2119"/>.</t>
+</section>
+
+<section title="Terminology and Notations">
+<!-- ------------------------------------ -->
+
+<t>
+The following notations and definitions are used throughout this document:
+<list style='symbols'> 
+	<t>MAC is the Message Authentication Code;</t>
+	<t>HMAC is the Keyed-Hash Message Authentication Code;</t>
+</list>
+</t>
+
+<t>
+Digital signature related notations and definitions:
+<list style='symbols'> 
+	<t>K_pub is the public key used by a receiver to check a packet's signature.
+		This key must be communicated to all receivers, before starting the
+		session;</t>
+	<t>K_priv is the private key used by a sender to generate a packet's signature;</t>
+	<t>n_k is the (private and public) key length, in bits. n_k is also the signature length, since both values
+	must be equal with digital signatures;</t>
+</list>
+</t>
+
+<t>
+Group MAC related notations and definitions:
+<list style='symbols'> 
+	<t>K_g is a shared group key, communicated to all group members, confidentially,
+		before starting the session.
+		The mechanism by which this group key is shared by the group members is
+		out of the scope of this document;</t>
+	<t>n_k is the key length, in bits;</t>
+	<t>n_m is the length of the truncated output of the MAC <xref target="RFC2104"/>.
+		Only the n_m left-most bits (most significant bits) of the MAC
+		output are kept;</t>
+</list>
+</t>
+
+</section>
+
+</section><!-- =Introduction= -->
+
+
+
+<!-- ======================================================================= -->
+
+<section title="Digital Signature Scheme">
+<!-- ==================================== -->
+
+<section title="Principles" anchor="sec:signature_principles">
+<!-- ------------------------------------ -->
+
+<t>
+The computation of the digital signature, using K_priv, includes the ALC or NORM header (with the
+various header extensions) and the payload when applicable.
+The UDP/IP/MAC headers are not included.
+During this computation, the "Signature" field MUST be set to 0.
+</t>
+<t>
+Upon receiving this packet, the receiver recomputes the Group MAC, using K_pub, and compares
+it to the value carried in the packet.
+During this computation, the Weak Group MAC field MUST also be set to 0.
+If the check fails, the packet MUST be immediately dropped.
+</t>
+
+<t>
+With RSASSA-PKCS1-v1_5 (default) and RSASSA-PSS signatures (<xref target="sec:iana"/>),
+the size of the signature is equal to the "RSA modulus", unless the "RSA modulus"
+is not a multiple of 8 bits. In that case, the signature MUST be prepended with
+between 1 and 7 bits set to zero such that the signature is a multiple of 8 bits
+<xref target="RFC4359"/>.
+The key size, which in practice is also equal to the "RSA modulus", has major security
+implications.
+<xref target="RFC4359"/> explains how to choose this value depending on the maximum
+expected lifetime of the session.
+This choice is out of the scope of this document.
+</t>
+
+
+</section>
+
+
+<section title="Parameters that Need to Be Initialized Out-of-Band" anchor="signature_params">
+<!-- ------------------------------------ -->
+
+<t>
+Several parameters MUST be initialized by an out-of-band mechanism
+The sender or group controller:
+<list style='symbols'>
+<t>	MUST communicate his public key, for each receiver to
+	be able to verify the signature of the bootstrap (and direct
+	time synchronization response messages when applicable).
+	As a side effect, the receivers also know the key length, n_k,
+	and the signature length, the two parameters being equal.</t>
+<t>	MAY communicate a certificate (which also means
+	that a PKI has been setup), for each receiver to be able to
+	check the sender's public key.</t>
+<t>	MUST communicate the Signature Encoding Algorithm.
+	For instance, <xref target="RFC3447"/> defines the
+	RSASSA-PKCS1-v1_5 and RSASSA-PSS algorithms that are usually
+	used to that purpose.</t>
+<t>	MUST associate a value to the "ASID" field
+	(Authentication Scheme Identifier) of the EXT_AUTH header extension
+	(<xref target="sec:signature_auth_he_format"/>).</t>
+</list>
+These parameters MUST be communicated to all receivers before they can
+authenticate the incoming packets. For instance it can be communicated in
+the session description, or initialized in a static way on the receivers,
+or communicated by means of an appropriate initialization protocol.
+The details of this out-of-band mechanism are out of the scope of this
+document.
+</t>
+
+</section>
+
+
+<section title="Authentication Header Extension Format" anchor="sec:signature_auth_he_format">
+<!-- ------------------------------------ -->
+
+<t>
+The integration of Digital Signatures in ALC or NORM is similar and relies on the 
+header extension mechanism defined in both protocols.
+More precisely this document details the EXT_AUTH==1 header extension defined
+in <xref target="draft-ietf-rmt-bb-lct-revised"/>.
+</t>
+
+<t>
+<list><t>----- Editor's note:
+	All authentication schemes using the EXT_AUTH header extension MUST
+	reserve the same 4 bit "ASID" field after the HET/HEL fields.
+	This way, several authentication schemes can be used in the same ALC
+	or NORM session, even on the same communication path.
+	-----</t>
+</list>
+</t>
+
+<t>
+Several fields are added in addition to the HET (Header Extension Type) and HEL
+(Header Extension Length) fields (<xref target="fig:signature_lct_integration"/>).
+</t>
+
+<t>
+<figure title="Format of the Digital Signature EXT_AUTH header extension."
+	anchor="fig:signature_lct_integration">
+      <artwork>
+  0                   1                   2                   3
+  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |   HET (=1)    |      HEL      |  ASID |       Reserved        |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                                                               |
+ ~                                                               ~
+ |                           Signature                           |
+ +                                               +-+-+-+-+-+-+-+-+
+ |                                               |    Padding    |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      </artwork>
+</figure>
+</t>
+
+<t>
+The fields of the Digital Signature EXT_AUTH header extension are:</t>
+
+<t>"ASID" (Authentication Scheme Identifier) field (4 bits):</t>
+<t><list><t>
+	The "ASID" identifies the source authentication scheme or protocol
+	in use.
+	The association between the "ASID" value and the actual authentication
+	scheme is defined out-of-band, at session startup.
+</t></list></t>
+
+<t>"Reserved" field (12 bits):</t>
+<t><list><t>
+	This is a reserved field that MUST be set to zero in this specification.
+</t></list></t>
+
+<t>"Signature" field (variable size, multiple of 32 bits):</t>
+<t><list><t>
+	The "Signature" field contains a digital signature of the message.
+	If need be, this field is padded (with 0) up to a multiple of 32 bits.
+</t></list></t>
+
+
+</section>
+
+
+<section title="Use of Authentication Header Extensions"
+	anchor="sec:signature_auth_he_use">
+<!-- ------------------------------------ -->
+
+<t>
+Each packet sent by the session's sender MUST contain exactly one
+Digital Signature EXT_AUTH header extension.
+A receiver MUST drop packets that do not contain a Digital Signature
+EXT_AUTH header extension.
+</t>
+
+<t>
+All receivers MUST recognize EXT_AUTH but MAY not be able to parse its content,
+for instance because they do not support digital signatures.
+In that case these receivers MUST ignore the Digital Signature EXT_AUTH header extensions.
+</t>
+
+
+<t>
+<figure anchor="fig:signature_auth_he_with_1024b_sig"
+	title="Example: Format of the Digital Signature EXT_AUTH header extension
+	using 1024 bit signatures.">
+      <preamble></preamble>
+      <artwork>
+  0                   1                   2                   3
+  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |   HET (=1)    |    HEL (=33)  |  ASID |          0            |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  ----
+ |                                                               |  ^  1
+ +                                                               +  |  2
+ |                                                               |  |  8
+ .                                                               .  |
+ .                      Signature (128 bytes)                    .  |  b
+ .                                                               .  |  y
+ |                                                               |  |  t
+ +                                                               +  |  e
+ |                                                               |  v  s
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  ----
+      </artwork>
+</figure>
+</t>
+
+<t>
+For instance <xref target="fig:signature_auth_he_with_1024b_sig"/> shows the digital signature
+EXT_AUTH header extension when using 128 byte (1024 bit) key digital signatures
+(which also means that the signature field is 128 byte long).
+The Digital Signature EXT_AUTH header extension is then 132 byte long.
+</t>
+
+
+</section>
+
+
+</section><!-- =Digital Signature Scheme= -->
+
+
+<!-- ======================================================================= -->
+
+<section title="Group MAC Scheme">
+<!-- ==================================== -->
+
+<section title="Principles" anchor="sec:group_mac_principles">
+<!-- ------------------------------------ -->
+
+<t>
+The computation of the Group MAC, using K_g, includes the ALC or NORM header (with the various header
+extensions) and the payload when applicable.
+The UDP/IP/MAC headers are not included.
+During this computation, the Weak Group MAC field MUST be set to 0.
+Then the sender truncates the MAC output to keep the n_w most significant bits
+and stores the result in the Group MAC Authentication header. 
+</t>
+<t>
+Upon receiving this packet, the receiver recomputes the Group MAC, using K_g, and compares
+it to the value carried in the packet.
+During this computation, the Group MAC field MUST also be set to 0.
+If the check fails, the packet MUST be immediately dropped.
+</t>
+
+<t>
+<xref target="RFC2104"/> explains that it is current practice to truncate the MAC
+output, on condition that the truncated output length, n_m be not less than half
+the length of the hash and not less than 80 bits.
+However, this choice is out of the scope of this document.
+</t>
+
+
+</section>
+
+
+<section title="Parameters that Need to Be Initialized Out-of-Band" anchor="group_mac_params">
+<!-- ------------------------------------ -->
+
+<t>
+Several parameters MUST be initialized by an out-of-band mechanism
+The sender or group controller:
+<list style='symbols'>
+<t>	MUST communicate the cryptographic Message Authentication Code (MAC).
+	For instance, HMAC-SHA-1, HMAC-SHA-224, HMAC-SHA-256, HMAC-SHA-384, or HMAC-SHA-512.
+	As a side effect, the receivers also know the key length, n_k, and the
+	(non truncated) MAC output length.
+	</t>
+<t>	MUST communicate the length of the truncated output of the MAC, n_m.</t>
+<t>	MUST communicate the K_g group key to the receivers, confidentially, before
+	starting the session.
+	This key might have to be periodically refreshed.
+	</t>
+<t>	MUST associate a value to the "ASID" field
+	(Authentication Scheme Identifier) of the EXT_AUTH header extension
+	(<xref target="sec:group_mac_auth_he_format"/>).</t>
+</list>
+These parameters MUST be communicated to all receivers before they can
+authenticate the incoming packets. For instance it can be communicated in
+the session description, or initialized in a static way on the receivers,
+or communicated by means of an appropriate initialization protocol.
+The details of this out-of-band mechanism are out of the scope of this
+document.
+</t>
+
+
+</section>
+
+
+<section title="Authentication Header Extension Format" anchor="sec:group_mac_auth_he_format">
+<!-- ------------------------------------ -->
+
+<t>
+The integration of Group MAC in ALC or NORM is similar and relies on the 
+header extension mechanism defined in both protocols.
+More precisely this document details the EXT_AUTH==1 header extension defined
+in <xref target="draft-ietf-rmt-bb-lct-revised"/>.
+</t>
+
+<t>
+<list><t>----- Editor's note:
+	All authentication schemes using the EXT_AUTH header extension MUST
+	reserve the same 4 bit "ASID" field after the HET/HEL fields.
+	This way, several authentication schemes can be used in the same ALC
+	or NORM session, even on the same communication path.
+	-----</t>
+</list>
+</t>
+
+<t>
+Several fields are added in addition to the HET (Header Extension Type) and HEL
+(Header Extension Length) fields (<xref target="fig:group_mac_lct_integration"/>).
+</t>
+
+<t>
+<figure title="Format of the Group MAC EXT_AUTH header extension."
+	anchor="fig:group_mac_lct_integration">
+      <artwork>
+  0                   1                   2                   3
+  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |   HET (=1)    |      HEL      |  ASID |       Reserved        |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                                                               |
+ ~                                                               ~
+ |                           Group MAC                           |
+ +                                               +-+-+-+-+-+-+-+-+
+ |                                               |    Padding    |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      </artwork>
+</figure>
+</t>
+
+<t>
+The fields of the Group MAC EXT_AUTH header extension are:</t>
+
+<t>"ASID" (Authentication Scheme Identifier) field (4 bits):</t>
+<t><list><t>
+	The "ASID" identifies the source authentication scheme or protocol
+	in use.
+	The association between the "ASID" value and the actual authentication
+	scheme is defined out-of-band, at session startup.
+</t></list></t>
+
+<t>"Reserved" field (12 bits):</t>
+<t><list><t>
+	This is a reserved field that MUST be set to zero in this specification.
+</t></list></t>
+
+<t>"Group MAC" field (variable size, multiple of 32 bits):</t>
+<t><list><t>
+	The "Group MAC" field contains a Group MAC of the message.
+	If need be, this field is padded (with 0) up to a multiple of 32 bits.
+</t></list></t>
+
+
+</section>
+
+
+<section title="Use of Authentication Header Extensions"
+	anchor="sec:group_mac_auth_he_use">
+<!-- ------------------------------------ -->
+
+<t>
+Each packet sent by the session's sender MUST contain exactly one
+Group MAC EXT_AUTH header extension.
+A receiver MUST drop packets that do not contain a Group MAC
+EXT_AUTH header extension.
+</t>
+
+<t>
+All receivers MUST recognize EXT_AUTH but MAY not be able to parse its content,
+for instance because they do not support Group MAC.
+In that case these receivers MUST ignore the Group MAC EXT_AUTH extensions.
+</t>
+
+
+<t>
+<figure anchor="fig:group_mac_auth_he_with_1024b_sig"
+	title="Example: Format of the Group MAC EXT_AUTH header extension
+	using HMAC-SHA-1.">
+      <preamble></preamble>
+      <artwork>
+  0                   1                   2                   3
+  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |   HET (=1)    |     HEL (=4)  |  ASID |          0            |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                                                               |
+ +                                                               +
+ |                      Group MAC (10 bytes)                     |
+ +                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                               |            Padding            |
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      </artwork>
+</figure>
+</t>
+
+<t>
+For instance <xref target="fig:group_mac_auth_he_with_1024b_sig"/> shows the Group MAC
+EXT_AUTH header extension when using HMAC-SHA-1.
+The Group MAC EXT_AUTH header extension is then 16 byte long.
+</t>
+
+
+</section>
+
+
+</section><!-- =Group MAC Scheme= -->
+
+
+<!-- ======================================================================= -->
+
+<section title="Combined Use of the Digital Signatures and Group MAC Schemes">
+<!-- ==================================== -->
+
+<section title="Principles" anchor="sec:combined_use_principles">
+<!-- ------------------------------------ -->
+
+
+<t>
+In some situations, it can be interesting to use both authentication
+schemes.
+The goal of the Group MAC is to mitigate DoS attacks coming from attackers
+that are not group member <xref target="RFC4082"/> by adding a light authentication
+scheme as a front-end.
+</t>
+
+<t>
+More specifically, before sending a message, the sender computes the Group MAC 
+MAC(K_g, M), which includes the ALC or NORM header (with the various header
+extensions), plus the payload when applicable.
+During this computation, the Weak Group MAC field MUST be set to 0.
+However the digital signature MUST have been calculated and is included in the
+Group MAC calculation itself.
+Then the sender truncates the MAC output to keep the n_w most significant bits
+and stores the result in the Group MAC authentication header. 
+Upon receiving this packet, the receiver recomputes the Group MAC and compares
+it to the value carried in the packet. If the check fails, the packet MUST be
+immediately dropped.
+</t>
+
+<t>
+This scheme features a few limits:
+<list style='symbols'>
+	<t>it is of no help if a group member (who knows K_g) impersonates
+	the sender and sends forged messages to other receivers;</t>
+	<t>it requires an additional MAC computing for each packet,
+	both at the sender and receiver sides;</t>
+	<t>it increases the size of the authentication headers.
+	In order to limit this problem, the length of the truncated output of the
+	MAC, n_m, SHOULD be kept small (e.g. 32 bits)
+	(see <xref target="RFC3711"/> section 9.5).
+	As a side effect, the authentication service is significantly weakened
+	(the probability that any packet be successfully forged is one in 2^32).
+	Since the Group MAC check is only a pre-check that will be followed
+	by the standard signature authentication check, this is not considered to
+	be an issue.</t>
+</list>
+For a given use-case, the benefits brought by the Group MAC must be balanced
+against these limitations.
+</t>
+
+</section>
+
+<section title="Combined Use of both Authentication Header Extensions"
+	anchor="sec:combined_use_auth_he_use">
+<!-- ------------------------------------ -->
+
+<t>
+In order to use both authentication schemes, the packet sender calculates
+and includes two EXT_AUTH header extensions, in any order, one for each
+authentication scheme.
+It is RECOMMENDED that the n_m parameter of the group authentication
+scheme be small, for instance equal to 32 bits
+(<xref target="sec:combined_use_principles"/>).
+</t>
+
+<t>
+When it is decided that both schemes should be combined, then all the
+packets MUST include both header extensions.
+A receiver receiving a packet with only one of the two schemes MUST
+reject it.
+This requirement is meant to prevent DoS attacks where the attacker
+would inject forged packets containing only the Digital Signature
+EXT_AUTH header extension, to force the receiver to check it.
+</t>
+
+</section>
+
+
+</section>
+
+
+<!-- ======================================================================= -->
+
+
+
+<section title="IANA Considerations" anchor="sec:iana">
+<!-- ==================================== -->
+
+<t>This document does not require any IANA registration.</t>
+
+
+</section>
+
+
+<section title="Security Considerations">
+<!-- ==================================== -->
+
+
+<t>TBD</t>
+
+<!--
+
+<section title="Impacts of Replay Attacks on NORM">
+
+<t>
+We review here the potential impacts of a replay attack on the NORM component.
+</t>
+
+<t>
+First, let us consider replay attacks within a given NORM session.
+NORM defines a "sequence" field that can be used to protect against replay
+attacks <xref target="draft-ietf-rmt-pi-norm-revised"/> within a given NORM session.
+This "sequence" field is a 16-bit value that is set by the message
+originator (sender or receiver) as a monotonically increasing number
+incremented with each NORM message transmitted.
+It is RECOMMENDED that a receiver check this sequence field and drop messages considered
+as replayed.
+Similarly, it is RECOMMENDED that a sender check this sequence, for each known receiver,
+and drop messages considered as replayed.
+This analysis shows that NORM itself is robust in front of replay attacks
+within the same session.
+</t>
+
+<t>
+Now let us consider replay attacks across several NORM sessions.
+XXXXXXXX
+</t>
+
+
+</section>
+
+
+<section title="Impacts of Replay Attacks on ALC">
+
+<t>
+We review here the potential impacts of a replay attack on the ALC component.
+Note that we do not consider here the protocols that could be used along with
+ALC, for instance the layered or wave based congestion control protocols.
+</t>
+<t>
+First, let us consider replay attacks within a given ALC session:
+<list style='symbols'> 
+	<t>Regular packets containing an authentication tag: a replayed message
+	containing an encoding symbol will be detected once authenticated, thanks to
+	the object/block/symbol identifiers, and will be silently discarded.
+	This kind of replay attack is only penalizing in terms of memory and
+	processing load, but does not compromise the ALC behavior.
+	</t>
+	<t>Control packets containing an authentication tag:
+	ALC control packets, by definition, do not include any encoding symbol
+	and therefore do not include any object/block/symbol identifier that would
+	enable a receiver to identify duplicates.
+	However, a sender has a very limited number of reasons to send control packets.
+	More precisely:
+	<list style='symbols'> 
+		<t>At the end of the session, a "close session" packet is sent.
+		Replaying this packet has no impact since the receivers already left.</t>
+		<t>The same remark can be done for the "close object" packets.</t>
+	</list>
+	</t>
+</list>
+This analysis shows that ALC itself is robust in front of replay attacks
+within the same session.
+</t>
+
+<t>
+Now let us consider replay attacks across several ALC sessions.
+If the same TSI ("Transport Session Identifier") is used across several
+sessions for the same sender, there is a risk that packets from old
+sessions be replayed in the new session (e.g.  a "close object" control packet).
+To prevent this attack, it is RECOMMENDED that the sender chooses different
+TSI fields each time a new session is launched.
+This TSI needs only be different for a given sender, not across all possible
+senders, since an ALC session is uniquely identifyed by its {sender's IP address; TSI}
+tuple.
+</t>
+
+</section>
+
+-->
+
+</section>
+
+
+
+<section title="Acknowledgments">
+<!-- ==================================== -->
+
+<t>
+TBD
+</t>
+
+</section>
+
+
+    </middle>
+
+
+    <back>
+
+
+<references title="Normative References">
+<!-- ==================================== -->
+
+      <reference anchor="RFC2119">
+	<front>
+	  <title>Key words for use in RFCs to Indicate Requirement Levels</title>
+	  <author initials="S." surname="Bradner">
+	    <organization />
+	  </author>
+	  <date month="March" year="1997" />
+	</front>
+	<seriesInfo name="RFC" value="2119" />
+	<seriesInfo name="BCP" value="14" />
+      </reference>
+
+      <reference anchor="RFC4082">
+        <front>
+          <title>Timed Efficient Stream Loss-Tolerant Authentication (TESLA):
+          Multicast Source Authentication Transform Introduction
+          </title>
+          <author initials="A." surname="Perrig" fullname="A. Perrig">
+            <organization/></author>
+          <author initials="D." surname="Song" fullname="D. Song">
+            <organization/></author>
+          <author initials="R." surname="Canetti" fullname="R. Canetti">
+            <organization/></author>
+          <author initials="J.D." surname="Tygar" fullname="J.D. Tygar">
+            <organization/></author>
+          <author initials="B." surname="Briscoe" fullname="B. Briscoe">
+            <organization/></author>
+          <date year="2005" month="June"/>
+        </front>
+        <seriesInfo name="RFC" value="4082"/>
+        <format type="TXT" octets="54316" target="ftp://ftp.isi.edu/in-notes/rfc4082.txt"/>
+      </reference>
+
+<reference anchor="draft-ietf-msec-tesla-for-alc-norm">
+	<front>
+		<title>Use of TESLA in the ALC and NORM Protocols</title>
+		<author initials="B." surname="Adamson" fullname="B. Adamson">
+			<organization/></author>
+		<author initials="C." surname="Bormann" fullname="C. Bormann">
+			<organization/></author>
+		<author initials="M." surname="Handley" fullname="M. Handley">
+			<organization/></author>
+		<author initials="J." surname="Macker" fullname="J. Macker">
+			<organization/></author>
+		<date year="2007" month="November"/>
+	</front>
+	<seriesInfo name="" value="draft-ietf-msec-tesla-for-alc-norm-03.txt (work in progress)"/>
+</reference>
+
+<!--
+      <reference anchor='RFC3450'>
+        <front>
+          <title>Asynchronous Layered Coding (ALC) Protocol Instantiation</title>
+          <author initials='M.' surname='Luby' fullname='M. Luby'>
+            <organization /></author>
+          <author initials='J.' surname='Gemmell' fullname='J. Gemmell'>
+            <organization /></author>
+          <author initials='L.' surname='Vicisano' fullname='L. Vicisano'>
+            <organization /></author>
+          <author initials='L.' surname='Rizzo' fullname='L. Rizzo'>
+            <organization /></author>
+          <author initials='J.' surname='Crowcroft' fullname='J. Crowcroft'>
+            <organization /></author>
+          <date year='2002' month='December' />
+        </front>
+        <seriesInfo name='RFC' value='3450' />
+        <format type='TXT' octets='86022' target='ftp://ftp.isi.edu/in-notes/rfc3450.txt' />
+      </reference>
+
+      <reference anchor="RFC3451">
+        <front>
+          <title>Layered Coding Transport (LCT) Building Block</title>
+          <author initials="M." surname="Luby" fullname="M. Luby">
+            <organization/></author>
+          <author initials="J." surname="Gemmell" fullname="J. Gemmell">
+            <organization/></author>
+          <author initials="L." surname="Vicisano" fullname="L. Vicisano">
+            <organization/></author>
+          <author initials="L." surname="Rizzo" fullname="L. Rizzo">
+            <organization/></author>
+          <author initials="M." surname="Handley" fullname="M. Handley">
+            <organization/></author>
+          <author initials="J." surname="Crowcroft" fullname="J. Crowcroft">
+            <organization/></author>
+          <date year="2002" month="December"/>
+        </front>
+        <seriesInfo name="RFC" value="3451"/>
+        <format type="TXT" octets="72594" target="ftp://ftp.isi.edu/in-notes/rfc3451.txt"/>
+      </reference>
+-->
+
+
+<reference anchor="draft-ietf-rmt-pi-alc-revised">
+	<front>
+		<title>Asynchronous Layered Coding (ALC) Protocol Instantiation</title>
+		<author initials='M.' surname='Luby'>
+			<organization />
+		</author>
+		<author initials="M." surname="Watson">
+			<organization/>
+		</author>
+		<author initials='L.' surname='Vicisano'>
+			<organization />
+		</author>
+		<date month="November" year="2007"/>
+	</front>
+	<seriesInfo name="" value="draft-ietf-rmt-pi-alc-revised-05.txt (work in progress)"/>
+</reference>
+
+
+<reference anchor="draft-ietf-rmt-bb-lct-revised">
+	<front>
+		<title>Layered Coding Transport (LCT) Building Block</title>
+		<author initials='M.' surname='Luby'>
+			<organization />
+		</author>
+		<author initials="M." surname="Watson">
+			<organization/>
+		</author>
+		<author initials='L.' surname='Vicisano'>
+			<organization />
+		</author>
+		<date month="November" year="2007"/>
+	</front>
+	<seriesInfo name="" value="draft-ietf-rmt-bb-lct-revised-06.txt (work in progress)"/>
+</reference>
+
+	<!--
+      <reference anchor="RFC3940">
+        <front>
+          <title>Negative-acknowledgment (NACK)-Oriented Reliable Multicast (NORM) Protocol</title>
+          <author initials="B." surname="Adamson" fullname="B. Adamson">
+            <organization/></author>
+          <author initials="C." surname="Bormann" fullname="C. Bormann">
+            <organization/></author>
+          <author initials="M." surname="Handley" fullname="M. Handley">
+            <organization/></author>
+          <author initials="J." surname="Macker" fullname="J. Macker">
+            <organization/></author>
+          <date year="2004" month="November"/>
+        </front>
+        <seriesInfo name="RFC" value="3940"/>
+        <format type="TXT" octets="220549" target="ftp://ftp.isi.edu/in-notes/rfc3940.txt"/>
+      </reference>
+	-->
+
+<reference anchor="draft-ietf-rmt-pi-norm-revised">
+	<front>
+		<title>Negative-acknowledgment (NACK)-Oriented Reliable Multicast (NORM) Protocol</title>
+		<author initials="B." surname="Adamson" fullname="B. Adamson">
+			<organization/></author>
+		<author initials="C." surname="Bormann" fullname="C. Bormann">
+			<organization/></author>
+		<author initials="M." surname="Handley" fullname="M. Handley">
+			<organization/></author>
+		<author initials="J." surname="Macker" fullname="J. Macker">
+			<organization/></author>
+		<date year="2007" month="March"/>
+	</front>
+	<seriesInfo name="" value="draft-ietf-rmt-pi-norm-revised-05.txt (work in progress)"/>
+</reference>
+
+</references>
+
+
+<references title="Informative References">
+<!-- ==================================== -->
+
+      <reference anchor="RFC3926">
+        <front>
+          <title>FLUTE - File Delivery over Unidirectional Transport</title>
+          <author initials="T." surname="Paila" fullname="T. Paila">
+            <organization/></author>
+          <author initials="M." surname="Luby" fullname="M. Luby">
+            <organization/></author>
+          <author initials="R." surname="Lehtonen" fullname="R. Lehtonen">
+            <organization/></author>
+          <author initials="V." surname="Roca" fullname="V. Roca">
+            <organization/></author>
+          <author initials="R." surname="Walsh" fullname="R. Walsh">
+            <organization/></author>
+          <date year="2004" month="October"/>
+        </front>
+        <seriesInfo name="RFC" value="3926"/>
+        <format type="TXT" octets="81224" target="ftp://ftp.isi.edu/in-notes/rfc3926.txt"/>
+      </reference>
+
+	<!--
+      <reference anchor="Perrig04">
+	<front>
+	  <title>Secure Broadcast Communication in Wired and Wireless Networks</title>
+	  <author initials="A." surname="Perrig" fullname="A. Perrig">
+	    <organization /></author>
+          <author initials="J.D." surname="Tygar" fullname="J.D. Tygar">
+            <organization/></author>
+	  <date year="2004" />
+	</front>
+        <seriesInfo name="Kluwer Academic Publishers" value="ISBN 0-7923-7650-1"/>
+      </reference>
+	-->
+
+	<!--
+      <reference anchor="RFC4442">
+        <front>
+          <title>Bootstrapping Timed Efficient Stream Loss-Tolerant Authentication (TESLA)</title>
+          <author initials="S." surname="Fries" fullname="S. Fries">
+            <organization/>
+          </author>
+          <author initials="H." surname="Tschofenig" fullname="H. Tschofenig">
+            <organization/>
+          </author>
+          <date month="March" year="2006"/>
+        </front>
+        <seriesInfo name="RFC" value="4442"/>
+        <format type="TXT" octets="37345" target="ftp://ftp.isi.edu/in-notes/rfc4442.txt"/>
+      </reference>
+	-->
+
+	<!--
+      <reference anchor="RFC4383">
+        <front>
+          <title>
+          The Use of Timed Efficient Stream Loss-Tolerant Authentication (TESLA) in the Secure Real-time Transport Protocol (SRTP)
+          </title>
+          <author initials="M." surname="Baugher" fullname="M. Baugher"><organization/></author>
+          <author initials="E." surname="Carrara" fullname="E. Carrara"><organization/></author>
+          <date year="2006" month="February"/>
+        </front>
+        <seriesInfo name="RFC" value="4383"/>
+        <format type="TXT" octets="41766" target="ftp://ftp.isi.edu/in-notes/rfc4383.txt"/>
+      </reference>
+	-->
+
+      <reference anchor="RFC3711">
+        <front>
+          <title>The Secure Real-time Transport Protocol (SRTP)</title>
+          <author initials="M." surname="Baugher" fullname="M. Baugher"><organization/></author>
+          <author initials="D." surname="McGrew" fullname="D. McGrew"><organization/></author>
+          <author initials="M." surname="Naslund" fullname="M. Naslund"><organization/></author>
+          <author initials="E." surname="Carrara" fullname="E. Carrara"><organization/></author>
+          <author initials="K." surname="Norrman" fullname="K. Norrman"><organization/></author>
+          <date year="2004" month="March"/>
+      </front>
+      <seriesInfo name="RFC" value="3711"/>
+      <format type="TXT" octets="134270" target="ftp://ftp.isi.edu/in-notes/rfc3711.txt"/>
+      </reference>
+
+      <reference anchor="RFC4359">
+        <front>
+          <title>
+          The Use of RSA/SHA-1 Signatures within Encapsulating Security Payload (ESP) and Authentication Header (AH)
+          </title>
+          <author initials="B." surname="Weis" fullname="B. Weis"><organization/></author>
+          <date year="2006" month="January"/>
+        </front>
+        <seriesInfo name="RFC" value="4359"/>
+        <format type="TXT" octets="26989" target="ftp://ftp.isi.edu/in-notes/rfc4359.txt"/>
+      </reference>
+
+      <reference anchor="RFC2104">
+        <front>
+          <title abbrev="HMAC">HMAC: Keyed-Hashing for Message Authentication</title>
+          <author initials="H." surname="Krawczyk" fullname="Hugo Krawczyk">
+            <organization>IBM, T.J. Watson Research Center</organization>
+          </author>
+          <author initials="M." surname="Bellare" fullname="Mihir Bellare">
+            <organization>University of California at San Diego, Dept of Computer Science and Engineering</organization>
+          </author>
+          <author initials="R." surname="Canetti" fullname="Ran Canetti">
+            <organization>IBM T.J. Watson Research Center</organization>
+          </author>
+          <date year="1997" month="February"/>
+        </front>
+        <seriesInfo name="RFC" value="2104"/>
+        <format type="TXT" octets="22297" target="ftp://ftp.isi.edu/in-notes/rfc2104.txt"/>
+      </reference>
+
+	<reference anchor="RFC3447">
+		<front>
+			<title>Public-Key Cryptography Standards (PKCS) #1: RSA Cryptography Specifications Version 2.1</title>
+			<author initials="J." surname="Jonsson" fullname="J. Jonsson"> <organization/> </author>
+			<author initials="B." surname="Kaliski" fullname="B. Kaliski"> <organization/> </author>
+			<date year="2003" month="February"/>
+		</front>
+		<seriesInfo name="RFC" value="3447"/>
+		<format type="TXT" octets="143173" target="ftp://ftp.isi.edu/in-notes/rfc3447.txt"/>
+	</reference>
+
+    </references>
+
+
+
+    </back>
+
+</rfc>

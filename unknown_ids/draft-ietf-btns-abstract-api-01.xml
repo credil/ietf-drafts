@@ -1,0 +1,486 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!-- 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml' -->
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY RFC2119 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+<!ENTITY RFC2367 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2367.xml">
+<!ENTITY RFC2692 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2692.xml">
+<!ENTITY RFC4301 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4301.xml">
+<!ENTITY connection-latching PUBLIC '' 'http://www.sandelman.ca/public/rfc/bibxml3/reference.I-D.ietf-btns-connection-latching.xml'>
+]>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes"?>
+<?rfc tocindent="no" ?>
+<?rfc autobreaks="no" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<rfc docName="draft-ietf-btns-abstract-api-01.txt" ipr="full3978">
+  <front>
+    <title abbrev="btns-abstract-api">An abstract interface between
+	applications and IPsec</title>
+
+    <author fullname="Michael C. Richardson" initials="M."
+            surname="Richardson">
+      <organization abbrev="SSW">Sandelman Software Works</organization>
+
+      <address>
+        <postal>
+          <street>470 Dawson Avenue</street>
+
+          <city>Ottawa</city>
+
+          <region>ON</region>
+
+          <code>K1Z 5V7</code>
+
+          <country>CA</country>
+        </postal>
+
+        <email>mcr@sandelman.ottawa.on.ca</email>
+
+        <uri>http://www.sandelman.ottawa.on.ca/</uri>
+      </address>
+    </author>
+
+    <!--
+  <author initials="W." surname="Sommerfeld" fullname="Bill Sommerfeld">
+    <organization abbrev="Sun">Sun Microsystems</organization>
+    <address>
+      <postal>   
+        <street>1 Network Drive</street>
+        <city>Burlington</city>
+        <region>MA</region>
+        <code>xxxxx</code>
+        <country>USA</country>
+      </postal>
+      <email>sommerfeld@east.sun.com</email>
+      <uri>http://www.orchard.arlington.ma.us/</uri>
+    </address>
+  </author>
+-->
+
+    <date year="2008" />
+
+    <abstract>
+      <t>
+This document explains in the abstract (no language bindings are
+provided) how an application may learn that IPsec has been applied to a
+conversation or specify that IPsec should be used.  Though this is
+useful in general it is particularly useful for applications that wish
+to use BTNS (Better Than Nothing Security -- a mode of IPsec keying),
+either in conjunction with channel binding or otherwise.
+</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Overview">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in RFC2119 <xref
+      target="RFC2119"></xref>.</t>
+    </section>
+
+    <section title="Introduction">
+      <t>Implementation of application protocols that depend on IPsec
+	  <xref target='RFC4301'/> tend to depend on configuration of
+	  IPsec, without having any portable (or even non-portable) way
+	  to ensure that IPsec is being used properly.  This state of
+	  affairs is unfortunate, as it limits use of IPsec and
+	  encourages applications not to rely on IPsec, which in
+	  environments that do use IPsec, may lead to redudant
+	  cryptographic protection layers.</t>
+      <t>This document describes an abstract application programming
+	  interface (API) that is intended to interface applications
+	  with IPsec.  It is abstract in that no programming language
+	  specific bindings are given here, nor is this API specified in
+	  terms of familiar APIs such as the "BSD sockets API," for
+	  example.  Programming language specific bindings, and
+	  operating system specific bindings are left to other
+	  documents.</t>
+    </section>
+
+    <section title="Objects involved">
+      <t>There are two major kinds of objects that are defined by this
+      document. These are the Protection Token (pToken) and the Identity Token
+      (iToken). Both objects are abstracted into unique opaque tokens which
+      may be manipulated only indirectly by applications.  Here we use
+      the term "opaque token" to mean much what "object" means in a
+      typical object-oriented programming language, but with no public
+      fields (only methods or generic functions).  Additionally, the
+      iToken may be serialized -- that is, converted, by application of
+      a suitable function, into an octet string that can later be
+      imported to create a new iToken object that is equivalent to the
+      original (though a value equality test applied to both iTokens may
+      fail).</t>
+
+      <t>Each object has a series of attributes associated with it. The API
+      provides a mechanism to query the value of attributes of the token. The
+      attributes are where all of the content of the objects are.</t>
+
+      <t>Each token has a scope - the place and time in which it can be
+      considered valid. There are many conflicting qualities that one would
+      wish for the token, and the result is a different compromise among these
+      qualities for each token type. The tokens should be: <list>
+          <t>easy to allocate and release</t>
+
+          <t>automatically cleaned up when an application terminates (both
+          properly and inproperly)</t>
+
+          <t>easily compared (for equivalence)</t>
+
+	  <t>easily interfaced with existing APIs (such as the BSD
+	      sockets API, in that case as "auxiliary data")</t>
+        </list></t>
+
+      <t>We use terms such as "process" and "address space" without
+	  explaining them or providing references, much as with
+	  "object."  The terms refer to pervasive, common concepts in
+	  operating systems theory and practice over the past several
+	  decades.</t>
+
+      <section title="Scope of Protection Token">
+	<t>The protection token has a per-process (i.e. per-address
+	    space) scope, though it may be inherited by child processes
+	    in operating systems that have a "fork()" operation.  It
+	    SHOULD always be possible to obtain a current protection
+	    token for an established connection (whether for a
+	    connection-oriented transport protocol or for a "connected"
+	    UDP socket).  that is equivalent to any previous protection
+	    token that was obtained.  The scope of the token is not
+	    related to any specific underlying Security Associations
+	    used by IPsec, but to the entire set of past, current and
+	    future SAs that will be used by IPsec to protect that
+	    connection [connection-latching].
+        </t>
+      </section>
+
+      <section title="Scope of Identity Token">
+        <t>The identity token also has a per-process scope, but is
+	    serializable such that its serialized form has a per-system
+	    or even universal, scope.  (We have to consider whether we
+	    want universal scope for serialized iTokens, much as with
+	    exported name objects in the GSS-API, which would mean
+	    agreeing on a standard, extensible representation and
+	    encoding.)</t>
+      </section>
+
+      <section title="Validity period of Protection Token">
+        <t>A pToken is valid only within the scope of a single
+	process (though it may be inherited by child processes which
+	share the parent's address space with copy on write semantics).
+	The token may not be serialized, and, therefore, may not be
+	saved in any long term storage.</t>
+
+        <t>It is permitted for one protection token to be replaced with
+        another (equivalent) protection token due to a node moving, suspending
+        and resuming, or due to extended network outages, however the
+        underlying identity token would be guaranteed to be the same. This
+        would most likely occur with unconnected sockets, where due to the
+        outage/downtime, the keying system was unable to maintain a keying
+        channel, and had to re-create the keys from scratch.</t>
+      </section>
+
+      <section title="Validity period of Identity Token">
+        <t>The iToken may be valid across the entire system, although it may
+        need to be turned into an external representation (serialization).
+        Some forms of
+        identity token may be valid across systems, but in general an identity
+        token is only valid in reference to a local policy. (See
+        <xref target="RFC2692"></xref>).</t>
+      </section>
+
+      <section title="Serialization">
+          <t>
+           Serialization refers to the process of turning an in memory object
+           into a format which can be saved on disk, and re-imported by the
+           same implementation.  This document does not require a
+           specification for the serialization format, only that it be
+           possible. The format is a local matter.
+          </t>
+        <section title="Serialization of Protection Token">
+          <t>
+           There is no requirement to serialize the protection token, or
+           the attribrutes contained within.
+           There is a desire to serialize templates for protection tokens
+           such that a set of minimum security requirements can be saved for
+           future connections to the same peer.
+          </t>
+        </section>
+
+        <section title="Serialization of Identity Token">
+          <t>
+           There is a desire to be able to to serialize the identity token
+           in such a way that future communications can be confirmed to be
+           with the same identity as before.      
+          </t>
+        </section>
+      </section>
+
+    </section>
+
+    <section title="Namespace">
+      <t>All symbols (functions, macros, etc.) defined by this API are
+      prefixed with "ipsec_". Specific rules for capitalizations should
+      be driven by the specific language binding.</t>
+
+      <t>Whenever sensible, the enumerated values defined in <xref
+      target="RFC2367"></xref> are used if appropriate.</t>
+    </section>
+
+    <section title="pToken discovery">
+      <t>An application that receives a connection using accept(2) (or 
+      recvmsg(2)), or makes a connection using connect(2), needs to get a
+      protection token that is associated with the socket.</t>
+
+      <t>For connected sockets (UDP, TCP, some SCTP modes, etc.), the
+      protection token MUST not change during the lifetime of the socket, so
+      a simple process is appropriate. (<xref target="I-D.ietf-btns-connection-latching" />)</t>
+
+      <t>As the pToken will not change during the
+      connection. (see notes about rekeying). A simple function is provided to
+      return a pToken from a file descriptor. Many implementions are likely to
+      implement this using getsockopt(2), but an interface in those terms is
+      not specified in order to keep it more abstract, and therefore more
+      portable.</t>
+
+      <t>For unconnected sockets (such as UDP and some SCTP modes), each
+      datagram received may be received may arrive from a different source,
+      and therefore may have different protections applied. A protection token
+      needs to be returned with each datagram, so it must be returned as
+      ancilliary data with recvmsg(2).</t>
+
+      <t>A server using unconnected sockets, would receive a protection token 
+      as ancilliary data, and then would provide the same protection token
+      as ancilliary data on the corresponding sendmsg(2) call.</t>
+    </section>
+
+    <section title="pToken templates">
+      <t>
+         A pToken template is a type of pToken which is used only when
+         setting up a connection, or setting up a socket to listen for
+         connections. 
+      </t>
+      <t>
+         Properties which are not set on a pToken, are assumed to be
+         do-not-care values.
+      </t>
+    </section>
+
+    <section title="Properties of pToken objects">
+      <t><list>
+          <t>privacyProtected - boolean.
+          Set to false if the connection has either no privacy
+          configured (AH, ESP-null), or if the privacy configured is known to
+          be untrustworthy by the administrator. Returns true otherwise. (XXX:
+          False does not mean that there will be no IPsec, but that it should
+          not be considered useful)</t>
+
+          <t>integrityProtected - boolean.
+          Set to false if there is no data integrity protection
+          other than the UDP/TCP checksum.</t>
+
+          <t>compressionAvailable - boolean.
+          Set to true if data count sent/received from socket may
+          not map linearly to data sent/received on wire.</t>
+
+          <t>policyName - string. A handle which describes the system policy
+             which was used (or is desired), to establish the connection.
+             This is a string, such as: "secure", "ospf", "iSCSI",
+             "very-secure", "do-not-tell-mom-secure", "minimum-security",
+             "was-posted-on-usenet-security".</t>
+
+          <t>iToken - object. Set
+          to iToken object which represents identity of remote system.</t>
+
+          <t>remote_iToken - object. Set
+          to iToken object which was used to represent our identity to the
+          remote system.</t>
+
+          <t>tunnelMode - boolean. Set if tunnel mode was used, or if it
+          is desired. </t>
+
+          <t>ipoptionsProtected - boolean. Set if ip options (and IPv6
+             header extensions), are protected. </t>
+
+          <t>auditString - string. readonly. Not part of a template.
+          Valid only after connection establishment. Contains a string which
+          can be used in system auditing and logging functions which describes
+          the details of the IPsec SA that was negotiated. No structure of
+          this string may be assumed. No session keys are disclosed by this
+          string. </t>
+
+          <t>informationString - string. readonly. Not part of a template.
+          Valid only after connection establishment. Contains a string which
+          can be displayed to a user, informing them of what kind of 
+          security association was established for this connection.  This 
+          string may be localized.  No session keys are disclosed by this
+          string. </t>
+
+          <t></t>
+        </list></t>
+    </section>
+
+    <section title="Properties of iToken objects">
+      <t><list>
+          <t>auditString - string. readonly on responder and readonly on
+          initiator after connection establishment. Contains a string which
+          can be used in system auditing and logging functions which describes
+          the remote identity, and the method by which it was authenticated
+          (i.e. it may list the CA or origin of a public key)</t>
+
+          <t>authenticationMethod - enumerated type. Indicates which method
+          was used to authenticate the peer, possible values are:<list>
+              <t>NONE - the peer was not authenticated in anyway</t>
+
+              <t>BTNS - the peer was authenticated using an inline key which
+              was not verified in anyway</t>
+
+              <t>LEAFOFFAITH - the peer was authenticated using a key which
+              was previously cached, but was previously received inline, and
+              was not verified in anyway.</t>
+
+              <t>PRESHAREDKEY - the peer was authenticated using a unique
+              pre-shared key</t>
+
+              <t>GROUPKEY - the peer was authenticated using a non-unique
+              pre-shared key</t>
+
+              <t>XAUTH - the type of phase1/PARENT-SA is not relevant, as the
+              peer was authenticated using a username/password.</t>
+
+              <t>EAP - the type of phase1/PARENT-SA is not relevant, as the
+              peer was authenticated using an EAP method. (Additional
+              properties may provide more information)</t>
+
+              <t>PKIX_TRUSTED - the peer was authenticated using a PKIX/X.509
+              certificate that was found in the trusted store.</t>
+
+              <t>PKIX_INLINE - the peer was authenticated using a PKIX/X.509
+              certificate that was transmitted inline, and was verified by
+              using a Certificate Authority that was found in the trusted
+              store.</t>
+
+              <t>PKIX_OFFLINE - the peer was authenticated using a PKIX/X.509
+              certificate that was retrieved out-of-band (such as by LDAP or
+              HTTP), and was verified by using a Certificate Authority that
+              was found in the trusted store.</t>
+
+              <t></t>
+            </list>certificateAuthorityDN - string. readonly. the
+          Distinguished Name (DN) of certificate authority that was used to
+          verify the key (for methods that involved PKIX)</t>
+
+          <t>certificateDN - string. readonly. the DN of the peer that was
+          authenticated</t>
+
+          <t>pubKeyID - string. readonly. a somewhat unique identifier for the
+          public key. A suggestion is to use the first 9 base64 digits of the
+          RFC3110 public key modulus, but this is a local matter.</t>
+
+          <t>channelBinding - binary blog. readonly. provides the concatenated
+          set of public keys</t>
+        </list></t>
+    </section>
+
+    <section title="Accessor Functions">
+      <t>Methods to access the properties of the two objects are specific to
+      the language in which the bindings are done. See YYYY for
+      C-bindings.</t>
+    </section>
+
+    <section title="Use Cases">
+      <t>
+        Explain slides from IETF68.
+      </t>
+     </section>
+
+    <section title="Security Considerations">
+      <t>Probably lots to say here. Please help.</t>
+    </section>
+
+    <section title="IANA Considerations">
+      <t>There are no registries created by this document. The names (and
+      language specific enum, if applicable) of the pToken and iToken
+      proprties are internal to a single system, and therefore do not need
+      standization.</t>
+    </section>
+
+    <section title="Acknowledgments">
+      <t>stuff</t>
+    </section>
+
+    <section title="TRACKING">
+<t>
+ <figure anchor="tracking" title="document tracking">
+   <preamble>Document RCS tracking info</preamble>
+<artwork>
+
+$Revision: 1.6 $
+$Log: ietf-btns-abstract-api.xml,v $
+Revision 1.6  2008/02/18 02:37:45  mcr
+updated edits.
+
+Revision 1.5  2007/07/24 22:15:51  nico
+
+New abstract, new intro, various minor changes (scope of objects,
+etc...).
+
+Revision 1.4  2007/07/24 03:30:19  mcr
+	edits to token scope, in collaboration with Nico.
+
+Revision 1.3  2007/07/19 20:09:50  mcr
+	added more properties to describe the type of the SA.
+
+Revision 1.2  2007/07/19 19:45:55  mcr
+	edits from 2007-07-19 discussion.
+
+Revision 1.1  2007/06/25 15:34:08  mcr
+   renamed drafts in Makefile
+
+Revision 1.3  2007/05/14 19:56:37  mcr
+  added abstract
+
+Revision 1.2  2007/05/12 20:38:56  mcr
+  fixed id string
+
+Revision 1.1  2007/05/12 01:31:00  mcr
+  updates to abstract api document
+
+Revision 1.4 2007/02/16 03:24:09 mcr
+      updated to make XML happy, and dates corrected
+Revision 1.3 2007/02/16 03:04:44 mcr
+      C API document.
+Revision 1.2 2006/03/21 22:02:47 mcr
+      added API requirements and skeleton of original API spec
+Revision 1.1 2006/03/21 21:04:43 mcr
+      added documents from ipsp WG
+Revision 1.1 2003/06/03 20:45:06 mcr
+      initial template
+           </artwork>
+           <postamble></postamble>
+</figure>
+</t>
+    </section>
+
+  </middle>
+
+  <back>
+    <references title="Normative references">
+      &RFC2119;
+
+      &RFC2367;
+
+      &RFC2692;
+      &connection-latching;
+
+      <!-- DNSSEC -->
+    </references>
+
+    <references title="Non-normative references">
+      &RFC4301;
+    </references>
+  </back>
+</rfc>
+

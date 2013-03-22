@@ -1,0 +1,721 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY rfc3917 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3917.xml">
+<!ENTITY rfc5101 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.5101.xml">
+<!ENTITY rfc5102 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.5102.xml">
+<!ENTITY rfc5103 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.5103.xml">
+<!ENTITY draftIpfixArch PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-ipfix-arch.xml'>
+<!ENTITY draftPsampInfo PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-psamp-info.xml'>
+<!ENTITY rfc2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+<!ENTITY rfc2434 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2434.xml'>
+] >
+<rfc ipr="full3978" category="std" docName="draft-ietf-ipfix-exporting-type-01.txt">
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+
+<front>
+ <title abbrev="IPFIX Type Information">
+   Exporting Type Information for IPFIX Information Elements
+ </title>
+
+ <author initials="E." surname="Boschi" fullname="Elisa Boschi">
+    <organization abbrev="Hitachi Europe">
+    Hitachi Europe
+    </organization>
+    <address>
+      <postal>
+        <street>c/o ETH Zurich</street>
+        <street>Gloriastrasse 35</street>
+        <city>8092 Zurich</city>
+        <country>Switzerland</country>
+      </postal>
+      <phone>+41 44 6327057</phone>
+      <email>elisa.boschi@hitachi-eu.com</email>
+    </address>
+  </author>
+ <author initials="B." surname="Trammell" fullname="Brian H. Trammell">
+   <organization abbrev="CERT/NetSA">
+     CERT Network Situational Awareness
+   </organization>
+   <address>
+     <postal>
+       <street>Software Engineering Institute</street>
+       <street>4500 Fifth Avenue</street>
+       <city>Pittsburgh</city> <region>Pennsylvania</region>
+       <code>15213</code>
+       <country>United States</country>
+     </postal>
+     <phone>+1 412 268 9748</phone>
+     <email>bht@cert.org</email>
+   </address> 
+ </author>
+ <author initials="L." surname="Mark" fullname="Lutz Mark">
+   <organization abbrev="Fraunhofer FOKUS">
+     Fraunhofer Institute for Open Communication Systems
+   </organization>
+   <address>
+     <postal>
+       <street>Kaiserin-Augusta-Allee 31</street>
+       <city>10589 Berlin</city>
+       <country>Germany</country>
+     </postal>
+     <phone>+49 30 3463 7306</phone>
+     <email>lutz.mark@fokus.fraunhofer.de</email>
+   </address>
+ </author>
+ <author initials="T." surname="Zseby" fullname="Tanja Zseby">
+   <organization abbrev="Fraunhofer FOKUS">
+     Fraunhofer Institute for Open Communication Systems
+   </organization>
+   <address>
+     <postal>
+       <street>Kaiserin-Augusta-Allee 31</street>
+       <city>10589 Berlin</city>
+       <country>Germany</country>
+     </postal>
+     <phone>+49 30 3463 7153</phone>
+     <email>tanja.zseby@fokus.fraunhofer.de</email>
+   </address>
+ </author>
+ <date month="February" day="25" year="2008"></date>
+ <area>Operations</area>
+ <workgroup>IPFIX Working Group</workgroup>
+ <abstract> 
+   <t>This document describes an extension to IPFIX to allow the encoding of
+   IPFIX Information Model properties within an IPFIX Message stream, to
+   allow the export of extended type information for enterprise-specific
+   Information Elements. This format is designed to facilitate
+   interoperability and reusability among a wide variety of applications and
+   tools.</t>
+ </abstract>
+</front>
+
+<middle>
+
+ <section title="Introduction">
+
+   <t>The IPFIX protocol specification allows the creation of
+   enterprise-specific Information Elements to easily extend the protocol to
+   meet requirements which aren't covered by the existing Information Model.
+   However, IPFIX Templates provide only the ability to export the size of
+   the fields defined by these Information Elements; there is no mechanism 
+   to provide full type information for these Information Elements as
+   is defined for the Information Elements in the IPFIX Information 
+   Model.</t>
+
+   <t>This limits the interoperability of enterprise-specific Information
+   Elements. It is not possible to use analysis tools on IPFIX records
+   containing these partially defined Information Elements that have not been
+   developed with a priori knowledge of their types, since such tools will
+   not be able to decode them; these tools can only treat and store them as
+   opaque octet arrays. However, if richer information is available,
+   additional operations such as efficient storage, display, and limited
+   analysis of records containing enterprise-specific Information Elements
+   become possible, even for Collecting Processes that had not been
+   specifically developed to understand them.</t>
+
+   <t>This document proposes a mechanism to encode the full set of properties
+   available for the definition of Information Elements within the IPFIX
+   Information Model inline within an IPFIX Message stream using IPFIX
+   Options. This mechanism may be used to fully define type information for
+   Information Elements used within a message stream, without resort to an
+   external reference or reliance on out-of-band configuration.</t>
+
+   <t>Note that the solution described in this draft is only for providing
+   interoperability for enterprise specific information elements that are not
+   yet standardized. The solution introduces overhead and does not lead to
+   real interoperability as provided by standards. Therefore we highly
+   recommend to standardize all new information elements by registering them
+   with IANA. Standardization is straightforward. The type information that
+   needs to be specified in order to support the proposed solution provides a
+   perfect basis for the description required for standardizing the
+   information element. </t>
+
+   <t>We assume that the proposed solution is mainly used in the following two
+   situations: a) for information elements for very specific solutions or in
+   very specific environments for which a standardization might not seem
+   necessary because only few users are using it or b) temporarily for new
+   information elements before they are standardized or to first investigate
+   whether they become popular enough to become standardized. </t>
+
+   <t>It might happen that information elements previously described by the
+   proposed exporting type information later become a standard information
+   element. In some environments old and new version of the information
+   element can coexist. A translation between information elements expressed
+   by the described solution and standardized information elements is not
+   necessary. Collectors will act in accordance to their capabilities and
+   ignore messages that they do not support.</t>
+
+   <section title="IPFIX Documents Overview" anchor="intro-docs">
+     <t><xref target="RFC5101">"Specification of the IPFIX
+     Protocol for the Exchange of IP Traffic Flow Information"</xref>
+     (informally, the IPFIX Protocol document) and its associated documents
+     define the IPFIX Protocol, which provides network engineers and
+     administrators with access to IP traffic flow information.</t>
+
+     <t><xref target="I-D.ietf-ipfix-arch">"Architecture for IP Flow
+     Information Export"</xref> (the IPFIX Architecture document) defines
+     the architecture for the export of measured IP flow information out of
+     an IPFIX Exporting Process to an IPFIX Collecting Process, and the
+     basic terminology used to describe the elements of this architecture,
+     per the requirements defined in <xref target="RFC3917">"Requirements
+     for IP Flow Information Export"</xref>. The IPFIX Protocol document
+     <xref target="RFC5101"></xref> then covers the details of the method for
+     transporting IPFIX Data Records and Templates via a congestion-aware
+     transport protocol from an IPFIX Exporting Process to an IPFIX
+     Collecting Process.</t>
+
+     <t><xref target="RFC5102">"Information Model for IP Flow
+     Information Export"</xref> (informally, the IPFIX Information Model
+     document) describes the Information Elements used by IPFIX, including
+     details on Information Element naming, numbering, and data type
+     encoding.</t>
+
+     <t>This document references the Protocol and Architecture documents for
+     terminology and extends the IPFIX Information Model to provide new
+     Information Elements for the representation of Information Element
+     properties.</t>
+   </section>
+
+</section>
+
+<section title="Terminology">
+
+   <t>Terms used in this document that are defined in the Terminology section
+   of the <xref target="RFC5101">IPFIX Protocol</xref>
+   document are to be interpreted as defined there.</t>
+
+   <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+   document are to be interpreted as described in <xref target="RFC2119">RFC
+   2119</xref>.</t>
+
+</section>
+
+<section title="Type Information Export" anchor="self-description-IEs">
+
+     <t>This section describes the mechanism used to encode Information
+     Element type information within an IPFIX Message stream. This mechanism
+     consists of an Options Template Record used to define Information
+     Element type records, and a set of Information Elements required by
+     these type records. We first specify the necessary Information Elements,
+     followed by the Information Element Type Options Template itself. Note
+     that Information Element type records require one Information Element,
+     informationElementId, that is defined in the <xref target="I-D.ietf-psamp-info">PSAMP Information Model</xref>.</t>
+
+<section title="informationElementDataType">
+	<list style="hanging">
+	  <t hangText="Description: ">
+ 	A description of the storage type of an IPFIX information element. These
+   correspond to the abstract data types defined in section 3.1 of the <xref target="RFC5102">IPFIX Information Model</xref>; see that
+   section for more information on the types described below. This field may
+   take the following values:
+ 	  <texttable>
+ 	    <ttcol align="left">Value</ttcol>
+	      <ttcol align="left">Description</ttcol>
+	      <c>0x00</c><c>octetArray</c>
+	      <c>0x01</c><c>unsigned8</c>
+	      <c>0x02</c><c>unsigned16</c>
+	      <c>0x03</c><c>unsigned32</c>
+	      <c>0x04</c><c>unsigned64</c>
+	      <c>0x05</c><c>signed8</c>
+	      <c>0x06</c><c>signed16</c>
+	      <c>0x07</c><c>signed32</c>
+	      <c>0x08</c><c>signed64</c>
+	      <c>0x09</c><c>float32</c>
+	      <c>0x0A</c><c>float64</c>
+	      <c>0x0B</c><c>boolean</c>
+	      <c>0x0C</c><c>macAddress</c>
+	      <c>0x0D</c><c>string</c>
+	      <c>0x0E</c><c>dateTimeSeconds</c>
+	      <c>0x0F</c><c>dateTimeMilliseconds</c>
+	      <c>0x10</c><c>dateTimeMicroseconds</c>
+	      <c>0x11</c><c>dateTimeNanoseconds</c>
+	      <c>0x12</c><c>ipv4Address</c>
+	      <c>0x13</c><c>ipv6Address</c>
+	    </texttable>
+       These types are registered in the IANA IPFIX Information Element Data 
+       Type subregistry. This subregistry is intended to assign numbers for type names, 
+       not to provide a mechanism for adding data types to the IPFIX Protocol, 
+       and as such requires a <xref target="RFC2434">Standards Action</xref> to modify.
+ 	</t>
+ 	<t hangText="Abstract Data Type: ">unsigned8</t>
+ 	<t hangText="ElementId: ">TBD1</t>
+	  <t hangText="Status: ">Proposed</t>
+	  <t hangText="Reference: ">
+	    Section 3.1 of the <xref target="RFC5102">IPFIX Information Model</xref>
+ 	</t>
+ </list>
+</section>
+
+<section title="informationElementDescription">
+ <list style="hanging">
+   <t hangText="Description: ">
+   A string containing a human-readable description of an Information
+   Element.
+   </t>
+   <t hangText="Abstract Data Type: ">string</t>
+   <t hangText="Data Type Semantics: ">identifier</t>
+   <t hangText="ElementId: ">TBD2</t>
+   <t hangText="Status: ">Proposed</t>
+ </list>
+</section>
+
+<section title="informationElementName">
+ <list style="hanging">
+   <t hangText="Description: ">
+   A string containing the name of an Information Element.
+   </t>
+   <t hangText="Abstract Data Type: ">string</t>
+   <t hangText="Data Type Semantics: ">identifier</t>
+   <t hangText="ElementId: ">TBD3</t>
+   <t hangText="Status: ">Proposed</t>
+ </list>
+</section>
+
+<section title="informationElementRangeBegin">
+ <list style="hanging">
+   <t hangText="Description: ">
+   Contains the inclusive low end of the range of acceptable values for an
+   Information Element. Not valid and SHOULD be ignored by a Collecting
+   Process unless informationElementRangeEnd is also available for the same
+   Information Element.
+   </t>
+   <t hangText="Abstract Data Type: ">unsigned64</t>
+   <t hangText="Data Type Semantics: ">quantity</t>
+   <t hangText="ElementId: ">TBD4</t>
+   <t hangText="Status: ">Proposed</t>
+ </list>
+</section>
+
+<section title="informationElementRangeEnd">
+ <list style="hanging">
+   <t hangText="Description: ">
+   Contains the inclusive high end of the range of acceptable values for an
+   Information Element. Not valid and SHOULD be ignored by a Collecting
+   Process unless informationElementRangeBegin is also available for the same
+   Information Element.
+   </t>
+   <t hangText="Abstract Data Type: ">unsigned64</t>
+   <t hangText="Data Type Semantics: ">quantity</t>
+   <t hangText="ElementId: ">TBD5</t>
+   <t hangText="Status: ">Proposed</t>
+ </list>
+</section>
+
+<section title="informationElementSemantics">
+	<list style="hanging">
+	  <t hangText="Description: ">
+ 	A description of the semantics of an IPFIX information element. These
+   correspond to the data type semantics defined in section 3.2 of the <xref target="RFC5102">IPFIX Information Model</xref>; see that
+   section for more information on the types described below. This field may
+   take the following values; the special value 0x00 (none) is used to note
+   that no semantics apply to the field; it cannot be manipulated by a
+   Collecting Process or File Reader that does not understand it a priori.
+ 	  <texttable>
+       <ttcol align="left">Value</ttcol>
+       <ttcol align="left">Description</ttcol>
+ 	    <c>0x00</c><c>none</c>
+ 	    <c>0x01</c><c>quantity</c>
+ 	    <c>0x02</c><c>totalCounter</c>
+ 	    <c>0x03</c><c>deltaCounter</c>
+ 	    <c>0x04</c><c>identifier</c>
+ 	    <c>0x05</c><c>flags</c>
+ 	  </texttable>
+     These semantics are registered in the IANA IPFIX Information Element 
+     Semantics subregistry. This subregistry is intended to assign numbers for 
+     semantics names, not to provide a mechanism for adding semantics to the 
+     IPFIX Protocol, and as such requires a <xref target="RFC2434">Standards Action</xref> to modify.
+   </t>
+ 	<t hangText="Abstract Data Type: ">unsigned8</t>
+ 	<t hangText="ElementId: ">TBD6</t>
+ 	<t hangText="Status: ">Proposed</t>
+	  <t hangText="Reference: ">
+	    Section 3.2 of the <xref target="RFC5102">IPFIX Information Model</xref>
+ 	</t>
+ </list>
+</section>
+
+<section title="informationElementUnits">
+	<list style="hanging">
+	  <t hangText="Description: ">
+ 	A description of the units of an IPFIX Information Element. These
+   correspond to the units implicitly defined in the Information Element
+   definitions in section 5 of the <xref target="RFC5102">IPFIX
+   Information Model</xref>; see that section for more information on the
+   types described below. This field may take the following values; the
+   special value 0x00 (none) is used to note that the field is unitless.
+ 	  <texttable>
+       <ttcol align="left">Value</ttcol>
+       <ttcol align="left">Name</ttcol>
+       <ttcol align="left">Notes</ttcol>
+ 	    <c>0x0000</c><c>none</c><c></c>
+ 	    <c>0x0001</c><c>bits</c><c></c>
+ 	    <c>0x0002</c><c>octets</c><c></c>
+ 	    <c>0x0003</c><c>packets</c><c></c>
+ 	    <c>0x0004</c><c>flows</c><c></c>
+ 	    <c>0x0005</c><c>seconds</c><c></c>
+ 	    <c>0x0006</c><c>milliseconds</c><c></c>
+ 	    <c>0x0007</c><c>microseconds</c><c></c>
+ 	    <c>0x0008</c><c>nanoseconds</c><c></c>
+ 	    <c>0x0009</c><c>4-octet words</c><c>for IPv4 header length</c>
+ 	    <c>0x000A</c><c>messages</c><c>for reliability reporting</c>
+ 	    <c>0x000B</c><c>hops</c><c>for TTL</c>
+ 	    <c>0x000C</c><c>entries</c><c>for MPLS label stack</c>
+ 	  </texttable>
+     These types are registered in the IANA IPFIX Information Element Units
+     subregistry; new types may be added on a <xref target="RFC2434">First
+     Come First Served</xref> basis.
+   </t>
+ 	<t hangText="Abstract Data Type: ">unsigned16</t>
+ 	<t hangText="ElementId: ">TBD7</t>
+ 	<t hangText="Status: ">Proposed</t>
+	  <t hangText="Reference: ">
+	    Section 5 of the <xref target="RFC5102">IPFIX Information Model</xref>
+ 	</t>
+ </list>
+</section>
+
+<section title="privateEnterpriseNumber">
+ <list style="hanging">
+   <t hangText="Description: ">
+   A private enterprise number used to scope an informationElementID, as
+   would appear in an IPFIX Template Record. This element can be used to
+   scope properties to a specific Information Element. If
+   the Enterprise ID bit of the corresponding Information Element is cleared
+   (has the value 0), this IE should be set to 0. The presence of a non-zero
+   value in this IE implies that the Enterprise ID bit of the corresponding
+   Information Element is set (has the value 1).
+   </t>
+   <t hangText="Abstract Data Type: ">unsigned32</t>
+   <t hangText="Data Type Semantics: ">identifier</t>
+   <t hangText="ElementId: ">TBD8</t>
+   <t hangText="Status: ">Proposed</t>
+   <t hangText="Reference: ">
+     Section 3.4.1 of the <xref target="RFC5101">IPFIX Protocol</xref>
+   </t>
+ </list>
+</section>
+
+<section title="Information Element Type Options Template">
+
+  <t>The Information Element Type Options Template attaches type information
+  to Information Elements used within Template Records, as scoped to an
+  Observation Domain within a Transport Session. This provides a mechanism for
+  representing an IPFIX Information Model inline within an IPFIX Message
+  stream. Data Records described by this template are referred to as
+  Information Element type records.</t>
+
+  <t>In deployments in which interoperability across vendor implementations of
+  IPFIX is important, an Exporting Process exporting data using Templates
+  containing enterprise-specific Information Elements SHOULD export an
+  Information Element type record for each enterprise-specific Information
+  Element it exports. Collecting Processes MAY use these type records to
+  improve handling of unknown enterprise-specific Information Elements.
+  Exporting Processes using enterprise-specific Information Elements to
+  implement proprietary features MAY omit type records for those Information
+  Elements.</t>
+
+  <t>Information Element type records MUST be handled by Collecting Processes
+  as scoped to the Transport Session in which they are sent; this facility is
+  not intended to provide a method for the permanent definition of Information
+  Elements.</t>
+
+  <t>Similarly, for security reasons, type information for a given Information
+  Element MUST NOT be re-defined by Information Element type records, and a
+  Collecting Process MUST NOT allow an Information Element type record to
+  replace its own internal definition of an Information Element. Information
+  Element type records SHOULD NOT be duplicated within a Transport Session,
+  but once an Information Element type record has been exported for a given
+  Information Element within a given Transport Session, all subsequent type
+  records for that Information Element MUST be identical. Conflicting
+  semantic or type information MUST be ignored by a Collecting Process.</t>
+
+  <t>The template SHOULD contain the following Information Elements as defined
+  in the <xref target="I-D.ietf-psamp-info">PSAMP Information Model</xref> and
+  in this document, above:
+
+   <texttable>
+     <ttcol align="left">IE</ttcol>
+     <ttcol align="left">Description</ttcol>
+     <c>informationElementID</c>
+     <c>
+       The Information Element identifier of the Information Element within
+       the specified Template this record describes. This Information Element
+       MUST be defined as a Scope Field. See the <xref target="I-D.ietf-psamp-info">PSAMP Information Model</xref> for a
+       definition of this field.
+     </c>
+     <c>privateEnterpriseNumber</c>
+     <c>
+	    The Private Enterprise number of the Information Element within the
+       specified Template this record describes. This Information Element
+       MUST be defined as a Scope Field.
+     </c>
+     <c>informationElementDataType</c>
+     <c>
+	       The storage type of the specified Information Element.
+     </c>
+     <c>informationElementSemantics</c>
+     <c>
+	       The semantic type of the specified Information Element.
+     </c>
+     <c>informationElementUnits</c>
+     <c>
+          The units of the specified Information Element. This element MAY be
+          omitted if the Information Element is a unitless quantity, or a not
+          a quantity or counter.
+     </c>
+     <c>informationElementRangeBegin</c>
+     <c>
+          The low end of the range of acceptable values for the specified
+          Information Element. This element MAY be omitted if the Information
+          Element's acceptable range is defined by its data type.
+     </c>
+     <c>informationElementRangeEnd</c>
+     <c>
+         The high end of the range of acceptable values for the specified
+         Information Element. This element MAY be omitted if the Information
+         Element's acceptable range is defined by its data type.
+     </c>
+     <c>informationElementName</c>
+     <c>
+	       The name of the specified Information Element.
+     </c>
+     <c>informationElementDescription</c>
+     <c>
+	       A human readable description of the specified Information Element.
+          This element MAY be omitted in the interest of export efficiency.
+     </c>
+   </texttable>
+   </t>
+ </section>
+ 
+ <section title="Data Type and Semantics Restrictions">
+
+    <t>Note that the informationElementSemantics values are primarily intended
+    to differentiate semantic interpretation of numeric values, and that not
+    all combinations of the informationElementDataType and
+    informationElementSemantics Information Elements are valid; e.g., a
+    counter cannot be encoded as an IPv4 address. Any
+    informationElementSemantics value is valid for unsigned
+    informationElementDataType values ("unsigned8", "unsigned16",
+    "unsigned32", or "unsigned64"). Any informationElementSemantics value
+    except flags is valid for signed informationElementDataType values
+    ("signed8", "signed16", "signed32", or "signed64"). Any
+    informationElementSemantics value except "identifier" or "flags" is valid
+    for floating-point informationElementDataType values ("float32" or
+    "float64"). Only the informationElementSemantics value "none" is valid for
+    all other other informationElementDataType values ("octetArray",
+    "boolean", "macAddress", "string", "dateTimeSeconds",
+    "dateTimeMilliseconds", "dateTimeMicroseconds", "dateTimeNanoseconds",
+    "ipv4Address", or "ipv6Address").</t>
+
+    <t>Information Element type records containing invalid combinations of
+    informationElementSemantics and informationElementDataType MUST NOT be
+    sent by Exporting Processes, and MUST be ignored by Collecting
+    Processes.</t>
+
+    <t>Future standards actions that modify the Information Element Data Type
+    subregistry or the Information Element Semantics subregistry should
+    contain a Data Type and Semantics Restrictions sections such as this one
+    to define allowable combinations of type and semantics information.</t>
+
+ </section>
+</section>
+
+<section title="Security Considerations">
+   <t>The same security considerations as for the
+   <xref target="RFC5101">IPFIX Protocol</xref>
+   apply.</t>
+ </section>
+
+ <section title="IANA Considerations">
+
+   <t>This document specifies the creation of several new IPFIX Information
+   Elements in the IPFIX Information Element registry located at
+   http://www.iana.org/assignments/ipfix, as defined in section 3 above. IANA
+   has assigned the following Information Element numbers for their
+   respective Information Elements as specified below:</t>
+
+   <list style="symbols">
+
+       <t>Information Element Number TBD1 for the informationElementDataType
+       Information Element</t>
+
+       <t>Information Element Number TBD2 for the
+       informationElementDescription Information Element</t>
+
+       <t>Information Element Number TBD3 for the informationElementName
+       Information Element</t>
+
+       <t>Information Element Number TBD4 for the
+       informationElementRangeBegin Information Element</t>
+
+       <t>Information Element Number TBD5 for the informationElementRangeEnd
+       Information Element</t>
+
+       <t>Information Element Number TBD6 for the informationElementSemantics
+       Information Element</t>
+
+       <t>Information Element Number TBD7 for the informationElementUnits
+       Information Element</t>
+
+       <t>Information Element Number TBD8 for the privateEnterpriseNumber
+       Information Element</t>
+
+       <t>[NOTE for IANA: The text TBD1, TBD2, TBD3, TBD4, TBD5, TBD6, TBD7,
+       and TBD8 should be replaced with the respective assigned Information
+       Element numbers where they appear in this document.]</t>
+   </list>
+
+   <t>IANA has created an Information Element Data Type subregistry for the values 
+   defined for the informationElementSemantics Information Element. Entries may 
+   be added to this subregistry subject to a <xref target="RFC2434">Standards Action</xref>.</t>
+
+   <t>[NOTE for IANA: Please create a new Information Element
+   Data Type subregistry as specified in the paragraph above,
+   with values taken from section 3.1 of this document.]</t>
+
+   <t>IANA has created an Information Element Semantics subregistry for the
+   values defined for the informationElementSemantics Information Element.
+   Entries may be added to this subregistry subject to a <xref target="RFC2434">Standards Action</xref>.</t>
+
+   <t>[NOTE for IANA: Please create a new Information Element
+   Semantics subregistry as specified in the paragraph above,
+   with values taken from section 3.6 of this document.]</t>
+
+   <t>IANA has created an Information Element Units subregistry for the
+   values defined for the informationElementUnits Information Element.
+   Entries may be added to this subregistry on an <xref target="RFC2434">Expert Review</xref> basis.</t>
+
+   <t>[NOTE for IANA: Please create a new Information Element
+   Units subregistry as specified in the paragraph above,
+   with values taken from section 3.7 of this document.]</t>
+
+ </section>
+
+ <section title="Acknowledgements">
+   <t>Thanks to Paul Aitken for the detailed technical review, and to David
+   Moore for first raising this issue to the IPFIX mailing list.</t>
+ </section>
+</middle>
+
+<back>
+ <references title="Normative References">
+   &rfc5101;
+   &rfc5102;
+   &draftPsampInfo;
+   </references>
+ <references title="Informative References">
+   &rfc3917;
+   &draftIpfixArch;
+   &rfc5103;
+   &rfc2119;
+   &rfc2434;
+ </references>
+ <section title="Examples">
+   <t>The following example illustrates how the type information
+   extension mechanism defined in this document may be used to
+   describe the semantics of enterprise-specific Information
+   Elements. The Information Elements used in this example are as
+   follows:</t>
+   <list style="symbols">
+     <t>initialTCPFlags, CERT (PEN 6871) private IE 14, 1 octet, the
+     TCP flags on the first TCP packet in the flow.</t>
+     <t>unionTCPFlags, CERT (PEN 6871) private IE 15, 1 octet, the
+     union of the TCP flags on all packets after the first TCP packet
+     in the flow.</t>
+   </list>
+   <t>An Exporting Process exporting flows containing these
+   Information Elements might use a Template like the following:</t>
+   <figure title="Template with Enterprise-Specific IEs" anchor="esie-template">
+     <artwork><![CDATA[
+                     1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|          Set ID = 2           |          Length =  52         |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|      Template ID = 256        |        Field Count = 9        |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|0| flowStartSeconds        150 |       Field Length =  4       |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|0| sourceIPv4Address         8 |       Field Length =  4       |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|0| destinationIPv4Address   12 |       Field Length =  4       |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|0| sourceTransportPort       7 |       Field Length =  2       |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|0| destinationTransportPort 11 |       Field Length =  2       |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|0| octetTotalCount          85 |       Field Length =  4       |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ 
+|1| (initialTCPFlags)        14 |       Field Length =  1       |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+   
+|                            PEN 6871                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+   
+|1| (unionTCPFlags)          15 |       Field Length =  1       |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+   
+|                            PEN 6871                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+   
+|0| protocolIdentifier        4 |       Field Length =  1       |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+     ]]></artwork>
+   </figure>
+   <t>However, a Collecting Process receiving Data Sets described by this Template can only treat the enterprise-specific Information Elements as opaque octets; specifically, there is no hint to the collector that they contain flag information. To use the type information extension mechanism to address this problem, the Exporting Process would first export the Information Element Type Options Template described in section 3.9 above:</t>
+   <figure title="Example Information Element Type Options Template" anchor="ieso-template">
+     <artwork><![CDATA[
+                     1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|          Set ID = 3           |          Length =  26         |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|      Template ID = 257        |        Field Count = 4        |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|    Scope Field Count = 2      |0| priv.EnterpriseNumber  TBD8 |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|       Field Length = 4        |0| informationElementId    303 |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|       Field Length = 2        |0| inf.El.DataType        TBD1 |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|       Field Length = 1        |0| inf.El.Semantics       TBD6 |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|       Field Length = 1        |0| inf.El.Name            TBD3 |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|     Field Length = 65536      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     ]]></artwork>
+   </figure>
+   <t>Then, the Exporting Process would then export two records described by the Example Information Element Type Options Template to describe the enterprise-specific Information Elements:</t>
+       <figure title="Type Information Extension Example" anchor="ieso-data">
+     <artwork><![CDATA[
+                     1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|          Set ID = 257         |          Length =  50         |  
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|                            PEN 6871                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|           IE 14               |0x01 unsigned8 |0x05 flags     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|   15 length   |                                               |
++-+-+-+-+-+-+-+-+                                               |
+|                      "initialTCPFlags"                        |
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|                            PEN 6871                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|           IE 15               |0x01 unsigned8 |0x05 flags     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+|   13 length   |                                               |
++-+-+-+-+-+-+-+-+        "unionTCPFlags"                        |
+|                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  
+]]></artwork>
+   </figure>
+
+ </section>
+</back>
+</rfc>

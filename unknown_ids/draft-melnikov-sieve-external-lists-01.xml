@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+]>
+<!-- !ENTITY rfc2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml' -->
+<!-- ?xml-stylesheet type='text/xsl' href='http://xml.resource.org/authoring/rfc2629.xslt' ? -->
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc tocompact="no" ?>
+<?rfc tocindent="no" ?>
+<?rfc comments="yes" ?>
+<?rfc inline="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+
+<rfc category="std"
+     ipr="full3978"
+     docName="draft-melnikov-sieve-external-lists-01">
+    <front>
+        <title>Sieve Extension: Externally Stored Lists</title>
+        <author initials='A.' surname="Melnikov" fullname="Alexey Melnikov">
+            <organization>Isode Limited</organization>
+            <address>
+              <postal>
+                <street>5 Castle Business Village</street>
+                <street>36 Station Road</street>
+                <city>Hampton</city>
+                <region>Middlesex</region>
+                <code>TW12 2BX</code>
+                <country>UK</country>
+              </postal>
+              <email>Alexey.Melnikov@isode.com</email>
+            </address>
+        </author>
+        <date year="2007"/>
+        <area>Applications</area>
+        <workgroup>Sieve Working Group</workgroup>
+        <keyword>Sieve</keyword>
+        <keyword>external list</keyword>
+		
+        <abstract>
+          <t>
+			Sieve scripting language can be used for implementing of whitelisting,
+			blacklisting and personal distribution lists. Currently this requires
+			that all members of such lists be hardcoded in the script itself.
+			Whenever a member of such list is added or deleted, the script needs
+			to be updated and possibly uploaded to a mail server.
+          </t>
+			
+          <t>
+			This document defines a Sieve extension for accessing externally stored
+			mailing lists, i.e. list whose members are stored externally to the script,
+			for example in LDAP (RFC 4510), ACAP (RFC 2244) or a relational database.
+          </t>
+        </abstract>
+		
+<note title="ToDo">
+<t><list style="symbols">
+<t>Need a way to advertise supported URI schemas in ManageSieve and ihave.</t>
+</list></t>
+</note>		
+		
+    </front>
+
+    <middle>
+        <section anchor="intro" title="Introduction">
+<!--Why?
+Want to have externally stored whitelists/ blacklists/ greylists
+Want to implement personal mailing lists
+Don't want to change the script every time the list member changes-->
+						
+          <t>
+            This document specified an extension to the Sieve language defined by
+			<xref target="Sieve"/> for checking membership in an externally stored
+			list or for sending messages to a list of recipients stored externally
+			to the Sieve script.
+          </t>
+          <t>
+            This extension adds a new tagged argument to the "header" and "envelope"
+			tests, and to the "redirect" action <xref target="Sieve"/>.
+          </t>
+          
+          <section title="Conventions used in this document">
+            <t>
+              Conventions for notations are as in <xref target="Sieve"/> section 1.1, including
+              the use of <xref target="ABNF"/>.
+            </t>
+            <t>
+              The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+              "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+              document are to be interpreted as described in <xref target="Kwds"/>.
+            </t>
+          </section>
+        </section>
+		
+        <section title="Extlists extension">
+			
+          <section anchor="capability" title="Capability Identifier">
+            <t>
+              The capability string associated with the extension defined in this
+              document is "extlists".
+            </t>
+          </section>
+
+          <section title=":list tagged argument to the 'address', 'header' and 'envelope' tests">
+            <t>
+              <list style="hanging" hangIndent="8">
+                <t hangText="Usage:">
+                  address [COMPARATOR] [ADDRESS-PART] [MATCH-TYPE] [:list]<vspace/>
+                         &lt;header-list: string-list&gt;<vspace/>
+                         &lt;key-list: string-list&gt;
+                </t>
+                <t hangText="Usage:">
+                  header [COMPARATOR] [MATCH-TYPE] [:list]<vspace/>
+                         &lt;header-names: string-list&gt;<vspace/>
+                         &lt;key-list: string-list&gt;
+                </t>
+                <t hangText="Usage:">
+                  envelope [COMPARATOR] [ADDRESS-PART] [MATCH-TYPE] [:list]<vspace/>
+                         &lt;envelope-part: string-list&gt;<vspace/>
+                         &lt;key-list: string-list&gt;
+                </t>
+              </list>
+            </t>
+            <t>
+			  The new ":list" tagged argument, if present, changes interpretation
+			  of the "key-list" parameter to the 'address'/'header'/'envelope' test
+			  to become a list of names of externally
+			  stored lists. E.g. the "header" test with the ":list" parameter
+			  evaluates to true if the value of any of the named headers,
+			  ignoring leading and trailing whitespace, matches any member of
+			  one or more externally stored lists of values with names
+			  specified in key-list.
+            </t>
+			  
+            <t>
+			  See <xref target="list-name-syntax"/> for the detailed description
+			  of syntax used for naming externally stored lists.
+            </t>
+          </section>
+
+          <section title=":list tagged argument to the 'redirect' action">
+            <t>
+              <list style="hanging" hangIndent="8">
+                <t hangText="Usage:">
+				  redirect :list &lt;ext-list-name: string&gt;
+				</t>
+              </list>
+            </t>
+            <t>The "redirect" action with the ":list" argument is used to send
+			  the message to one or more email address stored in the externally stored
+              list 'ext-list-name'. This variant of the redirect command can be used
+			  to implement a personal distribution list.
+            </t>
+
+            <t>
+			  See <xref target="list-name-syntax"/> for the detailed description
+			  of syntax used for naming externally stored lists.
+            </t>
+          </section>
+			
+          <section anchor="list-name-syntax" title='Syntax of an externally stored list name'>
+            <t>
+				<cref>Specify ABNF. Dave Cridland has suggested to use a leading ':' for
+				"opaque" identifiers.</cref>
+            </t>
+			  
+		    <t>
+			   A name of an externally stored list is either an absolute URL (e.g. an <xref target="LDAP"/>,
+			   <xref target="ACAP"/> or <xref target="CardDAV"/> URL) or an opaque identifier. Interpretation of opaque
+			   identifiers is left up to implementations. They can hide complexity of
+			   an implementation from end users. For example, an implementation can
+			   provide a web interface for managing lists of users stored in LDAP.
+			   Requiring users to know syntax for LDAP URLs is just not very practical.
+			</t>
+          </section>
+
+          <section anchor="examples" title='Examples'>
+            <t>
+              <figure>
+               <artwork><![CDATA[
+Example 1:
+    require ["extlists"];
+
+    # Submission from list members is sent to all members
+    if allof (envelope :detail :list "to" "mylist",
+              header :contains :list "from" "mylist") {
+        redirect :list "mylist";
+    }
+]]></artwork>
+              </figure>
+            </t>
+          </section>
+            
+        </section>
+
+        <section anchor="security" title="Security Considerations">
+          <t>
+            Security considerations are discussed in <xref target="Sieve"/>.
+          </t>
+          <t>
+		    <cref>Describe risks of external lists including thousands
+			of recipients.</cref>
+			<cref>Describe how to handle outages of servers providing
+			access to an externally stored list.</cref>
+          </t>
+			
+		  <t>Implementations of this extensions should keep in mind that
+		  matching values against an externally stored list can be IO
+		  and/or CPU intensive. This can be used to deny service to the mailserver
+		  and/or to servers providing access to externally stored mailing lists.
+		  A naive implementation, such as the one that tries to retrieve content
+		  of the whole list to perform matching can make this worse.
+
+		  But note that many protocols that can be used for accessing externally
+		  stored lists support flexible searching facilities that can be used
+		  to minimize network traffic. For example LDAP allows for search filters.
+		  </t>
+
+		  <t>In order to avoid mailbombs, when redirecting a message to
+			an externally stored mailing list, implementations SHOULD enforce
+			limits on the number of recipients and/or on domains to which such
+			recipients belong.
+		  </t>
+        </section>
+
+        <section anchor="iana" title="IANA Considerations">
+          <t>
+            The following template specifies the IANA registration of the
+            notify Sieve extension specified in this document:
+          </t>
+          <t>
+            To: iana@iana.org
+            <vspace/>
+            Subject: Registration of new Sieve extension
+            <vspace/>
+            Capability name: extlists
+            <vspace/>
+            Description: adds the ':list' tagged argument to 'address',
+			'header' and 'envelope' tests, and to the 'redirect' action.
+			The ':list' argument changes address/header/envelope test to match
+			values against values stored in one or more externally stored
+			list. The ':list' argument to the redirect action changes
+			the redirect action to forward the message to email addresses
+			stored in the externally stored list.
+            <vspace/>
+            RFC number: this RFC
+            <vspace/>
+            Contact address:
+            <vspace/>
+            &nbsp; &nbsp; The Sieve discussion list &lt;ietf-mta-filters@imc.org&gt;
+          </t>
+          <t>
+            This information should be added to the list of sieve extensions
+            given on http://www.iana.org/assignments/sieve-extensions.
+          </t>
+        </section>
+
+        <section anchor="acknowledgements" title="Acknowledgements">
+            <t>
+              Thanks to Alexandros Vellis, Barry Leiba, Nigel Swinson,
+			  Kjetil Torgrim Homme, Dave Cridland, Cyrus Daboo, Pete Resnick
+			  for ideas, comments and suggestions.
+            </t>
+        </section>
+    </middle>
+
+    <back>
+        <references title="Normative References">
+        
+          <reference anchor="Kwds">
+            <front>
+              <title>Key words for use in RFCs to Indicate Requirement Levels</title>
+              <author initials="S." surname="Bradner" fullname="Scott Bradner">
+                <organization>Harvard University</organization>
+              </author>
+              <date month="March" year="1997" />
+            </front>
+            <seriesInfo name="RFC" value="2119" />
+          </reference>
+          
+          <reference anchor="ABNF">
+            <front>
+              <title>Augmented BNF for Syntax Specifications: ABNF</title>
+              <author initials="D." surname="Crocker" fullname="Dave Crocker" role="editor">
+                <organization>Internet Mail Consortium</organization>
+              </author>
+              <author initials="P." surname="Overell" fullname="Paul Overell">
+                <organization>Demon Internet Ltd.</organization>
+              </author>
+              <date month="October" year="2005" />
+            </front>
+            <seriesInfo name="RFC" value="4234" />
+          </reference>
+          
+          <reference anchor="Sieve">
+            <front>
+              <title>Sieve: An Email Filtering Language</title>
+              <author initials="P." surname="Guenther" fullname="Philip Guenther">
+                <organization>Sendmail, Inc.</organization>
+              </author>
+              <author initials="T." surname="Showalter" fullname="Tim Showalter">
+                <organization />
+              </author>
+              <date month="August" year="2006" />
+            </front>
+            <seriesInfo name="work in progress," value="draft-ietf-sieve-3028bis" />
+          </reference>
+
+          <reference anchor="URI">
+            <front>
+              <title abbrev="URI Generic Syntax">Uniform Resource Identifier (URI): Generic Syntax</title>
+              <author initials="T." surname="Berners-Lee" fullname="Tim Berners-Lee">
+                <organization abbrev="W3C/MIT">World Wide Web Consortium</organization>
+              </author>
+              <author initials="R." surname="Fielding" fullname="Roy T. Fielding">
+                <organization abbrev="Day Software">Day Software</organization>
+              </author>
+              <author initials="L." surname="Masinter" fullname="Larry Masinter">
+                <organization abbrev="Adobe Systems">Adobe Systems Incorporated</organization>
+              </author>
+              <date year="2005" month="January"/>
+            </front>
+            <seriesInfo name="STD" value="66"/>
+            <seriesInfo name="RFC" value="3986"/>
+            <format type="TXT" octets="141811" target="ftp://ftp.isi.edu/in-notes/rfc3986.txt"/>
+            <format type="HTML" octets="200858" target="http://xml.resource.org/public/rfc/html/rfc3986.html"/>
+            <format type="XML" octets="165759" target="http://xml.resource.org/public/rfc/xml/rfc3986.xml"/>
+          </reference>        
+            
+        </references>
+        
+        <references title="Informative References">
+          <reference anchor="ACAP">
+            <front>
+              <title abbrev="ACAP">ACAP -- Application Configuration Access Protocol</title>
+              <author initials="C." surname="Newman" fullname="Chris Newman">
+                <organization>Innosoft</organization>
+              </author>
+              <author initials="J. G." surname="Myers" fullname="John G. Myers">
+                <organization>Netscape</organization>
+              </author>
+              <date year="1997" month="November"/>
+            </front>
+            <seriesInfo name="RFC" value="2244"/>
+            <format type="TXT" target="ftp://ftp.isi.edu/in-notes/rfc2244.txt"/>
+          </reference>
+			
+		  <reference anchor="LDAP">
+			<front>
+				<title>Lightweight Directory Access Protocol (LDAP): Technical Specification Road Map</title>
+				<author initials="K." surname="Zeilenga" fullname="K. Zeilenga">
+					<organization/>
+				</author>
+				<date year="2006" month="June"/>
+			</front>
+			<seriesInfo name="RFC" value="4510"/>
+			<format type="TXT" octets="12354" target="ftp://ftp.isi.edu/in-notes/rfc4510.txt"/>
+		  </reference>
+			
+          <reference anchor="CardDAV">
+            <front>
+              <title>vCard Extensions to WebDAV (CardDAV)</title>
+              <author initials="C." surname="Daboo" fullname="Cyrus Daboo">
+                <organization>Apple</organization>
+              </author>
+              <date month="May" year="2007" />
+            </front>
+            <seriesInfo name="work in progress," value="draft-daboo-carddav" />
+          </reference>
+			
+        </references>
+    </back>
+</rfc>

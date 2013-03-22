@@ -1,0 +1,710 @@
+<?xml version="1.0"encoding="US-ASCII"?>
+<!DOCTYPE rfc  SYSTEM "rfc2629.dtd" [
+<!ENTITY rfc2119 SYSTEM 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+<!ENTITY rfc2863 SYSTEM 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2863.xml'>
+<!ENTITY rfc0792 SYSTEM 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.0792.xml'>
+<!ENTITY rfc1812 SYSTEM 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.1812.xml'>
+<!ENTITY rfc2277 SYSTEM 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2277.xml'>
+<!ENTITY rfc3629 SYSTEM 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3629.xml'>
+<!ENTITY rfc4443 SYSTEM 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4443.xml'>
+<!ENTITY rfc4884 SYSTEM 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4884.xml'>
+<!ENTITY rfc3022 SYSTEM 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3022.xml'>
+<!ENTITY I-D.shen-udp-traceroute-ext  SYSTEM 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.shen-udp-traceroute-ext.xml'>
+<!ENTITY I-D.ietf-behave-nat-icmp SYSTEM 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-behave-nat-icmp.xml'>
+]>
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<rfc category="std" ipr='full3978' docName='draft-atlas-icmp-unnumbered-06'>
+<?rfc toc="yes" ?>
+<?rfc compact="yes"?>
+<?rfc subcompact="yes"?>
+  <?rfc symrefs="yes" ?>
+  <?rfc sortrefs="yes"?>
+  <?rfc strict="yes" ?>
+<front>
+  <title abbrev="ICMP Unnumbered"> Extending ICMP for Interface and Next-hop Identification </title>
+
+  <author initials="A" surname="Atlas" fullname="Alia K. Atlas" role="editor">
+    <organization>BT</organization>
+    <address>
+       <email>alia.atlas@bt.com</email>
+    </address>
+  </author>
+
+  <author initials="R" surname="Bonica" fullname="Ronald P. Bonica">
+    <organization>Juniper Networks</organization>
+    <address>
+      <postal>
+        <street>2251 Corporate Park Drive</street>
+        <city>Herndon</city>
+        <region>VA</region>
+        <code>20171</code>
+        <country>USA</country>
+      </postal>
+      <email>rbonica@juniper.net</email>
+    </address>
+  </author>
+
+  <author initials="JR" surname="Rivers" fullname="J.R. Rivers">
+    <organization>Nuova Systems </organization>
+    <address>
+      <email>jrrivers@nuovasystems.com</email>
+    </address>
+  </author>
+
+<author initials="N" surname="Shen" fullname="Naiming Shen">
+<organization>Cisco Systems</organization>
+<address>
+<postal>
+<street>225 West Tasman Drive</street>
+<city>San Jose</city>
+<region>CA</region>
+<code>95134</code>
+<country>USA</country>
+</postal>
+<email>naiming@cisco.com</email>
+</address>
+</author>
+
+<author initials="E" surname="Chen" fullname="Enke Chen">
+<organization>Cisco Systems</organization>
+<address>
+<postal>
+<street>170 West Tasman Drive</street>
+<city>San Jose</city>
+<region>CA</region>
+<code>95134</code>
+<country>USA</country>
+</postal>
+<email>enkechen@cisco.com</email>
+</address>
+</author>
+
+
+  <date year="2008" />
+  <area>Internet</area>
+  <workgroup>Internet</workgroup>
+  <keyword>I-D</keyword>
+  <keyword>Internet-Draft</keyword>
+  <keyword>ICMP MPLS</keyword>
+
+  <abstract><t> This memo defines ICMP extensions, using ICMP
+  multi-part messages, through which a router or host can explicitly
+  identify an interface by ifIndex, name, and/or address, as already
+  used in MIBs and by OSPF.  The interfaces so identified can be the
+  interface upon which an undeliverable datagram arrived, a sub-IP
+  member of that interface, and the interface through which the
+  datagram would have been sent.  The nexthop IP address can also be
+  provided as part of the outgoing interface information.  The
+  extensions defined herein are particularly useful when
+  troubleshooting networks with unnumbered interfaces, parallel
+  interfaces and/or asymmetric routing.
+   </t></abstract>
+</front>
+
+
+<middle>
+<section anchor="Conventions" title=" Conventions Used In This Document">
+<t>
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+"RECOMMENDED",  "MAY", and "OPTIONAL" in this document are to be interpreted as described
+in <xref target="RFC2119">RFC2119</xref>.</t>
+</section>
+
+<section anchor="Introduction" title="Introduction">
+<t>
+IP devices use the
+  <xref target="RFC0792">Internet Control Message Protocol (ICMP)</xref>
+  <xref target="RFC4443">(ICMPv6)</xref> to convey control
+information.  In particular, when an IP device receives a datagram
+that it cannot forward, it may send an ICMP message to the datagram's
+originator. Network operators and higher level protocols use these
+ICMP messages to detect and diagnose network issues.
+</t>
+
+<t>
+In the nominal case, the source address of the ICMP message identifies
+the interface upon which the non-forwardable datagram arrived. However,
+in many cases, the incoming interface is not identified by the ICMP
+message at all. Details follow:
+</t>
+
+<t> According to <xref target="RFC1812">RFC1812</xref>, when a router
+generates an ICMP message, the source address of that ICMP message
+MUST be one of the following:
+</t>
+<t><list style="symbols">
+<t> one of the IP addresses associated with the physical interface over
+which the ICMP message is transmitted </t>
+<t> if that interface has no IP addresses associated with it, the
+device's router-id or host-id is used instead.</t>
+
+</list></t>
+
+<t>If the following conditions are true, the source address of the ICMP
+message identifies the interface upon which the non-forwardable
+datagram arrived:</t>
+
+<t><list style="symbols">
+
+<t>the device originates an ICMP message through the same interface
+upon which the non-forwardable datagram was received.</t>
+<t>that interface is numbered.</t>
+</list></t>
+
+<t>However, the transmitting and incoming interfaces may be different
+due to an asymmetric return path, which can occur due to asymmetric
+link costs, parallel links or ECMP.  </t>
+
+<t>For ICMPv6, the asymmetric issues need not be an issue, since there
+is more flexibility for ICMPv6, as defined in <xref
+target="RFC4443">RFC4443</xref>.  For responses to messages sent to
+addresses that aren't the router's, the source address must be chosen
+as follows:</t>
+
+<t><list style="symbols">
+<t>the Source Address of the ICMPv6 packet MUST be a unicast address
+belonging to the node.  The address SHOULD be chosen according to the
+rules that would be used to select the source address for any other
+packet originated by the node, given the destination address of the
+packet.  However, it MAY be selected in an alternative way if this
+would lead to a more informative choice of address reachable from the
+destination of the ICMPv6 packet.</t>
+</list></t>
+
+<t>For both ICMP and ICMPv6, when a network uses unnumbered
+interfaces, it is not possible to identify the incoming interface.
+The extension defined in this memo permit an ICMP originator to
+identify the interface through which the datagram that elicited the
+ICMP message arrived.</t>
+
+<t>Using the extension defined herein, an IP device can explicitly
+identify the incoming interface by any or all of the following:</t>
+
+<t><list style="symbols">
+<t>IPv4 address</t>
+<t>IPv6 address</t>
+<t>name</t>
+<t>ifIndex</t>
+</list></t>
+
+<t>Using the same extension, an IP device can explicitly identify by
+the above the outgoing interface over which a datagram would have been
+forwarded if that datagram had been deliverable.</t>
+
+<t>The next-hop IP address, over which the datagram would have been
+forwarded, can also be provided via this same extension.  This
+information can be used for creating a downstream map.  The next-hop
+information may not always be available.  There are corner-cases, such
+as point-to-point unnumbered links, where it doesn't exist.  There may
+be implementations where it is not practical to provide this
+information.  This specification provides an encoding for providing
+the next-hop IP address when it is available.</t>
+
+<t>The extension defined herein use the ICMP multi-part message
+framework defined in <xref target="RFC4884"/>.  The same backward
+compatibility issues that apply to <xref target="RFC4884"/> apply to
+this extension.</t>
+
+</section>
+
+<section anchor="applications" title="Applications">
+
+<section anchor="traceroute" title="Application to Traceroute">
+<t>
+  ICMP extensions defined in this memo require enhancements (<xref
+  target="RFC4884"/>) and provide additional capability to
+  traceroute. The enhanced traceroute application, like older
+  implementations, indicates which nodes the original datagram visited
+  en route to its destination. It differs from older implementations
+  in that it also reflects the incoming interface on which the
+  original triggering packet arrived, even when that interface is
+  unnumbered.
+</t>
+</section>
+
+<section title="Policy and MTU Detection">
+<t>
+
+A general application would be to identify which outgoing interface
+triggered a given function for the original packet.  For example, if
+an ACL drops the packet and Dest Unreachable/Admin Prohibited denies
+the packet, being able to identify the outgoing interface might be
+useful.  Another example would be to support PMTU, since this would
+allow identification of which outgoing interface can't support a given
+MTU size.  For example, knowledge of the problematic interface would
+allow an informed request for reconfiguration of the MTU of that interface.
+</t>
+
+</section>
+</section>
+
+<section anchor="InterfaceObjectClass" title="Interface Information Object">
+<t>
+
+  This section defines an ICMP extension object that can be appended
+  to the ICMPv4 Time Exceeded, ICMPv4 Destination Unreachable, ICMPv4
+  Parameter Problem, ICMPv6 Time Exceeded, and ICMPv6 Destination
+  Unreachable messages, as described in <xref
+  target="RFC4884"></xref>.
+
+  For the description of the Interface Information Object, the
+  incoming interface is the one upon which the packet which triggered
+  the ICMP message was received.
+
+  If desired, information about a sub-IP member of the incoming
+  interface can be included.  An example of such a sub-IP member would
+  be a member of an Ethernet Link Aggregation Group that forms the
+  incoming interface.
+
+  To minimize the use of extra octets required for this extension,
+  there are four different pieces of information that can appear in an
+  Interface Information Object.  
+</t>
+
+ <t><list style='numbers'>
+
+  <t> If the interface of interest has at least one IPv4 address and
+  the triggering packet was IPv4, then one of the interface's IPv4
+  addresses MAY be included.  Alternately, if the interface of
+  interest has at least one IPv6 address and the triggering packet was
+  IPv6, then one of the interface's IPv6 addresses MAY be
+  included. </t>
+
+  <t> The ifIndex of the interface of interest MAY be included.  This
+  is the 32-bit ifIndex assigned to the interface by the router as
+  specified by the <xref target="RFC2863">Interfaces Group
+  MIB</xref>. </t>
+
+  <t> An Interface Name Sub-Object, containing a string of no more
+  than 62 octets, MAY be included.  That string, as specified in
+  Section <xref target="name_so"/>, is the interface name and SHOULD
+  be the MIB-II ifName <xref target="RFC2863"/>, but MAY be some other
+  human-meaningful name of the interface. </t>
+
+  <t>If the interface of interest is the outgoing interface, then if
+  the triggering packet was IPv4, a next-hop IPv4 address MAY be
+  included.  If the triggering packet was IPv6, a next-hop IPv6
+  address MAY be included.</t>
+
+  </list></t>
+
+<section title="C-type meaning in an Interface Information Object">
+
+  <t>For this object, the c-type is used to indicate both the role of
+  the interface and the information that is included.  This is
+  illustrated below.</t>
+
+<figure anchor="ctype" title="C-Type for the Interface Information Object">
+<artwork>
+
+
+Bit   7        6        5       4       3       2        1       0   
+   +-------+-------+-------+-------+-------+-------+---------+-------+
+   | Interface Role| Rsvd1 | Rsvd2 | index | IP    | nexthop | name  |
+   +-------+-------+-------+-------+-------+-------+---------+-------+
+                   
+
+  Interface Role: This 2-bit field [6:7] indicates the role of the
+                  interface being identified.  The enumerated values
+                  are given below.
+           0 : This object describes the incoming interface.
+           1 : This object describes the outgoing interface.
+           2 : This object describes a sub-IP member of the
+               incoming interface.
+           3 : Reserved
+
+   bit :  Field Name : description
+
+    5 : Reserved 1 : This bit is reserved for future use and MUST be
+                     set to 0 and MUST be ignored on receipt.
+
+    4 : Reserved 2 : This bit is reserved for future use and MUST be
+                     set to 0 and MUST be ignored on receipt.
+
+    3 : ifIndex : When set, this bit indicates the 32-bit ifIndex of
+                  the interface is included.  When clear, the ifIndex
+                  is not included.
+
+    2 :IP address : When set, this indicates an IP address of the
+                    interface is included.  When clear, no IP address
+                    is included.  The version of the IP packet
+                    containing the ICMP message will indicate the type
+                    of IP address.  An IPv4 packet will have an IPv4
+                    address; an IPv6 packet will have an IPv6 address.
+
+    1 : Next-hop : This MUST be clear unless the Interface Role is 3,
+                  indicating an outgoing interface.  When this flag is
+                  set, this indicates that the next-hop IP address is
+                  included.  When clear, no IP address is included. The
+                  version of the IP packet containing the ICMP message
+                  will indicate the type of IP address.  An IPv4 packet
+                  will include an IPv4 address and an IPv6 packet will
+                  include an IPv6 address.
+
+    0 : Interface Name: When set, this indicates an Interface Name
+                        Sub-object for the interface is included.  When
+                        clear, it is not included.
+
+</artwork>
+</figure>
+
+<t>With the exception of the Interface Name sub-object, the
+information included does not self-identify, so this specification
+defines a specific ordering for sending the information which must be
+followed.</t>
+
+<t>If bit 3 (ifIndex) is set, then the 32-bit ifIndex MUST be sent
+first.  If bit 2 (IP address) is set, then either an IPv4 address or
+an IPv6 address, depending on packet version, MUST be sent next.  If
+bit 0 (Interface Name) is set, then an Interface Name Sub-object MUST
+be sent next.  If bit 1 (Next-hop) is set, then the next-hop is given
+in either an IPv4 address or an IPv6 address, depending on the packet
+version.  The information order is thus: ifIndex, IP address,
+Interface Name sub-object, next-hop; any or all pieces of information
+may be present or absent, as indicated by the c-type.  Any data that
+follows these optional pieces of information MUST be ignored.
+</t>
+
+<t>The sender of an Interface Information Object MUST NOT set the
+Interface Role to 3 and an Interface Role value of 3 MUST be ignored
+on receipt and the Interface Information Object discarded.  It is
+valid (though pointless until additional bits are assigned by IANA) to
+receive an Interface Information Object where bits 3, 2, 1 and 0 are
+all 0; this MUST NOT generate a warning or error.</t>
+
+</section>
+
+<section title="Interface Name Sub-Object" anchor="name_so"> <t>The Interface Name
+Sub-Object MUST have a length that is a multiple of 4 octets and MUST
+NOT exceed 64 octets. A one octet "charset type" and a one octet
+"length" are required and the interface name can be at most 62 octets
+long.  
+
+The interface name SHOULD be the full MIB-II ifName <xref
+target="RFC2863"/>, if less than 63 octets, or the first 62 octets of
+the ifName, if the ifName is longer.  The interface name MAY be some
+other human-meaningful name of the interface.  It is useful to provide
+the ifName for cross-correlation with other MIB information and for
+human-reader familiarity.</t>
+
+<t>The Interface Name Sub-Object consists of three fields.  The first
+1-octet field indicates the character set type used by the second
+field.  The second field contains the length of the Interface name
+Sub-object, including the charset type, the length, and the
+human-readable name in octets.  The maximum valid length is 64 octets.
+The length is constrained to ensure there is space for the start of
+the original packet and additional information.  The third field
+contains the human-readable name.</t>
+
+<figure anchor="ifname" title="Interface Name Sub-Object">
+<artwork>
+octet      0          1        2                   63
+     +--------------+--------+---..............-----------------+
+     | charset type | length |   interface name octets 1-62     |
+     +--------------+--------+---..............-----------------+
+
+</artwork>
+</figure>
+
+<t>charset type 0 : This indicates that the human-readable interface
+name MUST be provided in the US-ASCII charset <xref
+target="US-ASCII"/> using the Default Language <xref
+target="RFC2277"/>.</t>
+
+<t>charset type 1 : This indicates that the human-readable interface
+name MUST be provided in the UTF-8 charset <xref target="RFC3629"/>
+using the Default Language <xref target="RFC2277"/>.</t>
+
+</section>
+
+<section title="Interface Information Object Examples">
+
+<t> <xref target="full_icmp"/> shows a full ICMPv4 Time Exceeded
+message, including the Interface Information Object, which must be
+preceded by an ICMP Extension Structure Header and an ICMP Object
+Header. Both are defined in <xref target="RFC4884"></xref>.</t>
+
+<t> <xref target="interface"/> depicts the Interface Information
+Object, with four of the valid permutations.</t>
+
+<t>Although all examples show an Interface Name Sub-object of
+length 64, this is only for illustration and depicts the maximum
+allowable length.</t>
+
+<figure anchor="full_icmp"
+    title="ICMPv4 Time Exceeded message with Interface Information Object">
+<artwork>
+
+  0                   1                   2                   3
+  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |     Type      |     Code      |          Checksum             |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |     unused    |    Length     |          unused               |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |      Internet Header + leading octets of original datagram    |
+  |                                                               |
+  |                           //                                  |
+  |                                                               |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ 
+  | Ver=2 |      (Reserved)       |           Checksum            |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |             Length            |Class-Num=2 | C-Type=00001001b | 
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |                    Interface ifIndex                          | 
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ 
+  |                Interface Name, 32-bit word 1                  |  
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ 
+ ...                                                              ...
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |                Interface Name , 32-bit word 16                |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+</artwork>
+</figure>
+
+<figure anchor="interface" title="Interface Information Object">
+<artwork>
+          Class-Num = 2
+
+  Example 1: Unnumbered Interface with ifIndex and interface name
+
+          C-Type = 00001001b   // Indicates incoming interface
+          Length = 40 (4 + 4 + 32)
+
+           0             1             2            3
+   +--------------+--------------+--------------+--------------+
+   |                    Interface ifIndex                      |
+   +--------------+--------------+--------------+--------------+
+   |                Interface Name, 32-bit word 1              |
+   +--------------+--------------+--------------+--------------+
+  ...                                                         ...
+   +--------------+--------------+--------------+--------------+
+   |                Interface Name , 32-bit word 16             |
+   +--------------+--------------+--------------+--------------+
+
+
+  Example 2: IPv4 interface with IPv4 address,
+             ifIndex and interface name
+
+          C-Type = 00001101b   // Indicates incoming interface
+          Length = 44 (4 + 4 + 4 + 32)
+
+           0             1             2            3
+   +--------------+--------------+--------------+--------------+
+   |                    Interface ifIndex                      |
+   +--------------+--------------+--------------+--------------+
+   |                    IPv4 address                           |
+   +--------------+--------------+--------------+--------------+
+   |                Interface Name, 32-bit word 1              |
+   +--------------+--------------+--------------+--------------+
+  ...                                                         ...
+   +--------------+--------------+--------------+--------------+
+   |                Interface Name, 32-bit word 16             |
+   +--------------+--------------+--------------+--------------+
+
+
+  Example 3: IPv6 interface with IPv6 address and ifIndex
+
+          C-Type = 00001100b   // Indicates incoming interface
+          Length = 24 (4 + 4 + 16)
+
+           0             1             2            3
+   +--------------+--------------+--------------+--------------+
+   |                    Interface ifIndex                      |
+   +--------------+--------------+--------------+--------------+
+   |                    IPv6 address, 32-bit word 1            |
+   +--------------+--------------+--------------+--------------+
+   |                    IPv6 address, 32-bit word 2            |
+   +--------------+--------------+--------------+--------------+
+   |                    IPv6 address, 32-bit word 3            |
+   +--------------+--------------+--------------+--------------+
+   |                    IPv6 address, 32-bit word 4            |
+   +--------------+--------------+--------------+--------------+
+
+  Example 4: outgoing IPv4 interface with IPv4 address,
+                  next-hop IPv4 address
+
+          C-Type = 10000110b   // Indicates incoming interface
+          Length = 44 (4 + 4)
+
+           0             1             2            3
+   +--------------+--------------+--------------+--------------+
+   |          outgoing interface's IPv4 address                |
+   +--------------+--------------+--------------+--------------+
+   |           next-hop IPv4 address                           |
+   +--------------+--------------+--------------+--------------+
+ 
+</artwork>
+</figure>
+
+</section>
+
+<section title="Usage">
+
+<t> For each interface described by an included Interface Information
+Object, these are the rules for the information to be included.  If
+the interface in question is unnumbered, then the Interface
+Information Object SHOULD include the ifIndex and MUST NOT include an
+IP address.  If the interface in question is numbered, then the
+Interface Information Object SHOULD include the IP address.  Other
+fields MAY be included in the Interface Information Object.</t>
+
+<t>In an ICMP message, more than one Interface Information Object with
+a given interface role MUST NOT be included.  Multiple Interface
+Information Objects, each with a different interface role, MAY be
+included.</t>
+
+</section>
+</section>
+
+<section title="Network Address Translation Considerations">
+
+<t><xref target="I-D.ietf-behave-nat-icmp"/> encourages Traditional IP
+Network Address Translators (Traditional NATs, see <xref
+target="RFC3022"/>) to support ICMP extension objects.  This document
+defines an ICMP extension that includes IP addresses and therefore
+contain realm specific information, and consequently describes
+possible NAT behaviors in presence of these extensions.</t>
+
+<t>In the most general case, a NAT device may choose to transparently
+pass, remove or overwrite this extension. The action may be different
+for the different fields: The ifIndex can either be transparently
+passed or removed, the Description can be transparently passed,
+removed or re-written (adding some text to the effect that a NAT was
+crossed and the description was removed, as a matter of policy or
+other), and IP addresses can either be passed, removed or
+translated.</t>
+
+<t>When translating IP address-related fields of the extension defined
+in this document, the behavior should be equivalent to that of the
+treatment of Router-x and Router-y source IP address in Sections 4.2.1
+and 4.2.2 of <xref target="I-D.ietf-behave-nat-icmp"/>(respectively). That is:</t>
+
+<t><list style="symbols">
+
+<t>For ICMP Error Packets received from an External Realm: IP
+Addresses included in this extension remain unchanged because they
+correspond to the external domain (e.g., correspond to a router that
+generated the ICMP in the external realm).</t>
+
+<t>For ICMP Error Packets received from a Private Realm: This
+extension includes an IP address corresponding to the Private realm,
+let's refer to it as IP-Private, and its translation depends on
+whether Basic NAT or NAPT function (<xref target="RFC3022"/>) is
+enforced by the NAT:</t>
+
+<t><list style="symbols">
+
+<t>Basic NAT: If the NAT has an active mapping for IP-Private, the NAT
+translate it within the extension with the IP-Public in said mapping.
+If not, the NAT translates the IP-Private address using its own IP
+address on the external domain.</t>
+
+<t>NAPT: the NAT translates the IP-Private address in the extension to
+its own IP address on the external domain.</t>
+</list></t>
+</list></t>
+
+<t>These recommendations allow for the improved troubleshooting
+offered by this extension while not leaking private-realm addresses
+outside.  A NAT SHOULD follow the recommendations in this section; it
+MAY choose to pass the extension unaltered.</t>
+
+</section>
+
+<section anchor="Security Considerations" title="Security Considerations">
+
+<t> This extension can provide the user of traceroute with additional
+network information that is not currently available.  It may be
+desirable to provide this information to a particular network's
+operators and not to others.  If such policy controls are desirable,
+then an implementation could determine what sub-objects to include
+based upon the destination IP address of the ICMP message that will
+contain the sub-objects.  The implementation of policy controls could
+also be based upon the mechanisms described in <xref
+target="I-D.shen-udp-traceroute-ext"/> for those limited cases
+supported.</t>
+
+<t>For instance, the IP address may be included for all potential
+recipients.  The ifIndex and interface name could be included as well
+if the destination IP address is a management address of the network
+that has administrative control of the router.
+</t>
+
+<t>Another example use case would be where the detailed information in
+these extensions may be provided to ICMP destinations within the local
+administrative domain, but only traditional information is provided to
+'external' or untrusted ICMP destinations.</t>
+
+</section>
+<section anchor="IANAConsiderations" title="IANA Considerations">
+<t>
+IANA should reserve from the ICMP Extension Object registry: 2
+for the Interface Information Object. </t>
+
+<t>From the Interface ID Object's c-type, IANA should reserve as follows:</t>
+
+<t><list style='symbols'>
+<t> Bit 0: Interface Name Sub-Object included</t>
+<t> Bit 1: IP next-hop address included</t>
+<t> Bit 2: IP address included</t>
+<t> Bit 3: ifIndex included </t>
+<t> Bit 4: Unallocated - allocatable with Standards Action</t>
+<t> Bit 5: Unallocated - allocatable with Standards Action</t>
+<t> Bit 6-7: Interface Role field
+<list style='symbols'>
+<t>Value 0: Incoming Interface</t>
+<t>Value 1: Outgoing Interface</t>
+<t>Value 2: Incoming Interface - Sub-IP Member</t>
+<t>Value 3: Unallocated - allocatable with Standards Action</t>
+</list></t>
+</list></t>
+
+<t>Additionally, the Interface Name Sub-Object has a 1 octet charset type
+field.  IANA should create a registry for it and allocate as follows:</t>
+
+<t><list style='symbols'>
+<t>0 : encoded in ASCII</t>
+<t>1 : encoded in UTF-8</t>
+<t>2-127: Unallocated - allocatable with Standards Action</t>
+<t>128-255: Unallocated - allocated on first come basis.</t>
+</list></t>
+
+</section>
+<section title="Acknowledgements">
+<t>The authors would like to thank Carlos Pignataro, Sasha Vainshtein,
+and Joe Touch for their comments and suggestions.</t>
+</section>
+
+</middle>
+<back>
+<references title="Normative References">
+  &rfc0792;
+  &rfc2119;
+  &rfc2863;
+  &rfc4443;
+  &rfc4884;
+</references>
+
+<references title="Informative References">
+  &rfc1812;
+  &rfc2277;
+  &rfc3022;
+  &rfc3629;
+  &I-D.shen-udp-traceroute-ext;
+  &I-D.ietf-behave-nat-icmp;
+
+<reference anchor="US-ASCII">
+<front>
+<title>Coded Character Set -- 7-bit American Standard Code for
+Information Interchange, ANSI X3.4-1986</title>
+<author><organization/></author>
+</front>
+</reference>  
+
+</references>
+</back>
+</rfc>

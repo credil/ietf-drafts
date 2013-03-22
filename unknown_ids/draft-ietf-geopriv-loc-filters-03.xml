@@ -1,0 +1,741 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact='yes'?><rfc category="std" ipr="full3978" docName="draft-ietf-geopriv-loc-filters-03">
+<front>
+    <title abbrev="Location Event Filters">
+       A Document Format for Filtering and Reporting Location Notications in the Presence Information Document Format Location Object (PIDF-LO)
+    </title>
+    <author initials="R." surname="Mahy" fullname="Rohan Mahy">
+      <organization>Plantronics</organization>
+      <address>
+        <postal>
+          <street>345 Encincal Street</street>
+          <city>Santa Cruz</city>
+          <region>CA</region>
+          <country>USA</country>
+        </postal>
+      	<email>rohan@ekabal.com</email>
+      </address>
+    </author>
+    <author fullname="Brian Rosen" initials="B.R" surname="Rosen">
+      <organization>NeuStar</organization>
+
+      <address>
+        <postal>
+          <street>470 Conrad Dr.</street>
+          <city>Mars</city>
+          <region>PA</region>
+          <code>16046</code>
+          <country>US</country>
+        </postal>
+        <phone>+1 724 382 1051</phone>
+        <email>br@brianrosen.net</email>
+      </address>
+    </author>
+    <date month="November" day="3" year="2008" />
+    <area>RAI</area>
+    <workgroup>geopriv</workgroup>
+    <keyword>I-D</keyword>
+    <keyword>Internet-Draft</keyword>
+    <keyword>geopriv</keyword>
+    <keyword>location</keyword>
+    <abstract>
+      <t>
+This document describes filters which limit asynchronous location notifications to compelling events. 
+The resulting location information is conveyed in existing location formats wrapped in GEOPRIV privacy extensions 
+to the Presence Information Document Format (PIDF-LO)</t>
+    </abstract>
+  </front>
+  <middle>
+    <section title="Conventions">
+      <t>
+  The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", 
+  "RECOMMENDED",  "MAY", and "OPTIONAL" in this document are to be interpreted as described 
+  in <xref target="RFC2119">RFC-2119</xref>.
+</t>
+</section>
+
+<section title="Overview">
+<t>
+Conveying static location in <xref target="RFC4119">PIDF-LO</xref> bodies is straightforward.  However the difficult part 
+about asynchronous notification of location information is that many forms of location are measured as a continuous gradient.  
+Unlike notifications using discreet quantities, it is difficult to know when a change in location is large enough to warrant 
+a notification.  Moreover, different applications require a wide variety of location resolutions.  Any optimization made for 
+one application would ultimately result in wasteful polling or a sluggish user interface for other applications.
+</t><t>
+The mechanism described here defines filters in <xref target="W3C.REC-xml">XML</xref> documents which limit location notification 
+to events which are of relevance to the subscriber.  These filters persist until they are changed with a replacement filter.
+</t><t>
+In addition to the relevant filters, this document also defines a new <xref target="W3C.REC-xmlschema-1">XML schema</xref> 
+which can be included in PIDF-LO documents to indicate that the resource is inside or outside of a container region.
+</t>
+</section>
+
+<section anchor="filter-format" title="Definition of Location Filter Format">
+<t>
+The granularity of notifications necessary for various geographic location applications varies dramatically. 
+The subscriber should be able to get asynchronous notifications with appropriate granularity and accuracy, without having to 
+poll or flood the network with notifications which are not important to the application.  Notifications should only happen 
+when the notification would be considered an Interesting Event to the subscriber.  This section of this document defines 
+an XML filter format to describe interesting conditions or events.  The terminal elements in this format are defined in 
+terms of existing <xref target="GML">Geographic Markup Language (GML)</xref> data types or civic address elements. 
+</t><t>
+This document also defines a MIME type for this location filter format:  application/location-delta-filter+xml.
+</t><t>
+This document defines the following as an initial list of Interesting Events:
+<list style="numbers">
+<t>
+the resource moves more than a specific distance horizontally or vertically since the last notification
+</t><t>
+the resource exceeds a specific speed
+</t><t>
+the resource enters or exits one or more GML objects (for example, a set of 2-dimensional or 3-dimensional regions) included or 
+referenced in the filter.
+</t><t>
+one or more of the values of the specified address labels has changed for the resource (for example, the A1 value of 
+the civilAddress has changed from California to Nevada)
+</t><t>
+a mininum and maximum rate of reports regardless of movement
+</t></list>
+This specification makes use of <xref target="W3C.REC-xml-names">XML namespaces</xref> for identifying location filter documents and
+document fragments. The namespace URI for elements defined by this
+specification is a URN <xref target="RFC2141"/>, using the namespace
+identifier 'ietf' defined by <xref target="RFC2648"/> and extended by
+<xref target="RFC3688"/>. This URN is: 
+</t>
+<figure><artwork>
+urn:ietf:params:xml:ns:location-filter
+</artwork></figure>
+<t>
+The filter format starts with a top-level XML element called <spanx style="verb">&lt;location-filter></spanx>, which contains 
+one or more filter events. The semantics of multiple elements inside a location-filter generally is a logical OR.  
+In other words, if any of the individual filter events occurs, the event satisfies the location-filter and triggers a notification.
+However the "maxRate" parameter is a logical AND, and will limit events that otherwise would have been reported.
+</t>
+  <section title="Horizontal and Vertical Movement">
+  <t>
+The movedHoriz and movedVert filter events each indicate a minimum horizontal motion or vertical distance (respectively) that 
+the resource must have moved from the location of the resource when the last notification was sent in order to trigger this event.  
+The distance is measured absolutely from the point of last notification rather than in terms of cumulative motion (For example, 
+someone pacing inside a room will not trigger an event if the trigger threshold is slightly larger than the room.)  
+Each of these events can only appear once in a location-filter.    These events have an attribute "uom" (for "units of measure"), 
+which indicates the units of the element.  The default unit for these events is meters.
+</t><t>
+Similarly, the speedExceeds filter event indicates a minimum horizontal speed of the resource before the speedExceeds event 
+is triggered. This element can appear only once in a location-filter, and has a "uom" attribute which defaults to meters 
+per second if not present.
+</t>
+    <t><list><t>
+        This filter measures the horizontal component of speed in any direction.  It does not measure velocity.  
+        Note also that there is no corresponding event triggered when speed drops below a threshold.  
+    </t></list></t>
+    <t>
+Below are some examples.  In the first example if the resource moves 20m in the x,y direction or 3m in the z direction, send a notification:
+</t>
+<figure><artwork><![CDATA[
+<location-filter>
+  <movedHoriz uom="urn:ogc:def:uom:EPSG::9001">20</movedHoriz>
+  <movedVert uom="urn:ogc:def:uom:EPSG::9001">3</movedVert>
+</location-filter>
+]]></artwork></figure>
+<t>
+If the resource exceeds 3 meters per second (10.8 km/h), send a notification:
+</t>
+<figure><artwork><![CDATA[
+<location-filter>
+  <speedExceeds uom="#mps">3</speedExceeds>
+</location-filter>
+]]></artwork></figure>
+  </section>
+  <section title="Changes in value">
+<t> 
+The valueChanges filter event contains a string which is interpreted as an <xref target="W3C.xpath">XPath</xref> expression evaluated 
+within the context of the location-info element of the PIDF-LO document which would be generated by the notification.  
+The XPath expression MUST evaluate to only a single Xpath node.  If the value of any of the elements in the resulting node changes, 
+then the filter event is triggered.  Note that the value of the resulting node changes if any of those nodes or subnodes transitions 
+from having a value to having no value or vice versa.  A location-filter may contain multiple valueChanges filters.
+</t><t>
+For example, given the following logical PIDF-LO document, If the state (A1), county (A2), city (A3), or postal code (PC) changes, 
+send a notification:
+</t>
+<figure><artwork><![CDATA[
+PIDF-LO Location Document:
+    <?xml version="1.0" encoding="UTF-8"?>
+    <presence xmlns="urn:ietf:params:xml:ns:pidf"
+       xmlns:gp="urn:ietf:params:xml:ns:pidf:geopriv10"
+       xmlns:cl="urn:ietf:params:xml:ns:pidf:geopriv10:civilLoc"
+       entity="pres:geotarget@example.com">
+     <tuple id="sg89ae">
+      <status>
+       <gp:geopriv>
+         <gp:location-info>
+           <cl:civilAddress>
+             <cl:country>US</cl:country>
+             <cl:A1>NY</cl:A1>
+             <cl:A3>New York</cl:A3>
+             <cl:RD>Broadway</cl:RD>
+             <cl:HNO>123</cl:HNO>
+             <cl:UNIT>Suite 75</cl:UNIT>
+             <cl:PC>10027</cl:PC>
+           </cl:civilAddress>
+         </gp:location-info>
+         <gp:usage-rules>
+           <gp:retransmission-allowed>yes</gp:retransmission-allowed>
+           <gp:retention-expiry>2003-06-23T04:57:29Z
+           </gp:retention-expiry>
+         </gp:usage-rules>
+       </gp:geopriv>
+      </status>
+      <timestamp>2003-06-22T20:57:29Z</timestamp>
+     </tuple>
+    </presence>
+
+Filter Document:
+  <location-filter 
+    xmlns="urn:ietf:params:xml:ns:location-filter"
+    xmlns:cl="urn:ietf:params:xml:ns:pidf:geopriv10:civilLoc">
+    <valueChanges>cl:civilAddress/cl:A1</valueChanges>
+    <valueChanges>cl:civilAddress/cl:A2</valueChanges>
+    <valueChanges>cl:civilAddress/cl:A3</valueChanges>
+    <valueChanges>cl:civilAddress/cl:PC</valueChanges>
+  </location-filter>    
+]]></artwork></figure>
+  </section>
+  <section title="Containment Within a Region">
+<t>
+The "enterOrExit" filter event is satisfied when the resource enters or exits a named 2-dimensional or 3-dimensional region described 
+by one of the shapes defined in section 5 of <xref target="I-D.ietf-geopriv-pdif-lo-profile"/>. These regions can be defined using 
+inline snippets of GML, or externally referenced using a URI (Uniform Resource Identifier).  
+<list><t>These regions need a unique name or identifier so location with respect to these regions can be described later (for example 
+in a notification).  These regions are currently described as GML Features so they can be named with a GML Name.  Ideally each 
+region could be described instead as a GML geometry with some associated name or identifier.</t></list>  
+</t><t>
+Any 2-dimensional region MUST be defined using the EPSG 4326 coordinate reference system.  Any 3-dimensional region MUST be 
+defined using the EPSG 4979 coordinate reference system.  A location-filter can contain more than one enterOrExit filter event.
+</t>
+<t><list><t>
+Notifiers MAY support other more complex geometries or additional coordinate reference systems. How the Subscriber 
+negotiates support for more complex geometries or reference systems is out of the scope of this document.  
+</t><t>
+Likewise, this document does not describe how a subscriber discovers the existence of externally referenced features. 
+This topic is out of scope of this document.
+</t></list></t>
+<t>
+In most cases Subscribers that use location filters based on enterOrExit events are especially interested in the resource's 
+relationship to those named features.  Consequently, the notifier MUST include either a "containment" element for each feature 
+mentioned in the location-filter which has changed its containment properties with respect to the resource since the last notification.  
+These elements are defined in <xref target="containment"/>.  The notifier MAY include any other form of location that is relevant.
+</t><t> 
+For example, if the resource enters or exits Building 10 (which is defined by specific 2-D or 3-D rectangular coordinates), send a notification:
+</t>
+<figure><artwork><![CDATA[
+Version in 2-Dimensions:
+<location-filter>
+  <enterOrExit>
+    <my:Building>
+      <gml:name>Building 10</gml:name>
+      <gml:extentOf>
+        <gml:Polygon 
+  srsName="urn:ogc:def:crs:EPSG::4326"
+  xmlns:gml="http://www.opengis.net/gml">
+          <gml:exterior>
+            <gml:LinearRing>
+              <gml:posList
+                   37.41188 -121.93243
+                   37.41142 -121.93243
+                   37.41142 -121.93132
+                   37.41188 -121.93132  
+                   37.41188 -121.93243
+              </gml:posLis>
+            </gml:LinearRing>
+          </gml:exterior>
+        </gml:Polygon>
+      </gml:extentOf>
+    </my:Building>
+  </enterOrExit>
+</location-filter>
+    
+Version in 3-Dimensions:
+<location-filter>
+  <enterOrExit>
+    <my:Building>
+      <gml:name>Building 10</gml:name>
+      <gs:Prism 
+  srsName="urn:ogc:def:crs:EPSG::4979"
+  xmlns:gs="urn:ietf:params:xml:ns:pidf:geopriv10:geoShape"
+  xmlns:gml="http://www.opengis.net/gml">
+        <gs:base>
+          <gml:Polygon>
+            <gml:exterior>
+              <gml:LinearRing>
+                <gml:posList>
+                   37.41188 -121.93243 0
+                   37.41142 -121.93242 0
+                   37.41142 -121.93132 0
+                   37.41188 -121.93132 0  
+                   37.41188 -121.93243 0
+                </gml:posList>
+              </gml:LinearRing>
+            </gml:exterior>
+          </gml:Polygon>
+        </gs:base>
+        <gs:height uom="urn:ogc:def:uom:EPSG::9001">
+           24
+        </gs:height>
+      </gs:Prism>
+    </my:Building>
+  </enterOrExit>
+</location-filter>
+]]></artwork></figure>
+<t> 
+If the resource enters or exits either the parking garage or any of the conference rooms (both of which are externally defined), send a notification:
+</t>
+<figure><artwork><![CDATA[
+<location-filter>
+  <enterOrExit>
+    <my:ParkingGarage 
+xlink:href="http://server.example.com/loc-defs/bldg-mgr/parking"/>
+  </enterOrExit>
+  <enterOrExit>
+    <my:ConferenceRooms 
+xlink:href="http://server.example.com/loc-defs/userdef/confrooms"/>
+  </enterOrExit>
+</location-filter>
+]]></artwork></figure>
+  </section>
+  <section title="Rate Control">
+<t>Although not part of the loc-filter function, the throttle mechanisms <xref target="I-D.niemi-sipping-event-throttle"></xref> can be used to control the rate of notifications.  
+The "throttle", "force" and "average" settings can filter notications by time</t>
+</section>
+    
+<section anchor="schema1" title="XML Schema for filter format">
+<t>
+The XML Schema for this format is defined below.
+</t>    
+<figure><artwork><![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema 
+  targetNamespace="urn:ietf:params:xml:ns:location-filter" 
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+  xmlns:gml="http://www.opengis.net/gml">
+    
+  <xs:element name="location-filter">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="movedHoriz" type="gml:MeasureType" 
+                       minOccurs="0" maxOccurs="1"/>
+        <xs:element name="movedVert" type="gml:MeasureType" 
+                       minOccurs="0" maxOccurs="1"/>
+        <xs:element name="speedExceeds" type="gml:MeasureType" 
+                       minOccurs="0" maxOccurs="1"/>
+        
+        <!-- this type needs to hold an XPath statement -->
+        <xs:element name="valueChanges" type="xs:string" 
+                       minOccurs="0" maxOccurs="unbounded"/>
+        
+        <xs:element name="enterOrExit" type="gml:FeaturePropertyType"
+                       minOccurs="0" maxOccurs="unbounded"/>
+        <xs:element name="minRate" type="xs:rate-spec" 
+                       minOccurs="0" maxOccurs="1"/>
+        <xs:element name="maxRate" type="xs:rate-spec" 
+                       minOccurs="0" maxOccurs="1"/>
+        <xs:any namespace="##other" processContents="lax"
+           minOccurs="0"  maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>  
+  <xs:element name="rate-spec">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:attribute name="uom" use="required">
+          <xs:simpleType>
+            <xs:restriction base="xs:token">
+              <xs:enumeration value="seconds"></xs:enumeration>
+              <xs:enumeration value="minutes"></xs:enumeration>
+              <xs:enumeration value="hours"></xs:enumeration>
+              <xs:enumeration value="days"></xs:enumeration>
+              <xs:enumeration value="weeks"></xs:enumeration>
+              <xs:enumeration value="years"></xs:enumeration>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:attribute>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>    
+]]>
+<!--  <xs:import namespace="http://www.opengis.net/gml" 
+             schemaLocation="../basicTypes.xsd"/>
+  <xs:import namespace="http://www.opengis.net/gml" 
+             schemaLocation="../geometryBasic0d1d.xsd"/> -->
+<!-- Alternatively, for convenience import all of gml.xsd -->
+</artwork></figure> 
+
+</section>
+</section>
+    
+<section anchor="containment" title="Containment schema">
+<t>
+This section describes a schema for describing the resource's location relative to a region or list of regions which might contain the resource.  (These regions can be defined dynamically in an "enterOrExit" element in a subscription filter, or defined on the notifier using some out-of-band mechanism.)  The "pidfResource" element is placed inside the location-info element in a PIDF-LO document.  The pidfResource element can contain zero or more "containment" elements.  Each containment element has a GML Feature sub-element (of type "FeaturePropertyType") and a mandatory attribute which specifies if the PIDF resource is inside or outside of the feature, or if the position of the resource with respect to the region or region list is undefined.  
+<list><t>
+  In a future version of this specification, the GML Feature can become a reference to a more preferable name or identifier type.  The GML Feature type is only used because it includes a name to reference it.
+</t></list>
+</t><t>
+If the subscriber is not authorized to know the relative position, the notifier MUST NOT reveal this private information.  The RECOMMENDED way to prevent the subscriber from seeing private location data of this type is to return a containment element whose position attribute is "undefined".   Note that in some cases, the containment information may be more interesting than the actual raw location.  It is not necessary to convey a concrete civic or geo location in a PIDF-LO if the subscriber is only interested in or authorized to see the containment status.
+</t>
+<figure><artwork>
+<![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema 
+targetNamespace="urn:ietf:params:xml:ns:pidf:geopriv10:containment"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:gml="http://www.opengis.net/gml"
+xmlns:pr="urn:ietf:params:xml:ns:pidf:geopriv10:containment" >
+  <xs:element name="pidfResource">
+    <xs:complexType>
+        <xs:sequence>
+            <xs:element ref="pr:containment"
+             minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="containment">
+    <xs:complexType>
+        <xs:sequence>
+          <xs:any namespace="http://www.opengis.net/gml" 
+                minOccurs="1" maxOccurs="1"/>
+        </xs:sequence>
+      <xs:attribute name="position" use="required">
+         <xs:simpleType>
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="inside"></xs:enumeration>
+            <xs:enumeration value="outside"></xs:enumeration>
+            <xs:enumeration value="undefined"></xs:enumeration>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
+]]></artwork></figure>  
+<!--
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema 
+  targetNamespace="urn:ietf:params:xml:ns:pidf:geopriv10:containment" 
+  xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+  xmlns:gml="http://www.opengis.net/gml"
+  <xs:import namespace="http://www.opengis.net/gml"/>   
+  <xs:element name="pidfResource">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="isInsideOf" type="gml:AbstractGeometryType" 
+                       minOccurs="0" maxOccurs="unbounded"/>
+        <xs:element name="isOutsideOf" type="gml:AbstractGeometryType"
+                       minOccurs="0" maxOccurs="unbounded"/>
+        <xs:any namespace="##other" processContents="lax"
+           minOccurs="0"  maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>     
+</xs:schema>    
+-->
+<t>
+Below is an example PIDF-LO document which indicates that the resource is inside building 10, not outside the parking garage, and not permitted to know if the resource is in a conference room.  Note that in GML, these features could be referenced by their unique identifiers instead.
+</t>
+<figure><artwork><![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+  <presence xmlns="urn:ietf:params:xml:ns:pidf"
+     xmlns:gp="urn:ietf:params:xml:ns:pidf:geopriv10"
+     xmlns:pr="urn:ietf:params:xml:ns:pidf:geopriv10:containment"
+     entity="pres:geotarget@example.com">
+   <tuple id="sg89ae">
+    <status>
+     <gp:geopriv>
+       <gp:location-info>
+         <pr:pidfResource>
+           <pr:containment position="inside">
+            <my:Building>
+               <gml:name>Building 10</gml:name>
+             </my:Building>
+           </pr:containment>
+           <pr:containment position="outside">
+             <my:ParkingGarage 
+xlink:href="http://server.example.com/loc-defs/bldg-mgr/parking"/>
+           </pr:containment>
+           <pr:containment position="undefined">
+             <my:ConferenceRooms 
+xlink:href="http://server.example.com/loc-defs/userdef/confrooms"/>
+           </pr:containment>
+         </pr:pidfResource>
+       </gp:location-info>
+       <gp:usage-rules>
+         <gp:retransmission-allowed>yes</gp:retransmission-allowed>
+         <gp:retention-expiry>2003-06-23T04:57:29Z
+         </gp:retention-expiry>
+        </gp:usage-rules>
+     </gp:geopriv>
+    </status>
+    <timestamp>2003-06-22T20:57:29Z</timestamp>
+   </tuple>
+  </presence>
+]]></artwork></figure>
+<!--
+          <pr:pidfResource>
+           <pr:isInsideOf>
+            <my:Building>
+               <gml:name>Building 13</gml:name>
+             </my:Building>
+            </pr:isInsideOf>
+            <pr:isOutsideOf>
+             <my:ParkingGarage 
+xlink:href="http://server.example.com/loc-defs/bldg-mgr/parking"/>
+            </pr:isOutsideOf>
+            <pr:isInsideOf>
+             <my:ConferenceRooms 
+xlink:href="http://server.example.com/loc-defs/userdefined/confrooms"/>
+            </pr:isInsideOf>    
+-->
+</section>
+    
+<section title="Security Considerations">
+<t>
+Location information is typically very privacy sensitive.  As such, GEOPRIV requires that notifications MUST be encrypted and integrity protected.
+</t><t>
+Additional privacy and security considerations are discussed in detail in <xref target="I-D.ietf-geopriv-pdif-lo-profile"/>.
+</t>
+</section>
+
+<section title="IANA Considerations">
+
+<section title="MIME Registration for application/location-delta-filter+xml">
+<figure><artwork>
+      MIME media type name: application
+
+      MIME subtype name: application/location-delta-filter+xml
+
+      Required parameters: none.
+
+      Optional parameters: none.
+
+      Encoding considerations:   Same as for XML.
+
+      Security considerations: See the "Security Considerations"
+        section in this document.
+
+      Interoperability considerations: none
+
+      Published specification: This document.
+</artwork></figure>
+<t>
+Applications which use this media: The application/location-delta-filter+xml application subtype supports the exchange of filters to throttle asynchronous notifications of location information.
+</t>
+<figure><artwork>
+      Additional information:
+
+           1. Magic number(s): N/A
+
+           2. File extension(s): N/A
+
+           3. Macintosh file type code: N/A
+</artwork></figure>
+</section>
+    
+<section title="URN Sub-Namespace Registration for
+urn:ietf:params:xml:ns:location-filter">
+
+<t>
+This section registers a new XML namespace, as per the guidelines in
+<xref target="RFC3688"/>.
+</t>
+
+<t><list style="hanging">
+
+<t hangText="URI:"> The URI for this namespace is
+urn:ietf:params:xml:ns:location-filter.
+</t>
+
+<t hangText="Registrant Contact:"> IETF, GEOPRIV working group,
+&lt;geopriv@ietf.org&gt;, as delegated by the IESG 
+&lt;iesg@ietf.org&gt;. 
+</t>
+
+<t hangText="XML:">
+<figure><artwork>
+<![CDATA[
+BEGIN
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML Basic 1.0//EN"
+          "http://www.w3.org/TR/xhtml-basic/xhtml-basic10.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="content-type"
+     content="text/html;charset=iso-8859-1"/>
+  <title>Location Filter Namespace</title>
+</head>
+<body>
+  <h1>Namespace for PIDF-LO Location Filters</h1>
+  <h2>urn:ietf:params:xml:ns:location-filter</h2>
+  <p>See <a href="[[[URL of published RFC]]]">RFCXXXX</a>.</p>
+</body>
+</html>
+END
+]]>
+</artwork></figure>
+</t>
+</list></t>
+
+</section>
+
+<section title="Schema Registration For location-filter">
+
+<t>This specification registers a schema, as per the guidelines in
+<xref target="RFC3688"/>.</t>
+
+<t><list style="hanging">
+
+<t>URI: please assign.</t>
+
+<t>Registrant Contact: IETF, GEOPRIV Working Group
+(geopriv@ietf.org), as delegated by the IESG
+(iesg@ietf.org).</t>
+
+<t>XML: The XML can be found as the sole content of <xref
+target="schema1"/>.</t>
+</list></t>
+</section>
+    
+<section title="URN Sub-Namespace Registration for
+urn:ietf:params:xml:ns:pidf:geopriv10:containment">
+
+<t>
+This section registers a new XML namespace, as per the guidelines in
+<xref target="RFC3688"/>.
+</t>
+
+<t><list style="hanging">
+
+<t hangText="URI:"> The URI for this namespace is
+urn:ietf:params:xml:ns:pidf:geopriv10:containment.
+</t>
+
+<t hangText="Registrant Contact:"> IETF, GEOPRIV working group,
+&lt;geopriv@ietf.org&gt;, as delegated by the IESG
+&lt;iesg@ietf.org&gt;. 
+</t>
+
+<t hangText="XML:">
+<figure><artwork>
+<![CDATA[
+BEGIN
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML Basic 1.0//EN"
+          "http://www.w3.org/TR/xhtml-basic/xhtml-basic10.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="content-type"
+     content="text/html;charset=iso-8859-1"/>
+  <title>PIDF-LO Location Containment Namespace</title>
+</head>
+<body>
+  <h1>Namespace for PIDF-LO location containment elements</h1>
+  <h2>urn:ietf:params:xml:ns:pidf:geopriv10:containment</h2>
+  <p>See <a href="[[[URL of published RFC]]]">RFCXXXX</a>.</p>
+</body>
+</html>
+END
+]]></artwork></figure>
+</t>
+</list></t>
+</section>
+
+<section title="Schema Registration For containment">
+
+<t>This specification registers a schema, as per the guidelines in
+<xref target="RFC3688"/>.</t>
+
+<t><list style="hanging">
+
+<t>URI: please assign.</t>
+
+<t>Registrant Contact: IETF, GEOPRIV Working Group
+(geopriv@ietf.org), as delegated by the IESG
+(iesg@ietf.org).</t>
+
+<t>XML: The XML can be found as the sole content of <xref
+target="containment"/>.</t>
+</list></t>
+</section>  
+</section>
+
+
+
+<section title="Acknowledgments">
+<t>
+Thanks to Allan Thompson, James Winterbottom, and Martin Thomson for their comments.
+</t>
+</section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+     <?rfc include="reference.RFC.4119" ?>
+      <?rfc include="reference.RFC.2119" ?>
+     <?rfc include="reference.W3C.REC-xml" ?>
+     <?rfc include="reference.W3C.REC-xmlschema-1" ?>
+     <?rfc include="reference.W3C.REC-xml-names" ?>
+     <?rfc include="reference.W3C.xpath" ?>
+     <?rfc include="reference.I-D.ietf-geopriv-pdif-lo-profile" ?>
+     <?rfc include="reference.I-D.niemi-sipping-event-throttle" ?>
+      <reference anchor='GML' target="http://www.opengis.org/techno/implementation.htm">
+        <front>
+            <title>Open Geography Markup Language (GML) Implementation
+         Specification</title>
+            <author>
+                <organization>
+                    OpenGIS
+                </organization>
+            </author>
+            <date month='January' year='2003' />
+        </front>
+        <seriesInfo name='OpenGIS' value='OGC 02-023r4'/>
+      </reference>
+    </references>
+    <references title="Informational References">
+      <?rfc include="reference.RFC.2141" ?>   
+      <?rfc include="reference.RFC.2648" ?>  
+      <?rfc include="reference.RFC.3688" ?>
+     </references>
+  </back>
+</rfc>
+
+<!--
+   <?xml version="1.0" encoding="UTF-8"?>
+    <presence xmlns="urn:ietf:params:xml:ns:pidf"
+       xmlns:gp="urn:ietf:params:xml:ns:pidf:geopriv10"
+       xmlns:gml="urn:opengis:specification:gml:schema-xsd:feature:v3.0"
+       entity="pres:geotarget@example.com">
+     <tuple id="sg89ae">
+      <status>
+       <gp:geopriv>
+         <gp:location-info>
+           <gml:location>
+             <gml:Point gml:id="point1" srsName="epsg:4326">
+               <gml:coordinates>37:46:30N 122:25:10W</gml:coordinates>
+             </gml:Point>
+            </gml:location>
+         </gp:location-info>
+         <gp:usage-rules>
+           <gp:retransmission-allowed>no</gp:retransmission-allowed>
+           <gp:retention-expiry>2003-06-23T04:57:29Z</gp:retention-expiry>
+         </gp:usage-rules>
+       </gp:geopriv>
+      </status>
+      <timestamp>2003-06-22T20:57:29Z</timestamp>
+     </tuple>
+    </presence>
+  -->

@@ -1,0 +1,719 @@
+<?xml version='1.0'?>
+<!DOCTYPE rfc SYSTEM 'rfc2629.dtd'>
+<?rfc compact='yes'?>
+<?rfc strict='yes'?>
+<?rfc symrefs='yes'?>
+<?rfc toc='yes'?>
+<?rfc tocdepth='2'?>
+<rfc category='info' docName='draft-miller-microid-01' ipr='full3978'>
+
+<front>
+  <title>MicroID</title>
+  <author initials='J.' surname='Miller' fullname='Jeremie Miller'>
+    <organization/>
+    <address>
+      <email>jeremie@jabber.org</email>
+    </address>
+  </author>
+  <author initials='P.' surname='Saint-Andre' fullname='Peter Saint-Andre'>
+    <organization/>
+    <address>
+      <email>stpeter@jabber.org</email>
+      <uri>https://stpeter.im/</uri>
+    </address>
+  </author>
+  <author initials='F.' surname='Stutzman' fullname='Fred Stutzman'>
+    <organization>ClaimID</organization>
+    <address>
+      <email>fred@metalab.unc.edu</email>
+    </address>
+  </author>
+  <date year='2007' month='December' day='11'/>
+  <area>Applications</area>
+  <abstract>
+    <t>This specification defines MicroID, a lightweight identity technology that enables the creation of a portable identity token based on any two Uniform Resource Identifiers.</t>
+  </abstract>
+</front>
+
+<middle>
+
+  <section title='Introduction' anchor='intro'>
+    <section title='Overview' anchor='overview'>
+      <t>MicroID is a lightweight identity technology that enables the creation of a portable identity token from any two Uniform Resource Identifiers <xref target='URI'/>.</t>
+      <t>Such identity tokens are desirable because they:</t>
+      <t>
+        <list style='symbols'>
+          <t>Enable individuals to assert ownership over information published and reputation earned on the Internet in a granular manner.</t>
+          <t>Enable service providers to "stamp" information and reputation based on a validated URI associated with an individual who uses the service.</t>
+        </list>
+      </t>
+    </section>
+    <section title='Terminology' anchor='terms'>
+      <t>The following keywords as used in this document are to be interpreted as described in <xref target='TERMS'/>: "MUST", "SHALL", "REQUIRED"; "MUST NOT", "SHALL NOT"; "SHOULD", "RECOMMENDED"; "SHOULD NOT", "NOT RECOMMENDED"; "MAY", "OPTIONAL".</t>
+    </section>
+    <section title='Discussion Venue' anchor='discuss'>
+      <t>The preferred discussion forum for this specification is the MicroID mailing list; subscription information is located at &lt;<eref target='http://lists.ibiblio.org/mailman/listinfo/microid'>http://lists.ibiblio.org/mailman/listinfo/microid</eref>&gt; and the mailing list archives are located at &lt;<eref target='http://lists.ibiblio.org/pipermail/microid/'>http://lists.ibiblio.org/pipermail/microid/</eref>&gt;.</t>
+    </section>
+    <section title='Acknowledgements' anchor='ack'>
+      <t>Thanks to James Cridland, Yaniv Golan, David Koblas, Paco Nathan, Will Norris, Evan Prodromou, Chris Roos, Terrell Russell, Eran Sandler, and Brian Suda for their feedback.</t>
+    </section>
+  </section>
+
+  <section title='Format' anchor='format'>
+    <t>The syntax for a MicroID is defined as follows, using the Augmented Backus-Naur Form specified in <xref target="ABNF"/>.</t>
+    <figure>
+      <artwork><![CDATA[
+microid = inputs ":" algo ":" hash
+inputs  = scheme "+" scheme
+scheme  = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
+          ; a URI scheme name (e.g., mailto)
+algo    = ALPHA *( ALPHA / DIGIT )
+          ; the short name of a hashing 
+          ; algorithm (e.g., sha256),
+hash    = *( ALPHA / DIGIT )
+          ; a hash of the URIs for both entities
+      ]]></artwork>
+    </figure>
+    <t>Note: If the URI scheme name includes the "+" character (which is allowed by <xref target='URI'/> but not in common use), that character MUST be escaped to %2B.</t>
+    <t>Note: The algorithm names should be as registered with the IANA in the Hash Function Textual Names registry located at &lt;http://www.iana.org/assignments/hash-function-text-names&gt;, but may exclude the "-" character (e.g., "sha1" rather than "sha-1").</t>
+    <t>Note: See the <xref target='legacy'>Legacy Support</xref> section of this document for information regarding the original MicroID format.</t>
+  </section>
+
+  <section title='Generation' anchor='generation'>
+    <t>The method for generating the hash is:</t>
+    <figure>
+      <artwork><![CDATA[
+hash = algo(
+            algo(EntityURI)
+            +
+            algo(EntityURI)
+           )
+      ]]></artwork>
+    </figure>
+    <t>The "algo" MAY be any recognized hashing algorithm, such as those defined in <xref target='SHA'/>.  Support for the sha1 and sha256 algorithms is REQUIRED for interoperability.  
+    The output MUST be in hexadecimal (not base64) format.  The same algorithm MUST be used for all hashing functions when generating a given MicroID.</t>
+    <t>The "EntityURI" MAY conform to any URI scheme, such as <xref target='HTTP'/>, <xref target='MAILTO'/>, <xref target='SIP'/>, or <xref target='XMPP'/>.</t>
+    <t>As an example, consider the following inputs, from which a MicroID is generated using the sha1 algorithm:</t>
+    <t>
+      <list style='symbols'>
+        <t>The first entity is an individual identified by an XMPP URI of "xmpp:stpeter@jabber.org".</t>
+        <t>The second entity is a service provider identified by an HTTP URI of "https://www.xmpp.net/".</t>
+      </list>
+    </t>
+    <t>The hash is generated as follows (note: the line break in the third example is included only for the sake of readability):</t> 
+    <figure>
+      <artwork><![CDATA[
+sha1(
+     sha1(xmpp:stpeter@jabber.org)
+     +
+     sha1(https://www.xmpp.net/)
+    )
+
+sha1(
+     afa6353518f818af2f036da336c3097dedc00dee
+     +
+     3115de01ebfa34a34314060b5f30038b0fa359f8
+    )
+
+sha1(
+afa6353518f818af2f036da336c3097dedc00dee
+3115de01ebfa34a34314060b5f30038b0fa359f8
+    )
+
+6196ea6709be2a4cbdf2bc0cfaeac491f2fb8921
+      ]]></artwork>
+    </figure>
+    <t>Thus in accordance with the format previously described the issued MicroID is:</t>
+    <figure>
+      <artwork><![CDATA[
+xmpp+https:sha1:6196ea6709be2a4cbdf2bc0cfaeac491f2fb8921
+      ]]></artwork>
+    </figure>
+  </section>
+ 
+  <section title='Processing' anchor='processing'>
+    <t>A processing application MAY use only the hash portion of the MicroID for comparison purposes.  An implementation SHOULD be liberal in accepting MicroIDs that conform to the legacy format; for details, see the <xref target='legacy'>Legacy Support</xref> section of this document.</t>
+  </section>
+
+  <section title='Meaning' anchor='meaning'>
+    <section title='Overview' anchor='meaning-overview'>
+      <t>By itself, a MicroID has no inherent meaning, since it is simply a string created from two URIs.  Any entity can generate a MicroID even if it has not verified the identity of the resources associated with one or both URIs.  Furthermore, a MicroID is easily copied by an entity that did not generate it.  Finally, a MicroID is not digitally signed by the entity that generated it and therefore cannot be cryptographically associated with the generating entity.</t>
+      <t>Therefore it may be wondered: what is the meaning of a MicroID?  The answer is: any meaning imputed to a MicroID results from the context in which it is used.  That context includes the nature of the generating application and the nature of the using technology.</t>
+      <t>Some possible generating applications and using technologies are described in the following sections.  We use the following terms to describe the parties involved in the generation and processing of a MicroID:</t>
+      <t>
+        <list style='symbols'>
+          <t>Consumer -- Any party that reads a MicroID issued by an Issuer (in other identity systems, a consumer is sometimes called a relying party).</t>
+          <t>Entity -- Either party identified by a URI or IRI that is used to construct a MicroID.</t>
+          <t>Individual -- An entity that generates information or earns reputation.</t>
+          <t>Issuer -- The party that generates a MicroID.  The issuer can be a third party and need not be an entity.</t>
+          <t>Service Provider -- An entity that is responsible for hosting information or reputation; a service provider may or may not be an issuer.</t>
+        </list>
+      </t>
+      <t>A MicroID should be generated by an issuer, not by an individual.  The issuer may be the service provider that hosts the information about, content created by, or reputation earned by an individual, or it may be a third party trusted by both the individual and the service provider.</t>
+      <t>An issuer should not generate a MicroID until it has verified that the individual or service provider has control over a given entity URI.  Methods for such verification are out of scope for this specification and may vary according to local service policies and the URI scheme in question.</t>
+      <t>The first entity URI should be that of the individual and the second EntityURI should be that of the service provider.  Any given entity URI may have meaning above and beyond that encapsulated in the relevant URI scheme; for example, the HTTP URI for an individual could be hosted by an OpenID service (see &lt;<eref target='http://openid.net/'>http://openid.net/</eref>&gt;).  However, MicroID places no restrictions on the semantics of a given entity URI.</t>
+    </section>
+    <section title='Generating Applications' anchor='meaning-gen'>
+      <section title='Service Provider' anchor='meaning-gen-serviceprovider'>
+        <t>It is envisioned that one common deployment scenario will be that of a service provider "stamping" information or reputation that is hosted by the service provider on behalf of individuals.  In this architecture, the service provider is both the issuer and one of the entities, where the other entity is an individual.</t>
+        <figure>
+          <artwork><![CDATA[
+     +--------+
+     | Entity |
+     +--------+
+         |
+         | registration
+         |
++-------------------+
+| Service Provider  |
+| (Entity + Issuer) |
++-------------------+
+         |
+         | issuance
+         |
+      MicroID
+          ]]></artwork>
+        </figure>
+        <t>Whether a given consumer imputes meaning to the MicroID in this scenario depends on the consumer's relationship to the service provider, whether the consumer has some trust in the information presented by the service provider, etc.</t>
+      </section>
+      <section title='Third Party as Issuer' anchor='meaning-thirdparty'>
+        <t>Another scenario is that in which the MicroID is issued by a trusted third party (e.g., a part with which both a service provider and individual have registered).  In this architecture, the service provider is merely one of the entities.</t>
+        <figure>
+          <artwork><![CDATA[
++--------+    +------------------+
+| Entity |    | Service Provider |
++--------+    +------------------+
+    |                 |
+    |                 |
+    +-----------------+
+           |
+           | registration
+           |
+       +--------+
+       | Issuer |
+       +--------+
+           |
+           | issuance
+           |
+        MicroID
+          ]]></artwork>
+        </figure>
+        <t>Whether a given consumer imputes meaning to the MicroID in this scenario depends on the consumer's relationship to the third part, whether the consumer has some trust in the information presented by the third party, whether the consumer is one of the entities, etc.</t>
+      </section>
+    </section>
+    <section title='Using Technologies' anchor='use'>
+      <t>This specification does not limit the technologies that might make use of MicroIDs, and future versions of this specification might describe a wide range of such uses.  Here we describe two such uses.</t>
+      <t>Note: The scope of information (e.g., markup) covered by a MicroID depends on the nature of the using technology and must be defined separately by each using technology.</t>
+      <section title='HTML Class Attribute' anchor='use-class'>
+        <t>One possible use is to include a MicroID in the HyperText Markup Language <xref target='HTML'/> class attribute.  The recommended format is to prepend the MicroID itself with the string "microid-", as shown in the following example:</t>
+        <figure>
+          <artwork><![CDATA[
+<p class='microid-xmpp+https:sha1:
+6196ea6709be2a4cbdf2bc0cfaeac491f2fb8921'>
+mycontent</p>
+          ]]></artwork>
+        </figure>
+        <t>In this usage, the scope of the MicroID is all information contained within the element that possesses the class attribute, whether that information is represented as attributes, character data, or child elements.  However, any given child element may itself possess a class attribute specifying a MicroID that overrides the content claim asserted by the parent element.  In all cases, the relevant claim is always that of the nearest containing element in the hierarchy.</t>
+        <t>A MicroID can be used on its own to mark content as created by a certain individual (e.g., a comment made on a web forum):</t>
+        <figure>
+          <artwork><![CDATA[
+<div class='
+microid-xmpp+https:sha1:6196ea6709be2a4cbdf2bc0cfaeac491f2fb8921'>
+  <p>This is a great idea!</p>
+</div>
+          ]]></artwork>
+        </figure>
+        <t>A MicroID can be also used in concert with other lightweight identity technologies such as the rel='me' value defined by XHTML Friends Network (XFN) as specified at &lt;<eref target='http://gmpg.org/xfn/11'>http://gmpg.org/xfn/11</eref>&gt;:</t>
+        <figure>
+          <artwork><![CDATA[
+<div class='
+  microid-xmpp+https:sha1:6196ea6709be2a4cbdf2bc0cfaeac491f2fb8921'>
+  <p>This is a great idea!</p>
+  <p>--<a rel='me' 
+          href='http://2idi.com/contact/=stpeter'>
+          stpeter</a></p>
+</div>
+          ]]></artwork>
+        </figure>
+      </section>
+      <section title='HTML Meta Data' anchor='use-meta'>
+        <t>Another possible use is in meta data about an <xref target='HTML'/> file (e.g., to signify that a given web page is created by, owned by, or about a given Individual).  This is done by including a &lt;meta/&gt; tag whose 'name' attribute is "microid" and whose 'content' attribute specifies the MicroID, as shown in the following example:</t>
+        <figure>
+          <artwork><![CDATA[
+<meta 
+  name='microid' 
+  content='xmpp+https:sha1:6196ea6709be2a4cbdf2bc0cfaeac491f2fb8921'/>
+          ]]></artwork>
+        </figure>
+        <t>In this usage, the scope of the MicroID is the page itself.  However, the whole-page claim represented in the META tag can be overridden by claims represented in class attributes possessed by elements within the HTML body.</t>
+        <t>A file MAY contain multiple META tags with a name of "microid" (e.g., to claim ownership by multiple authors or to represent multiple identities associated with the same individual).</t>
+      </section>
+    </section>
+  </section>
+
+  <section title='Internationalization Considerations' anchor='i18n'>
+    <t>A MicroID SHOULD be constructed using two Uniform Resource Identifiers <xref target='URI'/> but one or both inputs MAY instead be an Internationalized Resource Identifier <xref target='IRI'/>.</t>
+  </section>
+
+  <section title='Security Considerations' anchor='security'>
+    <t>MicroID is a technology for identifying the ownership or authorship of information on the Internet.  It is not a mechanism for authentication, authorization, security, or encryption. Use of MicroID technology results only in weak verification of identities (if any).  MicroID may be susceptible to <xref target='DNS'/> poisoning attacks unless <xref target='DNSSEC'/> is used, since most URIs depend on DNS.</t>
+  </section>
+
+</middle>
+
+<back>
+
+  <references title='Normative References'>
+
+<reference anchor='ABNF'>
+<front>
+<title abbrev='ABNF for Syntax Specifications'>Augmented BNF for Syntax Specifications: ABNF</title>
+<author initials='D.H.' surname='Crocker' fullname='David H.  Crocker'>
+<organization>Internet Mail Consortium</organization>
+<address>
+<postal>
+<street>675 Spruce Dr.</street>
+<city>Sunnyvale</city>
+<region>CA</region>
+<code>94086</code>
+<country>US</country></postal>
+<phone>+1 408 246 8253</phone>
+<facsimile>+1 408 249 6205</facsimile>
+<email>dcrocker@bbiw.net</email></address></author>
+<author initials='P.' surname='Overell' fullname='Paul Overell'>
+<organization>THUS plc.</organization>
+<address>
+<postal>
+<street>1/3 Berkeley Square</street>
+<street>99 Berkeley Street</street>
+<city>Glasgow</city>
+<code>G3 7HR</code>
+<country>UK</country></postal>
+<email>paulo@turnpike.com</email></address></author>
+<date month='October' year='2005' /></front>
+<seriesInfo name='RFC' value='4234' />
+<format type='TXT' octets='26351' target='ftp://ftp.isi.edu/in-notes/rfc4234.txt' />
+</reference>
+
+<reference anchor='SHA' target='http://csrc.nist.gov/publications/fips/fips180-2/fips180-2withchangenotice.pdf'>
+<front>
+<title>Secure Hash Standard</title>
+<author>
+<organization>National Institute of Standards and Technology</organization>
+</author>
+<date month='August' year='2002' />
+</front>
+<seriesInfo name='FIPS' value='PUB 180-2' />
+</reference>
+
+<reference anchor='TERMS'>
+<front>
+<title abbrev='RFC Key Words'>Key words for use in RFCs to Indicate Requirement Levels</title>
+<author initials='S.' surname='Bradner' fullname='Scott Bradner'>
+<organization>Harvard University</organization>
+<address>
+<postal>
+<street>1350 Mass.  Ave.</street>
+<street>Cambridge</street>
+<street>MA 02138</street></postal>
+<phone>- +1 617 495 3864</phone>
+<email>sob@harvard.edu</email></address></author>
+<date month='March' year='1997' />
+<area>General</area>
+<keyword>keyword</keyword>
+<abstract>
+<t>
+   In many standards track documents several words are used to signify
+   the requirements in the specification.  These words are often
+   capitalized.  This document defines these words as they should be
+   interpreted in IETF documents.  Authors who follow these guidelines
+   should incorporate this phrase near the beginning of their document:
+
+<list>
+<t>
+      The key words &quot;MUST&quot;, &quot;MUST NOT&quot;, &quot;REQUIRED&quot;, &quot;SHALL&quot;, &quot;SHALL
+      NOT&quot;, &quot;SHOULD&quot;, &quot;SHOULD NOT&quot;, &quot;RECOMMENDED&quot;,  &quot;MAY&quot;, and
+      &quot;OPTIONAL&quot; in this document are to be interpreted as described in
+      RFC 2119.
+</t></list></t>
+<t>
+   Note that the force of these words is modified by the requirement
+   level of the document in which they are used.
+</t></abstract></front>
+<seriesInfo name='BCP' value='14' />
+<seriesInfo name='RFC' value='2119' />
+<format type='TXT' octets='4723' target='ftp://ftp.isi.edu/in-notes/rfc2119.txt' />
+<format type='HTML' octets='14486' target='http://xml.resource.org/public/rfc/html/rfc2119.html' />
+<format type='XML' octets='5661' target='http://xml.resource.org/public/rfc/xml/rfc2119.xml' />
+</reference>
+
+<reference anchor='URI'>
+<front>
+<title abbrev='URI Generic Syntax'>Uniform Resource Identifier (URI): Generic Syntax</title>
+<author initials='T.' surname='Berners-Lee' fullname='Tim Berners-Lee'>
+<organization abbrev='W3C/MIT'>World Wide Web Consortium</organization>
+<address>
+<postal>
+<street>Massachusetts Institute of Technology</street>
+<street>77 Massachusetts Avenue</street>
+<city>Cambridge</city>
+<region>MA</region>
+<code>02139</code>
+<country>USA</country></postal>
+<phone>+1-617-253-5702</phone>
+<facsimile>+1-617-258-5999</facsimile>
+<email>timbl@w3.org</email>
+<uri>http://www.w3.org/People/Berners-Lee/</uri></address></author>
+<author initials='R.' surname='Fielding' fullname='Roy T. Fielding'>
+<organization abbrev='Day Software'>Day Software</organization>
+<address>
+<postal>
+<street>5251 California Ave., Suite 110</street>
+<city>Irvine</city>
+<region>CA</region>
+<code>92617</code>
+<country>USA</country></postal>
+<phone>+1-949-679-2960</phone>
+<facsimile>+1-949-679-2972</facsimile>
+<email>fielding@gbiv.com</email>
+<uri>http://roy.gbiv.com/</uri></address></author>
+<author initials='L.' surname='Masinter' fullname='Larry Masinter'>
+<organization abbrev='Adobe Systems'>Adobe Systems Incorporated</organization>
+<address>
+<postal>
+<street>345 Park Ave</street>
+<city>San Jose</city>
+<region>CA</region>
+<code>95110</code>
+<country>USA</country></postal>
+<phone>+1-408-536-3024</phone>
+<email>LMM@acm.org</email>
+<uri>http://larry.masinter.net/</uri></address></author>
+<date year='2005' month='January' />
+<area>Applications</area>
+<keyword>uniform resource identifier</keyword>
+<keyword>URI</keyword>
+<keyword>URL</keyword>
+<keyword>URN</keyword>
+<keyword>WWW</keyword>
+<keyword>resource</keyword>
+<abstract>
+<t>
+A Uniform Resource Identifier (URI) is a compact sequence of characters
+that identifies an abstract or physical resource.  This specification
+defines the generic URI syntax and a process for resolving URI references
+that might be in relative form, along with guidelines and security
+considerations for the use of URIs on the Internet.
+The URI syntax defines a grammar that is a superset of all valid URIs,
+allowing an implementation to parse the common components of a URI
+reference without knowing the scheme-specific requirements of every
+possible identifier.  This specification does not define a generative
+grammar for URIs; that task is performed by the individual
+specifications of each URI scheme.
+</t></abstract></front>
+<seriesInfo name='STD' value='66' />
+<seriesInfo name='RFC' value='3986' />
+<format type='TXT' octets='141811' target='ftp://ftp.isi.edu/in-notes/rfc3986.txt' />
+<format type='HTML' octets='200858' target='http://xml.resource.org/public/rfc/html/rfc3986.html' />
+<format type='XML' octets='165759' target='http://xml.resource.org/public/rfc/xml/rfc3986.xml' />
+</reference>
+
+  </references>
+
+  <references title='Informative References'>
+
+<reference anchor='DNS'>
+<front>
+<title abbrev='Domain Implementation and Specification'>Domain names - implementation and specification</title>
+<author initials='P.' surname='Mockapetris' fullname='P. Mockapetris'>
+<organization>USC/ISI</organization>
+<address>
+<postal>
+<street>4676 Admiralty Way</street>
+<city>Marina del Rey</city>
+<region>CA</region>
+<code>90291</code>
+<country>US</country></postal>
+<phone>+1 213 822 1511</phone></address></author>
+<date month='November' day='1' year='1987' /></front>
+<seriesInfo name='STD' value='13' />
+<seriesInfo name='RFC' value='1035' />
+<format type='TXT' octets='125626' target='ftp://ftp.isi.edu/in-notes/rfc1035.txt' />
+</reference>
+
+<reference anchor='DNSSEC'>
+<front>
+<title>DNS Security Introduction and Requirements</title>
+<author initials='R.' surname='Arends' fullname='R. Arends'>
+<organization /></author>
+<author initials='R.' surname='Austein' fullname='R. Austein'>
+<organization /></author>
+<author initials='M.' surname='Larson' fullname='M. Larson'>
+<organization /></author>
+<author initials='D.' surname='Massey' fullname='D. Massey'>
+<organization /></author>
+<author initials='S.' surname='Rose' fullname='S. Rose'>
+<organization /></author>
+<date year='2005' month='March' />
+<abstract>
+<t>The Domain Name System Security Extensions (DNSSEC) add data origin authentication and data integrity to the Domain Name System. This document introduces these extensions and describes their capabilities and limitations. This document also discusses the services that the DNS security extensions do and do not provide. Last, this document describes the interrelationships between the documents that collectively describe DNSSEC. [STANDARDS TRACK] </t></abstract></front>
+<seriesInfo name='RFC' value='4033' />
+<format type='TXT' octets='52445' target='ftp://ftp.isi.edu/in-notes/rfc4033.txt' />
+</reference>
+
+<reference anchor='HTML'
+           target='http://www.w3.org/TR/1999/REC-html401-19991224'>
+<front>
+<title>HTML 4.01 Specification</title>
+<author initials='I.' surname='Jacobs' fullname='Ian Jacobs'>
+    <organization />
+</author>
+<author initials='D.' surname='Raggett' fullname='David Raggett'>
+    <organization />
+</author>
+<author initials='A.' surname='Hors' fullname='Arnaud Le Hors'>
+    <organization />
+</author>
+<date month='December' day='24' year='1999' />
+</front>
+<seriesInfo name='World Wide Web Consortium Recommendation' value='REC-html401-19991224' />
+<format type='HTML' target='http://www.w3.org/TR/1999/REC-html401-19991224' />
+</reference>
+
+<reference anchor='HTTP'>
+<front>
+<title abbrev='HTTP/1.1'>Hypertext Transfer Protocol -- HTTP/1.1</title>
+<author initials='R.' surname='Fielding' fullname='Roy T.  Fielding'>
+<organization abbrev='UC Irvine'>Department of Information and Computer Science</organization>
+<address>
+<postal>
+<street>University of California, Irvine</street>
+<city>Irvine</city>
+<region>CA</region>
+<code>92697-3425</code></postal>
+<facsimile>+1(949)824-1715</facsimile>
+<email>fielding@ics.uci.edu</email></address></author>
+<author initials='J.' surname='Gettys' fullname='James Gettys'>
+<organization abbrev='Compaq/W3C'>World Wide Web Consortium</organization>
+<address>
+<postal>
+<street>MIT Laboratory for Computer Science, NE43-356</street>
+<street>545 Technology Square</street>
+<city>Cambridge</city>
+<region>MA</region>
+<code>02139</code></postal>
+<facsimile>+1(617)258-8682</facsimile>
+<email>jg@w3.org</email></address></author>
+<author initials='J.' surname='Mogul' fullname='Jeffrey C.  Mogul'>
+<organization abbrev='Compaq'>Compaq Computer Corporation</organization>
+<address>
+<postal>
+<street>Western Research Laboratory</street>
+<street>250 University Avenue</street>
+<city>Palo Alto</city>
+<region>CA</region>
+<code>94305</code></postal>
+<email>mogul@wrl.dec.com</email></address></author>
+<author initials='H.' surname='Frystyk' fullname='Henrik Frystyk Nielsen'>
+<organization abbrev='MIT/LCS'>World Wide Web Consortium</organization>
+<address>
+<postal>
+<street>MIT Laboratory for Computer Science, NE43-356</street>
+<street>545 Technology Square</street>
+<city>Cambridge</city>
+<region>MA</region>
+<code>02139</code></postal>
+<facsimile>+1(617)258-8682</facsimile>
+<email>frystyk@w3.org</email></address></author>
+<author initials='L.' surname='Masinter' fullname='Larry Masinter'>
+<organization abbrev='Xerox'>Xerox Corporation</organization>
+<address>
+<postal>
+<street>MIT Laboratory for Computer Science, NE43-356</street>
+<street>3333 Coyote Hill Road</street>
+<city>Palo Alto</city>
+<region>CA</region>
+<code>94034</code></postal>
+<email>masinter@parc.xerox.com</email></address></author>
+<author initials='P.' surname='Leach' fullname='Paul J.  Leach'>
+<organization abbrev='Microsoft'>Microsoft Corporation</organization>
+<address>
+<postal>
+<street>1 Microsoft Way</street>
+<city>Redmond</city>
+<region>WA</region>
+<code>98052</code></postal>
+<email>paulle@microsoft.com</email></address></author>
+<author initials='T.' surname='Berners-Lee' fullname='Tim Berners-Lee'>
+<organization abbrev='MIT/LCS'>World Wide Web Consortium</organization>
+<address>
+<postal>
+<street>MIT Laboratory for Computer Science, NE43-356</street>
+<street>545 Technology Square</street>
+<city>Cambridge</city>
+<region>MA</region>
+<code>02139</code></postal>
+<facsimile>+1(617)258-8682</facsimile>
+<email>timbl@w3.org</email></address></author>
+<date month='June' year='1999' />
+<abstract>
+<t>
+   The Hypertext Transfer Protocol (HTTP) is an application-level
+   protocol for distributed, collaborative, hypermedia information
+   systems.  It is a generic, stateless, protocol which can be used for
+   many tasks beyond its use for hypertext, such as name servers and
+   distributed object management systems, through extension of its
+   request methods, error codes and headers .  A feature of HTTP is
+   the typing and negotiation of data representation, allowing systems
+   to be built independently of the data being transferred.
+</t>
+<t>
+   HTTP has been in use by the World-Wide Web global information
+   initiative since 1990.  This specification defines the protocol
+   referred to as "HTTP/1.1", and is an update to RFC 2068 .
+</t></abstract></front>
+<seriesInfo name='RFC' value='2616' />
+<format type='TXT' octets='422317' target='ftp://ftp.isi.edu/in-notes/rfc2616.txt' />
+<format type='PS' octets='5529857' target='ftp://ftp.isi.edu/in-notes/rfc2616.ps' />
+<format type='PDF' octets='550558' target='ftp://ftp.isi.edu/in-notes/rfc2616.pdf' />
+<format type='HTML' octets='498891' target='http://xml.resource.org/public/rfc/html/rfc2616.html' />
+<format type='XML' octets='471630' target='http://xml.resource.org/public/rfc/xml/rfc2616.xml' />
+</reference>
+
+<reference anchor='IRI'>
+<front>
+<title>Internationalized Resource Identifiers (IRIs)</title>
+<author initials='M.' surname='Duerst' fullname='M. Duerst'>
+<organization /></author>
+<author initials='M.' surname='Suignard' fullname='M. Suignard'>
+<organization /></author>
+<date year='2005' month='January' />
+<abstract>
+<t>&lt;p>This document defines a new protocol element, the Internationalized Resource Identifier (IRI), as a complement of the Uniform Resource Identifier (URI). An IRI is a sequence of characters from the Universal Character Set (Unicode/ISO 10646). A mapping from IRIs to URIs is defined, which means that IRIs can be used instead of URIs, where appropriate, to identify resources.&lt;/p>&lt;p> The approach of defining a new protocol element was chosen instead of extending or changing the definition of URIs. This was done in order to allow a clear distinction and to avoid incompatibilities with existing software. Guidelines are provided for the use and deployment of IRIs in various protocols, formats, and software components that currently deal with URIs.&lt;/p></t></abstract></front>
+<seriesInfo name='RFC' value='3987' />
+<format type='TXT' octets='111190' target='ftp://ftp.isi.edu/in-notes/rfc3987.txt' />
+</reference>
+
+<reference anchor='MAILTO'>
+<front>
+<title>The mailto URL scheme</title>
+<author initials='P.E.' surname='Hoffman' fullname='Paul E.  Hoffman'>
+<organization>Internet Mail Consortium</organization>
+<address>
+<postal>
+<street>127 Segre Place</street>
+<street>Santa Cruz</street>
+<street>CA  95060</street>
+<country>USA</country></postal>
+<email>phoffman@imc.org</email></address></author>
+<author initials='L.' surname='Masinter' fullname='Larry Masinter'>
+<organization>Xerox Corporation</organization>
+<address>
+<postal>
+<street>3333 Coyote Hill Road</street>
+<street>Palo Alto</street>
+<street>CA 94304</street>
+<country>USA</country></postal>
+<email>masinter@parc.xerox.com</email></address></author>
+<author initials='J.' surname='Zawinski' fullname='Jamie Zawinski'>
+<organization>Netscape Communications Corp.</organization>
+<address>
+<postal>
+<street>501 East Middlefield Road</street>
+<street>Mountain View</street>
+<street>CA 94043</street>
+<country>USA</country></postal>
+<email>jwz@netscape.com</email></address></author>
+<date month='July' year='1998' />
+<area>Applications</area>
+<keyword>mailto</keyword>
+<keyword>mail</keyword>
+<keyword>uniform resource locator</keyword>
+<keyword>URL</keyword>
+<abstract>
+<t>
+   This document defines the format of Uniform Resource Locators (URL)
+   for designating electronic mail addresses.  It is one of a suite of
+   documents which replace RFC 1738, &apos;Uniform Resource Locators&apos;, and
+   RFC 1808, &apos;Relative Uniform Resource Locators&apos;.  The syntax of
+   &apos;mailto&apos; URLs from RFC 1738 is extended to allow creation of more RFC
+   822 messages by allowing the URL to express additional header and
+   body fields.
+</t></abstract></front>
+<seriesInfo name='RFC' value='2368' />
+<format type='TXT' octets='16502' target='ftp://ftp.isi.edu/in-notes/rfc2368.txt' />
+<format type='HTML' octets='30859' target='http://xml.resource.org/public/rfc/html/rfc2368.html' />
+<format type='XML' octets='17329' target='http://xml.resource.org/public/rfc/xml/rfc2368.xml' />
+</reference>
+
+<reference anchor='SIP'>
+<front>
+<title>SIP: Session Initiation Protocol</title>
+<author initials='J.' surname='Rosenberg' fullname='J. Rosenberg'>
+<organization /></author>
+<author initials='H.' surname='Schulzrinne' fullname='H. Schulzrinne'>
+<organization /></author>
+<author initials='G.' surname='Camarillo' fullname='G. Camarillo'>
+<organization /></author>
+<author initials='A.' surname='Johnston' fullname='A. Johnston'>
+<organization /></author>
+<author initials='J.' surname='Peterson' fullname='J. Peterson'>
+<organization /></author>
+<author initials='R.' surname='Sparks' fullname='R. Sparks'>
+<organization /></author>
+<author initials='M.' surname='Handley' fullname='M. Handley'>
+<organization /></author>
+<author initials='E.' surname='Schooler' fullname='E. Schooler'>
+<organization /></author>
+<date month='June' year='2002' /></front>
+<seriesInfo name='RFC' value='3261' />
+<format type='TXT' octets='647976' target='ftp://ftp.isi.edu/in-notes/rfc3261.txt' />
+</reference>
+
+<reference anchor='XMPP'>
+<front>
+<title>Internationalized Resource Identifiers (IRIs) and Uniform Resource Identifiers (URIs) for the Extensible Messaging and Presence Protocol (XMPP)</title>
+<author initials='P.' surname='Saint-Andre' fullname='P. Saint-Andre'>
+<organization /></author>
+<date year='2006' month='August' />
+<abstract>
+<t>&lt;p>This document defines the use of Internationalized Resource Identifiers (IRIs) and Uniform Resource Identifiers (URIs) in identifying or interacting with entities that can communicate via the Extensible Messaging and Presence Protocol (XMPP). [STANDARDS TRACK]&lt;/p></t></abstract></front>
+<seriesInfo name='RFC' value='4622' />
+<format type='TXT' octets='49968' target='ftp://ftp.isi.edu/in-notes/rfc4622.txt' />
+</reference>
+
+  </references>
+
+  <section title='Legacy Support' anchor='legacy'>
+    <t>MicroID originally assumed the use of sha1 as the hashing algorithm and did not specify the schemes of the EntityURI inputs, resulting in the following format:</t>
+    <figure>
+      <artwork><![CDATA[
+microid = hash
+hash    = *( ALPHA / DIGIT )
+          ; a hash of the URIs for both entities
+      ]]></artwork>
+    </figure>
+    <t>For example, using the same inputs as shown in the body of this specification, the MicroID in legacy format would be:</t>
+    <figure>
+      <artwork><![CDATA[
+6196ea6709be2a4cbdf2bc0cfaeac491f2fb8921
+      ]]></artwork>
+    </figure>
+    <t>An implementation MUST generate MicroIDs in the format specified in the <xref target='format'>Format</xref> section of this document, but SHOULD process MicroIDs generated using the legacy format for the sake of backward compatibility.</t>
+  </section>
+
+  <section title="Copying Conditions" anchor="copying">
+    <t>The Contributors grant third parties the irrevocable right to copy, use and distribute the Contribution, with or without modification, in any medium, without royalty, provided that, unless separate permission is granted, redistributed modified works:</t>
+    <t>
+      <list style='numbers'>
+        <t>do not contain misleading author, version, name of work, or endorsement information, and</t>
+        <t>do not claim endorsement of the modified work by the Contributors, or any organizations the Contributors belong to, the Internet Engineering Task Force (IETF), Internet Research Task Force (IRTF), Internet Engineering Steering Group (IESG), Internet Architecture Board (IAB), Internet Assigned Numbers Authority (IANA), Internet Society (ISOC), Request For Comments (RFC) Editor, or any combination or variation of such terms (including without limitation the IETF "4 diamonds" logo), or any terms that are confusingly similar thereto, and</t>
+        <t>remove any claims of status as an Internet Standard, including without limitation removing the RFC boilerplate.</t>
+      </list>
+    </t>
+    <t>The IETF suggests that any citation or excerpt of unmodified text reference the RFC or other document from which the text is derived.</t>
+  </section>
+
+</back>
+
+</rfc>

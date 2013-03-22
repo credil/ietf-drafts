@@ -1,0 +1,1239 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+
+<?rfc compact="no"?>
+<?rfc toc="yes"?>
+
+<rfc category="std" ipr="full3978"
+     docName="draft-ietf-sasl-gs2-09">
+
+<front>
+
+<title abbrev="SASL GS2-*">
+Using GSS-API Mechanisms in SASL:
+The GS2 Mechanism Family
+</title>
+
+<author initials="S." surname="Josefsson" fullname="Simon Josefsson">
+	<organization></organization>
+	<address>
+		<email>simon@josefsson.org</email>
+	</address>
+</author>
+	
+<date month="October" year="2007"/>
+
+<abstract>
+
+  <t>This document describes how to use a Generic Security Service
+    Application Program Interface (GSS-API) mechanism in the the
+    Simple Authentication and Security Layer (SASL) framework.  This
+    is done by defining a new SASL mechanism family, called GS2.  This
+    mechanism family offers a number of improvements over the previous
+    SASL/GSS-API mechanism: it is more general, uses fewer messages
+    for the authentication phase in some cases, and supports a
+    SASL-specific notion of channel binding.</t>
+
+  <t>See &lt;http://josefsson.org/sasl-gs2-*/&gt; for more
+    information.</t>
+
+</abstract>
+
+</front>
+	
+<middle>
+
+<section title="Introduction">
+
+  <t><xref target="RFC2743">Generic Security Service Application
+      Program Interface (GSS-API)</xref> is a framework that provide
+    security services to
+    applications.  <xref target="RFC4422">Simple Authentication and
+      Security Layer (SASL)</xref> is a framework to provide
+    authentication and security layers for connection based
+    protocols.  This document describe how to use a GSS-API
+    mechanism in a connection-based protocol using the SASL
+    framework.</t>
+  
+  <t>All GSSAPI mechanisms are implicitly registered for use within
+    SASL by this specification.  The SASL mechanism defined in this
+    document is known as the GS2 family.</t>
+
+  <t>The <xref target="RFC1964">"Kerberos V5 GSS-API mechanism"</xref>
+    is also supported in SASL through <xref target="RFC4752">"SASL
+    GSSAPI mechanisms"</xref>.  The difference between that protocol
+    and the one described here, is that this protocol offer more
+    features (i.e., channel bindings and round-trip optimizations)
+    while the other protocol is more widely deployed.  There are
+    interoperability concerns by having the same GSS-API mechanism
+    available under more than one SASL mechanism name, see the section
+    "Interoperability with the GSSAPI mechanism" below.</t>
+
+  <t>There are interoperability and security concerns if this SASL
+    mechanism is used together with a GSS-API mechanism that negotiate
+    other GSS-API mechanisms (such
+    as <xref target="RFC4178">SPNEGO</xref>), see the section
+    "Mechanisms that negotiate other mechanisms" below.</t>
+
+  <t>There are interoperability and security concerns with GSSAPI
+    mechanism that do not provide integrity, see the section
+    "Non-integrity capable GSS-API mechanisms" below.</t>
+
+  <t>SASL mechanism names starting with "GS2-" are reserved for SASL
+    mechanisms which conform to this document.</t>
+  
+  <t>The IESG is considered to be the owner of all SASL mechanisms
+    which conform to this document.  This does not necessarily imply
+    that the IESG is considered to be the owner of the underlying
+    GSSAPI mechanism.</t>
+
+</section>
+
+<section title="Conventions used in this document">
+
+  <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+    NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL"
+    in this document are to be interpreted as described in
+    <xref target="RFC2119" />.</t>
+
+</section>
+
+<section title="Mechanism name">
+
+<section title="Generating SASL mechanism names from GSS-API OIDs">
+
+  <t>The SASL mechanism name for a GSS-API mechanism is the
+    concatenation of the string "GS2-" and
+    the <xref target="RFC4648">Base32 encoding</xref> (with an upper
+    case alphabet) of the first ten bytes of the
+    binary <xref target="FIPS.180-1.1995">SHA-1 hash</xref> string computed
+    over the <xref target="ITU.X690.1994">ASN.1 DER encoding</xref>,
+    including the tag and length octets, of the GSS-API mechanism's
+    Object Identifier.  The Base32 rules on padding characters and
+    characters outside of the base32 alphabet are not relevant to this
+    use of Base32.  If any padding or non-alphabet characters are
+    encountered, the name is not a GS2 family mechanism name.</t>
+
+</section>
+
+<section title="Computing mechanism names manually">
+
+  <t>The SASL mechanism name may be computed manually.  This is useful
+    when the set of supported GSS-API mechanisms is known in advance.
+    It also obliterate the need to implement Base32, SHA-1 and DER in
+    the SASL mechanism.  The computed mechanism name can be used
+    directly in the implementation, and the implementation need not
+    concern itself with that the mechanism is part of a mechanism
+    family.</t>
+
+</section>
+
+<section title="Examples">
+
+  <t>The OID for the <xref target="RFC2025">SPKM-1 mechanism</xref> is
+    1.3.6.1.5.5.1.1.  The ASN.1 DER encoding of the OID, including the
+    tag and length, is (in hex) 06 07 2b 06 01 05 05 01 01.  The SHA-1
+    hash of the ASN.1 DER encoding is (in hex) 1c f8 f4 2b 5a 9f 80 fa
+    e9 f8 31 22 6d 5d 9d 56 27 86 61 ad.  Convert the first ten octets
+    to binary, and re-group them in groups of 5, and convert them back
+    to decimal, which results in these computations:</t>
+
+    <figure>
+      <artwork>
+hex:
+1c f8 f4 2b 5a 9f 80 fa e9 f8
+
+binary:
+00011100 11111000 11110100 00101011 01011010
+10011111 10000000 11111010 11101001 11111000
+
+binary in groups of 5:
+00011 10011 11100 01111 01000 01010 11010 11010
+10011 11110 00000 01111 10101 11010 01111 11000
+
+decimal of each group:
+3 19 28 15 8 10 26 26 19 30 0 15 21 26 15 24
+
+base32 encoding:
+D T 4 P I K 2 2 T 6 A P V 2 P Y
+      </artwork>
+    </figure>
+
+    <t>The last step translate each decimal value using table 3
+      in <xref target="RFC4648">Base32</xref>.  Thus the SASL
+      mechanism name for the SPKM-1 GSSAPI mechanism is
+      "GS2-DT4PIK22T6APV2PY".</t>
+
+    <t>The OID for the <xref target="RFC1964">Kerberos V5 GSS-API
+	mechanism</xref> is 1.2.840.113554.1.2.2 and its DER encoding
+	is (in hex) 06 09 2A 86 48 86 F7 12 01 02 02.  The SHA-1 hash
+	is 82 d2 73 25 76 6b d6 c8 45 aa 93 25 51 6a fc ff 04 b0 43
+	60.  Convert the first ten octets to binary, and re-group them
+	in groups of 5, and convert them back to decimal, which
+	results in these computations:</t>
+
+    <figure>
+      <artwork>
+hex:
+82 d2 73 25 76 6b d6 c8 45 aa
+
+binary:
+10000010 11010010 01110011 00100101 01110110
+01101011 11010110 11001000 01000101 10101010
+
+binary in groups of 5:
+10000 01011 01001 00111 00110 01001 01011 10110
+01101 01111 01011 01100 10000 10001 01101 01010
+
+decimal of each group:
+16 11 9 7 6 9 11 22 13 15 11 12 16 17 13 10
+
+base32 encoding:
+Q L J H G J L W N P L M Q R N K
+      </artwork>
+    </figure>
+
+    <t>The last step translate each decimal value using table 3
+      in <xref target="RFC4648">Base32</xref>.  Thus the SASL
+      mechanism name for the Kerberos V5 GSSAPI mechanism is
+      "GS2-QLJHGJLWNPLMQRNK".</t>
+
+</section>
+
+</section>
+
+<section title="SASL Authentication Exchange Message Format">
+
+  <section title="SASL Messages">
+
+    <t>During the SASL authentication exchange for GS2, a number of
+      messages following the following format is sent between the
+      client and server.</t>
+    
+    <figure>
+      <artwork>
+                        1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                        Context length                         |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                      Wrap token length                        |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                                                               /
+   /                        [Context token]                        /
+   /                                           --------------------/
+   /                     ---------------------/                    /
+   /--------------------/                                          /
+   /                          [Wrap token]                         /
+   /                                                               /
+   /                                                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      </artwork>
+    </figure>
+
+    <t>The "Context length" and "Wrap token length" fields each
+      contain a 4 octet (32 bit) integer encoded in network byte
+      order, that indicate the length of the "Context token" and "Wrap
+      token" fields, respectively.  A length of 0 means that a
+      particular field is not present.</t>
+
+    <t>The "Context token" field, if present, contain a GSS-API
+      context establishment token generated by GSS_Init_sec_context or
+      GSS_Accept_sec_context.</t>
+      
+    <t>The "Wrap token" field, if present, contain the output
+      generated by the GS2_Wrap function.</t>
+
+    <t>The fields need not be aligned to 32-bit a boundary.  There is
+      no padding between fields.</t>
+
+    <t>Messages shorter than or equal to 8 octets are invalid.  (The
+      only exception is the initial empty challenge sent by the server
+      which may be 0 octets.)  From that it follows that at least one
+      of the "Context token length" and the "Wrap token length"
+      integers MUST be non-zero in a particular message.  If the sum
+      of the length integers is longer than the entire message size,
+      minus 8 octets for the length fields, the message is
+      invalid.</t>
+
+    <t>During any successful authentication exchange, the client and
+      server will each send exactly one (non-empty) "Wrap token".</t>
+
+    <t>Conforming implementations MUST NOT send additional data after
+      the above message syntax, and MUST ignore additional data.  To
+      illustrate, implementations MUST NOT assume that the last "Wrap
+      token length" octets of the packet correspond to the "Wrap
+      token", because that would be incorrect if the packet contained
+      additional data not described by this document.</t>
+
+  </section>
+
+  <section title="Context Token Field">
+
+      <t>The format of the "Context token" field inside the SASL token
+	is defined by each GSS-API mechanism, and the data is computed
+	by (for the client) GSS_Init_sec_context and (for the server)
+	GSS_Accept_sec_context.</t>
+
+    <section title="Client side">
+
+      <t>The client calls GSS_Init_sec_context, passing in
+	input_context_handle of GSS_C_NO_CONTEXT (initially),
+	mech_type of the GSSAPI mechanism for which this SASL
+	mechanism is registered, the chan_binding is set to NULL, and
+	targ_name equal to output_name from GSS_Import_Name called
+	with input_name_type of GSS_C_NT_HOSTBASED_SERVICE (*) and
+	input_name_string of "service@hostname" where "service" is the
+	service name specified in the protocol's profile, and
+	"hostname" is the fully qualified host name of the server.</t>
+
+      <t>(*) - Clients MAY use name types other than
+	GSS_C_NT_HOSTBASED_SERVICE to import servers' acceptor names,
+	but only when they have a priori knowledge that the servers
+	support alternate name types.  Otherwise clients MUST use
+	GSS_C_NT_HOSTBASED_SERVICE for importing acceptor names.</t>
+
+      <t>When calling the GSS_Init_sec_context the client SHOULD pass
+	the integ_req_flag of TRUE, but MAY set it to FALSE (see
+	section 10 below).  If the client intends to request a
+	security layer, it MUST also supply to the
+	GSS_Init_sec_context a mutual_req_flag of TRUE, and a
+	sequence_req_flag of TRUE.  If the client will be requesting a
+	security layer providing confidentiality protection, it MUST
+	also supply to the GSS_Init_sec_context a conf_req_flag of
+	TRUE.</t>
+
+      <t>The client then responds with any resulting output_token.</t>
+
+      <t>If GSS_Init_sec_context returns GSS_S_CONTINUE_NEEDED, then
+	the client expect the server to issue a token in a subsequent
+	challenge or as additional information to the outcome of the
+	authentication.  The client pass the context token to another
+	call to GSS_Init_sec_context, repeating the procedure, until
+	GSS_S_COMPLETE is returned or authentication is aborted.</t>
+
+      <t>If the server sent a (non-empty) "Wrap token", the context
+	token is processed before processing the other tokens.  This
+	is required because GSS_Unwrap may need the context to be in
+	the state it is after the "Context token" in the message has
+	been processed.</t>
+
+      <t>When GSS_Init_sec_context returns GSS_S_COMPLETE, the client
+	MUST examine the context to ensure that it provides a level of
+	protection permitted by the client's security policy.</t>
+
+    </section>
+
+    <section title="Server side">
+
+      <t>The server passes the first context token to
+	GSS_Accept_sec_context as input_token, setting
+	input_context_handle to GSS_C_NO_CONTEXT (initially), the
+	chan_binding set to NULL, and a suitable acceptor_cred_handle
+	(see below).</t>
+
+      <t>Servers SHOULD use a credential obtained by calling
+	GSS_Acquire_cred or GSS_Add_cred for the GSS_C_NO_NAME
+	desired_name and the OID of the GSS-API mechanism for which
+	this SASL mechanism is registered (*).  Servers MAY use
+	GSS_C_NO_CREDENTIAL as an acceptor credential handle.  Servers
+	MAY use a credential obtained by calling GSS_Acquire_cred or
+	GSS_Add_cred for the server's principal name(s) (**) and the
+	GSS-API mechanism for which this SASL mechanism is
+	registered.</t>
+
+      <t>(*) - Unlike GSS_Add_cred the GSS_Acquire_cred uses an OID
+	set of GSS-API mechanism as an input parameter.  The OID set
+	can be created by using GSS_Create_empty_OID_set and
+	GSS_Add_OID_set_member.  It can be freed by calling the
+	GSS_Release_oid_set.</t>
+
+      <t>(**) - Use of server's principal names having
+	GSS_C_NT_HOSTBASED_SERVICE name type and "service@hostname"
+	format, where "service" is the service name specified in the
+	protocol's profile, and "hostname" is the fully qualified host
+	name of the server, is RECOMMENDED.  The server name can be
+	generated by calling GSS_Import_name with input_name_type of
+	GSS_C_NT_HOSTBASED_SERVICE and input_name_string of
+	"service@hostname".</t>
+
+      <t>The server then responds with any resulting output_token.</t>
+
+      <t>The server pass any resulting challenge from the client to
+	another call to GSS_Accept_sec_context, repeating the
+	procedure, until GSS_S_COMPLETE is returned or authentication
+	is aborted.</t>
+
+      <t>If the client sent a (non-empty) "Wrap token", the context
+	token is processed first.</t>
+
+      <t>Upon successful establishment of the security context (i.e.
+	GSS_Accept_sec_context returns GSS_S_COMPLETE) the server
+	SHOULD verify that the negotiated GSS-API mechanism is indeed
+	the registered one.  This is done by examining the value of
+	the mech_type parameter returned from the
+	GSS_Accept_sec_context call.  If the value differ, the SASL
+	authentication MUST be aborted.</t>
+
+      <t>Upon successful establishment of the security context and if
+	the server used GSS_C_NO_NAME/GSS_C_NO_CREDENTIAL to create
+	acceptor credential handle, the server SHOULD also check using
+	the GSS_Inquire_context that the target_name used by the
+	client matches:</t>
+
+      <t>- the GSS_C_NT_HOSTBASED_SERVICE "service@hostname" name
+	syntax, where "service" is the service name specified in the
+	application protocol's profile, and "hostname" is the fully
+	qualified host name of the server.</t>
+
+      <t>When GSS_Accept_sec_context returns GSS_S_COMPLETE, the
+	server MUST examine the context to ensure that it provides a
+	level of protection permitted by the server's security
+	policy.</t>
+
+    </section>
+
+  </section>
+
+  <section title="Wrap Token Field">
+
+    <t>The Wrap token field MUST NOT be sent or received before the
+      PROT_READY flag is set locally (by GSS_Init_sec_context or
+      Gss_Accept_sec_context), or if the PROT_READY flag is never set,
+      before the context has been fully established.  The Wrap token
+      field does not have to be present directly when the PROT_READY
+      flag is set.  During any exchange, exactly one Wrap token field
+      is sent in each direction.  The GS2_Wrap function is defined
+      below, and its inputs MUST follow the format described below.
+      If not exactly one Wrap token is received by the client and by
+      the server, the authentication MUST fail.</t>
+
+    <t>If PROT_READY is never set by GSS_Init_sec_context or
+      GSS_Accept_sec_context, the flag is implied by successful
+      context negotiation.  This is for GSS-API v1 mechanisms that do
+      not support PROT_READY, or for GSS-API mechanism that do not
+      provide per-message protection.  This may result in a SASL token
+      consisting of a context token length of 0 and a Wrap token.</t>
+
+    <t>The entity that sends the first Wrap token will have to specify
+      a bitmap of supported and preferred quality of protection
+      schemes.  The entity that replies to the Wrap tokens will pick a
+      scheme, based on the bitmask and local policy.  The quality of
+      protection values are defined in section 9.</t>
+
+    <t>Two pairs of input formats to the GS2_Wrap function are
+      defined.  The first pair is used when the client sends the Wrap
+      token first and the server responds.  The other pair is used
+      when the server sends the Wrap token first and the client
+      responds.</t>
+
+    <t>The inputs below are passed to GS2_Wrap, and the output is used
+      as the Wrap token value.</t>
+      
+    <t>Some fields in the input formats are optional, indicated by
+      brackets ("[" and "]") and explained by the text below.</t>
+
+    <section title="The GS2_Wrap function">
+
+      <t>The GS2_Wrap function have two implementations, and which one
+	is used depends on whether the negotiated GSS-API context
+	supports per-message protection.  When a context is
+	successfully negotiated (i.e., when GSS_S_COMPLETE is returned
+	from, for clients, GSS_Init_sec_context, or, for servers,
+	GSS_Accept_sec_context) and the output variable integ_avail is
+	FALSE, then GSS_Wrap cannot be used and instead we define
+	GS2_Wrap to be the identity function.  When integ_avail is
+	negotiated TRUE, the GS2_Wrap is identical to calling the
+	GSS_Wrap function with conf_flag set to FALSE and using the
+	generated output_message as the output data.</t>
+
+    </section>
+
+    <section title="Client first GS2_Wrap input">
+
+      <t>The input to GS2_Wrap when the client sends a Wrap token
+	field first is as follows.</t>
+
+      <figure>
+	<artwork>
+                        1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |  client_qops  |               client_maxbuf                   |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                   channel_binding_length                      |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |[client_cbqops]|          [channel_binding_data]               /
+   /                                                               /
+   /                         /      [authzid]                      /
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	</artwork>
+      </figure>
+
+      <t>The "client_qops" integer indicate the client's preferred
+	quality of protection if channel bindings are absent or the
+	negotiation of the channel binding fails.  The quality of
+	protection values are defined in section 9.</t>
+
+      <t>The "client_maxbuf" field indicate the maximum protected
+	buffer size the client can receive in network byte order.  It
+	MUST be 0 if the client doesn't advertise support for any
+	security layer, the server MUST verify this.  Small values can
+	make it impossible for the server to send any protected
+	message to the client, due to the overhead added by GSS_Wrap,
+	and the server MAY reject the authentication if it detects
+	this situation.</t>
+
+      <t>The "channel_binding_length" is a network byte order integer
+	that indicate the length of the "channel_binding_data"
+	field.</t>
+
+      <t>The optional field "client_cbqops" is present only if
+	"channel_binding_length" is non-zero, and indicate the
+	client's preferred quality of protection if channel binding
+	negotiation succeeds.  The quality of protection values are
+	defined in section 9.</t>
+
+      <t>The optional field "channel_binding_data" is present only if
+	"channel_binding_length" is non-zero, and contain the actual
+	channel binding data.</t>
+
+      <t>The optional field "authzid" contain the authorization
+	identity.  The authorization identity is encoded
+	using <xref target="RFC3629">UTF-8</xref>.  The authorization
+	identity is not terminated with the NUL (U+0000) character.
+	Servers MUST validate that the authorization identity is valid
+	UTF-8.</t>
+
+    </section>
+
+    <section title="Server last GS2_Wrap input">
+
+      <t>The input to GS2_Wrap when the server sends a Wrap token
+	field, after receiving the Wrap token in the previous section
+	from the client, is as follows.</t>
+
+      <figure>
+	<artwork>
+                        1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |  server_qop   |               server_maxbuf                   |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	</artwork>
+      </figure>
+
+      <t>The "server_qop" field integer indicate the selected quality
+	of protection.  The quality of protection values are defined
+	in section 9.</t>
+
+      <t>The "server_maxbuf" field indicate the maximum protected data
+	buffer size the server can receive in network byte order.  It
+	MUST be 0 if the server doesn't advertise support for any
+	security layer, the client MUST verify this.  Small values can
+	make it impossible for the client to send any protected
+	message to the server, due to the overhead added by GSS_Wrap,
+	and the client MAY reject the authentication if it detects
+	this situation.</t>
+
+    </section>
+
+    <section title="Server first GS2_Wrap input">
+
+      <t>The input to GS2_Wrap when the server sends the Wrap token
+	first is as follows.</t>
+
+      <figure>
+	<artwork>
+                        1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |  server_qops  |               server_maxbuf                   |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |[server_cbqops]|          [channel_binding_data]               /
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	</artwork>
+      </figure>
+
+      <t>The "server_qops" field is an integer indicating the server's
+	preferred quality of protection if channel bindings are absent
+	or the negotiation of the channel binding fails.  The quality
+	of protection values are defined in section 9.</t>
+
+      <t>The "server_maxbuf" is the same as above.</t>
+
+      <t>The optional field "server_cbqops" indicate the server's
+	preferred quality of protection if channel binding negotiation
+	succeeds.  The quality of protection values are defined in
+	section 9.</t>
+
+      <t>The optional field "channel_binding_data" contain the actual
+	channel binding data.</t>
+
+    </section>
+
+    <section title="Client last GS2_Wrap input">
+
+      <t>The input to GS2_Wrap when the clients sends a Wrap token
+	field, after receiving the Wrap token in the previous section
+	from the server, is as follows.</t>
+
+      <figure>
+	<artwork>
+                        1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |  client_qop   |               client_maxbuf                   |
+   /             [authzid]                                         |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	</artwork>
+      </figure>
+
+      <t>The "client_qop" field is the selected quality of protection.
+	The quality of protection values are defined in section 9.</t>
+
+      <t>The "client_maxbuf" and "authzid" fields are as above.</t>
+
+    </section>
+
+  </section>
+
+</section>
+
+<section title="Channel Bindings">
+
+  <t>The GS2 mechanism provide its own channel binding mechanism,
+    instead of using the "chan_binding" parameter in the GSS-API
+    context functions.  The reason for this is that the GS2 mechanism
+    provide an option to proceed even if the channel bindings does not
+    match.  The GSS-API framework specifies that authentication cannot
+    proceed if channel bindings do not match.</t>
+
+  <t>Client and servers MUST set the "chan_binding" parameter in the
+    calls to GSS_Init_sec_context and GSS_Accept_sec_context,
+    respectively, to NULL.</t>
+
+  <t>Implementations SHOULD set the "client_cbqops" and
+    "server_cbqops" to no security layer and instead depend on the
+    session security afforded by the bound-in channel.</t>
+
+  <t>In order to accomodate the requirement in
+    <xref target="I-D.altman-tls-channel-bindings"/> "Authentication
+    frameworks and mechanisms that support channel binding MUST
+    communicate channel binding failure to applications"
+    implementations MUST provide a way to communicate channel binding
+    failures to applications.</t>
+
+  <t>Use of no SASL security layers in combination with channel
+    binding should provide better performance than using SASL security
+    layers over secure channels, and better security characteristics
+    than using no SASL security layers over secure channels without
+    channel binding.</t>
+
+  <t>For more discussions of channel bindings, and the syntax of the
+    channel binding data for various security protocols, see
+    <xref target="I-D.williams-on-channel-binding"/>.  For easy
+    reference, the channel binding format used
+    for <xref target="RFC4346">The Transport Layer Security (TLS)
+    Protocol</xref> is specified in
+    <xref target="I-D.altman-tls-channel-bindings"/>.</t>
+
+</section>
+
+<section title="Protocol Overview">
+
+  <t>This section describe several high-level protocol exchanges.  The
+    descriptions do not assume any properties of the actual GSS-API
+    mechanism.  Protocol profiles, GSS-API mechanism specific
+    behaviour, and to some extent implementation and policy choices,
+    will dictate which packets are sent in what order.  The protocol
+    exchanges are examples and other exchanges are permitted and will
+    occur.</t>
+
+  <t>An informal pseudo-language is used to describe the packets sent
+    below.  GS2_Wrap refer to the operation of calling GS2_Wrap on the
+    indicated fields, formatted in the structures described earlier.
+    GSS_Init_sec_context and GSS_Accept_sec_context refer to the
+    context token generated by calling the respective function.  The
+    GS2 SASL Message is denoted as [Context_token, Wrap_token], and
+    the length fields are not mentioned.</t>
+
+  <t>An authentication exchange using GS2 may look like:</t>
+
+  <figure>
+    <artwork>
+      C: Request authentication exchange
+      S: Empty Challenge
+      C: Send [GSS_Init_sec_context, ""] token
+      ...
+      S: After PROT_READY is set,
+         send [GSS_Accept_sec_context,
+               GS2_Wrap(server_qops | server_maxbuf]
+      ...
+      C: After PROT_READY is set, 
+         send [GSS_Init_sec_context,
+               GS2_Wrap (client_qop | client_maxbuf | authzid)]
+      S: Send [GSS_Accept_sec_context, ""] token
+      C: Send [GSS_Init_sec_context, ""] token
+      ...
+      S: Outcome of authentication exchange
+    </artwork>
+  </figure>
+
+  <t>GSS-API authentication is always initiated by the client.  The
+    SASL framework allows either the client and server to initiate
+    authentication.  In GS2 the server will send an initial empty
+    challenge (zero byte string) if it has not yet received a token
+    from the client.  See section 3 of <xref target="RFC4422"/>.</t>
+
+  <t>The next example illustrate when the client sends its Wrap token
+    first.</t>
+
+  <figure>
+    <artwork>
+      C: Request authentication exchange
+      S: Empty Challenge
+      C: Send [GSS_Init_sec_context, ""] token
+      ...
+      C: After PROT_READY is set,
+         send [GSS_Init_sec_context,
+               GS2_Wrap(client_qops | client_maxbuf |
+                        channel_binding_length=0 | authzid)]
+      ...
+      S: After PROT_READY is set, 
+         send [GSS_Accept_sec_context,
+               GS2_Wrap (server_qop | server_maxbuf)]
+      C: Send [GSS_Init_sec_context, ""] token
+      S: Send [GSS_Accept_sec_context, ""] token
+      ...
+      S: Outcome of authentication exchange
+    </artwork>
+  </figure>
+
+  <t>If the protocol profile support the optional initial client
+    response, the first empty message can be optimized away, and then
+    the protocol exchange will look like:</t>
+
+  <figure>
+    <artwork>
+      C: Request authentication exchange and
+         send [GSS_Init_sec_context, ""] token
+      S: Send [GSS_Accept_sec_context, ""] token
+      ...
+      S: Outcome of authentication exchange
+    </artwork>
+  </figure>
+
+  <t>If the protocol profile can also send additional information when
+    indicating the outcome of the authentication, then the protocol
+    exchange will look like:</t>
+
+  <figure>
+    <artwork>
+      C: Request authentication exchange and
+         send [GSS_Init_sec_context, ""] token
+      S: Send [GSS_Accept_sec_context, ""] token
+      ...
+      C: Send [GSS_Init_sec_context, ""] token
+      S: Indicate successful authentication and
+         send [GSS_Accept_sec_context, ""] token
+         as additional information.
+    </artwork>
+  </figure>
+
+  <t>If the PROT_READY flag is never set by the GSS-API mechanism, the
+    GS2_Wrap message will be sent after the context has been
+    established.  The protocol may look like:</t>
+
+  <figure>
+    <artwork>
+      C: Request authentication exchange
+      ...
+      S: GSS_Accept_sec_context() returns GSS_S_COMPLETE and outputs
+         a token, send ["", GS2_Wrap(server_qops | server_maxbuf)]
+      C: GSS_Init_sec_context() returns GSS_S_COMPLETE and does not
+         output a token, send
+         ["", GS2_Wrap(client_qop | client_maxbuf |
+                       channel_binding_length=0 | authzid)]
+      S: Outcome of authentication exchange
+    </artwork>
+  </figure>
+
+  <t>Alternatively, if the client finishes first, it may look
+    like:</t>
+
+  <figure>
+    <artwork>
+      C: Request authentication exchange
+      ...
+      C: GSS_Init_sec_context() returns GSS_S_COMPLETE and outputs a
+         token, send ["", GS2_Wrap(client_qops | client_maxbuf |
+                          channel_binding_length=0 | authzid)]
+      S: GSS_Accept_sec_context() returns GSS_S_COMPLETE and does not
+         output a token, send ["", GS2_Wrap(server_qop | server_maxbuf |
+                                            channel_binding_length=0)]
+      S: Outcome of authentication exchange
+    </artwork>
+  </figure>
+
+  <t>Adding channel bindings to the last examples, gives the following
+    complex situation.  Here the client request confidentiality for
+    the application data if channel binding fails but no SASL security
+    layer if channel binding negotiation succeeds:</t>
+
+  <figure>
+    <artwork>
+      C: Request authentication exchange
+      ...
+      C: GSS_Init_sec_context() returns GSS_S_COMPLETE and outputs a
+         token, send [GSS_Init_sec_context,
+                 GS2_Wrap(client_qops=0x04 | client_maxbuf |
+                          channel_binding_length=n |
+                          client_cbqops=0x01 | channel_binding_data |
+                          authzid)]
+      S: GSS_Accept_sec_context() returns GSS_S_COMPLETE and does not
+         output a token, send ["",
+                               GS2_Wrap(server_qop | server_maxbuf |
+                                        channel_binding_length=0)]
+      S: Outcome of authentication exchange
+    </artwork>
+  </figure>
+
+  <t>If the protocol support initial data from the client, and the
+    PROT_READY flag is set in the client after the first call to
+    GSS_Init_sec_context, and the server can send additional data to
+    the client when indicating successful authentication, the
+    following protocol exchange will occur.</t>
+
+  <figure>
+    <artwork>
+      C: Request authentication exchange and
+         send [GSS_Init_sec_context,
+               GS2_Wrap (client_qops | client_maxbuf |
+                         channel_binding_length=0 | authzid)] token
+      S: Indicate successful authentication and
+         send [GSS_Accept_sec_context,
+               GS2_Wrap(server_qop | server_maxbuf)] token
+         as additional information.
+    </artwork>
+  </figure>
+
+  <t>The last example illustrate the optimal (round-trip wise)
+    authentication possible using this protocol.</t>
+
+</section>
+
+<section title="Authentication Conditions">
+
+  <t>Authentication MUST NOT succeed if any one of the following
+    conditions are true:</t>
+
+  <list style="symbols">
+    <t>An invalid SASL token is received (e.g., length field checks
+      discussed in section 4.1 fail).</t>
+
+    <t>GSS_Init/Accept_sec_context() return anything other than
+      GSS_S_CONTINUE_NEEDED or GSS_S_COMPLETE.</t>
+
+    <t>GSS_Wrap() returns anything other than GSS_S_COMPLETE.</t>
+
+    <t>GSS_Unwrap() returns anything other than GSS_S_COMPLETE.
+      (There can't be supplementary status codes in GS2 at this point,
+      so any indications of out of order processing or replays is
+      fatal.)</t>
+
+    <t>The token returned from GSS_Unwrap fail to parse correctly
+      (e.g., too short, invalid maximum buffer size) as the expected
+      Wrap token.</t>
+
+    <t>Local policy reject the attempt. For example, client and server
+      can't agree on qop proposal.</t>
+
+    <t>(server-side) Authorization of client principal (i.e., src_name
+      in GSS_Acecpt_sec_context) to requested authzid failed.</t>
+  </list>
+
+</section>
+
+<section title="GSS-API Parameters">
+
+  <t>The implementation MAY set any GSSAPI flags or arguments not
+    mentioned in this specification as is necessary for the
+    implementation to enforce its security policy.</t>
+
+  </section>
+
+<section title="Security Layer Bits">
+
+  <t>The fields "client_qops", "server_qops", "client_cbqops", and
+    "server_cbqops" are bit-fields that encode a set of requested
+    quality of protection.  The fields "client_qop" and "server_qop"
+    encode a single quality of protection value.</t>
+
+  <t>The "client_qop" and "server_qop" will contains the chosen
+    security layer.</t>
+
+  <t>Note that "client_qop" and "server_qop" MAY indicate a quality of
+    protection that was not offered by the server and client,
+    respectively.  This SHOULD only be used when the server or client
+    (respectively) would otherwise fail the entire authentication
+    exchange.  The server/client that receives a "client_qop"/
+    "server_qop" MUST verify that it corresponds to an acceptable
+    security level.</t>
+
+  <t>The security layers and their corresponding bit-masks are as
+    follows:</t>
+
+  <figure>
+    <artwork>
+  1 No security layer
+  2 Integrity protection.
+    Sender calls GSS_Wrap with conf_flag set to FALSE
+  4 Confidentiality protection.
+    Sender calls GSS_Wrap with conf_flag set to TRUE
+    </artwork>
+  </figure>
+
+  <t>Other bit-masks may be defined in the future; bits which are not
+    understood MUST be negotiated off.</t>
+  
+  <t>When decoding any received data with GSS_Unwrap the major_status
+    other than the GSS_S_COMPLETE MUST be treated as a fatal
+    error.</t>
+
+  <t>For integrity and confidentiality protection, GS2 negotiates the
+    maximum size of the output_message to send.  Implementations can
+    use the GSS_Wrap_size_limit call to determine the corresponding
+    maximum size input_message.</t>
+
+  <section title="Examples">
+
+    <t>When no security layer is negotiated the octet will encode an
+      integer 1 as follows.</t>
+
+    <figure>
+      <artwork>
+    0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+
+   |0|0|0|0|0|0|0|1|
+   +-+-+-+-+-+-+-+-+
+      </artwork>
+    </figure>
+
+    <t>When integrity is negotiated the octet will encode an integer 2
+      as follows.</t>
+
+    <figure>
+      <artwork>
+    0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+
+   |0|0|0|0|0|0|1|0|
+   +-+-+-+-+-+-+-+-+
+      </artwork>
+    </figure>
+
+    <t>When confidentiality is negotiated the octet will encode an
+      integer 4 as follows.</t>
+
+    <figure>
+      <artwork>
+    0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+
+   |0|0|0|0|0|1|0|0|
+   +-+-+-+-+-+-+-+-+
+      </artwork>
+    </figure>
+
+  </section>
+
+</section>
+
+<section title="Non-integrity capable GSS-API mechanisms">
+
+  <t>Mechanisms that do not support integrity can be used with GS2,
+    but some security features cannot be provided, in particular
+    including channel bindings, security layers, and integrity
+    protection of the authorization identity.</t>
+
+  <t>Channel bindings and security layers MUST NOT be negotiated when
+    the GSS-API mechanism do not support integrity.  It should also be
+    understood that the authorization identity is not integrity
+    protected.</t>
+
+  <t>Whether a mechanism supports integrity or not, for the purpose of
+    GS2, is decided by whether the integ_avail output variable from
+    GSS_Init_sec_context (for clients) and GSS_Accept_sec_context (for
+    servers).  If integ_avail is FALSE, integrity is not
+    supported.</t>
+
+  <t>There is a potential interoperability problem if a client call
+    GSS_Init_sec_context with integ_req_flag of TRUE and the context
+    negotiation fails because the mechanism (due to design, the
+    capability of the credentials, or policy) cannot provide
+    per-message protection.  Calling GSS_Init_sec_context with a FALSE
+    integ_req_flag instead is not optimal, since a mechanism may then
+    negotiate less security than it would have otherwise done.</t>
+
+  <t>It is RECOMMENDED that implementations only ever call
+    GSS_Init_sec_context with a integ_req_flag of FALSE when it knows
+    that the particular GSS-API mechanism will not be able to
+    negotiate per-message protection services.</t>
+
+  <t>Implementations MAY have a policy to disallow non-integrity
+    capable mechanisms, and always call GSS_Init_sec_context with the
+    integ_req_flag set to TRUE.</t>
+
+</section>
+
+<section title='Interoperability with the SASL "GSSAPI" mechanism'>
+
+  <t>The <xref target="RFC1964">Kerberos V5 GSS-API</xref> mechanism
+    is currently used in SASL under the name "GSSAPI",
+    see <xref target="RFC4752">GSSAPI mechanism</xref>.  The Kerberos
+    V5 mechanism may also be used with the GS2 family.  This causes an
+    interopability problem, which is discussed and resolved below.</t>
+
+  <section title="The interoperability problem">
+
+    <t>If a client (or server) only support Kerberos V5 under the
+      "GSSAPI" name and the server (or client) only support Kerberos V5
+      under the GS2 family, the authentication negotiation will
+      fail.</t>
+
+  </section>
+
+  <section title="Resolving the problem">
+
+    <t>If the Kerberos V5 mechanism is supported under GS2 in a
+      server, the server SHOULD also support Kerberos V5 through the
+      "GSSAPI" mechanism, to avoid interoperability problems with
+      older clients.</t>
+
+    <t>Reasons for violating this recommendation may include security
+      considerations regarding the absent features in the GS2
+      mechanism.  The Kerberos V5 "GSSAPI" SASL mechanism lack channel
+      bindings, which could enable certain <xref target="mitm">tunnel
+      attacks</xref>.</t>
+
+  </section>
+
+  <section title="Additional recommendations">
+
+    <t>It is RECOMMENDED to negotiate Kerberos V5 through the GS2
+      mechanism rather than through the "GSSAPI" mechanism, if both
+      are available, because of the additional features in the GS2
+      mechanism.</t>
+
+  </section>
+
+</section>
+
+<section title="Mechanisms that negotiate other mechanisms">
+
+  <t>A GSS-API mechanism that negotiate other mechanisms interact
+    badly with the SASL mechanism negotiation.  There are two
+    problems.  The first is an interoperability problem and the second
+    is a security concern.  The problems are described and resolved
+    below.</t>
+
+  <section title="The interoperability problem">
+
+    <t>If a client implement GSS-API mechanism X, potentially
+      negotiated through a GSS-API mechanism Y, and the server also
+      implement GSS-API mechanism X negotiated through a GSS-API
+      mechanism Z, the authentication negotiation will fail.</t>
+
+  </section>
+
+  <section title="Security problem">
+
+    <t>If a client's policy is to first prefer GSSAPI mechanism X,
+      then non-GSSAPI mechanism Y, then GSSAPI mechanism Z, and if a
+      server supports mechanisms Y and Z but not X, then if the client
+      attempts to negotiate mechanism X by using a GSS-API mechanism
+      that negotiate other mechanisms (such as SPNEGO), it may end up
+      using mechanism Z when it ideally should have used mechanism Y.
+      For this reason, the use of GSS-API mechanisms that negotiate
+      other mechanisms are disallowed under GS2.</t>
+
+  </section>
+
+  <section title="Resolving the problems">
+
+    <t>GSS-API mechanisms that negotiate other mechanisms MUST NOT be
+      used with the GS2 SASL mechanism.  This specifically exclude
+      negotiating <xref target="RFC4178">SPNEGO</xref> under GS2.</t>
+
+    <t>The <xref target="I-D.ietf-kitten-extended-mech-inquiry">
+	GSS_C_MA_MECH_NEGO attribute of
+	GSS_Inquire_attrs_for_mech()</xref> can be used to identify
+	such mechanisms.</t>
+
+  </section>
+
+</section>
+
+<section title="IANA Considerations">
+
+  <t>The IANA is advised that SASL mechanism names starting with
+    "GS2-" are reserved for SASL mechanisms which conform to this
+    document.  The IANA is directed to place a statement to that
+    effect in the sasl-mechanisms registry.</t>
+
+  <figure>
+    <artwork>
+  Subject: Registration of SASL mechanism GS2-*
+  SASL mechanism prefix: GS2-
+  Security considerations: RFC [THIS-DOC]
+  Published specification: RFC [THIS-DOC]
+  Person &amp; email address to contact for further information:
+    Simon Josefsson &lt;simon@josefsson.org&gt;
+  Intended usage: COMMON
+  Owner/Change controller: iesg@ietf.org
+  Note: Compare with the GSSAPI and GSS-SPNEGO mechanisms.
+    </artwork>
+  </figure>
+
+</section>
+
+<section title="Security Considerations">
+
+   <t>The security provided by GS2 depends on the security provided by
+     the GSS-API mechanism.  If the mechanism do not provide integrity
+     protection, the authorization identity can be replaced by a man
+     in the middle, and channel bindings and security layers cannot be
+     negotiated.  Therefor, it is generally recommended against using
+     any GSS-API mechanism widely on the Internet that do not support
+     integrity.</t>
+
+   <t>Because the negotiation of a particular GSS-API mechanism may be
+     done in the clear, it is important for the GSS-API mechanisms to
+     be designed such that an active attacker cannot obtain an
+     authentication with weaker security properties by modifying the
+     challenges and responses.  This is a generic design critera for
+     the GSS-API mechanisms used under GS2.</t>
+
+   <t>When a server or client supports multiple GSS-API mechanisms,
+     each of which has a different security strength, it is possible
+     for an active attacker to cause a party to use the least secure
+     mechanism supported.  This problem and a solution is discussed in
+     section 6.1.2 of <xref target="RFC4422"/>, but some additional
+     methods to mitigate the problem include:<vspace blankLines="1"
+     /></t>
+
+   <list style="numbers">
+     <t>Use of an integrity protected transport, such
+       as <xref target="RFC4346">TLS</xref>.  To protect against
+       certain <xref target="mitm">tunnel attacks</xref>, channel
+       bindings need to be used.</t>
+
+     <t>A client or server which supports mechanisms of different
+       strengths should have a configurable minimum strength that it
+       will use.  It is not sufficient for this minimum strength check
+       to only be on the server, since an active attacker can change
+       which mechanisms the client sees as being supported, causing
+       the client to send authentication credentials for its weakest
+       supported mechanism.  This solution, however, is not guaranteed
+       to lead to the most secure mechanism supported by both parties,
+       and is therefor only recommended as an additional
+       precaution.</t>
+
+   </list>
+
+   <t>The channel binding is sent without privacy protection and
+     knowledge of it is assumed to provide no advantage to an
+     attacker.  This is a property that has to be considered when
+     specifying channel bindings for a security protocol that will be
+     used with GS2.</t>
+
+   <t>When constructing the input_name_string, the client should not
+     canonicalize the server's fully qualified domain name using an
+     insecure or untrusted directory service, such as
+     the <xref target="RFC1034">Domain Name System</xref>
+     without <xref target="RFC4033">DNSSEC</xref>.</t>
+
+   <t>The GS2 protocol hard code the SHA-1 algorithm for computing the
+     mechanism names.  It is not possible to negotiate another hash
+     algorithm.  However, no traditional cryptographic hash properties
+     (such as collision resistance or pre-image resistance) are
+     required nor assumed.  The required and assumed property is that
+     it is statistically unlikely that two different DER-encoded OID's
+     share the same first 10 octets of the SHA-1 value.  It is
+     possible to practically confirm that the SHA-1 algorithm has the
+     necessary property, by testing many different inputs.</t>
+
+   <t>Additional security considerations are in the SASL and GSSAPI
+     specifications.  Additional security considerations for the
+     Kerberos V5 GSSAPI mechanism can be found in
+     <xref target="RFC1964" />.  We stress that service names should
+     not be canonicalized using an unsecured directory service such as
+     the DNS without DNSSEC.  Security issues are also discussed
+     throughout this memo.</t>
+
+</section>
+
+<section title="Acknowledgements">
+
+  <t>The history of GS2 can be traced to the GSSAPI mechanism
+    described in RFC 2222.  The GSSAPI mechanism had some drawbacks,
+    which created a need for an improved version.  This document was
+    derived from draft-ietf-sasl-gssapi-02 which was prepared by
+    Alexey Melnikov with significant contributions from John G. Myers,
+    although the majority of this document has been rewritten by the
+    current author.</t>
+
+  <t>Contributions of many members of the SASL mailing list are
+    gratefully acknowledged.  In particular, ideas and feedback from
+    Sam Hartman, Jeffrey Hutzelman, Alexey Melnikov, Nicolas Williams,
+    and Tom Yu improved the document and the protocol.</t>
+
+</section>
+
+</middle>
+
+<back>
+
+<references title="Normative References">
+
+  <?rfc include="reference.RFC.2119.xml"?>
+  <?rfc include="reference.RFC.4422.xml"?>
+  <?rfc include="reference.RFC.2743.xml"?>
+  <?rfc include="reference.FIPS.180-1.1995.xml"?>
+  <?rfc include="reference.RFC.3629.xml"?>
+  <?rfc include="reference.RFC.4648.xml"?>
+  <?rfc include="reference.ITU.X690.1994.xml"?>
+  <?rfc include="reference.I-D.williams-on-channel-binding.xml"?>
+
+</references>
+
+<references title="Informative References">
+
+  <?rfc include="reference.RFC.1034.xml"?>
+  <?rfc include="reference.RFC.1964.xml"?>
+  <?rfc include="reference.RFC.4178.xml"?>
+  <?rfc include="reference.RFC.4752.xml"?>
+  <?rfc include="reference.RFC.2025.xml"?>
+  <?rfc include="reference.RFC.4346.xml"?>
+  <?rfc include="reference.RFC.4033.xml"?>
+  <?rfc include="reference.I-D.draft-altman-tls-channel-bindings-01.xml"?>
+  <?rfc include="reference.I-D.ietf-kitten-extended-mech-inquiry.xml"?>
+
+    <reference anchor="mitm">
+      <front>
+	<title>Man-in-the-Middle in Tunneled Authentication</title>
+	<author initials="N." surname="Asokan" fullname="N. Asokan">
+	</author>
+	<author initials="V." surname="Niemi" fullname="V. Niemi">
+	</author>
+	<author initials="K." surname="Nyberg" fullname="K. Nyberg">
+	</author>
+      </front>
+      <seriesInfo name="WWW"
+		  value="http://www.saunalahti.fi/~asokan/research/mitm.html" />
+    </reference>
+
+</references>
+
+</back>
+
+</rfc>

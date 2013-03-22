@@ -1,0 +1,565 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<!DOCTYPE rfc SYSTEM 'rfc2629.dtd'>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<rfc category='std' ipr='trust200902' docName='draft-ietf-oauth-v2-bearer-00'>
+  <?rfc strict='yes' ?>
+  <?rfc toc='yes' ?>
+  <?rfc tocdepth='3' ?>
+  <?rfc symrefs='yes' ?>
+  <?rfc sortrefs='yes' ?>
+  <?rfc compact='yes' ?>
+  <?rfc subcompact='no' ?>
+
+  <front>
+    <title abbrev='OAuth 2.0 Bearer Tokens'>The OAuth 2.0 Protocol: Bearer Tokens</title>
+
+    <author fullname='Michael B. Jones' surname='Jones' initials='M.B.' role='editor'>
+      <organization>Microsoft</organization>
+      <address>
+        <email>mbj@microsoft.com</email>
+        <uri>http://self-issued.info/</uri>
+      </address>
+    </author>
+    <author fullname='Eran Hammer-Lahav' surname='Hammer-Lahav' initials='E'>
+      <organization>Yahoo!</organization>
+      <address>
+        <email>eran@hueniverse.com</email>
+        <uri>http://hueniverse.com</uri>
+      </address>
+    </author>
+    <author fullname='Dick Hardt' surname='Hardt' initials='D'>
+      <organization>independent</organization>
+      <address>
+        <email>dick.hardt@gmail.com</email>
+        <uri>http://dickhardt.org/</uri>
+      </address>
+    </author>
+    <author fullname='David Recordon' surname='Recordon' initials='D'>
+      <organization>Facebook</organization>
+      <address>
+        <email>davidrecordon@facebook.com</email>
+        <uri>http://www.davidrecordon.com/</uri>
+      </address>
+    </author>
+
+    <date year="2010" month="November" day="30" />
+
+    <abstract>
+      <t>
+        This specification describes how to use bearer tokens when accessing OAuth 2.0
+        protected resources.
+      </t>
+    </abstract>
+  </front>
+
+  <middle>
+
+    <section title='Introduction'>
+      <t>
+        OAuth enables clients to access protected resources by
+        obtaining an access token (a string that denotes a specific
+        scope, duration, and other attributes), rather than using the
+        resource owner's credentials.
+      </t>
+      <t>
+        Tokens are issued to third-party clients by an authorization server with the approval of
+        the resource owner. The client uses the access token to access the protected resources
+        hosted by the resource server. This specification describes how to make protected resource
+        requests by treating an OAuth access token as a bearer token.
+      </t>
+      <t>
+        This specification defines the use of OAuth over <xref target='RFC2616'>HTTP</xref>
+        (or HTTP over TLS as defined by <xref target='RFC2818' />). Other specifications may
+        extend it for use with other transport protocols.
+      </t>
+
+      <section title='Notational Conventions'>
+        <t>
+          The key words 'MUST', 'MUST NOT', 'REQUIRED', 'SHALL', 'SHALL NOT', 'SHOULD', 'SHOULD
+          NOT', 'RECOMMENDED', 'MAY', and 'OPTIONAL' in this document are to be interpreted as
+          described in <xref target='RFC2119' />.
+        </t>
+        <t>
+          This document uses the Augmented Backus-Naur Form (ABNF) notation of
+          <xref target='I-D.ietf-httpbis-p1-messaging' />. Additionally, the following rules are
+          included from <xref target='RFC2617' />: realm, auth-param; from
+          <xref target='RFC3986' />: URI-Reference; and from
+          <xref target='I-D.ietf-httpbis-p1-messaging' />: OWS, RWS, and quoted-string.
+        </t>
+        <t>
+          Unless otherwise noted, all the protocol parameter names and values are case sensitive.
+        </t>
+      </section>
+
+      <section title='Terminology'>
+        <t>
+          All terms are as defined in <xref target="OAuth2">The OAuth 2.0 Protocol</xref>.
+        </t>
+      </section>
+
+      <section title='Overview'>
+        <t>
+          OAuth provides a method for clients to access a protected resource on behalf of a
+          resource owner. Before a client can access a protected resource, it must first obtain
+          authorization (access grant) from the resource owner, then exchange the access grant for
+          an access token (representing the grant's scope, duration, and other attributes). The
+          client accesses the protected resource by presenting the access token to the resource
+          server.
+        </t>
+        <t>
+          The access token provides an abstraction layer, replacing different authorization
+          constructs (e.g. username and password, assertion) for a single token understood by the
+          resource server. This abstraction enables issuing access tokens valid for a short time
+          period, as well as removing the resource server's need to understand a wide range of
+          authentication schemes.
+        </t>
+        <figure title='Abstract Protocol Flow' anchor='Figure 1'>
+          <artwork>
+<![CDATA[+--------+                               +---------------+
+|        |--(A)- Authorization Request ->|   Resource    |
+|        |                               |     Owner     |
+|        |<-(B)----- Access Grant -------|               |
+|        |                               +---------------+
+|        |
+|        |           Access Grant &      +---------------+
+|        |--(C)--- Client Credentials -->| Authorization |
+| Client |                               |     Server    |
+|        |<-(D)----- Access Token -------|               |
+|        |                               +---------------+
+|        |
+|        |                               +---------------+
+|        |--(E)----- Access Token ------>|    Resource   |
+|        |                               |     Server    |
+|        |<-(F)--- Protected Resource ---|               |
++--------+                               +---------------+]]>
+          </artwork>
+        </figure>
+        <t>
+          The abstract flow illustrated in <xref target='Figure 1' /> describes the overall
+          OAuth 2.0 protocol architecture. The following steps are specified within this
+          document:
+
+          <list>
+            <t>
+              E) The client makes a protected resource request to the resource server by presenting
+              the access token.
+            </t>
+            <t>
+              F) The resource server validates the access token, and if valid, serves the request.
+            </t>
+          </list>
+        </t>
+      </section>
+    </section>
+
+    <section title='Authenticated Requests'>
+      <t>
+        Clients make authenticated token requests using the
+        <spanx style='verb'>Authorization</spanx> request header field. Resource servers MUST
+        accept authenticated requests using the <spanx style='verb'>OAuth</spanx> HTTP
+        authentication scheme as described in <xref target='authz-header' />, and MAY support
+        additional methods.
+      </t>
+      <t>
+        Alternatively, clients MAY attempt to include the access token using the HTTP request
+        URI in the query component as described in <xref target='query-param' />, or in the HTTP
+        body when using the <spanx style='verb'>application/x-www-form-urlencoded</spanx> content
+        type as described in <xref target='body-param' />. Resource server MAY support these
+        alternative methods.
+      </t>
+      <t>
+        Clients SHOULD only use the request URI or body when the
+        <spanx style='verb'>Authorization</spanx> request header field is not available, and MUST
+        NOT use more than one method in each request.
+      </t>
+
+      <section title='The Authorization Request Header Field' anchor='authz-header'>
+        <t>
+          The <spanx style='verb'>Authorization</spanx> request header field is used by clients
+          to make authenticated token requests. The client uses the
+          <spanx style='verb'>OAuth</spanx> authentication scheme to include the access token in
+          the request.
+        </t>
+        <figure>
+          <preamble>
+            For example:
+          </preamble>
+          <artwork>
+<![CDATA[GET /resource HTTP/1.1
+Host: server.example.com
+Authorization: OAuth vF9dft4qmT]]>
+          </artwork>
+        </figure>
+        <t>
+          The <spanx style='verb'>Authorization</spanx> header field uses the framework defined by
+          <xref target='RFC2617' /> as follows:
+        </t>
+        <figure>
+          <artwork>
+<![CDATA[credentials    = "OAuth" RWS access-token [ RWS 1#auth-param ]
+access-token   = 1*( quoted-char / <"> )
+
+quoted-char    =   "!" / "#" / "$" / "%" / "&" / "'" / "("
+		 / ")" / "*" / "+" / "-" / "." / "/" / DIGIT
+		 / ":" / "<" / "=" / ">" / "?" / "@" / ALPHA
+		 / "[" / "]" / "^" / "_" / "`" / "{" / "|"
+		 / "}" / "~" / "\" / "," / ";"]]>
+          </artwork>
+        </figure>
+        <t>
+          <list>
+            <t>
+              NOTE: <xref target='RFC5849' /> defines a different format for the
+              <spanx style='verb'>OAuth</spanx> authentication scheme. Resource servers can
+              differentiate between the two protocol versions based on the presence of the
+              <spanx style='verb'>oauth_signature_method</spanx> which is REQUIRED in the
+              previous version and is not supported by this specification.
+            </t>
+          </list>
+        </t>
+      </section>
+
+      <section title='URI Query Parameter' anchor='query-param'>
+        <t>
+          When including the access token in the HTTP request URI, the client adds the access
+          token to the request URI query component as defined by <xref target='RFC3986' /> using
+          the <spanx style='verb'>oauth_token</spanx> parameter.
+        </t>
+        <figure>
+          <preamble>
+            For example, the client makes the following HTTP request using transport-layer
+            security:
+          </preamble>
+          <artwork>
+<![CDATA[GET /resource?oauth_token=vF9dft4qmT HTTP/1.1
+Host: server.example.com]]>
+          </artwork>
+        </figure>
+        <t>
+          The HTTP request URI query can include other request-specific parameters, in which
+          case, the <spanx style='verb'>oauth_token</spanx> parameters SHOULD be appended
+          following the request-specific parameters, properly separated by an
+          <spanx style='verb'>&amp;</spanx> character (ASCII code 38).
+        </t>
+        <figure>
+          <preamble>
+            For example:
+          </preamble>
+          <artwork>
+<![CDATA[http://example.com/resource?x=y&oauth_token=vF9dft4qmT]]>
+          </artwork>
+        </figure>
+        <t>
+          <list>
+            <t>
+              NOTE: The <spanx style='verb'>oauth_token</spanx> parameter is used by the previous
+              version of the OAuth protocol as described in <xref target='RFC5849' />. Resource
+              servers can differentiate between the two protocol versions based on the presence
+              of the <spanx style='verb'>oauth_signature_method</spanx> which is REQUIRED in the
+              previous version and is not supported by this specification.
+            </t>
+          </list>
+        </t>
+      </section>
+
+      <section title='Form-Encoded Body Parameter' anchor='body-param'>
+        <t>
+          When including the access token in the HTTP request entity-body, the client adds the
+          access token to the request body using the <spanx style='verb'>oauth_token</spanx>
+          parameter. The client can use this method only if the following REQUIRED conditions are
+          met:
+
+          <list style='symbols'>
+            <t>
+              The entity-body is single-part.
+            </t>
+            <t>
+              The entity-body follows the encoding requirements of the
+              <spanx style='verb'>application/x-www-form-urlencoded</spanx> content-type as
+              defined by <xref target='W3C.REC-html401-19991224' />.
+            </t>
+            <t>
+              The HTTP request entity-header includes the <spanx style='verb'>Content-Type</spanx>
+              header field set to <spanx style='verb'>application/x-www-form-urlencoded</spanx>.
+            </t>
+            <t>
+              The HTTP request method is <spanx style='verb'>POST</spanx>,
+              <spanx style='verb'>PUT</spanx>, or <spanx style='verb'>DELETE</spanx>.
+            </t>
+          </list>
+        </t>
+        <t>
+          The entity-body can include other request-specific parameters, in which case, the
+          <spanx style='verb'>oauth_token</spanx> parameters SHOULD be appended following the
+          request-specific parameters, properly separated by an <spanx style='verb'>&amp;</spanx>
+          character (ASCII code 38).
+        </t>
+        <figure>
+          <preamble>
+            For example, the client makes the following HTTP request using transport-layer
+            security:
+          </preamble>
+          <artwork>
+<![CDATA[POST /resource HTTP/1.1
+Host: server.example.com
+Content-Type: application/x-www-form-urlencoded
+
+oauth_token=vF9dft4qmT]]>
+          </artwork>
+        </figure>
+        <t>
+          <list>
+            <t>
+              NOTE: The <spanx style='verb'>oauth_token</spanx> parameter is used by the previous
+              version of the OAuth protocol as described in <xref target='RFC5849' />. Resource
+              servers can differentiate between the two protocol versions based on the presence
+              of the <spanx style='verb'>oauth_signature_method</spanx> which is REQUIRED in the
+              previous version and is not supported by this specification.
+            </t>
+          </list>
+        </t>
+      </section>
+
+      <section title='The WWW-Authenticate Response Header Field' anchor='authn-header'>
+        <t>
+          If the protected resource request contains an invalid access token or is malformed, the
+          resource server MUST include the HTTP <spanx style='verb'>WWW-Authenticate</spanx>
+          response header field. The <spanx style='verb'>WWW-Authenticate</spanx> header field
+          uses the framework defined by <xref target='RFC2617' /> as follows:
+        </t>
+        <figure>
+          <artwork>
+<![CDATA[challenge       = "OAuth" RWS token-challenge
+
+token-challenge = realm
+		  [ CS error ]
+		  [ CS error-desc ]
+		  [ CS error-uri ]
+		  [ CS scope ]
+		  [ CS 1#auth-param ]
+
+error           = "error" "=" <"> token <">
+error-desc      = "error_description" "=" quoted-string
+error-uri       = "error_uri" = <"> URI-Reference <">
+scope           = quoted-value /
+		  <"> quoted-value *( 1*SP quoted-value ) <">
+quoted-value    = 1*quoted-char
+
+CS              = OWS "," OWS]]>
+          </artwork>
+        </figure>
+        <figure>
+            <preamble>
+            For example:
+          </preamble>
+          <artwork>
+<![CDATA[HTTP/1.1 401 Unauthorized
+WWW-Authenticate: OAuth realm="Example Service",
+error="invalid_token",
+error_description="The access token expired"]]>
+          </artwork>
+        </figure>
+        <t>
+          The <spanx style='verb'>realm</spanx> attribute is used to provide the protected
+          resources partition as defined by <xref target='RFC2617' />. [[ add explanation ]]
+        </t>
+        <t>
+          The <spanx style='verb'>error</spanx> attribute is used to provide the client with the
+          reason why the access request was declined. The parameter values are described in
+          <xref target='resource-error-codes' />.
+        </t>
+        <t>
+          The <spanx style='verb'>error_description</spanx> attribute provides a human-readable
+          text containing additional information, used to assist in the understanding and
+          resolution of the error occurred.
+        </t>
+        <t>
+          The <spanx style='verb'>error_uri</spanx> attribute provides a URI identifying a
+          human-readable web page with information about the error, used to offer the end-user
+          with additional information about the error. If the value is not an absolute URI, it is
+          relative to the URI of the requested protected resource.
+        </t>
+        <t>
+          The <spanx style='verb'>scope</spanx> attribute is a space-delimited list of scope values
+          indicating the required scope of the access token for accessing the requested resource.
+        </t>
+      </section>
+
+      <section title='Error Codes' anchor='resource-error-codes'>
+        <t>
+          When a request fails, the resource server responds using the appropriate HTTP status
+          code (typically, 400, 401, or 403), and includes one of the following error codes in
+          the response:
+
+          <list style='hanging' hangIndent='6'>
+            <t hangText='invalid_request'>
+              <vspace />
+              The request is missing a required parameter, includes an unsupported parameter or
+              parameter value, repeats the same parameter, uses more than one method for
+              including an access token, or is otherwise malformed. The resource server SHOULD
+              respond with the HTTP 400 (Bad Request) status code.
+            </t>
+            <t hangText='invalid_token'>
+              <vspace />
+              The access token provided is expired, revoked, malformed, or invalid for other
+              reasons. The resource SHOULD respond with the HTTP 401 (Unauthorized) status
+              code. The client MAY request a new access token and retry the protected resource
+              request.
+            </t>
+            <t hangText='insufficient_scope'>
+              <vspace />
+              The request requires higher privileges than provided by the access token. The
+              resource server SHOULD respond with the HTTP 403 (Forbidden) status code and MAY
+              include the <spanx style='verb'>scope</spanx> attribute with the scope necessary to
+              access the protected resource.
+            </t>
+          </list>
+        </t>
+        <t>
+          [[ Add mechanism for extending error codes ]]
+        </t>
+        <t>
+          If the request lacks any authentication information (i.e. the client was unaware
+          authentication is necessary or attempted using an unsupported authentication method),
+          the resource server SHOULD not include an error code or other error information.
+        </t>
+        <figure>
+          <preamble>
+            For example:
+          </preamble>
+          <artwork>
+<![CDATA[HTTP/1.1 401 Unauthorized
+WWW-Authenticate: OAuth realm="Example Service"]]>
+          </artwork>
+        </figure>
+      </section>
+
+    </section>
+
+    <section title='Security Considerations'>
+      <t>
+	Implementers and deployers must ensure that bearer tokens are
+	not leaked to unintended parties, as they will be able to use
+	them to gain access to protected resources.  This is the
+	primary security consideration when using bearer tokens with
+	OAuth and underlies all the more specific statements that
+	follow.
+      </t>
+      <section title="Validate SSL Certificate Chains">
+        <t>
+	  The client must validate the TLS certificate chain when
+	  making requests to protected resources.  Failing to do so
+	  may enable DNS hijacking attacks to steal the token and gain
+	  unintended access.
+	</t>
+
+      </section>
+      <section title="Always use TLS (https)">
+        <t>
+	  Clients must always use TLS (https) when making requests
+	  with bearer tokens.  Failing to do so exposes the token to
+	  numerous attacks that could give attackers unintended
+	  access.
+	</t>
+      </section>
+      <section title="Don't store bearer tokens in cookies">
+        <t>
+	  As cookies are generally sent in the clear, implementations must not store bearer tokens within them.
+	</t>
+      </section>
+      <section title="Issue short-lived bearer tokens">
+        <t>
+	  Using short-lived (one hour or less) bearer tokens can
+	  reduce the impact of one of them being leaked.  The
+	  User-Agent flow should only issue short lived access tokens.
+	</t>
+      </section>
+    </section>
+
+    <appendix title='Acknowledgements'>
+      <t>
+        The following people contributed to preliminary versions of this document:
+        Blaine Cook (BT), Brian Eaton (Google), Yaron Goland (Microsoft), Brent Goldman (Facebook),
+        Raffi Krikorian (Twitter), Luke Shepard (Facebook), and Allen Tom (Yahoo!). The content and
+        concepts within are a product of the OAuth community, WRAP community, and the OAuth Working
+        Group.
+      </t>
+      <t>
+        The OAuth Working Group has dozens of very active contributors who proposed ideas and
+        wording for this document, including: [[ If your name is missing or you think someone
+        should be added here, please send Mike Jones a note - don't be shy ]]
+      </t>
+      <t>
+        Michael Adams, Andrew Arnott, Dirk Balfanz, Brian Campbell, Leah Culver, Bill de hÓra,
+        Brian Ellin, Igor Faynberg, George Fletcher, Tim Freeman, Evan Gilbert, Justin Hart,
+        John Kemp, Chasen Le Hara, Michael B. Jones, Torsten Lodderstedt, Eve Maler, James Manger, Laurence Miao,
+        Chuck Mortimore, Justin Richer, Peter Saint-Andre, Nat Sakimura, Rob Sayre,
+        Marius Scurtescu, Naitik Shah, Justin Smith, Jeremy Suriel, Christian Stübner, Paul Tarjan,
+        and Franklin Tse.
+      </t>
+    </appendix>
+
+    <appendix title='Document History'>
+      <t>
+        [[ to be removed by RFC editor before publication as an RFC ]]
+      </t>
+      <t>
+        -00
+        <list style='symbols'>
+          <t>
+            Initial draft based on preliminary version of OAuth 2.0 draft 11.
+          </t>
+        </list>
+      </t>
+    </appendix>
+
+  </middle>
+
+  <back>
+
+    <references title='Normative References'>
+
+      <?rfc include='http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml' ?>
+      <?rfc include='http://xml.resource.org/public/rfc/bibxml/reference.RFC.2616.xml' ?>
+      <?rfc include='http://xml.resource.org/public/rfc/bibxml/reference.RFC.2617.xml' ?>
+      <?rfc include='http://xml.resource.org/public/rfc/bibxml/reference.RFC.2818.xml' ?>
+      <?rfc include='http://xml.resource.org/public/rfc/bibxml/reference.RFC.3986.xml' ?>
+      <?rfc include='http://xml.resource.org/public/rfc/bibxml/reference.RFC.5849.xml' ?>
+      <?rfc include='http://xml.resource.org/public/rfc/bibxml4/reference.W3C.REC-html401-19991224.xml' ?>
+      <?rfc include='http://xml.resource.org/public/rfc/bibxml3/reference.I-D.draft-ietf-httpbis-p1-messaging-09.xml'?>
+
+      <reference anchor="OAuth2"> <!--TBD What is the correct way to reference the framework specification?-->
+        <front>
+          <title>The OAuth 2.0 Protocol</title>
+	  <author fullname='Eran Hammer-Lahav' surname='Hammer-Lahav' initials='E' role='editor'>
+	    <organization>Yahoo!</organization>
+	    <address>
+	      <email>eran@hueniverse.com</email>
+	      <uri>http://hueniverse.com</uri>
+	    </address>
+	  </author>
+	  <author fullname='David Recordon' surname='Recordon' initials='D'>
+	    <organization>Facebook</organization>
+	    <address>
+	      <email>davidrecordon@facebook.com</email>
+	      <uri>http://www.davidrecordon.com/</uri>
+	    </address>
+	  </author>
+	  <author fullname='Dick Hardt' surname='Hardt' initials='D'>
+	    <organization>independent</organization>
+	    <address>
+	      <email>dick.hardt@gmail.com</email>
+	      <uri>http://dickhardt.org/</uri>
+	    </address>
+	  </author>
+
+	  <date year='2010' />
+        </front>
+      </reference>
+
+    </references>
+
+  </back>
+
+</rfc>

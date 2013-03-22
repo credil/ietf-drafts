@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+  <!ENTITY rfc1035 PUBLIC ''
+    'http://xml.resource.org/public/rfc/bibxml/reference.RFC.1035.xml'>
+  <!ENTITY rfc1996 PUBLIC ''
+    'http://xml.resource.org/public/rfc/bibxml/reference.RFC.1996.xml'>
+  <!ENTITY rfc2136 PUBLIC ''
+    'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2136.xml'>
+]>
+
+<rfc category="bcp" ipr="full3978"
+ docName="draft-jabley-dnsop-missing-mname-00">
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+
+  <front>
+    <title abbrev="Non-Availability of Dynamic Updates">Indicating
+      Non-Availability of Dynamic Updates in the DNS</title>
+
+    <author initials='J.' surname="Abley" fullname='Joe Abley'>
+      <organization abbrev="Afilias Canada">Afilias Canada Corp.</organization>
+      <address>
+        <postal>
+          <street>Suite 204, 4141 Yonge Street</street>
+          <city>Toronto</city>
+          <region>ON</region>
+          <code>M2P 2A8</code>
+          <country>Canada</country>
+        </postal>
+        <phone>+1 416 673 4176</phone>
+        <email>jabley@ca.afilias.info</email>
+      </address>
+    </author>
+
+    <date month="June" year="2008"/>
+
+    <abstract>
+      <t>The Start of Authority (SOA) Resource Record (RR) in the
+	Domain Name System (DNS) specifies various parameters related
+	to the handling of data in DNS zones. These parameters are
+	variously used by authority-only servers, caching resolvers
+	and DNS clients to guide them in the way that data contained
+	within particular zones should be used.</t>
+
+      <t>One particular field in the SOA RR is known as MNAME, which
+	is used to specify the "Primary Master" server for a zone.
+	This is the server to which Dynamic Updates are sent by
+	clients. Many zones do not accept updates using the Dynamic
+	Update mechanism, and any such DNS UPDATE messages which
+	are received provide no usual purpose. For such zones it
+	may be preferable not to receive updates from clients at
+	all.</t>
+
+      <t>This document proposes a convention by which a zone operator
+	can signal to clients that a particular zone does not accept
+	Dynamic Updates.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t><xref target="RFC2136"/> specifies a mechanism for
+	clients to update zones in the DNS dynamically. This mechanism
+	is widely-deployed by many end-station operating systems,
+	where it is used (for example) to update DNS records in
+	response to a local change of IP address.</t>
+
+      <t>Many zones, however, do not accept dynamic updates from clients
+        as a matter of policy. For such zones, specifying a DNS server
+        name in the MNAME field of an SOA record has no benefit, and
+        in fact may well cause unwanted traffic (DNS UPDATE messages)
+        to be received by the named server.</t>
+
+      <t>This document proposes a convention by which a zone operator
+        can signal to clients that a particular zone does not accept
+        Dynamic Updates.</t>
+    </section>
+
+    <section title="Use of the MNAME Field">
+      <t>The Start of Authority (SOA) Resource Record (RR) is defined
+	in <xref target="RFC1035"/>. The MNAME field of the
+	SOA RDATA is defined in that document as "The &lt;domain-name&gt;
+	of the name server that was the original or primary source
+	of data for this zone."</t>
+
+      <t><xref target="RFC1035"/> includes no specific
+	guidance on the use of the MNAME field, although the general
+	tone in which SOA RDATA are discussed suggests that its
+	intended purpose was for the management of zone transfers
+	between authority-only servers. There are no implementations
+	of authority-only servers known to the author which use the
+	MNAME field to manage or perform zone transfers, however;
+	for bootstrapping reasons, commonly-deployed implementations
+	require master servers to be specified explicitly, usually
+	by address rather than name.</t>
+
+      <t>The MNAME field was subsequently referred to in
+	<xref target="RFC1996"/>, as part of the definition
+	of the term "Primary Master". The server specified in the
+	MNAME field was, by default, to be excluded from the set
+	of servers to which DNS NOTIFY messages would be sent.</t>
+
+      <t>In <xref target="RFC2136"/> the MNAME field was again
+	used to provide a definition for the term "Primary Master",
+	in this case for the purpose of identifying the server
+	towards which dynamic updates for that zone should be
+	sent.</t>
+
+      <t>There have been no other references to the use of the MNAME
+	in the RFC series.</t>
+
+      <t>This document specifies a convention by which a zone
+	operator may include an empty MNAME field in order to
+	deliberately specify that there is no appropriate place for
+	Dynamic Updates to be sent.</t>
+    </section>
+
+    <section title="Operations">
+      <t>Zone administrators who do not wish to receive Dynamic Updates
+        from clients for a particular zone may specify an empty MNAME
+        field in that zone's SOA RDATA. The textual representation of
+        an empty field in the canonical representation of zone data
+        is a single ".", as illustrated in <xref target="example"/>.</t>
+
+      <figure anchor="example">
+        <artwork>
+ @       1800    IN      SOA     jabley.automagic.org. . (
+                                     20080622    ; serial
+                                     1800        ; refresh
+                                     900         ; retry
+                                     10800       ; expire
+                                     1800 )      ; negative cache TTL
+        </artwork>
+      </figure>
+
+      <t>Dynamic Update clients who identify the Primary Master server
+        as the recipient of DNS UPDATE messages from the MNAME field
+        in SOA RDATA should interpret an empty MNAME field as an
+        indication that no attempt to send a DNS UPDATE message should
+        be made for the zone containing the SOA record.</t>
+    </section>
+
+    <section title="Impact on DNS NOTIFY">
+      <t><xref target="RFC1996"/> specifies that the Primary Server,
+        which is derived from the MNAME field of the SOA RDATA, be
+        excluded from the set of servers to which NOTIFY messages
+        should be sent.</t>
+
+      <t>For zones whose SOA record contains an MNAME field which
+	corresponds to a server listed in the apex NS set, making
+	the MNAME field empty might well cause additional NOTIFY
+	traffic. If this is a concern, the operators of the
+	authority-only servers for the zone might choose to specify
+	an explicit notify list.</t>
+    </section>
+
+    <section title="Impact on DNS UPDATE">
+      <t>The goal of the convention specified in this document is to
+        prevent Dynamic Update clients from sending DNS UPDATE messages
+        for particular zones. The use of an empty MNAME field is intended
+        to prevent a Dynamic Update client from finding a server to send
+        DNS UPDATE messages to.</t>
+    </section>
+
+    <section title="IANA Considerations">
+      <t>This document makes no requests of the IANA.</t>
+    </section>
+
+    <section title="Security Considerations">
+      <t>The convention described in this document provides no
+        additional security risks to DNS zone or server administrators.</t>
+
+      <t>Name servers which do not support Dynamic Updates for the
+	zones they host might experience a security benefit from
+	reduced DNS UPDATE traffic, the absence of that traffic
+	provides additional headroom in network bandwidth and server
+	capacity for legitimate query types.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+        &rfc1035;
+        &rfc1996;
+        &rfc2136;
+    </references>
+
+    <section title="Change History">
+      <t>This section to be removed prior to publication.</t>
+
+      <t>
+        <list style="hanging">
+          <t hangText="00">Initial draft, circulated as
+            draft-jabley-dnsop-missing-mname-00.</t>
+        </list>
+      </t>
+    </section>
+  </back>
+</rfc>

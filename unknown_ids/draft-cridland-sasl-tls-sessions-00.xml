@@ -1,0 +1,167 @@
+<?xml version="1.0"?>
+<?rfc toc="yes"?><?rfc compact="yes"?><?rfc strict="yes"?><?rfc symrefs="yes"?><?rfc sortrefs="yes"?><rfc ipr="full3978" docName="draft-cridland-sasl-tls-sessions-00" category="info">
+
+<front>
+  <title abbrev="SASL TLS Sessions">On the use of TLS Session resumption and SASL EXTERNAL</title>
+  <author initials="D.A." surname="Cridland" fullname="Dave Cridland">
+<organization>Isode Limited</organization>
+<address>
+	<postal>
+		<street>5 Castle Business Village</street>
+		<street>36, Station Road</street>
+		<city>Hampton</city>
+		<region>Middlesex</region>
+		<code>TW12 2BX</code>
+		<country>GB</country>
+	</postal>
+	<email>dave.cridland@isode.com</email>
+</address>
+</author>
+  <date day="9" month="November" year="2007"/>
+  <area>Security</area>
+  <abstract>
+    <t>Some SASL mechanisms provide a fast reauthentication option. TLS also provides this, and this memo outlines a proposal to use the TLS session resumption as a method for mechanism-independent fast reauthentication using SASL EXTERNAL.</t>
+  </abstract>
+</front>
+
+<middle>
+  <section title="Conventions used in this document">
+    <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+   document are to be interpreted as described in <xref target="KEYWORDS"/>.</t>
+  </section>
+
+  <section title="Introduction">
+  <t>The <xref target="DIGEST-MD5"/> <xref target="SASL"/> mechanism provides a method of performing subsequent authentications using many fewer round-trips, known as "fast reauthentication". Most SASL mechanisms do not, which can cause a relatively high number of round-trips at application protocol startup.</t>
+  <t>In addition, the cost of cryptographic computation in clients can be quite high, leading to a slower application session setup.</t>
+  <t>This memo proposes a use of the EXTERNAL mechanism, defined in <xref target="SASL"/>, in conjunction with TLS session resumption as specified in <xref target="TLS"/>, which effectively provides fast reauthentication in a generic manner for any SASL mechanism which supports channel binding.</t>
+  </section>
+  <section title="Implementation">
+  <section title="Initial Authentication" anchor="init">
+  <t>To use this method, the client first negotiates TLS as normal, then uses any SASL mechanism which supports channel binding to authenticate as normal whilst TLS is in effect. On successful authentication, the server then records the authorization identifier used against the SessionID used in TLS.</t>
+  <t>If the mechanism used in this initial authentication does not support, or use, channel binding, then the server MUST NOT record the authorization identifier against the SessionID.</t>
+  <t>The client SHOULD NOT provide a certificate during this initial TLS negotiation, as this would cause there to be multiple potential identities.</t>
+  <t>The TLS session so created SHOULD NOT be resumed except to reauthenticate to obtain the same authorization identifier.</t>
+  </section>
+  <section title="Fast Reauthentication" anchor="reauth">
+  <t>First, a client resumes a TLS session, using the SessionID previously recorded as per <xref target="init"/>. The server, on resumption of the TLS session, then determines whether any authorization identifiers have been cached as per <xref target="init"/>, and advertises EXTERNAL if so. If EXTERNAL is advertised, then the client then authenticates using the EXTERNAL mechanism.</t>
+  <t>The server verifies this by checking that the authorization identifier was previously used with the SessionID recorded as per <xref target="init"/>.</t>
+  <t>If this check fails, the application protocol will reject the authentication. Clients SHOULD retry using a traditional SASL mechanism.</t>
+  </section>
+  </section>
+  <section title="Open Issues">
+    <t>A significant problem with this method is that there is no negotiation to indicate the source of an externally asserted authorization identifier, in particular, there is no protocol by which a client can determine whether using EXTERNAL without specifying an authorization identifier will grant it the authorization identifier it was expecting. In particular, this suggests that use of the mechanism with a TLS client certificate may be particularly difficult.</t>
+    <t>Clients also cannot easily specify authorization identifiers to resolve this - not only do explicitly specified authorization identifiers tend to be treated as proxy-authentication requests, but the client cannot formally know what authorization identifier it was granted by default in the initial authentication.</t>
+    <t>This could be addressed by definition of a new SASL mechanism which would explicitly use the authorization identifier previously associated with the TLS session.</t>
+    <t>The problems outlined with EXTERNAL may be sufficient to consider replacing EXTERNAL itself with a family of mechanisms whose name indicates the source of the implicit authorization identifier.</t>
+  </section>
+  <section title="IANA Considerations">
+  <t>This document has no actions for IANA.</t>
+  </section>
+  <section title="Security Considerations">
+  <t>This method is only suitable in the case where the SASL mechanism used in initial authentication is actively using channel bindings, and the SessionID is secure.</t>
+  <t>In the case where the SessionID, and related session information, could be compromised on the wire, then the server cannot rely on this to provide an authorization identifier. This is the case where the encryption algorithm used is NULL, for example.</t>
+  <t>In the case where channel binding was not used by the SASL mechanism, then the server cannot know whether the client has been subjected to an MITM. The client can know by suitable verification of the server certificate, if one is provided, however, the server cannot know if this was carried out, and for anonymous cipher suites, there is no certificate to verify.</t>
+  <t>If an MITM is in effect without channel binding, use of this mechanism could otherwise allow the MITM to later reauthenticate.</t>
+  <t>Caching credentials sufficient to reauthenticate non-interactively, whether using this method, that of <xref target="DIGEST-MD5"/>, or merely storing the plaintext password, may allow a third-party unauthorized program to obtain the credentials and access the protected service. Use of this method entirely removes the ability to recover a password from this cached data, however, since neither the password nor any data derived from it is needed to reauthenticate.</t>
+  <t>Other security considerations applicable to this method are to be found in both <xref target="SASL"/> and <xref target="TLS"/>.</t>
+  <t>[The author notes that he is neither an expert on TLS nor on cryptography in general, hence there is probably more to consider than this.]</t>
+  </section>
+  <section title="Acknowledgements">
+  <t>Comments were received on the idea, and/or this draft, from Sam Hartman, Kurt Zeilenga, Tony Finch, Alexey Melnikov, and others. Whether in agreement or dissent, the comments have refined and otherwise influenced the document.</t>
+  </section>
+</middle>
+<back>
+  <references title="Normative References">
+    <reference anchor="KEYWORDS">
+
+<front>
+<title abbrev="RFC Key Words">Key words for use in RFCs to Indicate Requirement Levels</title>
+<author initials="S." surname="Bradner" fullname="Scott Bradner">
+<organization>Harvard University</organization>
+<address>
+<postal>
+<street>1350 Mass. Ave.</street>
+<street>Cambridge</street>
+<street>MA 02138</street></postal>
+<phone>- +1 617 495 3864</phone>
+<email>sob@harvard.edu</email></address></author>
+<date year="1997" month="March"/>
+<area>General</area>
+<keyword>keyword</keyword>
+<abstract>
+<t>
+   In many standards track documents several words are used to signify
+   the requirements in the specification.  These words are often
+   capitalized.  This document defines these words as they should be
+   interpreted in IETF documents.  Authors who follow these guidelines
+   should incorporate this phrase near the beginning of their document:
+
+<list>
+<t>
+      The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+      NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and
+      "OPTIONAL" in this document are to be interpreted as described in
+      RFC 2119.
+</t></list></t>
+<t>
+   Note that the force of these words is modified by the requirement
+   level of the document in which they are used.
+</t></abstract></front>
+
+<seriesInfo name="BCP" value="14"/>
+<seriesInfo name="RFC" value="2119"/>
+<format type="TXT" octets="4723" target="ftp://ftp.isi.edu/in-notes/rfc2119.txt"/>
+<format type="HTML" octets="17491" target="http://xml.resource.org/public/rfc/html/rfc2119.html"/>
+<format type="XML" octets="5777" target="http://xml.resource.org/public/rfc/xml/rfc2119.xml"/>
+</reference>
+    <reference anchor="SASL">
+
+<front>
+<title>Simple Authentication and Security Layer (SASL)</title>
+<author initials="A." surname="Melnikov" fullname="A. Melnikov">
+<organization/></author>
+<author initials="K." surname="Zeilenga" fullname="K. Zeilenga">
+<organization/></author>
+<date year="2006" month="June"/>
+<abstract>
+<t>The Simple Authentication and Security Layer (SASL) is a framework for providing authentication and data security services in connection-oriented protocols via replaceable mechanisms. It provides a structured interface between protocols and mechanisms. The resulting framework allows new protocols to reuse existing mechanisms and allows old protocols to make use of new mechanisms. The framework also provides a protocol for securing subsequent protocol exchanges within a data security layer.&lt;/t&gt;&lt;t&gt; This document describes how a SASL mechanism is structured, describes how protocols include support for SASL, and defines the protocol for carrying a data security layer over a connection. In addition, this document defines one SASL mechanism, the EXTERNAL mechanism.&lt;/t&gt;&lt;t&gt; This document obsoletes RFC 2222. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4422"/>
+<format type="TXT" octets="73206" target="ftp://ftp.isi.edu/in-notes/rfc4422.txt"/>
+</reference>
+    <reference anchor="TLS">
+
+<front>
+<title>The Transport Layer Security (TLS) Protocol Version 1.1</title>
+<author initials="T." surname="Dierks" fullname="T. Dierks">
+<organization/></author>
+<author initials="E." surname="Rescorla" fullname="E. Rescorla">
+<organization/></author>
+<date year="2006" month="April"/>
+<abstract>
+<t>This document specifies Version 1.1 of the Transport Layer Security (TLS) protocol.  The TLS protocol provides communications security over the Internet.  The protocol allows client/server applications to communicate in a way that is designed to prevent eavesdropping, tampering, or message forgery. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4346"/>
+<format type="TXT" octets="187041" target="ftp://ftp.isi.edu/in-notes/rfc4346.txt"/>
+</reference>
+  </references>
+  <references title="Informative References">
+    <reference anchor="DIGEST-MD5">
+
+<front>
+<title>Using Digest Authentication as a SASL Mechanism</title>
+<author initials="P." surname="Leach" fullname="P. Leach">
+<organization/></author>
+<author initials="C." surname="Newman" fullname="C. Newman">
+<organization/></author>
+<date year="2000" month="May"/>
+<abstract>
+<t>This specification defines how HTTP Digest Authentication can be used as a SASL mechanism for any protocol that has a SASL (Simple Authentication and Security Layer) profile. [STANDARDS TRACK] </t></abstract></front>
+
+<seriesInfo name="RFC" value="2831"/>
+<format type="TXT" octets="58124" target="ftp://ftp.isi.edu/in-notes/rfc2831.txt"/>
+</reference>
+  </references>
+</back>
+</rfc>

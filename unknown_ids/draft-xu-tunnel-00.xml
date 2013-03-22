@@ -1,0 +1,482 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSPY v5 rel. 3 U (http://www.xmlspy.com)
+     by Daniel M Kohn (private) -->
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+
+<!-- zzzz next line -->
+<rfc category="std" ipr="trust200811" docName="draft-xu-tunnel-00.txt">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="no" ?>
+<?rfc compact="yes" ?>
+
+    <front>
+		<title abbrev="BGP Tunnel Endpoint">Simple Tunnel Endpoint Signaling in BGP</title>
+
+
+	        <author initials ='X' surname ='Xu' fullname='Xiaohu Xu'>
+            <organization abbrev="Huawei">Huawei Technologies</organization>
+            <address>
+                <postal>
+<street>
+No.3 Xinxi Rd., Shang-Di Information Industry Base, Hai-Dian District
+</street>
+                    <city>Beijing</city>
+                    <region>Beijing</region>
+                    <code>100085</code>
+                    <country>P.R.China</country>
+                </postal>
+                <phone>+86 10 82836073</phone>
+                <email>xuxh@huawei.com</email>
+            </address>
+        </author>
+
+		    <author initials ='P' surname ='Francis' fullname='Paul Francis'>
+	           <organization abbrev="MPI-SWS">Max Planck Institute for Software Systems</organization>
+            <address>
+                <postal>
+                    <street>Gottlieb-Daimler-Strasse</street>
+                    <city>Kaiserslautern</city>
+		    <!-- <region>NY</region> -->
+                    <code>67633</code>
+                    <country>Germany</country>
+                </postal>
+		<phone>+49 631 930 39600</phone>
+                <email>francis@mpi-sws.org</email>
+            </address> 
+        </author>
+
+	<!-- zzzz set date zzzz -->
+	<date day="11" month="February" year="2009"/>
+
+        <abstract>
+<t> 
+Virtual Aggregation (VA) is a mechanism for shrinking the size of the 
+DFZ FIB in routers <xref target="I-D.francis-intra-va"></xref>.
+VA can result in longer paths and increased load
+on routers within the ISP that deploys VA.
+This document describes a mechanism that allows an AS that originates
+a route to associate a tunnel endpoint terminating at itself with the
+route.
+This allows routers in a remote AS to tunnel packets to the originating
+AS.
+If transit ASes between the remote AS and the originating AS install
+the prefixes associated with tunnel endpoints in their FIBs, 
+then tunneled packets that transit through them will take the shortest
+path.  This results in reduced load for the transit AS, and better
+performance for the customers at the source and destination.
+</t>
+        </abstract>
+
+    </front>
+
+    <middle>
+
+
+<section anchor="sec-intro" title="Introduction">
+<t>
+Virtual Aggregation (VA) <xref target="I-D.francis-intra-va"></xref>
+is a mechanism
+for reducing FIB size for routers within the AS that deploys VA.
+This is done through "FIB Suppression", where certain routers in the
+AS may not install routes to certain prefixes in their FIB.
+The downside of using VA is that packets addressed to suppressed prefixes
+transiting the AS may take a longer path than otherwise necessary.  
+</t>
+<t>
+For instance, imagine a packet traversing AS-path S-A-B-C-D, where ASes
+S and D are the service providers for their respective customers.
+Further, assume that ASes A, C, and D are using VA, and that
+A and C are FIB-suppressing the prefix associated with the packet.
+In this case, when the packet transits A and C, there is a good chance
+that it will take an extra router hop within A and C.  This increases
+load for A and C, and degrades performance for S's and D's customers.
+</t>
+<t>
+The mechanism described in this draft allows D, for instance, to
+associate a tunnel endpoint address with the prefixes that it originates.
+The tunnel endpoint address can be an anycasted address
+that terminates at some or all of D's routers.
+If A and C FIB-install the route to the prefix associated with the tunnel
+endpoint address, then packets tunneled to the FIB-suppressed prefix will take
+the shortest path.
+</t>
+<t>
+This draft describes a mechanism for advertising
+the tunnel endpoint address across ASes in BGP.
+<!--
+It does not change how BGP computes routes, and it insures that tunneled
+packets always follow the advertised AS path.  
+In other words, a tunnel T to a prefix P is not used unless the AS-path
+of the tunnel route and the AS-path of the prefix route are the same.
+-->
+</t>
+<t>
+This draft uses both the
+Address Specific BGP Extended Communities Attribute
+for IPv4 and IPv6
+to carry the tunnel endpoint address
+(<xref target="RFC4360"></xref> and
+<xref target="I-D.ietf-l3vpn-v6-ext-communities"></xref> respectively).
+Where additional tunnel parameters must be signaled (i.e. for GRE
+or L2TP),
+this draft uses the Tunnel Encapsulation Attribute
+(TEncap-Attribute) defined in
+<xref target="I-D.ietf-softwire-encaps-safi"></xref>
+to encode these parameters.
+</t>
+	<section title="Requirements notation">
+            <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+            "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+            and "OPTIONAL" in this document are to be interpreted as
+	    described in 
+	    <xref target="RFC2119"/>.
+    </t>
+        </section>
+</section> <!-- "sec-intro" -->
+
+
+<section anchor="sec-changed" title="Document revisions">
+<t>
+This draft was previously released with file name
+draft-xu-idr-tunnel-00.txt.
+The changes from that draft are as follows:
+</t>
+<t><list style="numbers">
+<t>
+The need for a new sub-TLV definition in 
+<xref target="I-D.ietf-softwire-encaps-safi"></xref> has been
+eliminated (in favor of the 
+Address Specific BGP Extended Communities Attribute).
+</t>
+<t>
+The need to carry the AS number of the originating AS separate from
+the AS-Path attribute has been eliminated.
+</t>
+<t>
+The requirement that the AS-path to the tunnel endpoint address and
+the AS-path to the destination prefix be the same was dropped.
+As a result, however, legacy ASes may believe that packets take a
+different AS-path than the one they actually take.
+</t>
+<t>
+The mechanism to avoid transient loops between providers of multi-homed
+sites has been made optional rather than required.
+</t>
+</list></t>
+</section> <!-- "sec-changed" -->
+
+
+<section anchor="sec-field-def" title="Syntax of the Tunnel Address Attribute">
+<t>
+This draft defines a new type for the
+Address Specific BGP Extended Communities Attribute
+for both IPv4 and IPv6 to be used as the Tunnel Address
+Attribute.
+The value of the
+high-order octet for the IPv4 type field is 0x01 as defined in
+<xref target="RFC4360"></xref> and
+for the IPv6 type field it is 0x00 as defined in
+<xref target="I-D.ietf-l3vpn-v6-ext-communities"></xref>.
+The attribute is transitive across ASes.
+The value of the low-order octet for the type field (i.e. the Sub-Type)
+is (TBD by IANA) for IPv4 and (TBD by IANA) for IPv6.
+</t>
+<t>
+The Global Administrator field is set to the Tunnel Address.
+This is the IP address of the tunnel endpoint.
+</t>
+<t>
+The Local Administrator field is set to zero and ignored upon receipt.
+</t>
+<t>
+If the Tunnel Attribute (TEncap-Attribute) defined in
+<xref target="I-D.ietf-softwire-encaps-safi"></xref>
+is not present, then the encapsulation type is assumed to be IP-in-IP.
+If the encapsulation type is GRE or L2TP, then the TEncap-Attribute must
+be present.  It defines the parameters associated with the tunnel
+as specified in <xref target="I-D.ietf-softwire-encaps-safi"></xref>.
+</t>
+</section> <!-- "sec-field-def" -->
+
+<section anchor="sec-usage" title="Usage of the Tunnel Address 
+and TE-Encap Attributes">
+<!--
+<t>
+The basic goal in the usage of the two tunnel attributes is that
+the AS path used to reach a destination is the same whether or not
+the tunnel is used.
+For example, consider the case where an AS S is forwarding a
+packet destined for AS D, with ASes A, B, and C on the AS-path to D.
+Assume that S does not tunnel the packet.
+The packet transmitted by S must take AS-path A-B-C-D whether or
+not any of the upstream ASes (A, B, or C) decide to tunnel the packet.
+The following sections describe the usage of the Tunnel Address
+Aggtribute for the originating AS and for other ASes respectively.
+</t>
+-->
+
+<section anchor="sec-orig-as" title="Originating AS">
+<t>
+The "Originating AS" is defined here as the AS whose AS number
+is the first AS in the AS path.
+Only the AS originating a route may include a 
+Tunnel Address Attribute and optional TEncap-Attribute.
+The TEncap-Attribute is included only if the tunnel type is
+something other than IP-in-IP (i.e. GRE or L2TP).
+In the remainder of this draft, the Tunnel Address Attribute alone,
+or both together, are referred to as the "Tunnel Attributes".
+The Tunnel Attributes MUST NOT be added to externally
+received routes (i.e. via eBGP), except in
+the case where the sole AS number of the received route is a
+private AS number, and it is replaced by that of the receiving AS.
+The reachable NLRI in the update may be both IPv4 and IPv6.
+<!--
+There MUST be an NLRI in the update that contains the
+tunnel endpoint address.
+This is required so that routers know the AS path taken by both
+tunneled and untunneled packets, and can therefore enforce the
+constraint that both tunneled and untunneled packets will take
+the same AS path.
+-->
+</t>
+<t>
+If a tunnel endpoint router receives a packet on the tunnel, and the only
+known route to the destination is via routes originated by other ASes
+(not including private ASes of customers), then the packet may be dropped.
+This prevents transient loops whereby a multi-homed customer is unreachable
+by both of its provider ASes, but neither AS has yet heard the withdraw
+from the other AS, and so 
+both think that the other AS can reach the customer.
+On the other hand, in the case where the customer is reachable via the
+other AS, a policy of dropping such packets causes unnecessary packet loss.
+</t>
+<t>
+The originating AS may of course aggregate the prefixes of customers
+reachable via multiple routers.  In this case there must
+be only one tunnel endpoint address for the aggregated prefix.
+This in turn suggests that the tunnel endpoint address is common
+to all of the routers.  In other words, the tunnel endpoint address must be
+anycasted across the routers.
+More generally, the tunnel endpoint address
+should be anycasted across all routers in the origin AS.
+</t>
+<t>
+Note that if different routers that originate a route for
+the same aggregated prefix use different tunnel endpoint addresses,
+the following problem can occur.  
+Imagine that there are two routers R1 and R2 that are originating routes to the same prefix but use different tunnel endpoint addresses.  Now, assume that router R1 crashes.  There is no way to withdraw the tunnel endpoint:  R2 has no mechanism with which do it. 
+As a result, remote routers with packets destined for sites attached to
+R2 may nevertheless tunnel them to R1 causing them to be dropped.
+</t>
+<t>
+It is possible that different routers with the same tunnel endpoint
+address advertise different tunnel parameters or even tunnel types
+in their respective TEncap-Attributes.
+This is allowed, however all such routers must be able to accept tunnels
+for every advertised tunnel.
+</t>
+</section> <!-- "sec-orig-as" -->
+
+<section anchor="sec-nonorig-as" title="Non-Originating ASes">
+<t>
+ASes that have deployed VA should FIB-install any routes containing a
+tunnel endpoint address.
+This will prevent packets tunneled to tunnel endpoint addresses from taking
+any extra hops.
+</t>
+<t>
+When a router in a non-originating AS receives a route with an associated
+tunnel endpoint address, it must decide whether or not to use the tunnel.
+The router always has the option of ignoring the tunnel (and will do so
+by default if it does not recognize the tunnel attributes).  
+<!--
+However, the router must ignore 
+the tunnel if the 
+AS_PATH to the tunnel endpoint address 
+does not match the AS path to the reachable prefix.
+-->
+</t>
+<t>
+A router may choose to
+tunnels where the AS_PATH to the tunnel endpoint address 
+does not match the AS path to the reachable prefix.
+There are pros and cons to doing this.
+On the plus side, doing this means that the AS-path taken by the
+packet is the same as the AS-path in the route to the destination prefix.
+This in turn means that the AS-path that upstream legacy ASes see is
+the actual AS-path taken.
+On the minus side,
+this rule has the characteristic that, if a transit
+AS decides to use one AS path to some prefixes from an origin AS, and
+another AS path to other prefixes from the origin AS, then only one
+of these paths can have a valid tunnel endpoint address associated with it.
+Packets transmitted via the other path cannot be tunneled.
+<!--
+One way to fix this, that would require changes to this draft,
+would be to encode the tunnel endpoint address as a block of addresses.  In this
+case, the transit AS that wishes to use multiple paths to different prefixes
+from an origin AS can deaggregate the block of addresses, and
+associate one tunnel endpoint address block deaggregate with each selected path.
+Whether this is a good idea is for further study.
+-->
+</t>
+<t>
+If routers in a non-originating AS combine routes from different
+received updates into a single update, and the tunnel attributes from the
+received updates are not identical, then the tunnel attributes must be
+excluded from the generated update.
+This prevents an error whereby a route is associated with the wrong tunnel.
+Likewise if routers in a non-originating AS receive an update with
+multiple different tunnel attributes, then it must ignore and drop all
+of the tunnel attributes.
+</t>
+<t>
+It is important to note that the behavior in the above paragraph must
+be followed for both legacy routers (i.e. those that do not recognize
+the tunnel attributes) as well as updated routers.
+It is the authors' understanding that all routers today, when combining
+the routes from different received updates into a single update,
+will in fact drop any unrecognized attributes from the new attribute.
+If there are routers that do not do this, however, then this draft
+will produce errors.
+There is a fix to these errors that involves placing the originating
+AS number in the Tunnel Address Attribute, and indeed this was the
+approach taken by the original version of this draft.
+If it is determined that such legacy routers exist, then we can revert
+back to the original draft.
+</t>
+</section> <!-- "sec-nonorig-as" -->
+</section> <!-- "sec-usage" -->
+
+<section anchor="sec-iana" title="IANA Considerations">
+<t>
+IANA must issue a new Sub-Type for the 
+Address Specific BGP Extended Communities Attribute.
+</t>
+</section> <!-- "sec-iana" -->
+
+<section anchor="sec-sec" title="Security Considerations">
+<t>
+If downstream ASes choose to tunnel packets along an AS-path different
+from the AS-path to the destination prefix, then upstream ASes may not
+know the AS-path packets are taking.  This can violate a security policy
+whereby certain ASes must be avoided (see
+<xref target="sec-nonorig-as"></xref>).
+</t>
+</section> <!-- "sec-sec" -->
+
+
+    </middle>
+
+    <back>
+
+	    <references title='Normative References'>&rfc2119;
+
+
+<reference anchor='I-D.francis-intra-va'>
+<front>
+<title>FIB Suppression with Virtual Aggregation</title>
+
+<author initials='P' surname='Francis' fullname='Paul Francis'>
+    <organization />
+</author>
+
+<author initials='X' surname='Xu' fullname='Xiaohu Xu'>
+    <organization />
+</author>
+
+<author initials='H' surname='Ballani' fullname='Hitesh Ballani'>
+    <organization />
+</author>
+
+<date month='February' day='11' year='2009' />
+
+<abstract><t> 
+The continued growth in the Default Free Routing Table (DFRT) stresses the global routing system in a number of ways.  One of the most costly stresses is FIB size:  ISPs often must upgrade router hardware simply because the FIB has run out of space, and router vendors must design routers that have adequate FIB.  FIB suppression is an approach to relieving stress on the FIB by NOT loading selected RIB entries into the FIB.  Virtual Aggregation (VA) allows ISPs to shrink the FIBs of any and all routers, easily by an order of magnitude with negligible increase in path length and load.  FIB suppression deployed autonomously by an ISP (cooperation between ISPs is not required), and can co-exist with legacy routers in the ISP.
+</t></abstract>
+
+</front>
+
+<seriesInfo name='Internet-Draft' value='draft-francis-intra-va-00' />
+<format type='TXT'
+        target='http://www.ietf.org/internet-drafts/draft-francis-intra-va-00.txt' />
+</reference>
+
+
+<reference anchor='I-D.ietf-softwire-encaps-safi'>
+<front>
+<title>BGP Encapsulation SAFI and BGP Tunnel Encapsulation Attribute</title>
+
+<author initials='P' surname='Mohapatra' fullname='Pradosh  Mohapatra'>
+    <organization />
+</author>
+
+<author initials='E' surname='Rosen' fullname='Eric Rosen'>
+    <organization />
+</author>
+
+<date month='June' day='4' year='2008' />
+
+<abstract><t>In certain situations, transporting a packet from one Border Gateway Protocol (BGP) speaker to another, the BGP next hop, requires that the packet be encapsulated by the first BGP speaker and decapsulated by the second. To support these situations, there needs to be some agreement between the two BGP speakers with regard to the "encapsulation information", i.e., the format of the encapsulation header as well as the contents of various fields of the header.  The encapsulation information need not be signaled for all encapsulation types. In the cases where the signaling is required (such as Layer Two Tunneling Protocol - Version 3 (L2TPv3), Generic Routing Encapsulation (GRE) with key), this draft specifies a method by which BGP speakers can signal encapsulation information to each other. The signaling is done by sending BGP updates using the "Encapsulation Subsequent Address Family Identifier (SAFI)" and IPv4 or IPv6 Address Family Identifier (AFI). In the cases where no encapsulation information needs to be signaled (such as GRE without key), this draft specifies a BGP extended community that can be attached to BGP UPDATE messages that carry payload prefixes to indicate the encapsulation protocol type to be used.</t></abstract>
+
+</front>
+
+<seriesInfo name='Internet-Draft' value='draft-ietf-softwire-encaps-safi-03' />
+<format type='TXT'
+        target='http://www.ietf.org/internet-drafts/draft-ietf-softwire-encaps-safi-03.txt' />
+</reference>
+
+
+<reference anchor='RFC4360'>
+
+<front>
+<title>BGP Extended Communities Attribute</title>
+<author initials='S.' surname='Sangli' fullname='S. Sangli'>
+<organization /></author>
+<author initials='D.' surname='Tappan' fullname='D. Tappan'>
+<organization /></author>
+<author initials='Y.' surname='Rekhter' fullname='Y. Rekhter'>
+<organization /></author>
+<date year='2006' month='February' />
+<abstract>
+<t>This document describes the "extended community" BGP-4 attribute.  This attribute provides a mechanism for labeling information carried in BGP-4.  These labels can be used to control the distribution of this information, or for other applications. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name='RFC' value='4360' />
+<format type='TXT' octets='24145' target='ftp://ftp.isi.edu/in-notes/rfc4360.txt' />
+</reference>
+
+
+<reference anchor='I-D.ietf-l3vpn-v6-ext-communities'>
+<front>
+<title>IPv6 Address Specific BGP Extended Communities Attribute</title>
+
+<author initials='Y' surname='Rekhter' fullname='Yakov Rekhter'>
+    <organization />
+</author>
+
+<date month='December' day='10' year='2008' />
+
+<abstract><t>Current specifications of BGP Extended Communities [BGP-EXTCOMM] support IPv4 Address Specific Extended Community, but do not support IPv6 Address Specific Extended Community. The lack of IPv6 Address Specific Extended Community may be a problem when an application uses IPv4 Address Specific Extended Community, and one wants to use this application in a pure IPv6 environment. This document defines a new BGP attribute, IPv6 Address Specific Extended Community that addresses this problem. The IPv6 Address Specific Extended Community is similar to the IPv4 Address Specific Extended Community, except that it carries an IPv6 address rather than an IPv4 address.</t></abstract>
+
+</front>
+
+<seriesInfo name='Internet-Draft' value='draft-ietf-l3vpn-v6-ext-communities-01' />
+<format type='TXT'
+        target='http://www.ietf.org/internet-drafts/draft-ietf-l3vpn-v6-ext-communities-01.txt' />
+</reference>
+
+	    </references>
+
+    </back>
+
+</rfc>

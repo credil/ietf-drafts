@@ -1,0 +1,519 @@
+<?xml version='1.0'?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd"
+[
+<!ENTITY RFC2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+<!ENTITY RFC3261 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3261.xml'>
+<!ENTITY RFC4474 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4474.xml'>
+<!ENTITY RFC4871 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4871.xml'>
+<!ENTITY RFC3323 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3323.xml'>
+<!ENTITY RFC3966 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3966.xml'>
+<!ENTITY RFC3761 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3761.xml'>
+<!ENTITY I-D.elwell-sip-e164-problem-statement PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.elwell-sip-e164-problem-statement.xml'>
+]>
+
+
+<rfc ipr="full3978" docName="draft-darilion-sip-e164-enum-00.txt" category="std">
+	<?rfc toc='yes' ?>
+	<?rfc tocompact='no' ?>
+	<?rfc compact='yes' ?>
+	<?rfc subcompact='yes' ?>
+	<front>
+
+		<title abbrev="E.164 Ownership using ENUM">E.164 Ownership using Public Keys stored in ENUM</title>
+
+		<author initials="K." surname="Darilion" fullname="Klaus Darilion">
+			<organization abbrev="enum.at"> enum.at GmbH </organization>
+			<address>
+				<postal>
+					<street>Karlsplatz 1/9</street>
+					<city>Wien</city>
+					<code>A-1010</code>
+					<country>Austria</country>
+				</postal>
+				<phone>+43 1 5056416 36</phone>
+				<email>klaus.darilion@enum.at</email>
+				<uri>http://www.enum.at/</uri>
+			</address>
+		</author>
+
+		<!-- 
+		<author fullname="Dan Wing" initials="D." surname="Wing">
+			<organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+			<address>
+				<postal>
+					<street>170 West Tasman Drive</street>
+					<city>San Jose</city>
+					<region>CA</region>
+					<code>95134</code>
+					<country>USA</country>
+				</postal>
+				<email>dwing@cisco.com</email>
+			</address>
+		</author>
+		-->
+
+		<author initials="H." surname="Tschofenig" fullname="Hannes Tschofenig">
+			<organization>Nokia Siemens Networks</organization>
+			<address>
+				<postal>
+					<street>Linnoitustie 6</street>
+					<city>Espoo</city>
+					<code>02600</code>
+					<country>Finland</country>
+				</postal>
+				<phone>+358 (50) 4871445</phone>
+				<email>Hannes.Tschofenig@nsn.com</email>
+				<uri>http://www.tschofenig.com</uri>
+			</address>
+		</author>
+
+		<date year="2008"/>
+		<area>RAI</area>
+		<workgroup>SIP</workgroup>
+		<keyword>Authentication</keyword>
+		<keyword>SIP</keyword>
+		<keyword>Domainkeys</keyword>
+		<keyword>Signature</keyword>
+
+		<abstract>
+			<t>To determine which domain is allowed to claim ownership of a certain telephone number
+				is difficult. This may cause problems when to authenticate endpoints that use
+				telephone number URIs and domain names in their From address. This document
+				investigates a proposal that stores a public key below the corresponding ENUM tree
+				in the DNS. The verifier can determine ownership by performing an ENUM lookup to
+				retrieve the public key from the DNS and to use it for verifying the signature
+				created as part of the SIP Identity mechanism.</t>
+			<t>This document is a contribution to the ongoing discussion on RFC 4474 when used in
+				combination with E.164 numbers. </t>
+		</abstract>
+	</front>
+
+	<middle>
+
+		<!-- ***************************************************************************** -->
+
+		<section anchor="intro" title="Introduction">
+			<t> RFC 4474 <xref target="RFC4474"/> defines a mechanism whereby an authentication
+				service authenticates a SIP UAC (possibly by sending a Digest authentication
+				challenge) and verifies whether he or she is authorized to use the identity that is
+				populated in the From header field. The authentication service then computes a hash
+				over some particular headers, including the From header field and the bodies in the
+				message. This hash is signed with the certificate for the domain and inserted in the
+				'Identity' header field in the SIP message. </t>
+
+			<t> The proxy, as the holder of the private key of its domain, is asserting that the
+				originator of this request has been authenticated and that a specific user is
+				authorized to claim the identity (the SIP address-of-record) that appears in the
+				From header field. The proxy also inserts a companion header field, Identity-Info,
+				that tells the verifying party how to acquire its certificate, in case it is not yet
+				known already. </t>
+
+			<t> When the verifier receives the SIP message, it verifies the signature provided in
+				the Identity header, and thus can determine whether the domain indicated by the host
+				portion of the AoR in the From header field authenticated the user, and permitted
+				the user to assert that From header field value. </t>
+
+			<t> The use of phone numbers with SIP was introduced with the TEL URL scheme <xref
+					target="RFC3966"/> whereby domain names were not used with the phone numbers.
+				SIP URIs always have domain names. In SIP <xref target="RFC3261"/>, a translation
+				between SIP URIs and TEL URLs is described: when translating from a SIP URI to a TEL
+				URL, the domain name from the SIP URI is simply dropped. When translating in the
+				other direction (or simply generating a SIP URI from an E.164 number) it is not
+				clear how to populate the domain name. </t>
+			<t>When SIP Identity <xref target="RFC4474"/> is applied to E.164 numbers <xref
+					target="E164"/> then there is the question what the identity assertion actually
+				means. Additionally, the usage of the domain for an E.164 number is not useful as
+				described in <xref target="I-D.elwell-sip-e164-problem-statement"/>. This document
+				does not make use of a domain field attached to an E.164 number.</t>
+			<t>
+				<list style="empty">
+					<t>******************************************************************</t>
+					<t> The authors of this document do not claim that the question of what
+						ownership of E.164 numbers means is sufficiently well understood at this
+						point to be fully confident that any solution actually helps to improve the
+						current state-of-the-art. In fact, the entire end-to-end security story when
+						a call originates in the PSTN and terminates somewhere on the Internet may
+						weaken the security of the call to such an extend that additional security
+						mechanisms applied to the communication on the Internet leg of the call may
+						not improve the overall security based on "security is as good as the
+						weakest link". However, strawman proposals (like this one) might help to
+						better understand the different forms of E.164 address ownership. The
+						authors have received a large number of intesting comments after
+						distributing an initial proposal. </t>
+					<t>******************************************************************</t>
+				</list>
+			</t>
+			<t>This document investigates the ability to store a public key in the ENUM database.
+				The private key corresponding to that public key is then used by the authentication
+				service to compute the digital signature for the 'Identity' header. Additionally, an
+				indication is provided for the verifier inside the Identity-Info header so that it
+				is apparent that the public key is not available at a given URI but rather in the
+				DNS used by ENUM. When the verifier receives a SIP message that contains the
+				'Identity' header instead of obtaining the certificate it performs a DNS lookup to
+				determine the public key used for the specific E.164 number. Possessing the public
+				key stored with the E.164 number allows verification of the digital signature.</t>
+			<t>From a design point of view we would like to make the following note: </t>
+			<t>
+				<list style="empty">
+					<t>This document does not define new SIP headers. Instead, it re-uses existing
+						headers from the SIP Identity specification. The 'Identity-Info' header is
+						reused to convey a so-called selector and the ENUM root. Both are required
+						for the verification procedure. The selector allows the authentication
+						service to support multiple concurrent public keys per signing domain and
+						the ENUM root allows to use different ENUM trees. This document suggests to
+						store the selector and the ENUM root as a URI in the 'Identity-Info' even
+						though a new and more flexible header is already required by the SIP SAML
+						specification.</t>
+				</list>
+			</t>
+			<t>To summarize the proposed changes; this document suggests an alternative method for
+				storing public keys, namely one based on the DNS in relationship to the ENUM
+				database. This method is conceptually similar to the approach used by DKIM <xref
+					target="RFC4871"/>. As a consequence, the mechanism to look-up the public key by
+				the verifier is different to the one proposed in <xref target="RFC4474"/>. The
+				suggested modifications are intentially kept at a minimum and only applicable when
+				an E.164 number is signed by an authentication service.</t>
+		</section>
+
+
+		<!-- ******************************************************************** -->
+		<section title="Terminology">
+			<t>In this document, several words are used to signify the requirements of the
+				specification. These words are often capitalized. The key words "MUST", "MUST NOT",
+				"REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and
+				"OPTIONAL" in this document are to be interpreted as described in <xref
+					target="RFC2119"/>.</t>
+		</section>
+
+		<!-- ******************************************************************** -->
+
+		<section anchor="enum" title="ENUM">
+
+			<t> ENUM comes in different deployment variations. The incentives for storing public
+				keys in ENUM with these deployments are different. Mostly, they can be distinguished
+				by the root domain and whether access is restricted or unrestricted.</t>
+
+			<section title="User ENUM">
+				<t>User ENUM is defined in <xref target="RFC3761"/>. It uses the root domain
+					e164.arpa and access is not restricted. The right to provison DNS records is
+					given to the user of the corresponding E.164 number.</t>
+				<t>Use cases for putting the public key into user ENUM are the following. A user who
+					has registered its E.164 number into ENUM and has its own SIP infrastructure
+					(like companies have) or users utilizing their own open SIP infrastructure
+					(similar to users running an SMTP server).</t>
+			</section>
+			<section title="Infrastructure ENUM">
+				<t>There is no exact definition for Infrastructure ENUM (also called Carrier ENUM).
+					Infrastrucure ENUM is often understood as a public accessible ENUM tree (for
+					example ie164.arpa) where the "carrier-of-record" (the carrier which provide
+					telephony service to the end-user) is allowed to provision the DNS records. It
+					can also be seen as federations of private ENUM. </t>
+				<t>The use case for infrastructure ENUM is similar to user ENUM except that now
+					carriers are able to relate the "carrier of record" to the E.164 number. For
+					example, if a call is routed from carrier A to carrier B via transit carrier T,
+					T will trust A and B will trust T. There is no way for B to verify that the
+					caller is really allowed to use the indicated caller id.</t>
+			</section>
+			<section title="Private ENUM trees">
+				<t>Private ENUM trees choose just any available domain as root domain (e.g.,
+					e164.example.com) and provide ENUM services below this root domain. Whether
+					access is restricited or not, and the policy for provisioning of DNS records, is
+					defined by the holder of that domain. An example of a private ENUM tree with
+					restricted access is the 3GPP ENUM tree (e164enum.net).</t>
+				<t>Use cases are similar to before, except that the owner of the root domain can
+					decide who is allowed to use the ENUM tree. Furthermore, private ENUM trees can
+					be used if user ENUM is not available in the respective country (for example by
+					using nrenum.net).</t>
+			</section>
+
+			<t>The main drawback of this proposal is the fact that public ENUM does not enjoy a lot
+				of deployment (see http://enumdata.org/). This document is, however, particularly
+				useful for environments that make use of public ENUM. Private and infrastructure
+				ENUM only need SIP Identity alike mechanisms when interacting with the "external"
+				world since they follow a sort of wallet garden model with a chain-of-trust. There
+				is non-neglectable deployment incentive challenge. As such, this proposal will live
+				or die with the ability to come up with a lucrative deployment story.</t>
+
+		</section>
+
+		<!-- ************************************************************************** -->
+
+		<section anchor="authbehave" title="Authentication Service Behavior">
+
+			<t> The authentication service behavior proposed in this document is almost identical to
+				the authentication service described in <xref target="RFC4474"/>. </t>
+			<t>Thus, the authentication service behavior is identical to the description in Section
+				5 of <xref target="RFC4474"/> when TEL URIs are used with the following addition for
+				step 4: </t>
+			<t>
+				<list style="empty">
+					<t> When a TEL URI scheme is used in context of SIP Identity then the
+						'Identity-Info' header field does not contain a URI pointing to a
+						certificate but rather contains the DomainKeys selector and the ENOM root
+						domain since the procedure described in <xref target="verifybehave"/> allows
+						the verifier to determine the location of the public key associated with a
+						particular TEL URI. </t>
+				</list>
+			</t>
+
+			<t>The mechanism for storing a public key in the DNS is re-used from DKIM <xref
+					target="RFC4871"/>.</t>
+		</section>
+
+		<!-- ****************************************************************************** -->
+
+		<section anchor="verifybehave" title="Verifier Behavior">
+
+			<t>When a verifier receives a SIP message containing an Identity-Info header, it may
+				inspect the signature to verify the identity of the sender of the message.
+				Typically, the results of a verification are provided as input to an authorization
+				process which is outside the scope of this document. If an Identity-Info header is
+				not present in a request, and one is required by either local policy (for example,
+				based on a per-sending-domain policy, or a per-sending-user policy) or remote
+				policy, then 'Use Identity Header' response code MUST be sent. </t>
+			<t> The steps executed by the verifier are outlined in Section 6 of <xref
+					target="RFC4474"/> with the exception that step 1 is different primarily because
+				SIP Identity relies on certificates whereas this document stores public keys in the
+				DNS. The following paragraph replaces the text the text in Section 6/step 1 of <xref
+					target="RFC4474"/>. This document does not make use of the 'Unsupported
+				Certificate' and the 'Bad Identity-Info' response code. </t>
+			<t> Step 1: <vspace blankLines="1"/>
+				<list style="empty">
+					<t>The verifier MUST obtain the ENUM root domain from the Identity-Info header
+						and apply local policies to find out if the specified ENUM root domain
+						points to a trusted ENUM tree. If the specified ENUM tree is not trusted,
+						the verifier has to cancel the signature verification and the message MUST
+						be treated like an unsigned message.</t>
+				</list>
+			</t>
+			<t> Step 2: <vspace blankLines="1"/>
+				<list style="empty">
+					<t>The verifier MUST acquire the public key for the signing domain. This
+						document suggests to store the public key in the DNS. <vspace blankLines="1"
+						/> This document is only applicable for the usage of tel URIs in the From:
+						header. When the tel URI contains a 'global-number', i.e., a phone number in
+						E.164 format starting with the '+' sign, the domain for retrieving the
+						public key will be constructed according to the following algorithm: <vspace
+							blankLines="1"/>
+						<list style="numbers">
+							<t>remove the 'visual-separators' and all parameters from the tel URI </t>
+							<t>remove the leading "+" sign </t>
+							<t>put dots (".") between each digit </t>
+							<t>reverse the order of the digits </t>
+							<t>append the ENUM root domain (for example ".e164.arpa") to the end </t>
+							<t>prepend the string "._domainkey." </t>
+							<t>prepend the selector</t>
+						</list>
+						<vspace blankLines="1"/> For example, given the tel URI
+						"tel:+43-1-5056416-36;mobile=false", the selector "2008-02" and the root
+						domain ".e164.arpa", the domain under which the public key is stored is:
+							<vspace blankLines="1"/>
+						2008-02._domainkey.6.3.6.1.4.6.5.0.5.1.3.4.e164.arpa <vspace blankLines="1"/>
+						<vspace blankLines="1"/> Non global-numbers cannot be stored in ENUM and
+						thus they cannot be used in the From: header when signing the request by the
+						authentication service. <vspace blankLines="1"/> The 'Unable to retrieve
+						Public Key from DNS' response code is used when an error in fetching the
+						public key from the DNS occurs. </t>
+				</list>
+			</t>
+		</section>
+
+		<!-- ****************************************************************************** -->
+
+		<section anchor="considua" title="Considerations for User Agent">
+			<t>There are no additional considerations beyond those described in Section 8 of <xref
+					target="RFC4474"/>.</t>
+		</section>
+
+		<!-- ****************************************************************************** -->
+
+		<section anchor="considproxy" title="Considerations for Proxy Servers">
+			<t>There are no additional considerations beyond those described in Section 8 of <xref
+					target="RFC4474"/>.</t>
+		</section>
+
+		<!-- ****************************************************************************** -->
+
+		<section anchor="example" title="Examples">
+			<t>The following message exchange highlights the interaction.</t>
+			<t>
+				<figure anchor="example-1" title="Example Exchange">
+					<artwork>
+						<![CDATA[
+ Calling    Auth.                            Called
+   UA      Service    proxies    Verifier      UA
+ -------   -------    --------   --------    ------ --------
+   |          |          |          |          |     ^
+   | INVITE   |          |          |          |     |
+   |--------->|          |          |          |     |
+   |          |          |          |          |     |
+   |    (signs request)  |          |          |     |
+   |          |          |          |          |     | Steps
+   |100       | INVITE   |          |          |     | largely
+   |<---------|--------->|          |          |     | based
+   |          |          |          |          |     | on normal
+   |          |100       | INVITE   |          |     | RFC4474
+   |          |<---------|--------->|          |     | processing
+   |          |          |          |          |     |
+   |          |          |100       |          |     |
+   |          |          |<---------|          |     V
+   |          |          |          |          |    ----------
+   |          |          |          |          |     ^
+   |          |          |    (retrieve        |     |
+   |          |          |     public key      |     This
+   |          |          |     from DNS)       |     document
+   |          |          |          |          |     |
+   |          |          |          |          |     v
+   |          |          |          |          |    --------
+   |          |          |    (validates       |     ^
+   |          |          |     signature)      |     | steps
+   |          |          |          |          |     | which are
+   |          |          |          |          |     | part of
+   |          |          |          |          |     | normal
+   |          |          |          | INVITE   |     | RFC4474
+   |          |          |          |--------->|     V
+   |          |          |          |          |    ----------
+   |          |          |          |          |
+   |          |          |          |          |display
+   |          |          |          |          |E.164 number
+						]]>
+					</artwork>
+				</figure>
+			</t>
+		</section>
+
+		<!-- ****************************************************************************** -->
+
+		<section anchor="caching" title="Caching and Scalability">
+			<t>When the verifier needs to determine the public key of a specific E.164 number then
+				it needs to perform a DNS lookup. This lookup might be cached in the DNS but the
+				lookup is specific for a certain E.164 number and not for a domain. The verifier may
+				cache the public key corresponding to a particular E.164 number but there is no
+				guarantee that the same key will be used by any other E.164 number. Furthermore, a
+				specific E.164 number may have multiple public keys associated with it based on the
+				selector concept that is useful when revocating keys or when delegating the signing
+				process.</t>
+		</section>
+
+		<!-- ****************************************************************************** -->
+
+		<section anchor="privacy" title="Privacy Considerations">
+			<t> The mechanism presented in this draft is compatible with the standard SIP practices
+				for privacy, described in RFC 3323 <xref target="RFC3323"/> and also with the
+				privacy considerations of RFC 4474 <xref target="RFC4474"/>. </t>
+		</section>
+
+		<!-- ****************************************************************************** -->
+
+		<section anchor="security" title="Security Considerations">
+			<t>The mechanism described in this document has different authorization properties than
+				RFC 4474 <xref target="RFC4474"/>. A SIP message (including the 'Identity' and the
+				'Identity-Info' header) with an E.164 number in the From: header field has the
+				following property (if successfully processed by the verifier): </t>
+			<t>
+				<list style="empty">
+					<t>The entity that uses the private key for creating the SIP Identity header is
+						authorized to attach the corresponding public key to the ENUM database of
+						the respective E.164 number used during the lookup.</t>
+				</list>
+			</t>
+
+			<t>When using PKI infrastructure, the signature verifier trusts the certificate
+				authority, which attest the identity of the certificate holder. Using ENUM, the
+				signature verifier has to trust the ENUM registry and the registrars. The ENUM
+				registrar typically has to validate that the user who tries to register an ENUM
+				domain is the number right holder. The validation methods usually will be different
+				between user ENUM (the validation methods can be approved by official buddies) and
+				private ENUM trees.</t>
+
+			<t>It is important to note that with this proposal public keys are essentially for
+				individual users rather than for the entire domain. As such, the authentication
+				service needs to have access to the private keys corresponding to the respective
+				public key. Note, however, that there is nothing special about these key pairs as
+				such and there is no relationship to other (long-term) asymmetric credentials
+				potentially possessed by the user. They are rather used only as a technical vehicle
+				to accomplished the ownership requirement described in this document.</t>
+
+			<t>This proposal also does not address the case where a call originates in the PSTN and
+				enters the Internet via provider that does not possess the private key corresponding
+				to the public key stored with the E.164 number in the ENUM tree. This is, in some
+				sense, desired since Caller-ID spoofing is very easy in the PSTN and is difficult to
+				differentiate from a call that enters the Internet through a provider that has no
+				relationship with the calling party. This asymmetric routing scenario is, however,
+				quite common today.</t>
+
+			<t>Additional security considerations can be found in <xref
+					target="I-D.schwartz-sip-e164-ownership"/>. </t>
+		</section>
+
+		<!-- ****************************************************************************** -->
+
+		<section anchor="iana" title="IANA Considerations">
+
+			<t>This document requests IANA to register a new response code. </t>
+
+			<section title="TBD 'Unable to retrieve Public Key from DNS' Response Code">
+				<t> This document registers a new SIP response code, which is described in <xref
+						target="verifybehave"/>. It is used when a verifier tries to retrieve the
+					public key from the DNS and does not succeed and the DNS lookup fails. This
+					response code is defined by the following information, which has been added to
+					the method and response-code sub-registry under
+					http://www.iana.org/assignments/sip-parameters. </t>
+				<t> Response Code Number: TBD </t>
+				<t>Default Reason Phrase: Unable to retrieve Public Key from DNS </t>
+			</section>
+
+			<section title="URI Scheme Registration">
+				<t>[Editor's Note: A future version of this document may register a URI scheme that
+					allows the SIP 'Identity-Info' header to be reused in order to convey parameters
+					from the authentication service to the verifier.]</t>
+			</section>
+		</section>
+
+		<!-- ****************************************************************************** -->
+
+		<section anchor="acknow" title="Acknowledgments">
+			<t>We would like to thank Dan Wing for raising the problems associated with E.164
+				number-usage in SIP Identity and the discussion during writing of this draft.
+				Further we would like to thank Alexander Mayrhofer for his ideas in
+				[draft-mayrhofer-enum-domainkeys-00].</t>
+			<t>We would also like to thank Kai Fischer, John Elwell, Hadriel Kaplan, David Schwartz,
+				and Jon Peterson for their off-list comments. </t>
+		</section>
+
+		<!-- ****************************************************************************** -->
+
+	</middle>
+
+	<back>
+
+		<references title="Normative References"> &RFC2119; &RFC3261; &RFC4474;
+			&RFC4871; &RFC3966; &RFC3761;</references>
+
+		<references title="Informative References"> &I-D.elwell-sip-e164-problem-statement;
+				<reference anchor="E164">
+				<front>
+					<title abbrev="E.164">The international public telecommunication numbering plan</title>
+					<author initials="" surname="" fullname="">
+						<organization abbrev="ITU-T">ITU-T</organization>
+					</author>
+					<date month="May" year="1997"/>
+				</front>
+				<seriesInfo name="Recommendation" value="E.164"/>
+			</reference> &RFC3323; 
+
+		<reference anchor="I-D.schwartz-sip-e164-ownership">
+			<front>
+				<title>E.164 Ownership Problem Statement</title>
+				<author initials="D." surname="Schwartz" fullname="David Schwartz">
+					<organization>XConnect</organization>
+				</author>
+				<date month="Feb" year="2008"/>
+			</front>
+			<seriesInfo name="Std" value="draft-schwartz-sip-e164-ownership-00.txt"/>
+		</reference>
+		</references>
+		
+	</back>
+
+</rfc>

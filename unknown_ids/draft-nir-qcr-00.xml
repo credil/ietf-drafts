@@ -1,0 +1,396 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type='text/xsl' href='./rfc2629.xslt' ?>
+
+<?rfc toc="yes"?>
+<?rfc symrefs="no"?>
+<?rfc compact="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc strict="yes" ?>
+<?rfc linkmailto="yes" ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" >
+    
+
+<?xml-stylesheet type='text/xsl' href='./rfc2629.xslt' ?>
+
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="yes" ?>
+<?rfc sortrefs="yes" ?>
+<rfc ipr="full3978" docName="draft-nir-qcr-00.txt" category="std">
+  <front>
+    <title abbrev="Quick Crash Recovery">A Quick Crash Recovery Method for IKE</title>
+    <author initials="Y." surname="Nir" fullname="Yoav Nir">
+      <organization abbrev="Check Point">Check Point Software Technologies Ltd.</organization>
+      <address>
+        <postal>
+          <street>5 Hasolelim st.</street>
+          <city>Tel Aviv</city>
+          <code>67897</code>
+          <country>Israel</country>
+        </postal>
+        <email>ynir@checkpoint.com</email>
+      </address>
+    </author>
+    <date year="2008"/>
+    <area>Security Area</area>
+    <keyword>Internet-Draft</keyword>
+    <abstract>
+      <t> This document describes an extension to the IKEv2 protocol that allows for faster crash 
+        recovery using a saved token method.</t>
+      <t> When an IPsec tunnel between two IKEv2 implementations is disconnected due to a restart
+        of one peer, it can take as much as several minutes to recover. In this text we propose an extension
+        to the protocol, that allows for recovery within a few seconds of the reboot.</t>
+    </abstract>
+  </front>
+  <middle>
+    <!-- ====================================================================== -->
+    <section anchor="introduction" title="Introduction">
+      <t> IKEv2, as described in <xref target="RFC4306"/> has a method for recovering from a reboot
+        of one peer. As long as traffic flows in both directions, the rebooted peer should 
+        re-establish the tunnels immediately. However, in many cases the rebooted peer is a VPN
+        gateway that protects only servers, or else the non-rebooted peers have a dynamic IP address. 
+        In such cases, the rebooted peer will not re-establish the tunnels.</t>
+      <t> <xref target="SCR"/> describes the current procedure, and explains why crash recovery can
+        take up to several minutes. The method proposed here, is to send a token in the IKE_AUTH
+        exchange that establishes the tunnel. That token can be maintained on the peer in some kind 
+        of persistent storage such as a disk or a database, and can be used to delete the IKE SA
+        after a crash. Deleting the IKE SA results is a quick re-establishment of the IPsec
+        tunnel.</t>
+      <section anchor="mustshouldmay" title="Conventions Used in This Document">
+        <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+          "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described
+          in <xref target="RFC2119"/>.</t>
+      </section>
+      </section>
+      <section anchor="SCR" title="RFC 4306 Crash Recovery">
+        <t> When one peer reboots, the other peer does not get any notification, so IPsec traffic
+          can still flow. The rebooted peer will not be able to decrypt it, however, and the only
+          remedy is to send an unprotected INFORMATIONAL exchange with an INVALID_SPI notification
+          as described in section 3.10.1 of <xref target="RFC4306"/>.  That section also describes
+          the processing of such a notification: "If this Informational Message is sent outside the
+          context of an IKE_SA, it should be used by the recipient only as a "hint" that something
+          might be wrong (because it could easily be forged)."</t>
+        <t> Since the INVALID_SPI can only be used as a hint, the non-rebooted peer has to determine
+          whether the IPsec SA, and indeed the parent IKE SA are still valid.  The method of doing 
+          this is described in section 2.4 of <xref target="RFC4306"/>. This method, called 
+          "liveness check" involves sending a protected empty INFORMATIONAL message, and awaiting a 
+          response. This procedure is sometimes refered to as "Dead Peer Detection" or DPD.</t>
+        <t> Section 2.4 does not mandate how many times the INFORMATIONAL message should be 
+          retransmitted, or for how long, but does recommend the following: "It is suggested that
+          messages be retransmitted at least a dozen times over a period of at least several minutes
+          before giving up on an SA". Clearly, implementations differ, but all will take a significant
+          amount of time.</t>
+      </section>
+      <section anchor="outline" title="Protocol Outline">
+        <t> Supporting implementations will send a notification, called a "QCR token", as described
+          in <xref target="format_notif"/> in the last packets of the IKE_AUTH exchange.  
+          These are the final request and final response that contain the AUTH payloads.  The 
+          generation of these tokens is a local matter for implementations, but considerations are 
+          described in <xref target="tokengen"/>.</t>
+        <t> A supporting implementation receiving such a token SHOULD store it in such a way, that
+          it will survive a reboot. When a supporting implementation receives a protected IKE 
+          request message with unknown IKE SPIs, it should scan its saved token store. If a token 
+          matching the IKE SPIs is found, it SHOULD send it to the requesting peer in an unprotected
+          IKE message as described in <xref target="format_info"/>.</t>
+        <t> When a supporting implementation receives the QCR notification token in an unprotected
+          INFORMATIONAL exchange, it MUST verify that the TOKEN_SECRET_DATA field is associated with
+          the IKE SPIs in the IKE_SPI fields of the IKE packet. If the verification fails, it SHOULD 
+          log the event. If it succeeds, it MUST delete the IKE SA associated with the IKE_SPI fields, 
+          and all dependant child SAs. This event MAY also be logged.</t>
+        <t> A supporting implementation MAY immediately create new SAs using an Initial exchange, 
+          or it may wait for subsequent traffic to trigger the creation of new SAs.</t>
+        <t> There is ongoing work on IKEv2 Session Resumption <xref target="resumption"/>. The 
+          current proposal is orthogonal to Session Resumption, and in fact using Session Resumption 
+          instead of a regular IKE exchange, the new SA can be created with minimal overhead.</t>
+      </section>
+      <section anchor="format" title="Formats and Exchanges">
+        <section anchor="format_notif" title="Notification Format">
+          <t> The notification payload called "QCR token" is formatted as follows:<figure>
+            <artwork><![CDATA[
+                           1                   2                   3
+       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      ! Next Payload  !C!  RESERVED   !         Payload Length        !
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      !  Protocol ID  !   SPI Size    ! QCR Token Notify Message Type !
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      !                                                               !
+      ~                       TOKEN_SECRET_DATA                       ~
+      !                                                               !
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            ]]></artwork>
+            </figure></t>
+          <t><list style="symbols">
+            <t>Protocol ID (1 octet) MUST contain 1, as this message is related to an IKE SA.</t>
+            <t>SPI Size (1 octet) MUST be zero, in conformance with <xref target="RFC4306"/>.</t>
+            <t>QCR Token Notify Message Type (2 octets) - Must be xxxxx, the value assigned for QCR
+              token notifications. TBA by IANA.</t>
+            <t>TOKEN_SECRET_DATA (16-256 octets) contains a generated token as described in 
+              <xref target="tokengen"/>.</t>
+          </list></t>
+        </section>
+        <section anchor="format_auth" title="Authentication Exchange">
+          <t> For clarity, only the EAP version of an AUTH exchange will be presented here. The 
+            non-EAP version is very similar. The figure below is based on appendix A.3 of
+            <xref target="RFC4718"/>.<figure>
+            <artwork><![CDATA[
+   first request       --> IDi,
+                           [N(INITIAL_CONTACT)],
+                           [[N(HTTP_CERT_LOOKUP_SUPPORTED)], CERTREQ+],
+                           [IDr],
+                           [CP(CFG_REQUEST)],
+                           [N(IPCOMP_SUPPORTED)+],
+                           [N(USE_TRANSPORT_MODE)],
+                           [N(ESP_TFC_PADDING_NOT_SUPPORTED)],
+                           [N(NON_FIRST_FRAGMENTS_ALSO)],
+                           SA, TSi, TSr,
+                           [V+]
+
+   first response      <-- IDr, [CERT+], AUTH,
+                           EAP,
+                           [V+]
+
+                     / --> EAP
+   repeat 1..N times |
+                     \ <-- EAP
+
+   last request        --> AUTH
+                           [N(QCR_TOKEN)]
+
+   last response       <-- AUTH,
+                           [N(QCR_TOKEN)]
+                           [CP(CFG_REPLY)],
+                           [N(IPCOMP_SUPPORTED)],
+                           [N(USE_TRANSPORT_MODE)],
+                           [N(ESP_TFC_PADDING_NOT_SUPPORTED)],
+                           [N(NON_FIRST_FRAGMENTS_ALSO)],
+                           SA, TSi, TSr,
+                           [N(ADDITIONAL_TS_POSSIBLE)],
+                           [V+]
+            ]]></artwork>
+            </figure></t>
+          <t> Note that the QCR_TOKEN notification is marked as optional because it is not required
+            by this specification that both sides send QCR tokens. If only one peer sends the QCR 
+            token, then a reboot of the other peer will not be recoverable by this method. This may be
+            acceptable if traffic typically originates from the other peer.</t>
+          <t> In any case, the lack of a QCR_TOKEN notification MUST NOT be taken as an indication
+            that the peer does not support this standard. Conversely, if a peer does not understand 
+            this notification, it will simply ignore it. Therefore a peer MAY send this notification 
+            freely, even if it doesn’t know whether the other side supports it.</t>
+        </section>
+        <section anchor="format_info" title="Informational Exchange">
+          <t> This informational exchange is non-protected, and is sent as a response to a protected
+            IKE request, which uses an IKE SA that is unknown. <figure>
+            <artwork><![CDATA[
+            request             --> N(QCR_TOKEN)
+
+            response            <-- 
+            ]]></artwork>
+            </figure></t>
+          <t> The QCR_TOKEN is the only notification in the request. Similar to the description
+            in section 2.21 of <xref target="RFC4306"/>, The IKE SPI and message ID fields in the 
+            packet headers are taken from the protected IKE request.</t>
+          <t> If the QCR_TOKEN verifies OK, an empty response MUST be sent. If the QCR_TOKEN 
+            cannot be validated, a response SHOULD NOT be sent. <xref target="tokengen"/>
+            defines token verification.</t>
+        </section>
+      </section>
+      <section anchor="tokengen" title="Token Generation and Verification">
+        <t> No token generation method is mandated by this document. Two methods are documented in
+          <xref target="tg1"/> and <xref target="tg2"/>, but they only serve as examples.</t>
+        <t> The following lists the requirements from a token generation mechanism:<list style="symbols">
+          <t> Tokens should be at least 16 octets log, and no more than 256 octets long, to 
+            facilitate storage.</t>
+          <t> It should not be possible for an external attacker to guess the QCR token generated
+            by an implementation. Cryptographic mechanisms such as PRNG and hash functions are
+            RECOMMENDED.</t>
+          <t> The peer that generated the QCR token, should be able to immediately verify it, 
+            provided that the IKE SPIs are given, and that the IKE SA has not expired or been
+            otherwise deleted.</t>
+        </list></t>
+        <section anchor="tg1" title="A Stateful Method of Token Generation">
+          <t> This describes a stateful method of generating a token:<list style="symbols">
+            <t> Before sending the QCR token, 32 random octets are generated using a secure random
+              number generator or a PRNG.</t>
+            <t> Those 32 bytes are used as the TOKEN_SECRET_DATA field, and stored as part of the
+              IKE SA.</t>
+            <t> For verification, the IKE implementation simply retrieves the IKE SA, and compares
+              the TOKEN_SECRET_DATA field from the notification to the TOKEN_SECRET_DATA field
+              stored with the SA.</t>
+          </list></t>
+        </section>
+        <section anchor="tg2" title="A Stateless Method of Token Generation">
+          <t> This describes a stateless method of generating a token.<list style="symbols">
+            <t> At startup, the IKE implementation generates a 32-octet random buffer using a
+              cryptographically secure PRNG. This buffer is called the QCR_SECRET.</t>
+            <t> For each QCR token, the TOKEN_SECRET_DATA field is generated by calculating a 
+              SHA-256 hash over a concatenation of the QCR_SECRET and the IKE SPI as follows:<figure>
+            <artwork><![CDATA[
+            
+         TOKEN_SECRET_DATA = HASH(QCR_SECRET | SPI-I | SPI-R)
+
+            ]]></artwork>
+            </figure></t>
+            <t> Verification uses the same calculation, and works even if the IKE SA has been
+              deleted. Still, if the IKE SA is no longer valid, the notification MUST NOT be
+              acknowledged, as this could be used in an attempt to guess the QCR_SECRET.</t>
+          </list></t>
+        </section>
+        <section anchor="toklifetime" title="Token Lifetime">
+          <t> The token is associated with a single IKE SA, and SHOULD be deleted when the SA is 
+            deleted or expires. More formally, the token is associated with the pair (SPI-I, SPI-R).</t>
+        </section>
+      </section>
+      <section anchor="whynot" title="Alternative Solutions">
+        <section anchor="saveikesa" title="Why not Save the Entire IKE SA">
+        <t> IKEv2 does not assume the existence of a persistent storage module. If we are adding
+          such a module, why not use it to save the entire IKE SA across reboots, nullifying the
+          need for a crash recovery procedure?</t>
+        <t> There are several reasons why we believe that this is not a good idea:<list style="numbers">
+          <t> A token is only 16-256 octets, and is much more compact than all the data
+            needed to store an IKE SA.</t>
+          <t> A token is valid for the life of an IKE SA. An IKE SA state is updated whenever a message
+            is sent, becuase of the requirement to keep the sequence of message IDs.  It may not 
+            be acceptable to update the persistent storage whenever an IKE message is sent.</t>
+          <t> A reboot is usually an unpredictable event, and as such, we cannot know how long it
+            will last. By the time the machine has rebooted, the peer may have attempted some type
+            of protected exchange (liveness check, create-child-SA or delete), timed out, and deleted
+            the SA. It is far better to reboot without SAs and with only a token for quick
+            recovery.</t>
+        </list></t>
+        </section>
+        <section anchor="newikesa" title="Initiating a new IKE SA">
+        <t> Instead of sending a QCR token, we could have the rebooted implementation start an 
+          Initial exchange with the peer, including the INITIAL_CONTACT notification. This would
+          have the same effect, instructing the peer to erase the old IKE SA, as well as establishing
+          a new IKE SA with fewer rounds.</t>
+        <t> The disadvantage here, is that in IKEv2 an authentication exchange MUST have
+          a piggy-backed Child SA set up. Since our use case is such that the rebooted implementation
+          does not have traffic flowing to the peer, there are no good selectors for such a child
+          SA.</t>
+        <t> Additionally, when authentication is assymetric, such as when EAP is used, it is not 
+          possible for the rebooted implementation to initiate IKE.</t>
+        </section>
+      </section>
+      <section anchor="operation" title="Operational Considerations">
+        <t> To support this standard, an implementation needs to have access to a persistent
+          storage module. This could be an internal hard disk, a local or remote database
+          application, or any other method that persists across reboots. This storage module and
+          the data links between the storage module and the IKE module must meet the performance
+          requirements of the IKE module. The storage module MUST support insertion and deletion
+          rates equal to peek IKE SA setup rates and it SHOULD support query rates that are fast
+          enough.</t>
+        <t> See <xref target="security"/> for security considerations for this storage mechanism.</t>
+        <t> In order to limit the effects of DoS attacks, an implementation SHOULD limit the rate
+          of queries into the token storage so as not to overload it. If excessive amounts of IKE
+          requests protected with unknown IKE SPIs arrive, the IKE module SHOULD revert to the 
+          behavior described in section 2.21 of <xref target="RFC4306"/> and either send an 
+          INVALID_IKE_SPI notification, or ignore it entirely.</t>
+      </section>
+      <section anchor="security" title="Security Considerations">
+        <t> Tokens MUST be hard to guess. This is critical, because if an attacker can guess the 
+          token associated with the IKE SA, she can tear down the IKE SA and associated tunnels at
+          will. When the token is delivered in the IKE_AUTH exchange, it is encrypted. When it is
+          sent back in an informational exchange it is not encrypted, but that is the last use
+          of that token.</t>
+        <t> An aggregation of some tokens generated by one peer together with the related IKE SPIs
+          MUST NOT give an attacker the ability to guess other tokens. Specifically, if one peer 
+          does not properly secure the QCR tokens and an attacker gains access to them, this
+          attacker MUST NOT be able to guess other tokens generated by the same peer. This is the
+          reason that the QCR_SECRET in <xref target="tg2"/> needs to be long.</t>
+        <t> The persistent storage MUST be protected from access by other parties. Anyone gaining
+          access to the contents of the storage will be able to delete all the IKE SAs described
+          in it.</t>
+        <t> The tokens associated with expired and deleted IKE SAs MUST be deleted from the storage,
+          so that a future compromise of the storage does not reveal enough tokens to facilitate
+          an attack against the QCR tokens.</t>
+        <t> The QCR token is sent by the rebooted peer in an unprotected message. A message like 
+          that is subject to modification, deletion and replay by an attacker. However, these 
+          attacks will not compromise the security of either side. Modification is meaningless
+          because a modified token is simply an invalid token. Deletion will only cause the 
+          protocol not to work, resulting in a delay in tunnel re-establishment as described in
+          <xref target="SCR"/>. Replay is also meaningless, because the IKE SA has been deleted
+          after the first transmission.</t>
+      </section>
+      <section anchor="iana" title="IANA Considerations">
+        <t> IANA is requested to assign a notify message type from the error types range
+          (43-8191) of the "IKEv2 Notify Message Types" registry with name 
+          "QUICK_CRASH_RECOVERY".</t>
+      </section>      
+  </middle>
+  <!-- ====================================================================== -->
+  <back>
+    <references title="Normative References"> 
+      <reference anchor='RFC2119'>
+        <front>
+          <title abbrev='RFC Key Words'>Key words for use in RFCs to Indicate Requirement Levels</title>
+          <author initials='S.' surname='Bradner' fullname='Scott Bradner'>
+            <organization>Harvard University</organization>
+            <address>
+              <postal>
+                <street>1350 Mass. Ave.</street>
+                <street>Cambridge</street>
+                <street>MA 02138</street>
+              </postal>
+              <phone>- +1 617 495 3864</phone>
+              <email>sob@harvard.edu</email>
+            </address>
+          </author>
+          <date year='1997' month='March' />
+          <area>General</area>
+          <keyword>keyword</keyword>
+        </front>
+        <seriesInfo name='BCP' value='14' />
+        <seriesInfo name='RFC' value='2119' />
+        <format type='TXT' octets='4723' target='ftp://ftp.isi.edu/in-notes/rfc2119.txt' />
+        <format type='HTML' octets='16553' target='http://xml.resource.org/public/rfc/html/rfc2119.html' />
+        <format type='XML' octets='5703' target='http://xml.resource.org/public/rfc/xml/rfc2119.xml' />
+      </reference>
+      <reference anchor='RFC4306'>
+        <front>
+          <title>Internet Key Exchange (IKEv2) Protocol</title>
+          <author initials='C.' surname='Kaufman' fullname='C. Kaufman'>
+            <organization /></author>
+          <date year='2005' month='December' />
+        </front>
+        <seriesInfo name='RFC' value='4306' />
+        <format type='TXT' target='http://www.ietf.org/rfc/rfc4306.txt' />
+        <format type='HTML' target='http://xml.resource.org/public/rfc/html/rfc4306.html' />
+        <format type='XML' target='http://xml.resource.org/public/rfc/xml/rfc4306.xml' />
+      </reference>
+      <reference anchor='RFC4718'>
+        <front>
+          <title>IKEv2 Clarifications and Implementation Guidelines</title>
+          <author initials='P.' surname='Eronen' fullname='P. Eronen'>
+            <organization>Nokia</organization></author>
+          <author initials='P.' surname='Hoffman' fullname='P. Hoffman'>
+            <organization>VPN Consortium</organization></author>
+          <date year='2006' month='October' />
+        </front>
+        <seriesInfo name='RFC' value='4718' />
+        <format type='TXT' target='http://www.ietf.org/rfc/rfc4718.txt' />
+        <format type='HTML' target='http://xml.resource.org/public/rfc/html/rfc4718.html' />
+        <format type='XML' target='http://xml.resource.org/public/rfc/xml/rfc4718.xml' />
+      </reference>
+      <reference anchor='resumption'>
+        <front>
+          <title>IPsec Gateway Failover Protocol</title>
+          <author initials='Y.' surname='Sheffer' fullname='Y. Sheffer'>
+            <organization>Check Point</organization></author>
+          <author initials='H.' surname='Tschofenig' fullname='H. Tschofenig'>
+            <organization>Nokia Siemens Networks</organization></author>
+          <author initials='L.' surname='Dondeti' fullname='L. Dondeti'>
+            <organization>QUALCOMM, Inc.</organization></author>
+          <author initials='V.' surname='Narayanan' fullname='L. Narayanan'>
+            <organization>QUALCOMM, Inc.</organization></author>
+          <date year='2007' month='November' />
+        </front>
+        <seriesInfo name='Internet-Draft' value='draft-sheffer-ipsec-failover-02' />
+        <format type='TXT'
+          target='http://www.ietf.org/internet-drafts/draft-sheffer-ipsec-failover-02.txt' />
+       </reference>
+    </references>
+    <!-- ====================================================================== -->
+  </back>
+</rfc>

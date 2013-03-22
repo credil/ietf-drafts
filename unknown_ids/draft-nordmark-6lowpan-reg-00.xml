@@ -1,0 +1,291 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+    <!ENTITY rfc3971 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3971.xml'>
+    <!ENTITY rfc4443 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4443.xml'>
+    <!ENTITY rfc4861 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4861.xml'>
+    <!ENTITY lowpan-backbone-router-nd PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.thubert-6lowpan-backbone-router.xml'>
+    <!ENTITY lowpan-ipv6-nd PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.chakrabarti-6lowpan-ipv6-nd.xml'>
+]>
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes"?>
+<?rfc tocdepth="4"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc strict="no"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<?xml version="1.0"?>
+
+<rfc ipr="full3978" docName="draft-nordmark-6lowpan-reg-00.txt">
+	
+<front>
+<title abbrev="ND Registration Extension">
+Neighbor Discovery Registration Extension
+</title>
+
+<author initials="E" surname="Nordmark" fullname="Erik Nordmark">
+  <organization>Sun Microsystems, Inc.</organization>
+  <address>
+    <postal>
+    <street>17 Network Circle</street>
+    <city>Menlo Park, CA 94025</city>
+    <country>USA</country>
+    </postal>
+    <phone>+1 650 786 2921</phone>
+    <email>Erik.Nordmark@Sun.COM</email>
+  </address>
+</author>
+
+
+<date month="June" year="2008"/>
+<workgroup>6LOWPAN WG</workgroup>
+<keyword>6LOWPAN</keyword>
+
+<abstract>
+<t>In order to reduce Neighbor Discovery multicast messages it is useful
+if the routers on a link can maintain an authoritative list of the IPv6 and
+layer 2 addresses for all the hosts on the link.</t>
+
+<t>This draft specifies an extension to the Router Advertisement messages
+which trigger to hosts to send periodic registration messages which can be
+either unicast, multicast, or anycast. The protocol uses a soft-state approach
+to gather registration information.</t>
+</abstract>
+</front>
+
+<middle>
+
+<section title="Introduction">
+<t>
+IPv6 Neighbor Discovery <xref target="RFC4861"/> relies on multicast packets
+for much functionality. On links where there are low-powered nodes, such as
+6LOWPAN links, the multicast packets are expensive in the sense that they cause
+the nodes to wake up thereby consuming (battery) power.</t>
+
+<t>Some ND multicast packets can be avoided if the routers can track the
+IPv6 and layer 2 addresses of all the hosts on the link, since that removes
+the need for multicasting address resolution and duplicate address messages.
+See <xref target="I-D.chakrabarti-6lowpan-ipv6-nd"/> for potential techniques
+to avoid other reasons for multicasting ND packets.</t>
+
+<t>This document specifies a simple extension to IPv6 Neighbor Discovery that
+provide a registration mechanism for the hosts. The mechanism allows the 
+routers to specify how and when the hosts should register, which gives 
+flexibility. For instance, the registration messages could be sent periodically
+to N different unicast address, or sent to a single unicast or anycast address.
+The messages can also be sent immediately which is useful after a router 
+failure when the router or routers need to rebuild their list of registered
+hosts.</t>
+
+</section>
+
+<section title="New ND messages and options">
+
+<t>This document defines a new ND registration options which is included
+in Router Advertisement messages, and it defines a new ND registration message
+which is sent by the hosts.</t>
+
+<section title="New ND Registration Option">
+
+<t>The ND registration option can be sent in Router Advertisement
+messages. It specifies a registration period and a list of IP addresses
+to which Registration messages should be sent.</t>
+
+<figure>
+ <artwork><![CDATA[
+ 0                   1                   2                   3   
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|     Type      |    Length     |N|        Reserved             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Registration Period                     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                                                               +
+|                                                               |
++                            Address[0]                         +
+|                                                               |
++                                                               +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+~                            Address[1] etc                     ~
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+]]></artwork>
+</figure>
+<t>Fields:
+ <list style='hanging' hangIndent='15'>
+  <t hangText="Type:"> TBD [To be allocated by the IANA.]</t>
+  <t hangText="Length:"> 8-bit unsigned integer.
+The length of the option in units of 8 octets.
+The value 0 is invalid. The length depends on the number of addresses.</t>
+  <t hangText="Registration Period:"> 32-bit unsigned integer.
+The amount of time in seconds between successive registration messages
+for the same IP address.</t>
+  <t hangText="N:"> NEW. A single bit. When set the receiving host will
+immediately send registration messages.</t>
+  <t hangText="Address[i]:"> One or more IP address to which the host should
+send registration messages.</t>
+ </list>
+</t>
+</section>
+
+<section title="New ND Registration Message">
+
+<t>A host will send a registration message for each of its IPv6 addresses on the interface. They are send periodically based on the Registration Period
+in the option, and immediately when receiving a registration option with 
+the 'N' bit.
+</t>
+
+<figure>
+ <artwork><![CDATA[
+ 0                   1                   2                   3   
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|     Type      |     Code      |          Checksum             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           Reserved                            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|   Options ...
++-+-+-+-+-+-+-+-+-+-+-+-
+]]></artwork>
+</figure>
+<t>IP Fields:
+ <list style='hanging' hangIndent='15'>
+  <t hangText="Source Address:">
+The IPv6 address which is being registered. MUST be the an address assigned 
+to the interface from which this message is sent.</t>
+  <t hangText="Destination Address:">
+A unicast or multicast address. Typically a link-local address.</t>
+  <t hangText="Hop Limit:"> 255</t>
+ </list>
+</t>
+<t>Fields:
+ <list style='hanging' hangIndent='15'>
+  <t hangText="Type:"> TBD [To be allocated by the IANA]</t>
+  <t hangText="Code:"> 0</t>
+  <t hangText="Checksum:"> The ICMP checksum.  See <xref target="RFC4443"/>.
+</t>
+  <t hangText="Reserved:"> This field is unused.  It MUST be initialized to zero
+by the sender and MUST be ignored by the receiver.</t>
+ </list>
+</t>
+<t>Possible options:
+ <list style='hanging' hangIndent='15'>
+  <t hangText="Source link-layer address:">
+The link-layer address for the sender.  It MUST be included.</t>
+ </list>
+</t>
+</section>
+
+</section>
+
+<section title="Router Operation">
+
+<t>A router is configured with the registration period to use and the set 
+of IP addresses to include in the registration option. Typically the IP 
+addresses are those of all the routers addresses on the link.</t>
+
+<t>When the router initializes the interface, for instance, when the router
+is powered on, it sends three RAs as specified in 
+<xref target="RFC4861"/>. Those RAs SHOULD have the 'N' bit set to cause the
+hosts to immediately register. This enables a restarting router to quickly
+discover the set of attached hosts.</t>
+
+<t>Subsequent RAs do not have the 'N' bit set. But the hosts will register
+periodically based on the Registration Period that the router specified.</t>
+
+<t>It is expected that all the routers on a link use the same Registration
+Period and IP addresses in their Registration Options. 
+Routers SHOULD inspect valid Router Advertisements sent by other
+routers and verify that the routers are advertising consistent
+information on a link.  Detected inconsistencies indicate that one or
+more routers might be misconfigured and SHOULD be logged to system or
+network management.</t>
+
+<t>Since Registration Messages are not reliably delivered the router should 
+set the Registration Period to a fraction of the time after which it will
+forget about a registered host. What fraction to use depends on the
+loss characteristics of the link. On reliable wired networks it would be
+reasonable to use one fourth i.e., allow two or three consecutive registration
+messages to be lost without the router declaring the host gone.</t>
+
+</section>
+
+<section title="Host Operation">
+
+<t>A host needs to record the information received in the Registration Option
+separately for each interface, or optionally, for each interface and
+advertising router.</t>
+
+<t>When a host needs to send a registration it will send one registration
+message for each of its IP addresses on the interface to each of the IP 
+addresses. Each registration message has the registered IP address in the
+IP source address field. This means that when there are N IP addresses
+in the registration option and the host has M IP address, the host will
+send N*M registration messages.</t>
+
+<t>The reason for not including multiple IP addresses in the same registration
+message is due to the belief that this would make it harder to apply
+Secure Neighbor Discovery <xref target="RFC3971"/>
+to the registration messages.</t>
+
+<t>When the host receives a Router Advertisement message it records the
+Registration Period and the list of IP address from a Registration Option in
+the RA. The received information replaces what it has stored from a previous
+RA. If the 'N' bit is set it immediately sends out the N*M registration
+messages. The host maintains a randomized period timer based on the 
+Registration Period. The timer is set to fire between 0.5 and 1.5 times the 
+Registration Period to avoid self-synchronization for the registration
+messages. Each time the timer fires the host sends the N*M messages, and
+computes the random time the next timer should fire.</t>
+
+<t>If a particular router times out from the default router list then the
+host SHOULD discard the information it learned from that router's 
+Registration Option.</t>
+
+</section>
+
+<section title="Security Considerations">
+
+<t>The use of Hop Limit = 255 by the senders and verified as such by
+the receivers prevents off-link attackers from successfully injecting
+Registration Messages.</t>
+
+<t>It should be possible to apply Secure Neighbor Discovery
+<xref target="RFC3971"/> to the registration messages to guard against
+other on-link nodes spoofing registration messages.</t>
+
+</section>
+
+<section title="IANA Considerations">
+
+<t>This document needs one ICMPv6 type code assigned for the ND registration
+message, and one Neighbor Discovery option value assigned to the registration
+option.</t>
+
+</section>
+
+</middle>
+
+<back>
+<references title="Normative References">
+&rfc3971;
+&rfc4443;
+&rfc4861;
+</references>
+
+<references title="Informative References">
+&rfc2119;
+&lowpan-ipv6-nd;
+&lowpan-backbone-router-nd;
+</references>
+</back>
+</rfc>

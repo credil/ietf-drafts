@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="US-ASCII" ?>
+<!DOCTYPE rfc SYSTEM "http://xml.resource.org/authoring/rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC ''
+    'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+    <!ENTITY rfc3629 PUBLIC ''
+    'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3629.xml'>
+    <!ENTITY rfc4406 PUBLIC ''
+    'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4406.xml'>
+    <!ENTITY rfc4408 PUBLIC ''
+    'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4408.xml'>
+    <!ENTITY rfcSMTP PUBLIC ''
+    'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.klensin-rfc2821bis.xml'>
+    <!ENTITY rfcUTF8 PUBLIC ''
+    'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-eai-smtpext.xml'>
+]>
+<!-- $Id$ -->
+<?xml-stylesheet type="text/xsl" href="rfc2629.xslt" ?>
+
+<!-- no I-D - >
+    <?rfc private="SPF draft" ?>
+    <?rfc header="Sender Policy Framework" ?>
+    <?rfc footer="draft-ellermann-spf-eai-00" ?>
+<! - no I-D -->
+
+<?rfc toc="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc strict="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc rfcprocack="yes" ?>
+
+<rfc ipr="full3978" docName="draft-ellermann-spf-eai-00" category="exp">
+<front>
+    <title abbrev="SPF Email Address Internationalization">
+        Sender Policy Framework: Email Address Internationalization
+    </title>
+    <author initials="F." surname="Ellermann" fullname="Frank Ellermann">
+        <organization>xyzzy</organization>
+        <address>
+            <postal>
+                <street></street>
+                <city>Hamburg</city>
+                <region>Germany</region>
+            </postal>
+            <email>hmdmhdfmhdjmzdtjmzdtzktdkztdjz@gmail.com</email>
+            <uri>http://purl.net/xyzzy/</uri>
+        </address>
+    </author>
+    <date />
+    <abstract><t>
+        UTF8SMTP is an extension of SMTP (Simple Mail Transfer Protocol)
+        allowing the use of UTF-8 in the SMTP envelope for EAI (Email
+        Address Internationalization) and other purposes. This memo
+        discusses some consequences for SPF (Sender Policy Framework).
+    </t></abstract>
+
+    <note title="Editorial note"><t>
+        This note, the <xref target="iana">IANA considerations</xref>,
+        and the <xref target="history">document history</xref> should
+        be removed before publication.
+    </t></note>
+</front>
+
+<middle>
+    <section title="Introduction"><t>
+        The keywords "MUST NOT" and "SHOULD" in this memo are to be
+        interpreted as described in <xref target="RFC2119" />.  UTF-8
+        is specified in <xref target="RFC3629" />.
+    </t><t>
+        Readers should be familiar with SMTP as specified in
+        <xref target="I-D.klensin-rfc2821bis" />
+        and the SPF terminology in <xref target="RFC4408" />.  An MTA
+        is a Mail Transfer Agent, e.g., an SMTP relay.
+    </t><t>
+        Comments and questions can be sent to the SPF-Discuss mailing list
+        <eref target="http://dir.gmane.org/gmane.mail.spam.spf.discuss" />.
+    </t></section>
+
+    <section title="Background"><t>
+        SMTP as specified in
+        <xref target="I-D.klensin-rfc2821bis" />
+        supports only ASCII addresses and LDH (letter, digit, hyphen)
+        domain labels. The letters are ASCII letters, LDH-labels are
+        also known as A-labels in the context of IDN (Internationalization
+        of Domain Names).
+
+    </t><section title="SPF HELO identity"><t>
+        In SMTP sessions after an SMTP EHLO command from the client the
+        server response can indicate supported SMTP extensions.
+        <xref target="I-D.ietf-eai-smtpext" /> specifies the UTF8SMTP
+        extension.
+    </t><t>
+        The SMTP client can accept an offered UTF8SMTP extension by
+        using one of the specified features, notably by the use of UTF-8
+        in mailbox addresses of SMTP commands, by the use of alternative
+        ASCII addresses in these commands, or by the use of UTF-8 in
+        the message header for addresses and other purposes, i.e. by
+        sending a "message/global" instead of a "message/rfc822".
+    </t><t>
+        Because UTF8SMTP support is indicated in the response to an
+        EHLO command it cannot be used after HELO, and the SPF HELO
+        identity is not affected by EAI:  The domain in a HELO
+        or EHLO command consists of ordinary LDH-labels (A-labels),
+        or it is a domain literal.  For an empty reverse path, as it
+        is used in non-delivery reports and other auto-replies, SPF
+        fabricates a MAIL FROM identity based on the HELO identity
+        with a case insensitive local part "postmaster", this scenario
+        is also not affected by EAI.
+    </t><t>
+        A domain consisting of LDH-labels including IDN A-labels
+        beginning with "xn--" is an ordinary LDH-domain as far as
+        DNS (Domain Name System), SPF, and UTF8SMTP are concerned.
+        Apart from HELO and EHLO the only relevant SMTP command for
+        SPF is the MAIL FROM command with the reverse path containing
+        the envelope sender address (if it is not empty, see above).
+        Where the derived MAIL FROM identity is an ordinary address
+        SPF can handle it as specified in <xref target="RFC4408" />.
+
+    </t></section><section title="EAI MAIL FROM identity"><t>
+        The interesting UTF8SMTP cases for SPF contain non-ASCII
+        UTF-8 characters in the local part (left hand side) or the
+        domain part (right hand side) of the MAIL FROM identity.
+        Domain labels containing non-ASCII UTF-8 characters are also
+        known as U-labels in IDN.
+    </t><t>
+        SPF checks typically make only sense at the border MTA, and
+        ignoring the address fallback in SMTP for the moment this is
+        an MX (Mail eXchanger) of the receiver talking with a sender.
+        An MTA wishing to check the SPF sender policy against the
+        IP of the sender fetches the sender policy for the domain of
+        the HELO or MAIL FROM identity as DNS client of a server for
+        the alleged server. The SPF terminology might be confusing,
+        the MX is the SMTP server, but for the purpose of checking
+        a sender policy it is the SPF (or rather DNS) client of an
+        alleged sender with a known HELO or MAIL FROM identity.
+    </t><t>
+        Skipping all ordinary cases as noted above the SPF client
+        confronted with an EAI address in the MAIL FROM identity is
+        typically the SMTP server supporting UTF8SMTP, and in that
+        case it is supposed to know how to transform U-labels into
+        corresponding A-labels, e.g., because it might need to send
+        a non-delivey report to the envelope sender address later.
+    </t><t>
+        For agents trying post-SMTP SPF-checks this might be not the
+        case, but arguably that is a broken setup, the border MTA
+        should not offer and accept UTF8SMTP mails if critical parts
+        behind it - not limited to the mailbox of the receiver -
+        cannot handle it.  Where this nevertheless happens software
+        could try to use U-labels "as is" in DNS queries, this is a
+        general EAI issue.  SPF clients return NONE for domain
+        literals, a domain literal has no sender policy, they also
+        return NONE for invalid, malformed, or non-existent domains
+        as specified in <xref target="RFC4408" />.  This includes
+        U-labels in MAIL FROM identities for SPF clients not
+        supporting UTF8SMTP.
+    </t><t>
+        An MTA could "downgrade" EAI MAIL FROM addresses using an
+        optional alternative address given as UTF8SMTP Mail-parameter.
+        Where that happens the resulting new MAIL FROM address is an
+        ordinary <xref target="I-D.klensin-rfc2821bis" />
+        reverse path and can be handled as usual.
+    </t></section><section title="local parts"><t>
+        Top down at this point the remaining SPF clients are supposed
+        to know how to transform U-labels into A-labels, and fetch the
+        SPF policy of the alleged sender.  SPF implementors and
+        publishers of SPF sender policies should note that only the
+        domain part of the MAIL FROM identity is transformed from
+        U-labels into A-labels.  The local part MUST NOT be transformed,
+        it is used "as is" in the construction of a &lt;target-name&gt;
+        by SPF macro expansion involving local part macros.
+    </t><t>
+        Please note that <xref target="RFC4408" /> allows all octets in
+        labels of a &lt;target-name&gt; excluding dots, which are
+        supposed to separate labels.  Leading, trailing, or adjacent
+        dots in a &lt;target-name&gt; are expected to cause a PERMERROR,
+        or to explore dark corners of SPF implementations.  This is no
+        DNS issue, in theory all octets can be used in a label, it is a
+        limitation caused by baroque SPF features, and this memo is not
+        the place to specify the handling of labels with embedded dots.
+    </t><t>
+        <xref target="I-D.klensin-rfc2821bis" />
+        recommends to avoid quoted strings in local parts of addresses,
+        and a quoted string containing leading, trailing, or adjacent
+        dots in conjunction with rarely used local part macros is the
+        only way to arrive at a problematic &lt;target-name&gt;.
+    </t><t>
+        Other octets found in an UTF-8 local part of EAI addresses are
+        no problem for SPF, but note that DNS compares ASCII letters
+        case-insensitively.  Domains supporting case-sensitive ASCII
+        characters in local parts cannot expect to use the SPF local
+        part macro feature.  Non-ASCII UTF-8 octets are not affected
+        by this DNS limitation.
+    </t></section></section>
+
+    <section title="Considerations for policy publishers" anchor="spf"><t>
+        Policy publishers should know that this memo does not update
+        <xref target="RFC4408" />, in theory EAI is compatible with
+        SPF.  It is not possible to use U-labels in sender policies
+        directly, they have to be transformed into the corresponding
+        A-labels.  Likewise U-labels in UTF8SMTP MAIL FROM addresses
+        are transformed into A-labels for the purposes of SPF by
+        implementations supporting EAI.
+    </t><t>
+        SPF implementations not supporting U-labels in MAIL FROM
+        identities will return NONE instead of the intended result,
+        e.g., PASS or FAIL.  UTF8SMTP senders wishing to avoid this
+        problem could transform MAIL FROM U-labels into A-labels on
+        their side.  They can also hope that spammers forging MAIL
+        FROM identities will not abuse IDN U-labels in the near
+        future, and that most SPF implementations will be updated
+        before this changes.  Unfortunately experience has shown that
+        spammers learn faster than lazy users.
+    </t><t>
+        MAIL FROM identities using only A-labels, with or without
+        UTF-8 in the local part, work "as is" for the purposes of
+        SPF.  HELO identities consist either of A-labels, are domain
+        literals and irrelevant for SPF, or are syntactically malformed
+        as far as UTF8SMTP and SPF are concerned.  SPF does not
+        specify how receivers should handle SMTP HELO syntax errors.
+    </t><t>
+        UTF8SMTP allows to specify an optional alternative address
+        in the traditional syntax.  Receivers are free to check SPF
+        also or only based on the alternative address.  Obviously a
+        sender policy for the alternative address should permit the
+        same sending IPs as the sender policy for the EAI address,
+        and one simple way to achieve this is to use corresponding
+        A-labels in an alternative address yielding one SPF sender
+        policy for both addresses.  Please note that this is not
+        required by UTF8SMTP, it permits to use unrelated domains
+        with different policies.  Clearly if some IPs permitted for
+        one address fail for the other address, or vice versa, the
+        sender will have problems, if the affected IPs are actually
+        used to send mails.
+    </t><t>
+        This memo does not discuss EAI considerations for PRA
+        (Purported Responsible Address) policies specified in
+        <xref target="RFC4406" />, the PRA is determined by
+        addresses in the message header and not necessarily related
+        to the MAIL FROM identity used by SPF based on UTF8SMTP
+        MAIL FROM or EHLO commands.  Publishers of sender policies
+        should know that "spf2.0/pra" introduces a PRA policy.  In
+        theory policy records starting with "spf2.0/pra,mfrom" or
+        "spf2.0/mfrom,pra" can be checked using the PRA algorithm
+        or the SPF algorithm, while policy records starting with
+        "spf2.0/mfrom" have to be checked using the SPF algorithm.
+    </t><t>
+        In practice all SPF implementations support SPF policies
+        introduced by "v=spf1" as specified in
+        <xref target="RFC4408" />.  The "spf2.0/mfrom" variations
+        can be considered as obsolete, "spf2.0/mfrom" is an alias
+        for "v=spf1".  If users wish to publish policies for both
+        PRA and SPF they SHOULD use separate "spf2.0/pra" and
+        "v=spf1" policy records, even if those policy records are
+        otherwise syntactically identical.  In any case there are
+        significant semantical differences between SPF and PRA.
+    </t></section>
+
+    <section title="Acknowledgements"><t>
+        Various IETF tools by Henrik Levkowetz, Bill Fenner, and
+        others were a great help in the creation of this memo.
+    </t></section>
+
+    <section title="Security Considerations"><t>
+        When UTF8SMTP senders use a different domain in the optional
+        alternative MAIL FROM address, and the corresponding sender
+        policy is also different, it is hard to predict which policy
+        will be checked, if any, depending on the route to the
+        receiver and other factors.  Different results can be hard
+        to diagnose, e.g., if a mail from the same sender to the
+        same receiver sometimes results in PASS and at other times
+        in FAIL.  Various proposals to mitigate this problem are
+        discussed in <xref target="spf" />
+    </t><t>
+        Using the SPF local part macro in conjunction with EAI is not
+        intuitive, local parts are not transformed to A-labels.  This
+        is no new problem, but in conjunction with EAI it is more
+        likely, the details are explained in <xref target="spf" />.
+    </t><t>
+        Unsurprisingly evaluating PRA policies with SPF or vice versa
+        can cause havoc, as the algorithms are semantically different
+        even when the policies are otherwise syntactically identical.
+        This memo deprecates three of five sender policy variants in
+        <xref target="spf" /> to reduce the confusion.
+    </t><t>
+        Not all SPF implementations will already support U-labels as
+        specified in this memo.  Senders could transform U-labels in
+        MAIL FROM commands to A-labels on their side where this is a
+        problem.
+    </t><t>
+        UTF8SMTP servers can be forced to send non-delivery reports
+        to forged envelope sender addresses, if some receiver mailboxes
+        can handle EAI mails, while others can't, and the server has no
+        way to "downgrade" mails to traditional receivers.  Hopefully a
+        future SMTP extension will allow a kind of "selective reject"
+        mechanism.  Publishing SPF PASS or FAIL policies, and rejecting
+        FAIL at the border MTA can eliminate this problem.  Similarly
+        non-delivery reports after a PASS cannot hit innocent bystanders.
+    </t></section>
+
+    <section title="IANA Considerations" anchor="iana"><t>
+        Keep up the good work, nothing to do here.
+    </t></section>
+</middle>
+
+<back>
+    <references title="Normative References">
+        &rfc2119;
+        &rfc4408;
+        &rfcUTF8;
+    </references>
+    <references title="Informative References">
+        &rfc3629;
+        &rfc4406;
+        &rfcSMTP;
+    </references>
+    <section title="Document History" anchor="history"><t>
+        Initial version
+<!--
+        Changes in version 01:
+    </t><t>
+        <list style="symbols"><t>
+        </t></list>
+ -->
+    </t></section>
+</back></rfc>

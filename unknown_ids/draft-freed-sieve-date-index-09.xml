@@ -1,0 +1,612 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<rfc ipr="full3978" docName="draft-freed-sieve-date-index-09" category="std">
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<?rfc comments="yes" ?>
+	
+<front>
+
+<title abbrev="Sieve Date and Index Extensions">
+Sieve Email Filtering: 
+Date and Index Extensions
+</title>
+<author initials="N." surname="Freed" fullname="Ned Freed">
+<organization>Sun Microsystems</organization>
+<address>
+<postal>
+<street>3401 Centrelake Drive, Suite 410</street>
+<city>Ontario</city> <region>CA</region>  <code>92761-1205</code>
+<country>USA</country>
+</postal>
+<phone>+1 909 457 4293</phone>
+<email>ned.freed@mrochek.com</email>
+</address>
+</author>
+<date year="2008" />
+<area>Applications</area>
+<keyword>RFC</keyword>
+<keyword>Request for Comments</keyword>
+<keyword>SMTP</keyword>
+<keyword>ESMTP</keyword>
+<keyword>Sieve</keyword>
+<keyword>I-D</keyword>
+<keyword>Internet-Draft</keyword>
+
+<abstract><t>
+This document describes the "date" and "index" extensions to the Sieve email
+filtering language.  The "date" extension gives Sieve
+the ability to test date and time values in various ways.
+The "index" extension provides a means to limit header and address
+tests to specific instances of header fields when header fields
+are repeated.
+</t></abstract>
+
+<note title='Change History (to be removed prior to publication as an RFC)'>
+<t>
+Changed usage from Julian Days to Modified Julian Days. This has
+the advantage that the number are smaller and day numbers change at midnight
+rather than at noon.
+</t>
+<t>
+Added the ability to return the day of the week.
+</t>
+<t>
+Use the term "argument" instead of "parameter" throughout.
+</t>
+<t>
+Added a "std11" part type as a means to operate on values formatted
+in the same way as a Date: header field.
+</t>
+<t>
+Changed the terminology from "part" to "date-part".
+</t>
+<t>
+Updated reference to 3028bis, corrected miscellaneous typos.
+</t>
+<t>
+Updated the IANA registration templates.
+</t>
+<t>
+Added "time" and "date" as possible date-part values with appropriate
+syntax.
+</t>
+<t>
+Restricted allowed ISO 8601 formats so that comparisons will
+be reliable.
+</t>
+<t>
+Changed the date-part "timezone" to "zone" to make it consistent with the
+:zone parameter.
+</t>
+<t>
+Removed the reference to structured header fields in the description of the
+date test.
+</t>
+<t>
+Added a paragraph to make it clear that :index counts header fields, not
+the contents of header fields.
+</t>
+<t>
+Allow leap seconds.
+</t>
+<t>
+Added :originalzone parameter to date test.
+</t>
+<t>
+Added several examples.
+</t>
+<t>
+Made the specification of :last without :index an error, aligning this
+specification with editheader.
+</t>
+<t>
+Added some security considerations text about the impact of currentdate
+on script analysis.
+</t>
+<t>
+Updated references to recently published RFCs.
+</t>
+</note>
+
+</front>
+
+<middle>
+
+<section anchor="intro" title="Introduction">
+
+<t>
+Sieve <xref target='RFC5228' /> is a language for filtering email
+messages at or around the time of final delivery.  It is designed to be
+implementable on either a mail client or mail server.  It is meant to be
+extensible, simple, and independent of access protocol, mail architecture,
+and operating system.  It is suitable for running on a mail server where users
+may not be allowed to execute arbitrary programs, such as on black box
+Internet Message Access Protocol <xref target="RFC3501" /> servers, as it has no
+user-controlled loops or the ability to run external programs.
+</t>
+
+<t>
+The "date" extension provides a new date test to extract and match 
+date/time information from structured header fields.
+The date test is similar in concept to the
+address test specified in <xref target='RFC5228' />,
+which performs similar operations on addresses in header fields.
+</t>
+
+<t>
+The "date" extension also provides a currentdate test that operates on the
+date and time when the Sieve script is executed.
+</t>
+
+<t>
+Some header fields containing date/time information, e.g. Received:, naturally
+occur more than one in a single header. In such cases it is useful to be able
+to restrict the date test to some subset of the fields that are present. For
+example, it may be useful to apply a date test to the last (earliest)
+Received: field. Additionally, it may also be useful to apply similar restrictions
+to either the header or address tests specified in <xref target="RFC5228" />. 
+</t>
+
+<t>
+For this reason this specification also defines an "index" extension. This
+extension adds two additional tagged arguments :index and :last to the header,
+address, and date tests. If present these arguments specify which occurrence
+of the named header field is to be tested. 
+</t>
+
+</section>
+
+<section anchor="conventions" title="Conventions used in this document">
+
+<t>
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and "OPTIONAL" in this
+document are to be interpreted as described in <xref target="RFC2119">RFC 2119</xref>.
+</t>
+
+<t>
+The terms used to describe the various components of the Sieve
+language are taken from <xref target='RFC5228' /> section 1.1. A
+syntactic element defined using ABNF notation <xref target="RFC5234" />
+in <xref target='RFC3339' /> is also used here.
+</t>
+
+</section>
+
+<section title='Capability Identifiers'>
+
+<t>
+The capability strings associated with the two extensions defined in this
+document are "date" and "index".
+</t>
+
+</section>
+
+<section title='Date Test'>
+
+<figure><artwork><![CDATA[
+Usage:   date [<":zone" <time-zone: string>> / ":originalzone"]
+              [COMPARATOR] [MATCH-TYPE] <header-name: string>
+              <date-part: string> <key-list: string-list>
+]]></artwork></figure>
+
+<t>
+The date test matches date/time information derived from headers
+containing <xref target="RFC2822" /> date-time
+values. The date/time information is extracted from the header, shifted to
+the specified time zone, and the value of the given date-part is determined.
+The test returns true if the resulting string matches any of the
+strings specified in the key-list, as controlled by the comparator and match
+keywords. The date test returns false unconditionally if the specified header
+field does not exist, the field exists but does not contain a syntactically
+valid date-time specification, or the resulting string fails to
+match any key-list value.
+</t>
+
+<t>
+The type of match
+defaults to ":is" and the default comparator is "i;ascii-casemap".
+</t>
+
+
+<t>
+Unlike the header and address tests, the date test can only be applied
+to a single header field at a time. If multiple header fields with the
+same name are present only the first field that is found is used. (Note,
+however, that this behavior can be modified with the "index" extension
+defined below.)
+</t>
+
+<t>
+The "relational" extension <xref target='RFC5231' /> adds a match
+type called ":count".  The count of a date test is 1 if the specified field
+exists and contains a valid date, zero otherwise.
+</t>
+
+<t>
+Implementations MUST support extraction of RFC 2822 date-time information that
+either makes up the entire header field (e.g., as it does in a standard
+Date: header field) and date-time information that appears at the end of
+a header field (e.g., as it does in a standard Received: header field).
+Implementations MAY support extraction of date and time information in RFC2822
+or other formats that
+appears in other positions in header field content. In the case of a field
+containing more than one date or time value the last one that appears should
+be used.
+</t>
+
+<section title="Zone and Originalzone Arguments">
+
+<t>
+The :originalzone argument specifies that the time zone originally in the
+extracted date-time value should be retained. The :zone argument specifies
+a specific time zone offset the date-time value is to be shifted to prior to
+testing. It is an error to specify both :zone and :originalzone.
+</t>
+
+<t>
+The value of time-zone MUST be an offset relative to
+UTC with the following syntax:
+</t>
+
+<figure><artwork><![CDATA[
+    time-zone  =  ( "+" / "-" ) 4DIGIT
+]]></artwork></figure>
+
+<t>
+If both the :zone and :originalzone arguments are omitted the local time zone
+MUST be used.
+</t>
+
+</section>
+
+<section title="Date-part Argument">
+
+<t>
+The date-part argument specifies a particular part of the resulting date/time
+value to match against the key-list. Possible values are:
+</t>
+
+<figure><artwork><![CDATA[
+  "year"      => the year, "0000" .. "9999".
+  "month"     => the month, "01" .. "12".
+  "day"       => the day, "01" .. "31".
+  "date"      => the date in "yyyy-mm-dd" format.
+  "julian"    => the Modified Julian Day, that is, the date
+                 expressed as an integer number of days since
+                 12:00AM on November 17, 1858 (using the Julian
+                 calendar). This corresponds to the regular
+                 Julian Day minus 2400000.5.
+  "hour"      => the hour, "00" .. "23".
+  "minute"    => the minute, "00" .. "59".
+  "second"    => the second, "00" .. "60".
+  "time"      => the time in "hh:mm:ss" format.
+  "iso8601"   => the date and time in restricted ISO 8601 format.
+  "std11"     => the date and time in a format appropriate
+                 for use in a Date: header field [RFC2822].
+  "zone"      => the time zone in use.  If the user specified a
+                 time zone with ":zone", "zone" will
+                 contain that value.  If :originalzone is specified
+                 this value will be the original zone specified
+                 in the date-time value. If neither arugment is
+                 specified the value will be the server's default
+                 time zone in offset format "+hhmm" or "-hhmm". An
+                 offset of 0 (Zulu) always has a positive sign.
+  "weekday"   => the day of the week expressed as an integer between
+                 "0" and "6". "0" is Sunday, "1" is Monday, etc.
+]]></artwork></figure>
+
+<t>
+The restricted ISO 8601 format is specified by the date-time ABNF
+production given in <xref target="RFC3339" /> section 5.6, with
+the added restrictions that the letters "T" and "Z" MUST be in
+upper case and a time zone offset of zero MUST be represented by
+"Z" and not "+00:00".
+</t>
+
+</section>
+
+<section title="Comparator Interactions With Date-part Arguments">
+
+<t>
+Not all comparators are suitable with all date-part arguments. In 
+general, the date-parts can be compared and tested for equality with 
+either "i;ascii-casemap" (the default) or "i;octet", but there are 
+two exceptions:
+</t>
+
+<t>
+<list style="hanging">
+
+<t hangText="julian">
+The Modified Julian Day is an integer, and may or may not 
+have leading zeros. As such, "i;ascii-numeric" is almost
+certainly the best comparator to use with it.
+</t>
+
+<t hangText="std11">
+This is case-insensitive, and therefore "i;ascii-casemap"  needs to be used.
+</t>
+</list>
+</t>
+
+<t>
+"year", "month", "day", "date", "hour", "minute", "second" and 
+"weekday" all use fixed-width string representations of integers, and 
+can therefore be compared with "i;octet", "i;ascii-casemap", and 
+"i;ascii-numeric" with equivalent results.
+</t>
+
+</section>
+
+<section anchor="dateexamples" title="Examples">
+
+<t>
+The Date: field can be tested to test when the sender claims to
+have created the message and act accordingly:
+</t>
+
+<figure><artwork><![CDATA[
+  require ["date", "relational", "fileinto"];
+  if allof(header :is "from" "boss@example.com",
+           date :value "ge" :originalzone "date" "hour" "09",
+           date :value "lt" :originalzone "date" "hour" "17")
+  { fileinto "urgent"; }
+]]></artwork></figure>
+
+<t>
+Testing the initial Received: field can provide an indication of when was
+actually received by the local system:
+</t>
+
+<figure><artwork><![CDATA[
+  require ["date", "relational", "fileinto"];
+  if anyof(date :is "received" "weekday" "0",
+           date :is "received" "weekday" "6")
+  { fileinto "weekend"; }
+]]></artwork></figure>
+
+</section>
+
+</section>
+
+<section anchor="currentdate" title="Currentdate Test">
+
+<figure><artwork><![CDATA[
+Usage:   currentdate [":zone" <time-zone: string>]
+                     [COMPARATOR] [MATCH-TYPE]
+                     <date-part: string>
+                     <key-list: string-list>
+]]></artwork></figure>
+
+<t>
+The currentdate test is similar to the date test, except that it
+operates on the current date/time rather than a value extracted from
+the message header. In particular, the ":zone" and date-part
+arguments are the same as those in the date test.
+</t>
+
+<t>
+All currentdate tests in a single Sieve script 
+MUST refer to the same point in time.
+</t>
+
+<t>
+The :count value of a currentdate test is always 1.
+</t>
+
+<section anchor="currentdateexamples" title="Examples">
+
+<t>
+The simplest use of currentdate is to have an action that only
+operations at certain times. For example, a user might want to
+have messages redirected to their pager after business hours and on
+weekends:
+</t>
+
+<figure><artwork><![CDATA[
+  require ["date", "relational"];
+  if anyof(currentdate :is "weekday" "0",
+           currentdate :is "weekday" "6",
+           currentdate :value "lt" "hour" "09",
+           currentdate :value "ge" "hour" "17")
+  { redirect pager@example.com"; }
+]]></artwork></figure>
+
+<t>
+Currentdate can be used to set up vacation 
+<xref target='RFC5230' /> responses in advance and to
+stop response generation automatically:
+</t>
+
+<figure><artwork><![CDATA[
+  require ["date", "relational", "vacation"];
+  if allof(currentdate :value "ge" "date" "2007-06-30",
+           currentdate :value "le" "date" "2007-07-07")
+  { vacation :days 7  "I'm away during the first week in July."; }
+]]></artwork></figure>
+
+<t>
+Currentdate may also be used in conjunction with the variables
+extension to pass time-dependent arguments to other tests and
+actions. The following Sieve places messages in a folder named
+according to the current month and year:
+</t>
+
+<figure><artwork><![CDATA[
+  require ["date", "variables"];
+  if currentdate :matches "month" "*" { set "month" "${1}"; }
+  if currentdate :matches "year"  "*" { set "year"  "${1}"; }
+  fileinto "${month}-${year}";
+]]></artwork></figure>
+
+</section>
+
+</section>
+
+<section anchor="index" title="Index Extension">
+
+<t>
+The "index" extension, if specified, adds optional :index and :last
+arguments to the header, address, and date tests as follows:
+</t>
+
+<figure><artwork><![CDATA[
+Syntax:   date [":index" <fieldno: number> [":last"]]
+               [<":zone" <time-zone: string>> / ":originalzone"]
+               [COMPARATOR] [MATCH-TYPE] <header-name: string>
+               <date-part: string> <key-list: string-list>
+]]></artwork></figure>
+
+<figure><artwork><![CDATA[
+Syntax:   header [":index" <fieldno: number> [":last"]]
+                 [COMPARATOR] [MATCH-TYPE]
+                 <header-names: string-list> <key-list: string-list>
+]]></artwork></figure>
+
+<figure><artwork><![CDATA[
+Syntax:   address [":index" <fieldno: number> [":last"]]
+                  [ADDRESS-PART] [COMPARATOR] [MATCH-TYPE]
+                  <header-list: string-list> <key-list: string-list>
+]]></artwork></figure>
+
+<t>
+If :index &lt;fieldno&gt; is specified, the attempts to match 
+a value are limited to the header field fieldno (beginning
+at 1, the first named header field).  If :last is also specified,
+the count is backwards; 1 denotes the last named header field,
+2 the second to last, and so on. Specifying :last without :index
+is an error.
+</t>
+
+<t>
+:index only counts separate header fields, not multiple occurences within
+a single field. In particular, :index cannot be used to test a specific
+address in an address list contained within a single header field.
+</t>
+
+<t>
+Both header and address allow the specification of more than one
+header field name. If more than one header field name is specified
+all the named header fields are counted in the order specified by the
+header-list.
+</t>
+
+<section anchor="indexexamples" title="Examples">
+
+<t>
+Mail delivery may involve mutiple hops, resulting in the Received: field
+containing information about when a message first entered the local
+administrative domain being the second or subsequent field in the message.
+As long as the field offset is consistent it can be tested:
+</t>
+
+<figure><artwork><![CDATA[
+  # Implement the Internet-draft cutoff date check assuming the
+  # second Receieved: field specifies when the message first
+  # entered the local email infrastructure.
+  require ["date", "relational", "index"];
+  if date :value "gt" :index 2 :zone "-0500" "received"
+          "iso8601" "2007-02-26T09:00:00-05:00"",
+  { redirect "aftercutoff@example.org"; }
+]]></artwork></figure>
+
+</section>
+
+</section>
+
+<section anchor="security" title="Security Considerations">
+
+<t>
+The facilities defined here, like the facilities in the base
+Sieve specification, operate on message header information which
+can easily be forged. Note, however, that some fields are more
+inherently more reliable than others. For example, the Date: field
+is typically inserted by the message sender and can be altered at
+any point. By contrast, the uppermost Received: field is typically
+inserted by the local mail system and is therefore difficult for the
+sender or an intermediary to falsify.
+</t>
+
+<t>
+Use of the currentdate test makes script behavior inherently less
+predictable and harder to analyze. This may have consequences for systems
+that use script analysis to try and spot problematic scripts.
+</t>
+
+<t>
+All of the security considerations given in the base Sieve
+specification also apply to these extensions. 
+</t>
+
+</section>
+
+<section anchor="IANA" title="IANA Considerations">
+<figure>
+<preamble>
+The following templates specify the IANA registrations of the two Sieve
+extensions specified in this document:
+</preamble>
+<artwork>
+   To: iana@iana.org
+   Subject: Registration of new Sieve extensions
+
+   Capability name: date
+   Description:     The "date" extension gives sieve the ability
+                    to test date and time values.
+   RFC number:      RFC &rfc.number;
+   Contact address: Sieve discussion list &lt;ietf-mta-filters@imc.org&gt;
+</artwork>
+</figure>
+<figure>
+<artwork>
+   Capability name: index
+   Description:     The "index" extension provides a means to
+                    limit header and address tests to specific
+                    instances when more than one field of a
+                    given type is present.
+   RFC number:      RFC &rfc.number;
+   Contact address: Sieve discussion list &lt;ietf-mta-filters@imc.org&gt;
+    </artwork>
+</figure>
+</section>
+
+</middle>
+
+<back>
+
+<references title="Normative References">
+
+<?rfc include="reference.RFC.2119" ?>
+<?rfc include="reference.RFC.2822" ?>
+<?rfc include="reference.RFC.3339" ?>
+<?rfc include="reference.RFC.5228" ?>
+<?rfc include="reference.RFC.5231" ?>
+<?rfc include="reference.RFC.5234" ?>
+
+</references>
+
+<references title="Informative References">
+
+<?rfc include="reference.RFC.3501" ?>
+<?rfc include="reference.RFC.5230" ?>
+
+</references>
+
+<section title='Acknowledgements'>
+
+<t>
+Dave Cridland contributed the text describing the proper comparators
+to use with different date-parts. Alexey Melnikov, Chris Newman,
+Dilyan Palauzov and Aaron Stone provided helpful suggestions and corrections.
+</t>
+
+</section>
+
+</back>
+
+</rfc>

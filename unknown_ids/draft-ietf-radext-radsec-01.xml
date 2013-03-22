@@ -1,0 +1,391 @@
+<?xml version = '1.0'?>
+<?rfc rfcedstyle='yes'?>
+<?rfc rfcprocack='yes'?>
+<?rfc toc='yes'?>
+<?rfc symrefs='yes'?>
+<!DOCTYPE rfc SYSTEM "../xml2rfc-current/rfc2629.dtd" [
+
+      <!ENTITY rfc2119    PUBLIC '' '../rfc-bib/reference.RFC.2119.xml'>
+      <!ENTITY rfc2865    PUBLIC '' '../rfc-bib/reference.RFC.2865.xml'>
+      <!ENTITY rfc2866    PUBLIC '' '../rfc-bib/reference.RFC.2866.xml'>
+      <!ENTITY rfc3268    PUBLIC '' '../rfc-bib/reference.RFC.3268.xml'>
+      <!ENTITY rfc5176    PUBLIC '' '../rfc-bib/reference.RFC.5176.xml'>
+      <!ENTITY rfc3588    PUBLIC '' '../rfc-bib/reference.RFC.3588.xml'>
+      <!ENTITY rfc5246    PUBLIC '' '../rfc-bib/reference.RFC.5246.xml'>
+      <!ENTITY rfc5280    PUBLIC '' '../rfc-bib/reference.RFC.5280.xml'>
+      <!ENTITY radius-tcp PUBLIC '' '../i-d-bib/reference.I-D.draft-dekok-radext-tcp-transport-00.xml'>
+
+    ]>
+<rfc ipr='full3978' docName='draft-ietf-radext-radsec-01' category='exp'>
+  <front>
+    <title abbrev="RADIUS over TCP/TLS (RadSec)" >TLS encryption for RADIUS over TCP (RadSec)</title>
+    <author fullname="Stefan Winter" initials="S." surname="Winter" >
+	<organization abbrev="RESTENA" >
+		  Fondation RESTENA
+	</organization>
+	<address>
+		<postal>
+			<street>6, rue Richard Coudenhove-Kalergi</street>
+			<city>Luxembourg</city>
+			<code>1359</code>
+			<country>LUXEMBOURG</country>
+		</postal>
+		<phone>+352 424409 1</phone>
+		<facsimile>+352 422473</facsimile>
+		<email>stefan.winter@restena.lu</email>
+		<uri>http://www.restena.lu.</uri>
+	</address>
+    </author>
+    <author fullname="Mike McCauley" initials="M." surname="McCauley" >
+	    <organization abbrev="OSC" >
+		    Open Systems Consultants
+	    </organization>
+	    <address>
+		    <postal>
+			    <street>9 Bulbul Place</street>
+			    <city>Currumbin Waters</city>
+			    <code>QLD 4223</code>
+			    <country>AUSTRALIA</country>
+		    </postal>
+		    <phone>+61 7 5598 7474</phone>
+		    <facsimile>+61 7 5598 7070</facsimile>
+		    <email>mikem@open.com.au</email>
+		    <uri>http://www.open.com.au.</uri>
+	    </address>
+    </author>
+    <author fullname="Stig Venaas" initials="S." surname="Venaas" >
+	<organization abbrev="UNINETT" >
+		  UNINETT
+	</organization>
+	<address>
+		<postal>
+			<street>Abels gate 5 – Teknobyen</street>
+			<city>Trondheim</city>
+			<code>7465</code>
+			<country>NORWAY</country>
+		</postal>
+		<phone>+47 73 55 79 00</phone>
+		<facsimile>+47 73 55 79 01</facsimile>
+		<email>stig.venaas@uninett.no</email>
+		<uri>http://www.uninett.no.</uri>
+	</address>
+    </author>
+    <author fullname="Klaas Wierenga" initials="K." surname="Wierenga" >
+	    <organization abbrev="Cisco" >
+		    Cisco Systems International BV
+	    </organization>
+	    <address>
+		    <postal>
+			    <street>Haarlerbergweg 13-19</street>
+			    <city>Amsterdam</city>
+			    <code>1101 CH</code>
+			    <country>The Netherlands</country>
+		    </postal>
+		    <phone>+31 (0)20 3571752</phone>
+		    <facsimile></facsimile>
+		    <email>kwiereng@cisco.com</email>
+		    <uri>http://www.cisco.com.</uri>
+	    </address>
+      </author>
+    <date day="22" month="August" year="2008" />
+    <area>Operations and Management Area</area>
+    <workgroup>RADIUS Extensions Working Group</workgroup>
+    <keyword>RADIUS</keyword>
+    <keyword>AAA</keyword>
+    <keyword>Security</keyword>
+    <keyword>Reliability</keyword>
+    <abstract>
+	    <t>This document specifies security on the transport layer (TLS) for the RADIUS protocol <xref target="RFC2865" /> when transmitted over TCP <xref target="I-D.dekok-radext-tcp-transport" />. This enables dynamic trust relationships between RADIUS servers.</t>
+    </abstract>
+  </front>
+  <middle>
+    <section title="Introduction" anchor="intro">
+	<t>The RADIUS protocol <xref target="RFC2865" /> is a widely deployed authentication and authorisation protocol. The supplementary RADIUS Accounting specification <xref target="RFC2866" /> also provides accounting mechanisms, thus delivering a full AAA solution. However, RADIUS is experiencing several shortcomings, such as its dependency on the unreliable transport protocol UDP and the lack of security for large parts of its packet payload. RADIUS security is based on the MD5 algorithm, which has been proven to be insecure.</t>
+	
+	<t>The main focus of RadSec is to provide a means to secure the communication between RADIUS/TCP peers on the transport layer. The most important use of RadSec lies in roaming environments where RADIUS packets need to be transferred through different administrative domains and untrusted, potentially hostile networks. An example for a world-wide roaming environment that uses RadSec to secure communication is "eduroam", see <xref target="eduroam"/>.</t>
+	
+	<t>There are multiple known attacks on the MD5 algorithm which is used in RADIUS to provide integrity protection and a limited confidentiality protection. RadSec wraps the entire RADIUS packet payload into a TLS stream and thus mitigates the risk of attacks on MD5.</t> 
+	
+	<t>Because of the static trust establishment between RADIUS peers (IP address and shared secret) the only scalable way of creating a massive deployment of RADIUS-servers under control by different administrative entities is to introduce some form of a proxy chain to route the access requests to their home server. This creates a lot of overhead in terms of possible points of failure, longer transmission times as well as middleboxes through which authentication traffic flows. These middleboxes may learn privacy-relevant data while forwarding requests. The new features in RadSec obsolete the use of IP addresses and shared MD5 secrets to identify other peers and thus allow the dynamic establishment of connections to peers that are not previously configured, and thus makes it possible to avoid intermediate aggregation proxies. The definition of lookup mechanisms is out of scope of this document, but an implementation of a DNS NAPTR lookup based mechanism exists and is described as an example lookup mechanism in <xref target="naptr"/>.</t>
+	<section title="Requirements Language" anchor="reqlang">
+		<t>In this document, several words are used to signify the requirements of the specification.  The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target="RFC2119" />.</t>
+	</section>
+	<section title="Terminology" anchor="terms">
+		<t>RadSec node: a RadSec client or server</t>
+		<t>RadSec Client: a RadSec instance which initiates a new connection.</t>
+		<t>RadSec Server: a RadSec instance which listens on a RadSec port and accepts new connections</t>
+	</section>
+    </section>
+    <section title="Normative: Transport Layer Security for RADIUS over TCP" anchor="TLS">
+	<section title="TCP port and packet types" anchor="ports">
+		<t>The default destination port number for RadSec is TCP/2083. There are no separate ports for authentication, accounting and dynamic authorisation changes. The source port is arbitrary.</t>
+	</section>
+	<section title="Connection Setup">
+		<t>RadSec nodes
+			<list style = "numbers">
+				<t>establish TCP connections as per <xref target="I-D.dekok-radext-tcp-transport" /></t>
+				<t>negotiate TLS sessions according to <xref target="RFC5246" /> or its predecessor TLS 1.1. The following restrictions apply:
+					<list style="symbols">
+						<t>When using X.509 certificates, RadSec servers SHOULD indicate their acceptable Certification Authorities as per section 7.4.4 of <xref target="RFC5246" /> (see <xref target="design-cert" /> (1) )</t>
+						<t>When using X.509 certificates, the TLS Extension "Trusted CA Indication" from <xref target="RFC5246" /> or its TLS 1.1 predecessor SHOULD be used to indicate trusted CAs for the client (see <xref target="design-cert" /> (2) )</t>
+						<t>When using X.509 certificates, certificate validation is performed as per <xref target="RFC5280" /> or its TLS 1.1 predecessor. The client MAY perform additional checks to accomodate for different trust models.</t>
+						<t>The client MUST NOT negotiate cipher suites which only provide integrity protection.</t>
+						<t>The cipher suite TLS_RSA_WITH_3DES_EDE_CBC_SHA MUST be supported.</t>
+						<t>The cipher suites TLS_RSA_WITH_AES_128_CBC_SHA and TLS_RSA_WITH_RC4_128_SHA SHOULD be supported. (see <xref target="design-cipher" /> (1) )</t>
+					</list></t>
+				<t>start exchanging RADIUS datagrams. Note <xref target="design-radius" /> (1) ). The shared secret to compute the (obsolete) MD5 integrity checks and attribute encryption MUST be "radsec" (see <xref target="design-radius" /> (2) ).</t>
+			</list>
+		</t>
+	</section>
+	<section title="RADIUS Datagrams">
+		<t>Authentication, Accounting and Authorization packets are sent according to the following rules:</t>
+		<t>RadSec clients handle the following packet types from <xref target="RFC2865" />, <xref target="RFC2866" />, <xref target="RFC5176" /> on the connection they initiated (see <xref target="design-radius" /> (3) and (4) ):
+			<list style= "symbols">
+				<t>send Access-Request</t>
+				<t>send Accounting-Request</t>
+				<t>send Status-Server</t>
+				<t>send Disconnect-ACK</t>
+				<t>send Disconnect-NAK</t>
+				<t>send CoA-ACK</t>
+				<t>send CoA-NAK</t>
+				<t>receive Access-Challenge</t>
+				<t>receive Access-Accept</t>
+				<t>receive Access-Reject</t>
+				<t>receive Accounting-Response</t>
+				<t>receive Disconnect-Request</t>
+				<t>receive CoA-Request</t>
+			</list></t>
+		<t>RadSec servers handle the following packet types from <xref target="RFC2865" />, <xref target="RFC2866" />, <xref target="RFC5176" /> on the connections they serve to clients:
+			<list style= "symbols">
+				<t>receive Access-Request</t>
+				<t>receive Accounting-Request</t>
+				<t>receive Status-Server</t>
+				<t>receive Disconnect-ACK</t>
+				<t>receive Disconnect-NAK</t>
+				<t>receive CoA-ACK</t>
+				<t>receive CoA-NAK</t>
+				<t>send Access-Challenge</t>
+				<t>send Access-Accept</t>
+				<t>send Access-Reject</t>
+				<t>send Accounting-Response</t>
+				<t>send Disconnect-Request</t>
+				<t>send CoA-Request</t>
+			</list></t>
+	</section>
+</section>
+	<section title="Informative: Design Decisions" anchor="design">
+		<t>This section explains the design decisions that led to the rules defined in the previous section.</t>
+		<section title="X.509 Certificate Considerations" anchor="design-cert">
+			<t>(1) If a RadSec client is in possession of multiple certificates from different CAs (i.e. is part of multiple roaming consortia) and dynamic discovery is used, the discovery mechanism possibly does not yield sufficient information to identify the consortium uniquely (e.g. DNS discovery). Subsequently, the client may not know by itself which client certificate to use for the TLS handshake. Then it is necessary to for the server to signal which consortium it belongs to, and which certificates it expects. If there is no risk of confusing multiple roaming consortia, providing this information in the handshake is not crucial.</t>
+			<t>(2) If a RadSec server is in possession of multiple certificates from different CAs (i.e. is part of multiple roaming consortia), it will need to select one of its certificates to present to the RadSec client. If the client sends the Trusted CA Indication, this hint can make the server select the appropriate certificate and prevent a handshake failure. Omitting this indication makes it impossible to deterministically select the right certificate in this case. If there is no risk of confusing multiple roaming consortia, providing this indication in the handshake is not crucial.</t>
+			<t>(3) When using X.509 certificate validation, peer validation always includes a check on whether the DNS name or the IP address of the server that is contacted matches its certificate. When a RadSec peer establishes a new connection (acts as a client) to another peer, the following rules of precedence are used during validation:
+				<list style="symbols">
+					<t>If the client expects a certain fully qualified domain name (FQDN) and the presented certificate contains both at least one instance of the subjectAltName field with type dNSName and a Common Name, then the certificate is considered a match if any one of those subjectAltName fields matches the expected FQDN. The Common Name field is not evaluated in this case.</t>
+					<t>If the client expects a certain fully qualified domain name (FQDN) and the presented certificate does not contain any subjectAltName field with type dNSName, then the certificate is considered a match if the Common Name field matches the expected FQDN.</t>
+					<t>If the client expects a certain IP address and the presented certificate contains both at least one instance of the subjectAltName field with type iPAddr and a Common Name, then the certificate is considered a match if any one of those subjectAltName fields matches the expected IP address. The Common Name field is not evaluated in this case.</t>
+					<t>If the client expects a certain IP address and the presented certificate does not contain any subjectAltName field with type iPAddr, then the certificate is considered a match if the Common Name field matches the expected IP address.</t>
+				</list>
+			</t>
+		<t>(4) If dynamic peer resolution is used, the above verification steps may not be sufficient to ensure that a connecting peer is authorised to perform user authentications. In these cases, the trust fabric cannot depend on peer authentication methods like DNSSEC to identify RadSec nodes. The RadSec nodes also need to be properly authorised. Operators of a RadSec infrastructure should define their own authorisation trust model and apply this model to the certificates after they have passed the standard validity checks above. Current RadSec implementations offer varying degrees of versatility for defining criteria which certificates to accept.</t>
+	        </section>
+		<section title="Ciphersuites and Compression Negotiation Considerations" anchor="design-cipher">
+			<t>RadSec implementations need not necessarily support all TLS ciphersuites listed in <xref target="RFC5246"/>. Not all TLS ciphersuites are supported by available TLS tool kits and licenses may be required in some cases. The existing implementations of RadSec use OpenSSL as cryptographic backend, which supports all of the ciphersuites listed in the rules in the normative section.</t>
+			<t>The TLS cphersuite TLS_RSA_WITH_3DES_EDE_CBC_SHA is mandatory-to-implement according to <xref target="RFC5246"/> and thus has to be supported by RadSec nodes.</t>
+			<t>The two other ciphersuites in the normative section (TLS_RSA_WITH_RC4_128_SHA and TLS_RSA_WITH_AES_128_CBC_SHA) are widely implemented in TLS toolkits and are considered good practice to implement.</t>
+			<t>TLS also supports compression. Compression is an optional feature. During the RadSec conversation the client and server may negotiate compression, but must continue the conversation even if the other peer rejects compression.</t>
+	    </section>
+	    <section title="RADIUS Datagram Considerations" anchor="design-radius">
+		    <t>(1) After the TLS session is established, RADIUS packet payloads are exchanged over the encrypted TLS tunnel. In plain RADIUS, the packet size can be determined by evaluating the size of the datagram that arrived. Due to the stream nature of TCP and TLS, this does not hold true for RadSec packet exchange. Instead, packet boundaries of RADIUS packets that arrive in the stream are calculated by evaluating the packet's Length field. Special care needs to be taken on the packet sender side that the value of the Length field is indeed correct before sending it over the TLS tunnel, because incorrect packet lengths can no longer be detected by a differing datagram boundary.</t>
+		    <t>(2) Within RADIUS <xref target="RFC2865"/>, a shared secret is used for hiding of attributes such as User-Password, as well as in computation of the Response Authenticator.  In RADIUS accounting <xref target="RFC2866"/>, the shared secret is used in computation of both the Request Authenticator and the Response Authenticator. Since TLS  provides integrity protection and encryption sufficient to substitute for RADIUS application-layer security, it is not necessary to configure a RADIUS shared secret. The use of a fixed string for the obsolete shared secret eliminates possible node misconfigurations.</t>
+		    <t>(3) RADIUS <xref target="RFC2865" /> uses different UDP ports for authentication, accounting and dynamic authorisation changes. RadSec allocates a single port for all RADIUS packet types. Also in RadSec, the notion of a client which sends authentication requests and processes replies associated with it's users' sessions and the notion of a server which receives requests, processes them and sends the appropriate replies is to be preserved. The normative rules about acceptable packet types for clients and servers mirror the packet flow behaviour from RADIUS.</t>
+		    <t>(4) RADIUS <xref target="RFC2865" /> used negative ICMP responses to a newly allocated UDP port to signal that a peer RADIUS server does not support reception and processing of the packet types in <xref target="RFC5176" />. These packet types are listed as to be received in RadSec implementations. Note well: it is not required for an implementation to actually process these packet types. It is sufficient that upon receiving such a packet, an unconditional NAK is sent back to indicate that the action is not supported.</t>
+		</section>
+    </section>
+    <section title="Diameter Compatibility" anchor="compat">
+	    <t>Since RadSec is only a new transport profile for RADIUS, compatibility of RadSec - Diameter <xref target="RFC3588" /> vs. RADIUS <xref target="RFC2865" /> - Diameter <xref target="RFC3588" /> is identical. The considerations regarding payload size in <xref target="I-D.dekok-radext-tcp-transport" /> apply.</t>
+    </section>
+    <section title="Security Considerations" anchor="security">
+	    <t>The computational resources to establish a TLS tunnel are significantly higher than simply sending mostly unencrypted UDP datagrams. Therefore, clients connecting to a RadSec node will more easily create high load conditions and a malicious client might create a Denial-of-Service attack more easily.</t>
+	    <t>In the case of dynamic peer discovery, a RadSec node needs to be able to accept connections from a large, not previously known, group of hosts, possibly the whole internet. In this case, the server's RadSec port can not be protected from unauthorised connection attempts with measures on the network layer, i.e. access lists and firewalls. This opens more attack vectors for Distributed Denial of Service attacks, just like any other service that is supposed to serve arbitrary clients (like for example web servers).
+	    </t>
+	    <t>Some TLS ciphersuites only provide integrity validation of their payload, and provide no encryption. This specification forbids the use of such ciphersuites. Since the RADIUS payload's shared secret is fixed and well-known, failure to comply with this requirement will expose the entire datagram payload in plain text, including User-Password, to intermediate IP nodes.</t>
+    </section>
+    <section title="IANA Considerations" anchor="iana">
+	    <t>This document has no actions for IANA. The TCP port 2083 was already previously assigned by IANA for RadSec. No new RADIUS attributes or packet codes are defined.</t>
+    </section>
+    <section title="Acknowledgements" anchor="acks">
+	    <t>RadSec version 1 was first implemented by Open Systems Consultants, Currumbin Waters, Australia, for their &quot;Radiator&quot; RADIUS server product (see <xref target="radsec-whitepaper" />).</t>
+	    <t>Funding and input for the development of this Internet Draft was provided by the European Commission co-funded project "GEANT2" <xref target="geant2" /> and further feedback was provided by the TERENA Task Force Mobility <xref target="terena" />.</t>
+    </section>
+  </middle>
+  <back>
+    <references title="Informative References">
+    	&rfc2119;
+	<reference anchor="radsec-whitepaper" target="http://www.open.com.au/radiator/radsec-whitepaper.pdf">
+		<front>
+			<title>RadSec - a secure, reliable RADIUS Protocol</title>
+			<author>
+				<organization abbrev="OSC">Open System Consultants</organization>
+			</author>
+			<date month="May" year="2005"/>
+		</front>
+		<format type="TXT" target="http://www.open.com.au/radiator/radsec-whitepaper.pdf"/>
+	</reference>
+	<reference anchor="radiator-manual" target="http://www.open.com.au/radiator/ref.html">
+		<front>
+			<title>Radiator Radius Server - Installation and Reference Manual</title>
+			<author>
+				<organization abbrev="OSC">Open System Consultants</organization>
+			</author>
+			<date year="2006"/>
+		</front>
+		<format type="TXT" target="http://www.open.com.au/radiator/ref.html"/>
+	</reference>
+<!--	<reference anchor="opendiameter" target="http://www.opendiameter.org/">
+		<front>
+			<title>Open Diameter</title>
+			<author>
+				<organization abbrev="ODP">Open Diameter Project</organization>
+			</author>
+			<date year="2006"/>
+		</front>
+		<format type="TXT" target="http://www.opendiameter.org/"/>
+	</reference>
+	<reference anchor="jdiameter" target="https://jdiameter.dev.java.net/">
+		<front>
+			<title>JDiameter Project Homepage</title>
+			<author initials="E." surname="Svenson" fullname="Erik Svenson">
+				<organization/>
+			</author>
+			<date year="2006"/>
+		</front>
+		<format type="TXT" target="https://jdiameter.dev.java.net/"/>
+	</reference> -->
+	<reference anchor="radsecproxy-impl" target="http://software.uninett.no/radsecproxy/">
+		<front>
+			<title>radsecproxy Project Homepage</title>
+			<author initials="S." surname="Venaas" fullname="Stig Venaas">
+				<organization abbrev="UNINETT">UNINETT</organization>
+			</author>
+			<date year="2007"/>
+		</front>
+		<format type="TXT" target="http://software.uninett.no/radsecproxy/"/>
+	</reference>
+	<reference anchor="eduroam" target="http://www.eduroam.org/">
+		<front>
+			<title>eduroam Homepage</title>
+			<author>
+				<organization abbrev="TERENA">Trans-European Research and Education Networking Association</organization>
+			</author>
+			<date year="2007"/>
+		</front>
+		<format type="TXT" target="http://www.eduroam.org/"/>
+	</reference>
+	<reference anchor="geant2" target="http://www.geant2.net/">
+		<front>
+			<title>European Commission Information Society and Media: GEANT2</title>
+			<author>
+				<organization abbrev="Dante">Delivery of Advanced Network Technology to Europe</organization>
+			</author>
+			<date year="2008"/>
+		</front>
+		<format type="TXT" target="http://www.geant2.net/"/>
+	</reference>
+	<reference anchor="terena" target="http://www.terena.org/">
+		<front>
+			<title>Trans-European Research and Education Networking Association</title>
+			<author>
+				<organization abbrev="TERENA">TERENA</organization>
+			</author>
+			<date year="2008"/>
+		</front>
+		<format type="TXT" target="http://www.terena.org/"/>
+	</reference>
+    </references>	
+    <references title="Normative References">
+	&rfc2865;
+	&rfc2866;
+	<!-- &rfc3268; -->
+	&rfc5280;
+	&rfc5176;
+	&rfc3588;	
+	&rfc5246;
+<!--	    <reference anchor="RFC4513">
+		    <front>
+			    <title>Lightweight Directory Access Protocol (LDAP): Authentication Methods and Security Mechanisms</title>
+			    <author initials="R." surname="Harrison" fullname="Roger Harrison">
+				    <organization abbrev="Novell">Novell, Inc.</organization>
+			    </author>
+			    <date month="June" year="2006"/>
+		    </front>
+		    <seriesInfo name="RFC" value="4513" />
+		    <format type="TXT" />
+	    </reference> -->
+	    <!--<reference anchor="draft-status-server" target="http://www.ietf.org/internet-drafts/draft-dekok-radius-status-server-01.txt">
+		    <front>
+			    <title>Use of Status-Server Packets in RADIUS</title>
+			    <author initials="A." surname="DeKok" fullname="Alan DeKok">
+				    <organization abbrev="FreeRADIUS">The FreeRADIUS Server Project</organization>
+			    </author>
+			    <date month="February" year="2007"/>
+		    </front>
+		    <format type="TXT" target="http://www.ietf.org/internet-drafts/draft-dekok-radius-status-server-01.txt"/>
+	    </reference>-->
+	&radius-tcp;
+    </references>
+    <section title="DNS NAPTR Peer Discovery" anchor="naptr"><t>The following text is quoted from the file goodies/dnsroam.cfg in the Radiator distribution; further documentation of the &lt;AuthBy DNSROAM&gt; feature in Radiator can be found at <xref target="radiator-manual" />. It describes an algorithm to retrieve the RadSec route information from the global DNS using NAPTR and SRV records. The input of the algorithm is the realm part of the user name.</t>
+	    <t>The following algorithm is used to discover a target server from a Realm using DNS:
+		<list style="numbers">
+		    <t>Look for NAPTR records for the Realm.</t>
+		    <t>For each NAPTR found record, examine the Service field and use that to determine the transport protocol and TLS requirements for the server. The Service field starts with 'AAA' for insecure and 'AAAS' for TLS secured. The Service field contains '+RADSECS' for RadSec over SCTP, '+RADSECT' for RadSec over TCP or '+RADIUS' for RADIUS protocol over UDP. The most common Service field you will see will be 'AAAS+RADSECT' for TLS secured RadSec over TCP.</t>
+		    <t><list style="letters">
+				    <t>If the NAPTR has the 'S' flag, look for SRV records for the name. For each SRV record found, note the Port number and then look for A and AAAA records corresponding to the name in the SRV record.</t>
+		    		    <t>If the NAPTR has the 'A' flag, look for a A and AAAA records for the name.</t>
+			    </list></t>
+		    <t>If no NAPTR records are found, look for A and AAAA records based directly on the realm name. For example, if the realm is 'examplerealm.edu', it looks for records such as '_radsec._tcp.examplerealm.edu', '_radsec._sctp.examplerealm.edu' and '_radius._udp.examplerealm.edu',</t>
+		    <t>All A and AAAA records found are ordered according to their Order and Preference fields. The most preferable server address is used as the target server address, along with any other server attributes discovered from DNS. If no SRV record was found for the address, the DNSROAM configured Port is used.</t>
+	       </list>
+	    For example, if the User-Name realm was 'examplerealm.edu', and DNS contained the following records:
+	    <list style="empty">
+		    <t>examplerealm.edu. IN NAPTR 50 50 "s" "AAAS+RADSECT" "" _radsec._tcp.examplerealm.edu.</t>
+		    <t>_radsec._tcp.examplerealm.edu. IN SRV 0 10 2083 radsec.examplerealm.edu.</t>
+		    <t>radsec.examplerealm.edu.  IN AAAA 2001::202:44ff:fe0a:f704</t>
+	    </list>
+		    Then the target selected would be a RadSec server on port 2083 at IPv6 address 2001::202:44ff:fe0a:f704. The connection would be made over TCP/IP, and TLS encryption would be used. This complete specification of the realm is the most flexible and is recommended.</t>
+    </section>
+    <section title="Implementation Overview: Radiator" anchor="radiator">
+	    <t>Radiator implements the RadSec protocol for proxying requests with the &lt;Authby RADSEC&gt; and &lt;ServerRADSEC&gt; clauses in the Radiator configuration file.</t>
+	    <t>The &lt;AuthBy RADSEC&gt; clause defines a RadSec client, and causes Radiator to send RADIUS requests to the configured RadSec server using the RadSec protocol.</t>
+	    <t>The &lt;ServerRADSEC&gt; clause defines a RadSec server, and causes Radiator to listen on the configured port and address(es) for connections from &lt;Authby RADSEC&gt; clients. When an &lt;Authby RADSEC&gt; client connects to a &lt;ServerRADSEC&gt; server, the client sends RADIUS requests through the stream to the server. The server then services the request in the same was as if the request had been received from a conventional UDP RADIUS client.</t>
+	    <t>Radiator is compliant to version 2 of RadSec if the following options are used:
+	    	<list style="empty">
+			<t>&lt;AuthBy RADSEC&gt;
+				<list style="symbols">
+					<t>Protocol tcp</t>
+					<t>UseTLS</t>
+					<t>TLS_CertificateFile</t>
+				</list>
+			</t>
+			<t>&lt;ServerRADSEC&gt;
+				<list style="symbols">
+					<t>Protocol tcp</t>
+					<t>UseTLS</t>
+					<t>TLS_RequireClientCert</t>
+				</list>
+			</t>
+		</list>
+		As of Radiator 3.15, the default shared secret for RadSec connections is "mysecret" (without quotes). The implementation uses TCP keepalive socket options, but does not send Status-Server packets. Once established, TLS connections are kept open throughout the server instance lifetime.
+	    </t>
+    </section>
+    <section title="Implementation Overview: radsecproxy" anchor="radsecproxy">
+	    <t>The RADIUS proxy named radsecproxy was written in order to allow use of RadSec in current RADIUS deployments. This is a generic proxy that supports any number and combination of clients and servers, supporting RADIUS over UDP and RadSec. The main idea is that it can be used on the same host as a non-RadSec client or server to ensure RadSec is used on the wire, however as a generic proxy it can be used in other circumstances as well.</t>
+	    <t>The configuration file consists of client and server clauses, where there is one such clause for each client or server. In such a clause one specifies either "type tls" or "type udp" for RadSec or UDP transport. For RadSec the default shared secret "mysecret" (without quotes), the same as Radiator, is used. A secret may be specified by putting say "secret somesharedsecret" inside a client or server clause.</t>
+	    <t>In order to use TLS for clients and/or servers, one must also specify where to locate CA certificates, as well as certificate and key for the client or server. This is done in a TLS clause. There may be one or several TLS clauses. A client or server clause may reference a particular TLS clause, or just use a default one. One use for multiple TLS clauses may be to present one certificate to clients and another to servers.</t>
+	    <t>If any RadSec (TLS) clients are configured, the proxy will at startup listen on port 2083, as assigned by IANA for the OSC RadSec implementation. An alternative port may be specified. When a client connects, the client certificate will be verified, including checking that the configured FQDN or IP address matches what is in the certificate. Requests coming from a RadSec client are treated exactly like requests from UDP clients.
+	    </t>
+	    <t>The proxy will at startup try to establish a TLS connection to each (if any) of the configured RadSec (TLS) servers. If it fails to connect to a server, it will retry regularly. There is some back-off where it will retry quickly at first, and with longer intervals later. If a connection to a server goes down it will also start retrying regularly. When setting up the TLS connection, the server certificate will be verified, including checking that the configured FQDN or IP address matches what is in the certificate. Requests are sent to a RadSec server just like they would to a UDP server.</t>
+	    <t>The proxy supports Status-Server messages. They are only sent to a server if enabled for that particular server. Status-Server requests are always responded to.</t>
+	    <t>This RadSec implementation has been successfully tested together with Radiator. It is a freely available open-source implementation. For source code and documentation, see <xref target="radsecproxy-impl" />.</t>
+</section>
+  </back>
+</rfc>

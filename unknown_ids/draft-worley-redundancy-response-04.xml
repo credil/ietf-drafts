@@ -1,0 +1,378 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfcXXXX.dtd">
+<?rfc strict="yes" ?>
+<?rfc toc="yes" ?>
+<rfc ipr="trust200811" category="std" docName="draft-worley-redundancy-response-04">
+
+<front>
+<title abbrev="Supporting Path Redundancy">
+Supporting Multiple Path Routing in the Session Initiation Protocol (SIP)
+</title>
+<author initials="D. R." surname="Worley" fullname="Dale R. Worley">
+       <organization abbrev="Nortel Networks">
+       Nortel Networks Corp.
+       </organization>
+   <address>
+       <postal>
+           <street>600 Technology Park Dr.</street>
+           <city>Billerica</city>
+           <region>MA</region>
+           <code>01821</code>
+           <country>US</country>
+       </postal>
+       <phone>+1 978 288 5505</phone>
+       <email>dworley@nortel.com</email>
+       <uri>http://www.nortel.com</uri>
+   </address>
+</author>
+<date month="March" year="2009" />
+<area>Transport</area>
+<workgroup>SIP</workgroup>
+<keyword></keyword>
+<abstract>
+<t>
+An increasing number of SIP architectures implement multiple path
+routing (MPR), which is the providing of more than one path for a
+call to reach a destination user agent (UA).  
+A typical example is a redundant pair of gateways from a SIP system to
+the PSTN.
+A call from the SIP system to the PSTN can pass through either gateway
+to ultimately reach the destination telephone.
+In order to gain the benefits of redundancy in case one of the
+gateways fails or reaches capacity, a proxy forks INVITEs
+serially to both gateways.
+</t>
+
+<t>
+Unfortunately, if the call passes through one gateway but fails at the
+destination phone (e.g., ring-no-answer), the proxy will then fork the
+call to the other gateway, because the proxy has no way to know that the call
+failed at the destination phone rather than at the first gateway.
+The second fork will fail in the same way at the same
+destination phone.
+This annoys both the caller (because the call takes twice as long as
+it should before failing) and anyone within earshot of the destination
+phone.
+Similar failures plague any other SIP architecture where a request can
+reach a destination through multiple paths.
+</t>
+
+<t>
+To gain the benefits of MPR without suffering from this problem,
+the proxy which forks a request onto the redundant paths needs to be
+able to determine if a fork that failed reached the destination UA
+and was rejected by the UA (and so an alternate path should not be
+tried), or if the fork failed before reaching the UA (and so an
+alternate path should be attempted).  This document is to begin a
+discussion of strategies for making this determination.
+</t>
+</abstract>
+</front>
+
+<middle>
+
+<section title='Background' anchor='background'>
+
+<t>
+An increasing number of Session Initiation Protocol (SIP) <xref target='rfc3261'/>
+system architectures implement multiple path routing (MPR), the feature of
+providing more than one path for a call to reach a destination user
+agent (UA).  (MPR is also called path redundancy (PR) or alternate
+path retry (APR).)
+Typical situations are:
+
+<list style='symbols'>
+<t>
+multiple gateway devices that connect a SIP network to the PSTN,
+such that if one gateway is occupied to capacity, calls should be
+routed to the next gateway
+</t>
+
+<t>
+a PSTN gateway device as fallback when SIP connection over the
+public Internet fails
+</t>
+
+<t>
+sending a request to multiple services that determine how to reach a
+destination, with an order of precedence among the services as to
+which service is to be
+used (e.g., connecting to an ENUM contact, falling back to a PSTN gateway)
+</t>
+</list>
+</t>
+
+<t>
+From a protocol point of view, a proxy is presented with the situation
+where a request (typically an INVITE) should be serially forked to
+more than one SIP URI, and from an application-layer point of view,
+all of the URIs are expected to ultimately reach the same user agent
+(UA).  Of course, if one fork of the request succeeds at the
+destination UA, the proxy should not attempt any further forks.
+</t>
+
+<t>
+If the forked request failed and did not reach the destination UA,
+then in order
+implement MPR, the proxy must attempt the next fork.  But if the
+request did reach the destination UA, and the UA returned a failure
+response, sending the request to the same UA via a different path is
+unlikely to yield success, and may even
+degrade the user experience.  For example, if the first request was not
+accepted by the attending human (ring-no-answer), sending a second
+request to the UA by a different path, which will cause the UA to
+alert again, is not the desired behavior.
+</t>
+
+<t>
+The purpose of this document is to open the discussion of methods by
+which the proxy can implement the desired behavior.
+</t>
+
+<t>
+Two subordinate problems are contained in the main problem:  One is
+how the proxy becomes aware that the forking of a request is a MPR
+situation.  Another is the question of when two destinations are
+to be considered to be "the same", and so constitute an MPR set.
+</t>
+
+</section>
+
+<section title="Proposed Solutions">
+
+<t>
+This section discusses proposed solutions to the problem.
+</t>
+
+<t>
+One possible solution is to split the failure response codes into two
+groups, one of which is only generated by proxies, the other is only
+generated by UAs.  Then the response code from a failed fork should
+identify whether the call reached a destination UA or not.  Most
+current failure response codes fall into one or the other of these two
+classes, but several of them can be generated by either proxies or
+user agents.  In addition, the rules for choosing the "best" response from
+among the set of responses from a set of forks must be adjusted to
+give preference to UA-generated responses, which causes difficulties
+in some situations where the UAC might be able to amend its request in
+ways that increase its chances of success.
+</t>
+
+<t>
+Other possible solutions to this problem are solicited.
+</t>
+
+</section>
+
+<section title="Related Work">
+
+<t>
+This section lists related work.
+</t>
+
+<t>
+
+<list style='empty'>
+
+<t>
+ITU-T Recommendation Q.850 (telephone call failure cause codes)<xref target="Q.850"/><vspace blankLines="1"/>
+The Q.850 failure cause codes used in SS7 provide a "location" field
+that distinguishes the network (caller's local network, callee's local
+network, transit network) in which the failure occurred.
+In addition the cause codes are segregated in such a way that it is
+clear whether the call reached the destination telephone before failing.
+</t>
+
+<t>
+RFC 3326: The Reason Header Field for the Session Initiation Protocol
+(SIP)<xref target="rfc3326"/><vspace blankLines="1"/>
+The Reason header can carry a Q.850 failure cause code.
+However, there is no provision for carrying the Q.850 location value.
+Given that the cause codes are well-segregated regarding network
+errors vs. endpoint errors, the cause code is probably sufficient to
+regulate MPR.
+</t>
+
+<t>
+The SIP SPECIFY Method<xref target="sreeram-specify"/><vspace blankLines="1"/>
+Abstract:
+This document proposes an extension to the Session Initiation
+Protocol (SIP).  This extension adds the SPECIFY method to the SIP
+protocol.  The intent of the SPECIFY method is to allow conveying SIP
+entity's (Proxy, User Agent, Redirect Server) intention of
+asynchronous service change (i.e. to be taken out of service or has
+just return to service) with and with out a backup SIP entity within
+the same administrative domain.
+</t>
+
+<t>
+No Service To This Number Reject Code<xref target="schwartz-nsr"/><vspace blankLines="1"/>
+Abstract:
+This specification discusses a SIP response error code ambiguity that
+may exist due to semantic differences between SIP [RFC3261] and TEL
+[RFC3966] URIs.
+</t>
+
+</list>
+
+</t>
+
+</section>
+
+<section title="Security Considerations">
+
+<t>
+Alternate path retry presents no security considerations that are known to the
+author beyond what is present in non-MPR SIP system architectures.
+</t>
+
+</section>
+
+<section title='Revision History' anchor='revision'>
+
+<section title='draft-worley-redundancy-response-00' anchor='00'>
+
+<t>
+First version.
+</t>
+
+</section>
+
+<section title='Changes from draft-worley-redundancy-response-00 to draft-worley-redundancy-response-01' anchor='00-01'>
+
+<t>
+Add note that the new variant of 500 would be like "reorder" in the PSTN.
+</t>
+
+<t>
+Add note that dealing with 402 can be postponed to
+when 402 is standardized.
+</t>
+
+<t>
+Add section proposing how to split response codes.
+</t>
+
+</section>
+
+<section title='Changes from draft-worley-redundancy-response-01 to draft-worley-redundancy-response-02' anchor='01-02'>
+
+<t>
+Narrow the scope of the document to be a problem description.
+</t>
+
+</section>
+
+<section title='Changes from draft-worley-redundancy-response-02 to draft-worley-redundancy-response-03' anchor='02-03'>
+
+<t>
+Changes were minimal.
+</t>
+
+</section>
+
+<section title='Changes from draft-worley-redundancy-response-03 to draft-worley-redundancy-response-04' anchor='03-04'>
+
+<t>
+Added "Related Work" section.
+</t>
+
+<t>
+Updated contact information.
+</t>
+
+<t>
+Revised Abstract.
+</t>
+
+</section>
+
+</section>
+
+</middle>
+
+<back>
+
+<references title="Normative References">
+
+<reference anchor="rfc3261">
+<!-- RFC 3261 -->
+    <front>
+	<title>SIP: Session Initiation Protocol</title>
+        <author initials="J." surname="Rosenberg"><organization/></author>
+        <author initials="H." surname="Schulzrinne"><organization/></author>
+        <author initials="G." surname="Camarillo"><organization/></author>
+        <author initials="A." surname="Johnston"><organization/></author>
+        <author initials="J." surname="Peterson"><organization/></author>
+        <author initials="R." surname="Sparks"><organization/></author>
+        <author initials="M." surname="Handley"><organization/></author>
+        <author initials="E." surname="Schooler"><organization/></author>
+	<date month="June" year="2002"/>
+    </front>
+    <seriesInfo name="RFC" value="3261"/>
+    <format type="TXT"
+            target="ftp://ftp.isi.edu/in-notes/rfc3261.txt" />
+</reference>
+
+<reference anchor="rfc3326">
+<!-- RFC 3326 -->
+    <front>
+	<title>The Reason Header Field for the Session Initiation Protocol (SIP)</title>
+        <author initials="H." surname="Schulzrinne"><organization/></author>
+        <author initials="D." surname="Oran"><organization/></author>
+        <author initials="G." surname="Camarillo"><organization/></author>
+	<date month="December" year="2002"/>
+    </front>
+    <seriesInfo name="RFC" value="3326"/>
+    <format type="TXT"
+            target="ftp://ftp.isi.edu/in-notes/rfc3326.txt" />
+</reference>
+
+</references>
+
+<references title="Informative References">
+
+<reference anchor="sreeram-specify">
+<!-- draft-sreeram-specify-method -->
+    <front>
+	<title>The SIP SPECIFY Method</title>
+        <author initials="S." surname="Kanumuri"><organization/></author>
+        <author initials="S." surname="Sarkar"><organization/></author>
+	<date month="April" year="2007"/>
+    </front>
+    <seriesInfo name="I-D" value="draft-sreeram-specify-method-00" />
+    <format type="TXT"
+            target="http://bgp.potaroo.net/ietf/idref/draft-sreeram-specify-method/" />
+</reference>
+
+<reference anchor="schwartz-nsr">
+<!-- draft-schwartz-sipping-nsr-code -->
+    <front>
+	<title>No Service To This Number Reject Code</title>
+        <author initials="D." surname="Schwartz"><organization/></author>
+	<date month="November" year="2008"/>
+    </front>
+    <seriesInfo name="I-D" value="draft-schwartz-sipping-nsr-code-01" />
+    <format type="TXT"
+            target="http://www.ietf.org/internet-drafts/draft-schwartz-sipping-nsr-code-01.txt" />
+</reference>
+
+<reference anchor="Q.850">
+<!-- Q.850 -->
+    <front>
+	<title>Usage of cause and location in the Digital Subscriber
+	Signalling System No. 1 and the Signalling System No. 7 ISDN
+	User Part</title>
+        <author><organization>ITU-T</organization></author>
+	<date month="May" year="1998"/>
+    </front>
+    <seriesInfo name="ITU-T Recommendation" value="Q.850" />
+    <format type="HTML"
+            target="http://www.itu.int/rec/T-REC-Q.850/e" />
+</reference>
+
+</references>
+
+</back>
+
+</rfc>

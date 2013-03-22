@@ -1,0 +1,417 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc tocdepth="5"?>
+<?rfc compact='yes'?>
+<?rfc subcompact='no'?>
+<?rfc symrefs="yes"?>
+
+<rfc ipr="full3978" category="bcp">
+  <front>
+    <title abbrev="SIP Trunk">What is a Session Initiation Protocol (SIP) Trunk Anyway?</title> 
+    
+    <author initials="J.R." surname="Rosenberg"
+	    fullname="Jonathan Rosenberg">
+      <organization>Cisco</organization>
+      
+      <address>
+	<postal>
+	  <city>Edison</city> <region>NJ</region>
+	  <country>US</country>
+	</postal>
+	
+	<email>jdrosen@cisco.com</email>
+	<uri>http://www.jdrosen.net</uri>
+      </address>
+    </author>
+
+    
+    <date month="February" year="2008" />
+    
+    <area>RAI</area>
+    <workgroup>SIPPING</workgroup>
+
+    <abstract>
+      <t>The term "Session Initiation Protocol (SIP) Trunk"
+      has become almost commonplace amongst vendors and SIP
+      providers. Even though the notion of a 'trunk' has a well
+      defined meaning in circuit switched systems, it has never been
+      defined for SIP. This document provides a formal definition for
+      a SIP trunk, discusses its scope and applications, and
+      establishes best practices for identification and security of
+      SIP trunks. </t>
+    </abstract>
+  </front>
+
+  <middle>
+
+<section title="Introduction">
+
+<t>
+The term "trunk" has been used within circuit switched telephony
+systems for many years. Wikipedia defines a trunk as:
+</t>
+
+<figure><artwork>
+<![CDATA[
+    A circuit between telephone switchboards or other switching
+    equipment, as distinguished from local loop circuits which 
+    extend from telephone exchange switching equipment to 
+    individual telephones or information origination/termination
+    equipment. 
+]]></artwork></figure>
+
+<t>
+Despite its reference to a physical circuit, the term "trunk" has been
+used in conjunction with Session Initiation Protocol (SIP)
+<xref target="RFC3261"/> systems. A SIP trunk has been used to
+describe all of the following:
+</t>
+
+<list style="symbols">
+
+<t>A service provided by service providers to enterprises, used for
+  the purpose of interconnection to the PSTN, as a replacement for
+  circuit based connectivity.
+</t>
+
+<t>
+A SIP port on an enterprise server, for the purposes of
+interconnection to other server-based systems, such as voicemail
+servers, call centers, and application servers.
+</t>
+
+<t>A SIP-based interconnection between IP-PBXs, for the
+  purposes of replacing traditional TDM tie lines. 
+</t>
+
+</list>
+
+<t>
+This document provides a formal definition of a "SIP trunk", and
+discusses its scope and applications, and establishes best practices
+for identification and security of  SIP trunks.
+</t>
+
+</section>
+
+<section title="What is a SIP Trunk?">
+
+<t>
+We propose the following definition:
+</t>
+
+<list style="empty">
+<t>A SIP trunk is a virtual sip entity on a server (UAS, UAC or proxy)
+constrained by a predefined set of polices and rules that determine how
+to process requests. </t>
+</list>
+
+<t>
+The behavior of the trunk is
+conditioned on a contract - an agreement between the client and the
+server, that so long as requests are formatted based on the nature
+of the contract, the request will receive the specified treatment.
+</t>
+
+<t>
+There are several key parts of this definition that are important.
+</t>
+<section title="Request Processing Behaviors">
+
+<t>
+SIP allows a server wide latitude in the processing it applies to an
+incoming SIP request. How the call is routed, how it is authenticated,
+whether it connects to the PSTN, whether headers are added or removed,
+whether it is terminated, and so on - are all at the discretion of the
+server. A SIP trunk is defined as a particular set of request
+processing logic - a specific authentication mechanism, specific
+routing logic, specific header addition and removal, and so on. 
+</t>
+
+<t>
+For example, the following are examples of SIP trunks that can be
+defined on a SIP server:
+</t>
+
+<list style="hanging">
+
+<t hangText="PSTN Interconnect Trunk:"> This is a SIP trunk that would
+  be used by enterprises connecting to a service provider. The trunk
+  utilizes mutual TLS authentication to ascertain the identity of the
+  requesting enterprise. Requests are accepted only if the resulting
+  identity matches a pre-provisioned enterprise user; all others cause
+  immediate closure of the TLS connection. Inbound requests are
+  accepted for termination towards the PSTN. The request URI has to
+  contain a phone number in the user part, and the domain part
+  contains the domain of the provider. Numbers must be in E.164
+  format. The server will use locally configured routing tables to
+  send the INVITE to a PSTN gateway based on the dialed number.
+</t>
+
+<t hangText="Filtering Trunk:">This is a SIP trunk that might be
+  provided by a session border controller or other perimeter
+  server. This SIP trunk runs over TCP and is not secured with
+  TLS. The Request-URI can be anything; the domain part represents the
+  destination of the request - not the server itself. The server will
+  examine the SIP request and compare the headers in it, against a
+  pre-configured set of allowed headers. Headers not on the list are
+  removed by the server before the request is forwarded.
+</t>
+
+<t hangText="Voicemail Trunk:">This is a SIP trunk that might be
+  provided by a voicemail server. It runs over TCP and is secured with
+  TLS; clients must present certificates from an allowed set. The
+  Request URI must be formatted based on the conventions of
+  <xref target="RFC4458"/>. 
+</t>
+
+<t hangText="Publication Trunk:">This is a SIP trunk might exit on a
+  presence server. It supports TLS over TCP only, and is used
+  explicitly for PUBLISH requests <xref target="RFC3903"/> containing
+  presence documents. Only a certain set of presence document
+  extensions are supported; in particular, the documents need to
+  comply with <xref target="RFC4480"/> but the sphere element is not
+  utilized and will be discarded silently if present.
+</t>
+
+</list>
+
+</section>
+
+<section title="Conditioned on a Contract">
+
+<t>
+A server can have an almost arbitrarily large number of
+SIP trunks, each providing specific functionality to clients whose
+requests are processed using that logic. Clients which send requests
+to a specific SIP trunk can expect certain behaviors to be exhibited
+by the server, and those behaviors are based on pre-defined agreements
+between the provider of the client and the provider of the server. In
+order to receive that specified treatment, the request must conform to
+some agreed-upon structures which may include constraints beyond those
+in RFC 3261.
+</t>
+
+<t>
+For example, if a voicemail server exposes a SIP trunk for voicemail
+services, the processing applied to requests on that trunk (namely,
+various voicemail services, such as voicemail deposit or retrieval),
+is conditioned on those requests being formatted based on the
+constraints of <xref target="RFC4458"/>. And therein lies the contract
+- IF the client formats the requests in that way, THEN it will apply
+voicemail processing to those requests.
+</t>
+
+<t>
+A more subtle example is the filtering trunk. There, the contract
+states that IF the request arrives over TCP - THEN it
+will remove headers from the request based on the pre-configured
+set. Here, there are very few constraints on the request beyond RFC
+3261 - just usage of TCP. The bulk of the contract is in the THEN part
+- what processing the server will apply to the request.
+</t>
+
+</section>
+
+
+<section title="On a Server, not Between">
+
+<t>In the proposed definition, the SIP trunk exists on a single
+  server. It represents functionality provided on that server,
+  possibly to a large number of other clients that connect. This is in
+  contrast to the traditional definition of a trunk, which referred
+  specifically to the interconnection between two switches. This is
+  shown in <xref target="fig-trunk-model"/>.
+</t>
+
+<figure anchor="fig-trunk-model" title="Trunk Models"><artwork>
+<![CDATA[
+                                                                          
+                                 .                                        
+                                 .                                        
+                                 .                                        
+              Trunk              .    +--------+                          
+                                 .    |   SIP  |                          
+                |                .    | Server |                          
+                |                .    |        |                          
+                |                .    +--------+                          
+   +--------+   |   +--------+   .                     +--------+         
+   |        |   V   |        |   .    +--------+       |   SIP  |         
+   | Switch |-------| Switch |   .    |   SIP  |   +-->o Server |         
+   |        |       |        |   .    | Server |   |   |        |         
+   +--------+       +--------+   .    |        |   |   +--------+         
+                                 .    +--------+   |                      
+                                 .                 |                      
+                                 .    +--------+   |                      
+                                 .    |   SIP  |   |                      
+                                 .    | Server |   +-- SIP Trunk          
+                                 .    |        |                          
+                                 .    +--------+                          
+                                 .                                        
+            TDM Model            .              SIP Model                 
+                                 .                                        
+]]></artwork></figure>
+
+<t>
+The difference is due to the nature of IP; IP allows any number of
+clients to connect to the trunk. In a TDM world, there is a distinct
+physical circuit that is bound to a specific upstreadm switch. 
+</t>
+
+<t>
+The definition posits that, in the TDM world, the important part of
+the concept of a trunk was the policies, features and
+functionality that were bound to it - not the fact that it was a
+physical connection to another switch. For this reason, a SIP trunk is
+defined entirely by a set of policies, features and functionality that
+are invoked when SIP requests are sent to that trunk.
+</t>
+
+</section>
+
+<section title="For Use by Servers">
+
+<t>
+The last key part of the definition is that the SIP trunk is meant to
+be used by other servers. That is, the entities on the other side of
+the TCP or UDP connection to the SIP trunk would be another server,
+not an end user client. This definition is fuzzy, but it is largely a
+consequence of the contract. The contract requires that the entity
+sending the request meet the constraints of the contract when sending
+the request. This typically involves a level of trust and
+pre-configured agreement that are difficult to put in place for an
+end-user client.
+</t>
+
+</section>
+
+</section>
+
+<section title="Identifying SIP Trunks">
+
+<t>
+We propose that SIP trunks be identified by a SIP URI. Furthermore,
+when requests are sent to a SIP trunk, the SIP trunk URI appear in the
+Route header field of the request. This rule applies only to requests
+outside the scope of a dialog. Mid-dialog requests utilize Route
+headers as defined in <xref target="RFC3261"/>.
+</t>
+
+<t>
+The usage of a SIP URI for identifying SIP trunks is natural. The SIP
+URI provides enough information to connect to the trunk - based on
+existing procedures in <xref target="RFC3263"/>. The user part of the
+SIP URI provides an infinitely large namespace - allowing a server to
+have as many trunks as it wishes, and utilize whatever manner of
+structure it likes for the user part to facilitate request
+processing. One server might construct the user part as an integer
+that maps into a database which contains the policies for that
+trunk. Another server might take the policy definition, represent it
+in some language, encrypt the result, and place that as the user part
+of the SIP URI. 
+</t>
+
+<t>
+Because the user part of the SIP URI provides an infinitely large
+namespace, a SIP server can have many SIP trunks, while listening for
+SIP requests on a single UDP or TCP port. 
+</t>
+
+<t>
+When a server provides a SIP trunk service, the administrator of that
+server hands out the SIP URI to use for connecting to that trunk. The
+SIP trunk URI goes hand in hand with the trunk contract. A requestor
+that send a request using the SIP trunk URI in the Route header, and
+formatting the request based on the nature of the contract, will
+receive the agreed-upon processing. 
+</t>
+
+<t>
+As an example, if provider example.com is offering a SIP trunk for
+connection to the PSTN, based on the contract described above, and it
+uses the SIP URI sip:pstn@example.com for its trunk URI, a request
+sent to that trunk would look like, in part:
+</t>
+
+<figure><artwork>
+<![CDATA[
+INVITE sip:+19739525000@example.com
+Route: sip:pstn@example.com
+To: sip:+19739525000@example.com
+]]></artwork></figure>
+
+<t>
+Usage of the Route header field allows for complete separation of the
+intended target of the request (present in the Request-URI) from the
+intermediate logic that is to be applied to the request before
+arriving at that target (identified by the topmost Route URI). 
+</t>
+
+</section>
+
+<section title="Best Practices for SIP Trunks">
+
+<t>
+Since SIP trunks are meant for interconnection between servers, they
+SHOULD run over TCP. Authentication SHOULD be done using mutual TLS
+authentication, with both sides of the trunk providing a TLS
+certificate. 
+</t>
+
+<t>
+TODO: might be interesting to recommend some practices for usage of
+phone numbers, but this might be out of scope here.
+</t>
+
+</section>
+
+<section title="Security Considerations">
+
+<t>
+Servers providing SIP trunks will need to authenticate and authorize
+access to those trunk services. This specification recommends usage of
+the practices defined and required in RFC 3261 - mutual TLS
+authentication - for this purpose. 
+</t>
+
+<t>
+In some cases, the requests sent on SIP trunks can require
+confidentiality and message integrity. In such cases, usage of mutual
+authenticated TLS is RECOMMENDED.
+</t>
+
+</section>
+
+<section title="IANA Considerations">
+
+<t>
+There are no IANA considerations associated with this specification.
+</t>
+
+</section>
+
+<section title="Acknowledgements">
+
+<t>
+I'd like to thank Mohammad Al-Taraireh for his comments on this document. </t> 
+</section>
+
+</middle>
+
+<back>
+<references title="Normative References">
+<?rfc include="reference.RFC.3261"?>
+<?rfc include="reference.RFC.3263"?>
+</references>
+
+<references title="Informative References">
+<?rfc include="reference.RFC.4458"?>
+<?rfc include="reference.RFC.4480"?>
+<?rfc include="reference.RFC.3903"?>
+</references>
+
+</back>
+</rfc>
+
+

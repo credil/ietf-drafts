@@ -1,0 +1,676 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+  <!ENTITY rfc0793 SYSTEM "/u/home/wima/scharf/paper/draft/id_fc/references/reference.RFC.0793.xml">
+  <!ENTITY rfc1323 SYSTEM "/u/home/wima/scharf/paper/draft/id_fc/references/reference.RFC.1323.xml">
+  <!ENTITY rfc2119 SYSTEM "/u/home/wima/scharf/paper/draft/id_fc/references/reference.RFC.2119.xml">
+  <!ENTITY rfc2488 SYSTEM "/u/home/wima/scharf/paper/draft/id_fc/references/reference.RFC.2488.xml">
+  <!ENTITY rfc2581 SYSTEM "/u/home/wima/scharf/paper/draft/id_fc/references/reference.RFC.2581.xml">
+  <!ENTITY rfc3390 SYSTEM "/u/home/wima/scharf/paper/draft/id_fc/references/reference.RFC.3390.xml">
+  <!ENTITY rfc3481 SYSTEM "/u/home/wima/scharf/paper/draft/id_fc/references/reference.RFC.3481.xml">
+  <!ENTITY rfc4782 SYSTEM "/u/home/wima/scharf/paper/draft/id_fc/references/reference.RFC.4782.xml">
+]>
+
+<rfc category="exp" ipr="full3978" docName="draft-scharf-tcpm-flow-control-quick-start-00.txt">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+
+<front>
+  <title abbrev="TCP Flow Control for Fast Startup Schemes">TCP Flow Control for Fast Startup Schemes</title>
+
+  <author initials='M' surname="Scharf" fullname='Michael Scharf'>
+    <organization>University of Stuttgart</organization>
+    <address>
+      <postal>
+        <street>Pfaffenwaldring 47</street>
+        <city>D-70569 Stuttgart</city>
+        <country>Germany</country>
+      </postal>
+      <phone>+49 711 685 69006</phone>
+      <email>michael.scharf@ikr.uni-stuttgart.de</email>
+      <uri>http://www.ikr.uni-stuttgart.de/en/~scharf</uri>
+    </address>
+  </author>
+
+  <author initials='S' surname="Floyd" fullname='Sally Floyd'>
+    <organization abbrev="ICIR">ICIR (ICSI Center for Internet Research)</organization>
+    <address>
+      <phone>+1 (510) 666-2989</phone>
+      <email>floyd@icir.org</email>
+      <uri>http://www.icir.org/floyd/</uri>
+    </address>
+  </author>
+
+  <author initials='P' surname="Sarolahti" fullname='Pasi Sarolahti'>
+    <organization>Nokia Research Center</organization>
+    <address>
+      <postal>
+        <street>P.O. Box 407</street>
+        <city>FI-00045 NOKIA GROUP</city>
+        <country>Finland</country>
+      </postal>
+      <phone>+358 50 4876607</phone>
+      <email>pasi.sarolahti@iki.fi</email>
+    </address>
+  </author>
+
+  <date month="July" year="2008"/>
+
+  <keyword>TCP</keyword>
+  <keyword>Flow Control</keyword>
+  <keyword>Quick-Start</keyword>
+
+  <abstract>
+    <t>
+    This document describes extensions for the flow control of the
+    Transmission Control Protocol (TCP) that avoid interactions with
+    fast startup congestion control mechanisms, in particular the
+    Quick-Start TCP extension. Quick-Start is an optional TCP
+    extension that allows to start data transfers with a large
+    congestion window, using feedback of the routers along the
+    path. This can avoid the time consuming Slow-Start, provided that
+    the TCP flow control is not a limiting factor.
+    </t>
+
+    <t>
+    There are two potential interactions between the TCP flow control
+    and congestion control schemes without the standard Slow-Start:
+    First, receivers might not allocate a sufficiently large buffer
+    space after connection setup, or they may advertise a receive
+    window implicitly assuming the Slow-Start behavior on the sender
+    side. This document therefore provides guidelines for buffer
+    allocation in hosts supporting the Quick-Start extension. Second,
+    the TCP receive window scaling mechanism can prevent fast startups
+    immediately after the initial three-way handshake connection
+    setup. This document describes a simple solution to overcome this
+    problem.
+    </t>
+  </abstract>
+</front>
+
+<middle>
+  <section title="Introduction">
+    <t>
+    The Transmission Control Protocol (TCP) <xref target="RFC0793"/>
+    realizes both flow control and congestion control. The TCP flow
+    control is a receiver-driven mechanism that informs the sender
+    about the available receive buffer space and limits the maximum
+    amount of outstanding data. In general, flow control and
+    congestion control are independent mechanisms, and the allocation
+    of receive buffer space is up to the receiving network stack
+    only. But if the TCP connection spans a path with a large
+    bandwidth-delay product (BDP), both congestion and receive window
+    should have large values in order to achieve good TCP performance
+    (see <xref target="RFC2488"/>,<xref target="RFC3481"/>). This
+    results in some overlap of flow control and congestion control.
+    </t>
+ 
+    <t>
+    A fast startup scheme, which speeds up data transfers by not using
+    the standard Slow-Start mechanism <xref target="RFC2581"/>, can
+    suffer from further interactions between the TCP flow control and
+    congestion control. While not being appropriate for the global
+    Internet, such a fast startup congestion control could be deployed
+    for instance in controlled environments. The experimental
+    Quick-Start TCP extension <xref target="RFC4782"/> is currently
+    the only specified TCP extension that realizes a fast
+    startup. This is why this document only considers Quick-Start.
+    However, as discussed in Appendix A, interactions between the TCP
+    flow control and congestion control mechanisms could also arise if
+    a fast startup was realized by other means.
+    </t>
+
+    <t>
+    With Quick-Start, TCP hosts can request permission from the
+    routers along a network path to send at a higher rate than allowed
+    by the default TCP congestion control, in particular during
+    connection setup or after longer idle periods. The explicit router
+    feedback avoids the time-consuming capacity probing by the TCP
+    Slow-Start and can significantly improve transfer times over paths
+    with a high bandwidth-delay product
+    <xref target="SAF07"/>.
+    </t>
+
+    <t>
+    The usage of a fast startup significantly changes the TCP behavior
+    during connection setup, since a sender can use large congestion
+    windows immediately after connection setup. Concerning the flow
+    control, these large windows raise two questions: First, what
+    receiver buffer allocation strategies should be used?  And second,
+    how to appropriately signal large windows?  This document
+    addresses these issues and shows that fast startup schemes require
+    special mechanisms in both cases. The document thereby supplements
+    the Quick-Start TCP specification <xref target="RFC4782"/>, where
+    flow control issues have not been addressed in detail.
+    </t>
+
+    <t>
+    The rest of this document is structured as follows: First, the
+    question of receive buffer allocation in combination with
+    Quick-Start is addressed and dimensioning guidelines are
+    provided. And second, a usage of the receive window scaling
+    mechanism <xref target="RFC1323"/> is specified, which is required
+    to fully benefit from Quick-Start when the Quick-Start request
+    is used in the initial &lt;SYN> segment.
+    </t>
+  </section>
+
+  <section title="Requirements Notation">
+    <t>
+    The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+    "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+    and "OPTIONAL" in this document are to be interpreted as
+    described in <xref target="RFC2119"/>.
+    </t>
+  </section>
+
+  <section title="Receive Buffer Dimensioning">
+
+    <section title="Background">
+      <t>
+      According to <xref target="RFC2581"/>, a TCP sender can transmit
+      up to the minimum of the congestion window and the receive
+      window (also called receiver's advertised window). Several
+      factors can have an impact on the value of the receive window:
+      On the one hand, hosts with a potentially high number of TCP
+      connections need to optimize their buffer and memory usage to be
+      able to serve a maximum possible number of TCP connections. 
+      On the other hand, a receiver that wants to use the available
+      bandwidth should advertise a receive window that is big enough
+      to allow an efficient utilization of the connection
+      path. Finding a fixed receive buffer size that is optimal
+      between these two goals is difficult.
+      </t>
+
+      <t>
+      This is why many modern TCP implementations use an intelligent
+      dynamic buffer management. There are different auto-tuning
+      techniques and heuristics <xref target="Dun06"/> designed to
+      prevent the receive window from limiting the data rate at the
+      sender. An implementation using receive window auto-tuning is
+      described for instance in <xref target="SB05"/>. A common
+      characteristic of most of these buffer allocation strategies is
+      that they initially advertise a rather small receive window. The
+      more data arrives, the more buffer is advertised to the
+      corresponding connection. This behavior is reasonable if the
+      sender uses the standard Slow-Start algorithm and thus starts
+      with a small congestion window anyway. However, when a fast
+      startup shall be used, the receiver must be ready to buffer a
+      large amount of data immediately after the connection setup.
+      </t>
+    </section>
+
+    <section title="Recommendations for Buffer Dimensioning with Quick-Start">
+
+      <t>
+      A network stack that supports the Quick-Start TCP extension
+      should apply the following guidelines for receive buffer
+      allocation, in addition to the normal buffer management
+      principles:
+      </t>
+
+      <t>
+      When a host receives and approves a Quick-Start request, it
+      SHOULD announce a receive window that is large enough so that a
+      potential Quick-Start data transfer can start with a high
+      sending window. If buffer size auto-tuning is used, it SHOULD be
+      ensured that a sufficiently high initial receive window is
+      announced. The handling of buffer space upon arrival of a
+      Quick-Start request SHOULD be configurable by the corresponding
+      application.
+      </t>
+
+      <t>
+      The TCP host could estimate the required buffer space as the
+      product of the approved Quick-Start rate and the round-trip
+      time, and advertise a receive window based on this required
+      buffer space.  This receive window should allow the other TCP
+      host to fully use the approved Quick-Start Request. If the TCP
+      host doesn't know the round-trip time, the TCP host could use an
+      estimate of the round-trip time in calculating the required
+      buffer space. For instance, the buffer dimension could be done
+      for a configurable "worst-case" RTT such as 500 ms. Alternately,
+      the TCP host could base the advertised receive window on the
+      available buffer space, without calculating the buffer space
+      required for the other TCP host to fully use the approved
+      Quick-Start Request.
+      </t>
+    </section>
+
+  </section>
+
+  <section title="Receive Window Scaling Issues">
+
+    <section title="Background">
+      <t>
+      The TCP header specified in <xref target="RFC0793"/> uses a 16
+      bit field to report the receive window size to the sender. This
+      effectively limits the sending window to 64 KB. To circumvent
+      this limitation, the "Window Scale" TCP extension <xref
+      target="RFC1323"/> defines an implicit scale factor, which is
+      used to multiply the window size value found in a TCP header to
+      obtain a 32 bit window size. If enabled, the scale factor is
+      announced during connection setup by the "Window Scale" TCP
+      option in &lt;SYN> and &lt;SYN,ACK> segments.
+      </t>
+
+      <t>
+      In general, using receive window scaling is highly beneficial
+      for TCP connections over path with a large bandwidth-delay
+      product <xref target="RFC2488"/>,<xref target="RFC3481"/>.
+      Otherwise, the path capacity cannot fully be utilized by
+      TCP. Quick-Start TCP can significantly speed up data transfers
+      over such paths <xref target='RFC4782'/>,<xref
+      target="SAF07"/>. As a consequence, a host supporting
+      Quick-Start should enable receive window scaling according to
+      <xref target="RFC1323"/>. If Quick-Start is used in the initial
+      three-way handshake, the minimum required scaling factor may be
+      obtained from the required receive buffer space, which can be
+      approximated as described in the previous section.
+      </t>
+    </section>
+
+    <section title="Interaction Problem">
+      <t>
+      A problem arises when the Quick-Start mechanism is used within
+      the three-way handshake, and the Quick-Start request is added to
+      the initial &lt;SYN> segment: In this scenario, if the
+      Quick-Start request is approved by the routers along the path,
+      the receiver echoes back the Quick-Start response in the
+      &lt;SYN,ACK> segment. This process is illustrated in <xref
+      target="RFC4782"/>. Upon reception of the &lt;SYN,ACK> with the
+      Quick-Start response, the sender can set the congestion window
+      to the determined value so that it can immediately start to
+      send with the approved data rate.
+      </t>
+
+      <t>
+      However, <xref target="RFC1323"/> defines that the "Window field
+      in a SYN (i.e., a &lt;SYN> or &lt;SYN,ACK>) segment itself is
+      never scaled." This means that the maximum receive window that
+      can be signaled to the sender in the &lt;SYN,ACK> is 64 KB. As a
+      consequence, the TCP flow control will prevent the TCP sender
+      from having more than 64 KB of outstanding data, even if the
+      receiver has much more free buffer, and the Quick-Start
+      feedback allows a much larger congestion window. 
+      </t>
+
+      <t>
+      This effect essentially limits the maximum amount of data sent
+      by Quick-Start to 64 KB, when the sender sends the Quick-Start
+      request in the initial &lt;SYN> segment.  Also, the congestion
+      window after quiting the Quick-Start rate pacing phase is at
+      most 64 KB, as the congestion window is set to the amount of
+      data that has actually been sent during the rate pacing
+      phase. This is an undesirable restriction for the Quick-Start
+      mechanism, even if 64 KB is still much more than the initial
+      congestion window in Slow-Start that is allowed by <xref
+      target="RFC3390"/>.
+      </t>
+
+      <t>
+      This issue only occurs when Quick-Start is used in the three-way
+      TCP connection setup procedure, and only in the direction of the
+      connection originator to the acceptor. Still, this case
+      is one of the planned usage scenarios for the Quick-Start TCP
+      extension.
+      </t>
+
+    </section>
+
+    <section title="Proposed Solution">
+      <t>
+      The limitation imposed by the window scaling could be addressed
+      in different ways. This document proposes the following
+      solution: If necessary, the TCP host SHOULD send a scaled
+      receive window in a separate &lt;ACK> packet following the
+      &lt;SYN,ACK> packet.
+      </t>
+
+      <t>
+      This means that when a host receives a &lt;SYN> segment with a
+      Quick-Start option, it processes the option as described in
+      <xref target="RFC4782"/>. Provided that the host has Quick-Start
+      support enabled, the Quick-Start response is echoed back in the
+      &lt;SYN,ACK> segment. As explained, this segment cannot announce
+      receive windows larger than 64 KB. If the receiver allocates a
+      buffer space larger than 64 KB, an additional empty segment
+      (without &lt;SYN> flag) SHOULD be sent after the &lt;SYN,ACK>
+      segment, in order to announce the true receive window. The
+      resulting message flow is depicted in <xref
+      target="fig:signaling"/>.
+      </t>
+
+      <figure title='Message sequence chart of the proposed mechanism' anchor='fig:signaling'>
+        <artwork>
+   Sender       Routers (approving QS request)        Receiver
+   ------       -------                               --------
+     |                                                  |
+     | ------------------------------------------------>|
+     |  QS request                                      |
+     |  TCP &lt;SYN>, unscaled receive window              |
+     |      window scaling and other options            |
+     |                                                  |
+     | &lt;------------------------------------------------|
+     |  QS response                                     |
+     |  TCP &lt;SYN,ACK>, unscaled receive window          |
+     |      window scaling and other options            |
+     |                                                  |
+     | &lt;------------------------------------------------|
+     |  Additional acknowledgment                       |
+     |  TCP &lt;ACK>, scaled receive window                |
+     |                                                  |
+     | ------------------------------------------------>|
+     |  QS report                                       |
+     |  TCP &lt;ACK>                                       |
+     |                                                  |
+     | ================================================>|
+     | ================================================>|
+     |  Rate paced data transfer                        |
+     |                                                  |
+     | &lt;------------------------------------------------|
+     |  First new acknowledgment                        |
+     V                                                  V
+        </artwork>
+      </figure>
+
+      <t>
+      After having received this additional acknowledgment, the sender
+      is aware of the true available receive buffer. Provided
+      that the Quick-Start request is approved on the path and that
+      the receive window is sufficiently large, this allows the sender
+      to send more than 64 KB during the Quick-Start rate pacing
+      phase.
+      </t>
+
+      <t>
+      We note that there is some degree of freedom as to when to send
+      the additional acknowledgment. The straightforward solution is
+      to send it immediately after the &lt;SYN,ACK> segment. But this
+      is not required: It is sufficient if the sender receives this
+      segment before reaching the limit of the unscaled receive
+      window. As a consequence, receivers could also delay the sending
+      of this segment for some small amount of time.
+      </t>
+    </section>
+
+    <section title='Deployment Considerations'>
+      <t>
+      The method proposed in this document is compliant with the TCP
+      specifications: Sending empty segments to increase the receive
+      window is implicitly allowed by <xref target="RFC0793"/>, and in
+      <xref target="RFC2581"/> it is clearly stated that sending an
+      acknowledgment is allowed to update the receive window.  For
+      standard-compliant TCP stacks, implementing the method thus
+      should require changes in the receiver TCP implementation only.
+      </t>
+
+      <t>
+      However, sending an empty acknowledgment shortly after a
+      &lt;SYN,ACK> segment is an atypical TCP communication event. The
+      &lt;SYN,ACK> and the additional segment could get reordered in the
+      network. In this case, the sending host will typically ignore the
+      additional segment, as it is still awaiting the
+      &lt;SYN,ACK>. Furthermore, middleboxes such as stateful firewalls
+      might drop the additional acknowledgment. Even worse, this segment
+      might also be dropped because a middlebox receives it earlier than the
+      &lt;ACK> segment from the sender. At this point in time, from the
+      viewpoint of the middlebox, the bi-directional end-to-end TCP
+      connection is not yet established. If the additional segment gets
+      dropped, the sender only knows the unscaled receive
+      window until the next new acknowledgment arrives, which may limit
+      the benefit of Quick-Start. Delaying the additional acknowledgment
+      for a short period of time could help to avoid such
+      problems. Further investigation is needed to analyze whether such
+      a delay is required.
+      </t>
+
+      <t>
+      A possible alternative to the message flow in <xref
+      target="fig:signaling"/> would be to piggyback the Quick-Start
+      response on the additional acknowledgment segment instead of the
+      &lt;SYN,ACK>. However, this approach has several drawbacks and is
+      therefore not recommended: First, the Quick-Start response would
+      be received later, which could cause additional delays. Second,
+      the &lt;SYN,ACK> is immediately acknowledged by the &lt;ACK>
+      segment. The Quick-Start rate report can thus be piggybacked on
+      this &lt;ACK>. In contrast, if the Quick-Start response is included
+      in the additional acknowledgment, the Quick-Start report has to be
+      piggybacked to a data segment, i. e., it depends on the availability
+      of application data whether and when the Quick-Start report is sent.
+      </t>
+
+      <t>
+      The additional segment mandated by this document results in a
+      network overhead of one segment. In many potential usage scenarios
+      this overhead will be small compared to the network load caused
+      by the acknowledgments of a starting high-speed Quick-Start
+      data transfer.
+      </t>
+  
+      <t>
+      Instead of sending one additional acknowledgment, a host could
+      also send a small number of copies in order to improve
+      robustness. This could help to reduce the risk of reordering
+      with the &lt;SYN,ACK> segment. However, given the additional
+      overhead, it is recommended to send only one acknowledgment
+      unless there are indications that the path suffers from frequent
+      packet reordering.
+      </t>
+    </section>
+
+  </section>
+
+  <section title="Security Considerations">
+    <t>
+    Quick-Start TCP imposes a number of security challenges. Known
+    security threats as well as counter-measures are discussed in the section
+    "Security Considerations" of <xref target='RFC4782'/>. Since this
+    document describes extensions to Quick-Start TCP, the security issues
+    and solutions identified in <xref target='RFC4782'/> apply here, too.
+    </t>
+
+    <t>
+    If a host reserves large amounts of buffer space during the
+    three-way handshake, this could increase the vulnerability to "syn
+    flooding" attacks: An attacker sending many Quick-Start requests
+    could try to allocate much buffer space at a host, which is then
+    not available any more for other TCP connections. If most involved
+    routers support Quick-Start, this type of attack is difficult to
+    realize, since the routers may reject many requests before they
+    reach a host. However, an attack could be possible if some routers
+    on the path do not support Quick-Start. A simple countermeasure
+    would be to set an upper limit on the total amount of buffer space
+    granted to connections with Quick-Start, and possibly to deny
+    requests if they arrive at a host with too high a frequency. The
+    main impact of this abuse is that Quick-Start may be rendered
+    useless for other connections. This can result in some performance
+    degradation, because the default Slow-Start must be used
+    instead. In general, it is an inherent weak point of Quick-Start
+    that one can send much more requests than required, which
+    temporarily can block resources for other earnest Quick-Start
+    requests <xref target='RFC4782'/>.
+    </t>
+
+    <t>
+    It is an allowed behavior for a TCP connection endpoint to send an
+    additional acknowledgment segment in order to update the receive
+    window. The usage of the proposed mechanism causes some limited
+    network overhead, but it does not result in additional security
+    threats.
+    </t>
+  </section>
+
+  <section title="IANA Considerations">
+    <t> 
+    This document has no actions for IANA.
+    </t>
+  </section>
+
+  <section title="Acknowledgments">
+    <t>
+    Special thanks to Haiko Strotbek, Martin Koehn, Simon Hauger,
+    Christian Mueller, and Gorry Fairhurst for suggestions and comments.
+    </t>
+  </section>
+</middle>
+
+<back>
+  <references title='Normative References'>
+    &rfc0793;
+    &rfc1323;
+    &rfc2119;
+    &rfc2581;
+    &rfc3390;
+    &rfc4782;
+  </references>
+
+  <references title='Informative References'>
+    &rfc2488;
+    &rfc3481;
+    <reference anchor='SAF07'>
+      <front>
+        <title>Determining an Appropriate Sending Rate Over an Underutilized Network Path</title>
+        <author initials='P.' surname='Sarolahti' fullname='Pasi Sarolathi'>
+        <organization /></author>
+        <author initials='M.' surname='Allman' fullname='Mark Allman'>
+        <organization /></author>
+        <author initials='S.' surname='Floyd' fullname='Sally Floyd'>
+        <organization /></author>
+        <date year='2007'/>
+      </front>
+      <seriesInfo name='Computer Networks,' value='vol. 51, no. 7'/>
+    </reference>
+    <reference anchor='LAJ+07'>
+      <front>
+        <title>Congestion Control Without a Startup Phase</title>
+        <author initials='D.' surname='Liu' fullname='Dan Liu'>
+        <organization /></author>
+        <author initials='M.' surname='Allman' fullname='Mark Allman'>
+        <organization /></author>
+        <author initials='S.' surname='Jin' fullname='Shudong Jin'>
+        <organization /></author>
+        <author initials='L.' surname='Wang' fullname='Limin Wang'>
+        <organization /></author>
+        <date year='2007' month='February' />
+      </front>
+      <seriesInfo name='Proc.' value='PFLDnet2007'/>
+    </reference>
+    <reference anchor='SB05'>
+      <front>
+        <title>Flow Control in the Linux Network Stack</title>
+        <author initials='M.' surname='Smith' fullname='Michael Smith'>
+        <organization /></author>
+        <author initials='S.' surname='Bishop' fullname='Steve Bishop'>
+        <organization /></author>
+        <date year='2005' month='February' />
+      </front>
+      <seriesInfo name='available at' value='http://www.cl.cam.ac.uk/~pes20/Netsem/linuxnet.pdf'/>
+    </reference>
+    <reference anchor='Dun06'>
+      <front>
+        <title>TCP auto-tuning zoo</title>
+        <author initials='T.' surname='Dunigan' fullname='Tom Dunigan'>
+        <organization /></author>
+        <date year='2006' month='February' />
+      </front>
+      <seriesInfo name='available at' value='http://www.csm.ornl.gov/~dunigan/net100/auto.html'/>
+    </reference>
+    <reference anchor='FPK07'>
+      <front>
+        <title>Specification for the Explicit Control Protocol (XCP)</title>
+        <author initials='A.' surname='Falk' fullname='Aaron Falk'>
+        <organization /></author>
+        <author initials='Y.' surname='Pryadkin' fullname='Yuri Pryadkin'>
+        <organization /></author>
+        <author initials='D.' surname='Katabi' fullname='Dina Katabi'>
+        <organization /></author>
+        <date year='2007' month='June' />
+      </front>
+      <seriesInfo name='Internet Draft,' value='work in progress'/>
+    </reference>
+  </references>
+
+  <section title="Applicability to Other Proposals">
+    <t>
+    Besides Quick-Start, there are some other fast startup proposals
+    under discussion. A common characteristic is that they can be more
+    aggressive than the standard TCP Slow-Start. A comprehensive
+    survey of this related work can be found in
+    <xref target="RFC4782"/>.  For instance, the Explicit Control
+    Protocol (XCP) <xref target="FPK07"/> proposes a new congestion
+    control based on explicit router feedback. Furthermore, there are
+    discussions in the research community whether a host could start
+    to send with a large congestion window, combined with a rate
+    pacing mechanism and a conservative reaction in case of congestion
+    <xref target="LAJ+07"/>.  Basically, the effects discussed in this
+    document are inherent to all fast startup schemes and not specific
+    to Quick-Start.
+    </t>
+
+    <t>
+    Dynamic receive buffer dimensioning is a non-trivial task for all
+    fast startup schemes. The amount of information that a receiver
+    can gain during a connection setup procedure differs from proposal
+    to proposal.  However, the basic guideline to advertise a larger
+    inital receive window applies to all proposals similar to
+    Quick-Start.
+    </t>
+
+    <t>
+    If the TCP header semantics apply, the interaction with receive
+    window scaling mechanism could also be a problem for other
+    approaches. In this case, the workaround of sending an
+    additional acknowledgment can be helpful, too.
+    </t>
+  </section>
+
+  <section title="Alternative Solutions">
+    <t>
+    The limitation imposed by the window scaling could be addressed in
+    several ways. This document proposes to send an additional
+    acknowledgment to announce the true receive window, if
+    needed. This method is compliant with the current TCP standards.
+    </t>
+
+    <t>
+    Alternatively, one could circumvent <xref target="RFC1323"/> in
+    several ways. For instance, one could use a scaled receive window
+    in &lt;SYN> and &lt;SYN,ACK> segments, if they include Quick-Start
+    options. The usage of a scaled window could also be indicated by
+    some other means (e. g., a new TCP option). Finally, the
+    advertised window could selectively be ignored by a sender that
+    receives a Quick-Start response. Still, such alternative solutions
+    would require changes in the TCP header semantics and might cause
+    interworking problems with currently deployed TCP implementations.
+    </t>
+  </section>
+
+  <section title="Document Revision History">
+    <t>
+    This document was originally entitled by "Avoiding Interactions of
+    Quick-Start TCP and Flow Control". Changes from earlier versions
+    of the document include:
+    <list style='symbols'>
+       <t>draft-scharf-tcpm-flow-control-quick-start-00.txt:
+          Changed title and more precise statements on the applicability 
+          beyond Quick-Start</t>   
+       <t>draft-scharf-tsvwg-quick-start-flow-control-01.txt:
+          Improved description of deployment implications</t>   
+       <t>draft-scharf-tsvwg-quick-start-flow-control-00.txt: 
+          Initial version</t>   
+
+    </list>
+    </t>
+  </section>
+
+</back>
+
+</rfc>

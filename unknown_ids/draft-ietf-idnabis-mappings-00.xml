@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY RFC2119 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+<!ENTITY RFC3454 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3454.xml">
+<!ENTITY RFC3490 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3490.xml">
+<!ENTITY RFC3491 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3491.xml">
+<!ENTITY DRAFTIDNABISPROTOCOL SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-idnabis-protocol.xml">
+]>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc strict="yes" ?>
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc comments="yes" ?>
+<?rfc inline="yes" ?>
+<rfc category="std" docName="draft-ietf-idnabis-mappings-00" ipr="pre5378Trust200902">
+  <front>
+    <title abbrev="IDNA Mapping">Mapping Characters in IDNA</title>
+
+        <author initials="P." surname="Resnick" fullname="Peter W. Resnick" role="editor">
+            <organization>Qualcomm Incorporated</organization>
+            <address>
+                <postal>
+                    <street>5775 Morehouse Drive</street>
+                    <city>San Diego</city>
+                    <region>CA</region>
+                    <code>92121-1714</code>
+                    <country>US</country>
+                </postal>
+                <phone>+1 858 651 4478</phone>
+                <email>presnick@qualcomm.com</email>
+                <uri>http://www.qualcomm.com/~presnick/</uri>
+            </address>
+        </author>
+
+    <date month="May" day="25" year="2009" />
+
+    <area>Applications</area>
+
+    <workgroup>IDNABIS</workgroup>
+    <keyword></keyword>
+    <abstract>
+      <t>In the original version of the Internationalized Domain Names in Applications (IDNA) protocol, any Unicode code points taken from user input were mapped into a set of Unicode code points that "make sense", which were then encoded and passed to the domain name system (DNS). The current version of IDNA presumes that the input to the protocol comes from a set of "permitted" code points, which it then encodes and passes to the DNS, but does not specify what to do with the result of user input. This document specifies the actions taken by an implementation between user input and passing permitted code points to the new IDNA protocol.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section anchor="intro" title="Introduction">
+    	<t>This document specifies the operations that applications apply to user input in order to get it into a form acceptable by the Internationalized Domain Names in Applications (IDNA) protocol <xref target="I-D.ietf-idnabis-protocol"/>. The document describes the architectural principles that underly this function in section <xref target="architecture" format="counter"/>, describes a general procedure that an application SHOULD implement in section <xref target="procedure" format="counter"/>, and specifies an algorithm and mapping that an application MAY implement in order to remain reasonably backward compatible with the original version of the IDNA protocol in appendix <xref target="mapping" format="counter"/>.</t>
+    	<t>It should be noted that this document is NOT specifying the behavior of a protocol that appears "on the wire". It specifies an operation that is to be applied to user input in order to prepare that user input for use in an "on the network" protocol. As unusual as this may be for an IETF protocol document, it is a necessary operation to maintain interoperability.</t>
+      <section title="Requirements Language">
+        <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this  document are to be interpreted as described in <xref target="RFC2119">RFC 2119</xref>.</t>
+      </section>
+    </section>
+    <section anchor="architecture" title="Architectural Principles">
+      <t>An application that implements the IDNA protocol <xref target="I-D.ietf-idnabis-protocol"/> must take a set of user input and convert that input to a set of Unicode code points. That user input might be typed on a keyboard, written by hand onto some sort of digitizer, spoken into a microphone and interpreted by a speech-to-text engine, or otherwise. The process of taking any particular user input and mapping it into a Unicode code point may be a simple one: If a user strikes the "A" key on a US English keyboard, without any modifiers such as the "Shift" key held down, in order to draw a Latin small letter A ("a"), many (perhaps most) modern operating system input methods will produce to the calling application the code point U+0061, encoded in a single octet. Sometimes the process is somewhat more complicated: A user might strike a particular set of keys to represent a combining macron followed by striking the "A" key in order to draw a Latin small letter A with a macron above it. Depending on the operating system, the input method chosen by the user, and even the parameters with which the application communicates with the input method, the result might be the code point U+0101 (encoded as two octets in UTF-8 or UTF-16, four octets in UTF-32, etc.), the code point U+0061 followed by the code point U+0304 (again, encoded in three or more octets, depending upon the encoding used) or even the code point U+FF41 followed by the code point U+0304 (and encoded in some form). And these examples leave aside the issue of operating systems and input methods that do not use Unicode code points for their character set. In every case, applications (with the help of the operating systems on which they run and the input methods used) MUST perform a mapping from user input into Unicode code points.</t>
+		<t>The original version of the IDNA protocol <xref target="RFC3490"/> used a model whereby input was taken from the user, mapped (via whatever input method mechanisms were used) to a set of Unicode code points, and then further mapped to a set of Unicode code points using the Nameprep profile specified in <xref target="RFC3491"/>. In this procedure, there are two separate mapping steps: First, a mapping done by the input method (which might be controlled by the operating system, the application, or some combination) and then a second mapping performed by the Nameprep portion of the IDNA protocol. The mapping done in Nameprep includes a particular mapping table to re-map some characters to other characters, a particular normalization, and a set of prohibited characters.</t>
+		<t>Note that the result of the two step mapping process means that the mapping chosen by the operating system or application in the first step might differ significantly from the mapping supplied by the Nameprep profile in the second step. This has advantages and disadvantages. Of course, the second mapping regularizes what gets looked up in the DNS, making for better interoperability between implementations which use the Nameprep mapping. However, the application or operating system may choose mappings in their input methods, which when passed through the second (Nameprep) mapping result in characters that are "surprising" to the end user.</t>
+		<t>The other important feature of the original version of the IDNA protocol is that, with very few exceptions, it assumes that any set of Unicode code points provided to the Nameprep mapping can be mapped into a string of Unicode code points that are "sensible", even if that means mapping some code points to nothing (that is, removing the code points from the string). This allowed maximum flexibility in input strings.</t>
+		<t>The present version of IDNA differs significantly in approach from the original version. First and foremost, it does not provide explicit mapping instructions. Instead, it assumes that the application (perhaps via an operating system input method) will do whatever mapping it requires to convert input into Unicode code points. This has the advantage of giving flexibility to the application to choose a mapping that is suitable for its user given specific user requirements, and avoids the two-step mapping of the original protocol. Instead of a mapping, the current version of IDNA provides a set of categories that can be used to specify the valid code points allowed in a domain name.</t>
+		<t>In principle, an application ought to take user input of a domain name and convert it to the set of Unicode code points that represent the domain name the user <spanx style="emph">intends</spanx>. As a practical matter, of course, determining user desires is a tricky business, so an application needs to choose a reasonable mapping from user input. That may differ based on the particular circumstances of a user, depending on locale, language, type of input method, etc. It is up to the application to make a reasonable choice.</t>
+		<t>In the next section, this document specifies a general algorithm that applications SHOULD implement in order produce Unicode code points that will be valid under the IDNA protocol. Then, in appendix <xref target="mapping" format="counter"/>, a full mapping is specified that is substantially compatible with the original IDNA protocol. An application MAY implement the full mapping or MAY choose a different mapping.</t>
+    </section>
+    <section anchor="procedure" title="The General Procedure">
+      <t>The general algorithm that an application (or the input method provided by an operating system) should use is relatively straightforward and generally follows section 5 of <xref target="I-D.ietf-idnabis-protocol"/>:</t>
+      <t><list style="numbers">
+      	<t>All characters are mapped using Unicode Normalization Form C (NFC). <xref target="Unicode51"/></t>
+      	<t>Capital (upper case) characters are mapped to their small (lower case) equivalents. <cref>Need reference to "toLowerCase"</cref></t>
+      	<t>Full-width and half-width CJK characters are mapped to their equivalents. <cref>Handwaving for how that's supposed to happen</cref></t>
+      </list></t>
+      <t>These are the minimal mappings that an application SHOULD do. Of course, there are many others that MAY be done. In particular, a mapping that in substantially compatible with <xref target="RFC3490"/> appears below in appendix <xref target="mapping" format="counter"/>.</t>
+    </section>
+
+    <section anchor="IANA" title="IANA Considerations">
+      <t>This memo includes no request to IANA.</t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t></t>
+    </section>
+    <appendix anchor="mapping" title="Backwards-compatible Mapping Algorithm">
+      <t>The following mapping is mostly backwards-compatible with the original version of the IDNA protocol <xref target="RFC3490"/>. One important change is that the original IDNA specification mapped some characters to nothing that the current IDNA specification permit. Those characters are not re-mapped in this algorithm.</t>
+      <t><cref>This is filler; needs to be completed.</cref><list style="numbers">
+      	<t>Map using table B.1 and B.2 from <xref target="RFC3454"/>.</t>
+      	<t>Normalize using Unicode Normalization Form KC. <xref target="Unicode51"/></t>
+      	<t>Prohibit using tables C.1.2, C.3, C.4, C.5, C.6, C.7, C.8, and C.9 from <xref target="RFC3454"/>.</t>
+      </list></t>
+    </appendix>
+    <appendix anchor="Acknowledgements" title="Acknowledgements">
+      <t></t>
+    </appendix>
+
+  </middle>
+
+  <back>
+    <references title="Normative References">
+		&RFC2119;
+		&RFC3454;
+		&RFC3490;
+		&RFC3491;
+		&DRAFTIDNABISPROTOCOL;
+		<reference anchor="Unicode51">
+					<front>
+			  <title abbrev="Unicode 5.1">
+				 The Unicode Standard, Version 5.1.0
+					 </title>
+				<author>
+				<organization>The Unicode Consortium</organization>
+				<address />
+				</author>
+				<date year="2008" />
+				</front>
+				<annotation>defined by: The Unicode Standard, Version 5.0,
+				   Boston, MA, Addison-Wesley, 2007, ISBN 0-321-48091-0, as
+				   amended by Unicode 5.1.0
+		
+		(http://www.unicode.org/versions/Unicode5.1.0/).</annotation>
+		  </reference>
+    </references>
+
+  </back>
+</rfc>

@@ -1,0 +1,2262 @@
+<?xml version="1.0"?>
+<?rfc toc="yes"?><?rfc compact="yes"?><?rfc strict="yes"?><?rfc symrefs="yes"?><?rfc sortrefs="yes"?><rfc category="std" ipr="full3978" docName="draft-ietf-lemonade-profile-bis-11.txt">
+    <front>
+        <title abbrev="Lemonade Profile">The Lemonade Profile</title>
+        <author initials="D.A." surname="Cridland" fullname="Dave Cridland" role="editor">
+            <organization>Isode Limited</organization>
+            <address>
+              <postal>
+                <street>5 Castle Business Village</street>
+                <street>36 Station Road</street>
+                <city>Hampton</city>
+                <region>Middlesex</region>
+                <code>TW12 2BX</code>
+                <country>UK</country>
+              </postal>
+              <email>dave.cridland@isode.com</email>
+            </address>
+        </author>
+        <author initials="A." surname="Melnikov" fullname="Alexey Melnikov" role="editor">
+            <organization>Isode Limited</organization>
+            <address>
+              <postal>
+                <street>5 Castle Business Village</street>
+                <street>36 Station Road</street>
+                <city>Hampton</city>
+                <region>Middlesex</region>
+                <code>TW12 2BX</code>
+                <country>UK</country>
+              </postal>
+              <email>Alexey.Melnikov@isode.com</email>
+            </address>
+        </author>
+        <author initials="S. H." surname="Maes" fullname="Stephane H. Maes" role="editor">
+            <organization abbrev="Oracle">Oracle</organization>
+            <address>
+              <postal>
+                  <street>MS 4op634, 500 Oracle Parkway</street>
+                  <city>Redwood Shores</city> <region>CA</region>
+                  <code>94539</code>
+                  <country>USA</country>
+              </postal>
+              <phone>+1-203-300-7786</phone>
+              <email>stephane.maes@oracle.com</email>
+            </address>
+        </author>
+ 	<date year="2008"/>
+ 	<area>Applications</area>
+        <workgroup>LEMONADE</workgroup>
+        <abstract>
+		<t>This document describes a profile (a set of required extensions, restrictions and usage modes) of the IMAP and mail submission protocols. This profile allows clients 
+		(especially those that are constrained in memory, bandwidth, processing power, or other areas) to efficiently use IMAP and Submission to access and submit mail. This includes the ability to forward received mail without needing to
+		download and upload the mail, to optimize submission and to efficiently resynchronize in case of loss of connectivity with the server.</t>
+
+		<t>The Lemonade profile relies upon several extensions to IMAP and Mail Submission protocols.</t>
+		
+		
+         </abstract>
+    </front>
+    <middle>
+        <section title="Conventions used in this document">
+	<t>In examples, "M:", "I:" and "S:" indicate lines sent by the client messaging user agent, IMAP e-mail server and SMTP submit server
+		respectively.</t>
+			
+		<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD
+                NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as
+                described in <xref target="KEYWORDS"/>. </t>
+		
+		<t>Other capitalised words are typically names of extensions or commands - these are uppercased for clarity only, and are case-insensitive.</t>
+                
+        <t>All examples in this document are optimized for Lemonade use and
+   might not represent examples of proper protocol usage for a general
+   use Submit/IMAP client. In particular, examples assume that Submit and IMAP
+   servers support all Lemonade extensions described in
+   this document, so they do not demonstrate fallbacks in the absence of an
+   extension.</t>
+        </section>
+    <section title="Introduction">
+	<t>The Lemonade Profile, or simply Lemonade, provides enhancements to Internet email to support diverse
+   service environments. Lemonade Mail Servers provide both a Lemonade Submission Server and a Lemonade Message Store, which are based on the existing <xref target="SUBMIT"/> and <xref target="IMAP"/> protocols respectively. They MAY also include a Lemonade Message Delivery Agent, which provides delivery-time filtering services based on <xref target="SIEVE"/>.</t>
+   
+   
+	<t>This document describes the Lemonade profile that includes:
+<list style="symbols">
+<t>General common enhancements to Internet Mail, described in <xref target="store-gen"/> and <xref target="submit-gen"/>.</t>
+<t>"Forward without download" that describes exchanges between
+           Lemonade clients and servers to allow to submit new email
+           messages incorporating content which resides on locations
+           external to the client, described in <xref target="fwd-main"/>.</t>
+<t>Quick mailbox resynchronization, described in <xref target="imap-condstore"/>.</t>
+<t>Extensions to support more precise, and broader, notifications from the store in support of notifications and view filters, described in <xref target="imap-idle"/> and <xref target="imap-vfolder"/>.</t>
+<t>Delivery-time filtering in support of typical mail management use-cases, as described in <xref target="lemonade-mda"/>.</t>
+</list></t>
+<t>It is intended that the Lemonade profile support realizations of the OMA's mobile email enabler (MEM) (see <xref target="OMA-MEM-REQ"/> and <xref target="OMA-MEM-ARCH"/>) using Internet Mail protocols defined by the IETF.<vspace blankLines="99"/></t>
+  </section>
+
+<section title="Summary of the required support">
+
+<section title="Lemonade Submission Servers">
+<t>Lemonade Submission Servers MUST provide a service as described in <xref target="SUBMIT"/>, and MUST support the following. Note that the Lemonade Profile imposes further requirements for some cases, detailed in the sections cited.</t>
+
+<texttable>
+<ttcol align="center">SMTP extension</ttcol>
+<ttcol align="center">Reference</ttcol>
+<ttcol align="center">Requirements</ttcol>
+<c>PIPELINING</c><c><xref target="SMTP-PIPELINING"/></c><c><xref target="esmtp-pipelining"/></c>
+<c>DSN</c><c><xref target="SMTP-DSN"/></c><c><xref target="esmtp-dsn"/></c>
+<c>SIZE</c><c><xref target="SMTP-SIZE"/></c><c><xref target="esmtp-size"/></c>
+<c>ENHANCEDSTATUSCODES</c><c><xref target="SMTP-STATUSCODES"/></c><c><xref target="esmtp-enhancedstatuscodes"/></c>
+<c>STARTTLS</c><c><xref target="SMTP-TLS"/></c><c><xref target="esmtp-starttls"/></c>
+<c>BURL imap</c><c><xref target="SMTP-BURL"/></c><c><xref target="fwd-main"/></c>
+<c>BINARYMIME</c><c><xref target="SMTP-BINARYMIME"/></c><c><xref target="esmtp-fwd"/></c>
+<c>CHUNKING</c><c><xref target="SMTP-BINARYMIME"/></c><c><xref target="esmtp-fwd"/></c>
+<c>8BITMIME</c><c><xref target="SMTP-8BITMIME"/></c><c><xref target="SMTP-BURL"/></c>
+<c>AUTH</c><c><xref target="SMTP-AUTH"/></c><c><xref target="SUBMIT"/></c>
+</texttable>
+<t><vspace blankLines="99"/></t>
+
+</section>
+<section title="Lemonade Message Stores">
+
+<t>Lemonade Message Stores MUST provide a service as described in <xref target="IMAP"/>, and MUST support the following. Note that the Lemonade Profile imposes further requirements for some cases, detailed in the sections cited.</t>
+   
+<texttable>
+<ttcol align="center">IMAP extension</ttcol>
+<ttcol align="center">Reference</ttcol>
+<ttcol align="center">Requirements</ttcol>
+<c>NAMESPACE</c><c><xref target="IMAP-NAMESPACE"/></c><c><xref target="imap-mbox"/></c>
+<c>CONDSTORE</c><c><xref target="IMAP-CONDSTORE"/></c><c><xref target="imap-condstore"/></c>
+<c>STARTTLS</c><c><xref target="IMAP"/></c><c>-</c>
+<c>URLAUTH</c><c><xref target="IMAP-URLAUTH"/></c><c><xref target="imap-fwd"/></c>
+<c>CATENATE</c><c><xref target="IMAP-CATENATE"/></c><c><xref target="imap-fwd"/></c>
+<c>URL-PARTIAL</c><c><xref target="url-partial"/></c><c><xref target="imap-fwd"/></c>
+<c>UIDPLUS</c><c><xref target="IMAP-UIDPLUS"/></c><c><xref target="imap-fwd"/></c>
+<c>LITERAL+</c><c><xref target="IMAP-LITERAL+"/></c><c><xref target="imap-other"/></c>
+<c>IDLE</c><c><xref target="IMAP-IDLE"/></c><c><xref target="imap-idle"/></c>
+<c>NOTIFY</c><c><xref target="IMAP-NOTIFY"/></c><c><xref target="imap-idle"/></c>
+<c>$Forwarded keyword</c><c>-</c><c><xref target="imap-fwd-keyword"/></c>
+<c>$SubmitPending keyword</c><c>-</c><c><xref target="imap-submission-keywords"/></c>
+<c>$Submitted keyword</c><c>-</c><c><xref target="imap-submission-keywords"/></c>
+<c>BINARY</c><c><xref target="IMAP-BINARY"/></c><c><xref target="imap-bodypart"/></c>
+<c>QRESYNC</c><c><xref target="IMAP-QRESYNC"/></c><c><xref target="imap-condstore"/></c>
+<c>ENABLE</c><c><xref target="IMAP-ENABLE"/></c><c><xref target="imap-condstore"/></c>
+<c>ESEARCH</c><c><xref target="IMAP-ESEARCH"/></c><c><xref target="imap-vfolder"/></c>
+<c>CONTEXT=SEARCH</c><c><xref target="IMAP-CONTEXT"/></c><c><xref target="imap-vfolder"/></c>
+<c>SORT</c><c><xref target="IMAP-SORT"/></c><c><xref target="imap-vfolder"/></c>
+<c>ESORT</c><c><xref target="IMAP-CONTEXT"/></c><c><xref target="imap-vfolder"/></c>
+<c>CONTEXT=SORT</c><c><xref target="IMAP-CONTEXT"/></c><c><xref target="imap-vfolder"/></c>
+<c>CONVERT</c><c><xref target="IMAP-CONVERT"/></c><c><xref target="imap-bodypart"/></c>
+<c>COMPRESS=DEFLATE</c><c><xref target="IMAP-COMPRESS"/></c><c><xref target="imap-compression"/></c>
+<c>I18NLEVEL=1</c><c><xref target="IMAP-I18N"/></c><c><xref target="imap-other"/></c>
+<c>SASL-IR</c><c><xref target="IMAP-SASL-IR"/></c><c><xref target="imap-other"/></c>
+</texttable>
+
+<t>In addition to this list, any Lemonade Message Stores MUST send the CAPABILITY
+response code (see Section 7.1 of <xref target="IMAP"/>) in
+the initial server greeting and after the LOGIN/AUTHENTICATE commands.</t>
+	
+<t><vspace blankLines="99"/></t>
+</section>
+
+	
+<section anchor="lemonade-mda" title="Lemonade Message Delivery Agents">
+
+<t>Lemonade Message Delivery Agents MUST support Sieve mail filtering language as described
+in <xref target="SIEVE"/>, and MUST support the following Sieve extensions.
+Note that the Lemonade Profile imposes further requirements for some cases, detailed in the
+sections cited.</t>
+   
+<texttable>
+<ttcol align="center">Sieve extension</ttcol>
+<ttcol align="center">Reference</ttcol>
+<ttcol align="center">Requirements</ttcol>
+<c>VACATION</c><c><xref target="SIEVE-VACATION"/></c><c><xref target="sieve-mda"/></c>
+<c>ENOTIFY</c><c><xref target="SIEVE-NOTIFY"/></c><c><xref target="sieve-mda"/></c>
+<c>VARIABLES</c><c><xref target="SIEVE-VARIABLES"/></c><c><xref target="sieve-mda"/></c>
+<c>RELATIONAL</c><c><xref target="SIEVE-RELATIONAL"/></c><c><xref target="sieve-mda"/></c>
+<c>IMAP4FLAGS</c><c><xref target="SIEVE-IMAP4FLAGS"/></c><c><xref target="sieve-mda"/></c>
+<c>comparator-i;unicode-casemap</c><c><xref target="UNICODE-CASEMAP"/></c><c><xref target="sieve-mda"/></c>
+
+</texttable>
+
+<t>Lemonade Message Delivery Agents should also consider supporting a Sieve script management protocol,
+such as <xref target="MANAGESIEVE"/>.</t>
+	
+<t><vspace blankLines="99"/></t>
+</section>
+	
+</section>
+
+<section anchor="submit-gen" title="Lemonade Submission Servers">
+
+   <t>All Lemonade Submission Servers implement the Mail Submission protocol described in <xref target="SUBMIT"/>, which is in turn a specific profile of <xref target="ESMTP"/>. Therefore any MUA designed to submit email via <xref target="SUBMIT"/> or <xref target="ESMTP"/> will interoperate with Lemonade Submission Servers.</t>
+   
+   <t>In addition, Lemonade Submission Servers implement
+   the following set of SMTP and Submission extensions to increase message
+   submission
+   efficiency.</t>
+   
+<section anchor="esmtp-fwd" title="Forward Without Download">
+   <t>In order to optimize network usage for the typical case where message content is copied to, or sourced from, the IMAP store, Lemonade provides support for a suite of extensions collectively known as Forward Without Download, discussed in detail in <xref target="fwd-main"/>.</t>
+   
+   <t>Lemonade Submission Servers MUST support the BURL <xref target="SMTP-BURL"/>,
+   8BITMIME <xref target="SMTP-8BITMIME"/>, BINARYMIME <xref target="SMTP-BINARYMIME"/> and CHUNKING <xref target="SMTP-BINARYMIME"/>.</t>
+   <t>BURL MUST support
+   URLAUTH type URLs <xref target="IMAP-URLAUTH"/>, and thus MUST advertise the "imap"
+   option following the BURL EHLO keyword (See <xref target="SMTP-BURL"/> for more details).</t>
+</section>   
+   
+<section anchor="esmtp-pipelining" title="Pipelining">
+   
+   <t>Some clients regularly use networks with a relatively high latency, such as Mobile or Satellite based networks.
+   Avoidance of round-trips within a transaction has a great advantage
+   for the reduction in both bandwidth and total transaction time. For
+   this reason Lemonade compliant mail submission servers MUST support
+   the SMTP Service Extensions for Command Pipelining <xref target="SMTP-PIPELINING"/>.</t>
+   
+</section>
+   
+<section anchor="esmtp-dsn" title="DSN Support">
+   
+   <t>Lemonade compliant mail submission servers MUST support SMTP service
+   extensions for delivery status notifications <xref target="SMTP-DSN"/>.</t>
+   
+</section>
+   
+<section anchor="esmtp-size" title="Message size declaration">
+
+   <t>There is a distinct advantage in detecting failure cases as early as
+   possible in many cases, such as where the user is charged per-octet, or
+   where bandwidth is low. This is especially true of large message sizes.</t>
+   
+   <t>Lemonade Submission Servers MUST support the SMTP
+   Service Extension for Message Size Declaration <xref target="SMTP-SIZE"/>.</t>
+   
+   <t>Lemonade Submission Servers MUST NOT consider a supplied message size to be acceptable without expanding all BURL parts.</t>
+   
+   <t>A Lemonade capable client SHOULD use message size declaration. In
+   particular the client MUST NOT send a message to a mail submission server,
+   if it knows that the message exceeds the maximal message size
+   advertised by the submission server.
+   When including a message size in the MAIL FROM command, the client
+   MUST use a value that is at least as large as the size of the assembled message data
+   after resolution of all BURL parts.
+   </t>
+   
+</section>
+   
+<section anchor="esmtp-enhancedstatuscodes" title="Enhanced status code Support">
+   
+   <t>Lemonade compliant mail submission servers MUST support SMTP Service
+   Extension for Returning Enhanced Error Codes <xref target="SMTP-STATUSCODES"/>. These allow a client to determine the precise cause of failure.</t>
+   
+</section>
+   
+<section anchor="esmtp-starttls" title="Encryption and Compression">
+   
+   <t>Lemonade Compliant mail submission servers MUST support SMTP Service
+   Extension for Secure SMTP over TLS <xref target="SMTP-TLS"/>.</t>
+   
+   <t>Support for the DEFLATE compression method, as described in <xref target="TLS-COMP"/>, is RECOMMENDED.</t>
+<t><vspace blankLines="99"/></t>
+</section>
+</section>
+
+<section anchor="store-gen" title="Lemonade Message Stores">
+
+<t>All Lemonade Message Stores implement Internet Message Access Protocol, as defined in <xref target="IMAP"/>. Therefore any MUA written to access messages using the facilities described in <xref target="IMAP"/> will interoperate with a Lemonade Message Store.</t>
+
+<t>In addition, Lemonade Message Stores provide a set of extensions to address the limitations of some clients and networks.</t>
+   
+<section anchor="imap-condstore" title="Quick resynchronization">
+
+   <t>Resynchronization is a costly part of an IMAP session, and mobile networks are generally more prone to unintended disconnection, which in turns makes this problem more acute. Therefore Lemonade Message Stores provide a suite of extensions to reduce the synchronization cost.</t>
+   
+   <t>Lemonade Compliant IMAP servers MUST support the CONDSTORE
+   <xref target="IMAP-CONDSTORE"/>, the QRESYNC
+   <xref target="IMAP-QRESYNC"/> and the ENABLE
+   <xref target="IMAP-ENABLE"/> extensions.
+   These allow a client to quickly resynchronize
+   any mailbox by asking the server to return all flag changes and expunges
+   that have occurred since a previously recorded state.
+   This can also speed up client reconnect in case the transport layer is cut,
+   whether accidentally or as part of a change in network.
+   </t>
+   
+   <t><xref target="IMAP-SYNC-HOWTO"/> details how clients perform efficient mailbox resynchronization.</t>
+   
+</section>
+
+<section anchor="imap-bodypart" title="Message part handling">
+
+   <t>The handling of message parts, especially attachments, represents a set of challenges to limited devices, both in terms of the bandwidth used, and the capability of the device.</t>
+
+   <t>Lemonade Compliant IMAP servers MUST support the BINARY
+   <xref target="IMAP-BINARY"/> extension. This moves MIME body part decoding operations
+   from the client to the server. The decoded data is always equal or less than
+   the encoded representation, so this reduces bandwidth effectively.</t>
+   
+   <t><xref target="IMAP-BINARY"/> allows for servers to refuse to accept uploaded
+   messages containing binary data, by not accepting the Binary
+   content-transfer-encoding; however Lemonade Compliant IMAP servers SHALL always
+   accept binary encoded MIME messages in APPEND commands for any folder.</t>
+   
+   <t><xref target="IMAP-CONVERT"/> MUST also be supported by servers, which
+   allows clients to request conversions between media types, and allows for
+   scaling images, etc. This provides the ability to view attachments (and
+   sometimes body parts) without the facility to cope with a wide range of
+   media types, or to efficiently view attachments.</t>
+
+</section>
+
+<section anchor="imap-compression" title="Compression">
+
+   <t>The IETF has for some time generally agreed that compression is best handled at as low a level as possible, therefore Lemonade Message Stores SHOULD support the Deflate compression algorithm for TLS, as defined in <xref target="TLS-COMP"/>.</t>
+   
+   <t>However, the working group acknowledges that for many endpoints, this is a rarely deployed technology, and as such, Lemonade Message Stores MUST provide <xref target="IMAP-COMPRESS"/> support for fallback application-level stream compression, where TLS is not actively providing compression.</t>
+
+</section>
+
+<section anchor="notifications" title="Notifications">
+<t>The addition of Server-to-client notifications ransforms the
+    LEMONADE profile into an event-based synchronization protocol.
+    Whenever an event occurs that interests the MUA, a
+    notification can be generated.</t>
+<t>If the MUA is connected to the IMAP server, inband notifications are
+    generated using the facilities outlined in <xref target="imap-idle"/>.</t>
+<t>When the MUA is not connected, the Notification filter generates a
+    outband notification.  The notification filter may be considered as
+    acting on a PUSH repository.</t>
+<t>If the MUA is not connected, and outband notification is disabled,
+    the client must perform a quick-sync on reconnect to determine
+    mailbox changes, using the mechanisms outlined in <xref target="imap-condstore"/>.</t>
+<section anchor="imap-idle" title="IMAP Notifications">
+   <t>Lemonade Message Stores MUST support the IDLE <xref target="IMAP-IDLE"/>
+   extension. The extension allows clients to receive unsolicited
+   notifications about changes in the selected mailbox, without needing
+   to poll for changes. The responses forming these notifications MUST be
+   sent in a timely manner when such changes happen.</t>
+   
+   <t>Lemonade Message Stores also provide the NOTIFY extension described in <xref target="IMAP-NOTIFY"/>, which allows clients to request specific event types to be sent immediately to the client, both for the currently selected folder and others. Such event types include message delivery, and mailbox renames.</t>
+</section>
+<section anchor="outband-notify" title="External Notifications">
+<t>Lemonade, and TCP, provide for long-lived idle connections between the client and mail store, allowing the server to
+push notifications within IMAP.  Some mobile networks support dormancy, which shuts down the radio traffic channel
+during idle periods to conserve handset and network resources, while maintaining IP and TCP state.  (See the
+<xref target="LEMONADE-DEPLOYMENTS"/> document for more information.)</t>
+
+<t>However, there are environments where the email client cannot remain active indefinitely, or where it is not advisable
+(or even always possible) for TCP connections to the server to remain up while idle for extended periods.  In these
+situations, a good user experience requires that when "interesting" events occur in the mail store, the client be
+informed so that it can connect and resynchronize.  At an absolute minimum, this requires that at least the arrival of
+new mail generate some sort of wake-up to the email client.  A number of vendors have implemented various
+solutions to this.  As examples of what has been done, for many years (long pre-dating cellular handsets) the
+technique described in <xref target="FINGER-HACK"/> has been supported. Today, a number of email vendors include facilities to send SMS
+or other simple non-stream messages to clients on handsets when new mail arrives.  OMA has published a
+mechanism that uses WAP PUSH to send a basic message containing a URL <xref target="OMA-EMN"/>.  The IETF is investigating
+ways to standardize enhanced functionality in this area.</t>
+
+<t>A "push email" user experience can be achieved using any number of techniques, ranging from always-on TCP
+connectivity to the server and the NOTIFY extension described above, to OMA EMN, or even a non-standard trigger
+message over SMS.  In any technique, the client learns of the existence of new mail, and decides to fetch information
+about it, some part of it, or all of it, and then presents this to the user.</t>
+</section>
+</section>
+
+<section anchor="imap-vfolder" title="Searching and View Filters">
+   <t>Lemonade Message Stores MUST support the ESEARCH <xref target="IMAP-ESEARCH"/>
+   extension. The extension allows clients to efficiently find the first or last messages,
+   find a count of matching messages, and obtain a list of matching messages in a
+   considerably more compact representation.</t>
+
+<t>Lemonade Message Stores also provide a mechanism for clients to avoid handling an entire mailbox, instead accessing a view of the mailbox. This technique, common in many desktop clients as a client-side capability, is useful for constrained clients to minimize the quantity of messages and notification data.</t>
+
+	<t>Lemonade Message Stores therefore MUST implement the CONTEXT=SEARCH, ESORT and
+	CONTEXT=SORT extensions defined in <xref target="IMAP-CONTEXT"/>, as well as the SORT
+	extension defined in <xref target="IMAP-SORT"/>.</t>	
+	
+</section>
+
+<section anchor="imap-mbox" title="Mailbox Handling">
+   <t>Lemonade Message Stores MUST support the NAMESPACE
+   <xref target="IMAP-NAMESPACE"/> extension. The extension allows clients to discover
+   shared mailboxes and mailboxes belonging to other users, and provide a normalized
+   hierarchy view of the mailboxes available.</t>
+   
+   <t>Lemonade Message Stores MUST support the I18NLEVEL=&lt;n&gt; <xref target="IMAP-I18N"/> extension,
+   with &lt;n&gt; having value 1 or 2. It adds support for non-English (internationalized) search and sort functions.
+   (Note that I18NLEVEL=2 implies support for I18NLEVEL=1, so a Lemonade compliant client that make use of this extension
+   MUST recognize either one.)</t>
+	
+</section>
+<section anchor="imap-fwd" title="Forward Without Download">
+   <t>In order to optimize network usage for the typical case where message content is copied to, or sourced from, the IMAP store, Lemonade provides support for a suite of extensions collectively known as Forward Without Download, discussed in detail in <xref target="fwd-main"/>.</t>
+   
+   <t>Lemonade Message Stores MUST support
+   CATENATE <xref target="IMAP-CATENATE"/>,
+   UIDPLUS <xref target="IMAP-UIDPLUS"/> and
+   URLAUTH <xref target="IMAP-URLAUTH"/>.
+   Lemonade Message Stores MUST also support URL-PARTIAL <xref target="url-partial"/>.
+   </t>
+
+	<section anchor="url-partial" title="Support for PARTIAL in CATENATE and URLAUTH">
+		
+		<t><xref target="IMAP-URL"/> introduced a new syntactic element for referencing
+		a byte range of a message/body part. This is done using the ;PARTIAL= field.
+		If an IMAP server supports PARTIAL in IMAP URL used in CATENATE and URLAUTH extensions,
+		then it MUST advertise the URL-PARTIAL capability in the CAPABILITY response/response code.
+		</t>
+		
+	</section>
+	
+</section>
+<section anchor="imap-other" title="Additional IMAP extensions">
+   
+   <t>Lemonade Message Stores MUST support the LITERAL+ <xref target="IMAP-LITERAL+"/>
+   extension. The extension allows clients to save a round trip each
+   time a non-synchronizing literal is sent.</t>
+   
+   <t>Lemonade Message Stores MUST also implement the SASL-IR <xref target="IMAP-SASL-IR"/> extension, which allows clients to save a round trip during authentication, potentially pipelining the entire authentication sequence.</t>
+   
+   <t>Lemonade Compliant IMAP servers MUST support IMAP over TLS <xref target="IMAP"/>
+   as required by <xref target="IMAP"/>. As noted above in <xref target="imap-compression"/>, servers SHOULD support the deflate compression
+   algorithm for TLS, as specified in <xref target="TLS-COMP"/>.</t>
+
+</section>
+<section anchor="imap-fwd-keyword" title="Registration of $Forwarded IMAP keyword">
+   
+   <t>The $Forwarded IMAP keyword is used by several IMAP clients to
+   specify that the marked message was forwarded to another email address,
+   embedded within or attached to a new message. A mail client sets this
+   keyword when it successfully forwards the message to another email
+   address. Typical usage of this keyword is to show a different (or
+   additional) icon for a message that has been forwarded. Once set the
+   flag SHOULD NOT be cleared.</t>
+   
+   <t>Lemonade Message Stores MUST be able to store the $Forwarded
+   keyword. They MUST preserve it on the COPY operation.  The servers
+   MUST support the SEARCH KEYWORD $Forwarded.</t>
+   
+</section>
+
+<section anchor="imap-submission-keywords" title="Registration of $SubmitPending and $Submitted IMAP keywords">
+
+   <t>The $SubmitPending IMAP keyword designates the message as
+   awaiting to be submitted. This keyword allows to store messages waiting
+   to be submitted in the same mailbox where messages that were already
+   submitted and/or being edited are stored. A mail client sets this keyword
+   when it decides that the message needs to be sent out.
+   When a client (it might be a different client from the one that decided that
+   the message is pending submission) starts sending the message, it atomically
+   (using "STORE (UNCHANGEDSINCE)") adds the $Submitted keyword.
+   Once submission is successful, the $SubmitPending keyword is atomically cleared.
+   The two keywords allow to distinguish messages being actively submitted 
+   (messages that have both $Submitted and $SubmitPending keywords set) from
+   messages awaiting to be submitted, or from messages already submitted.
+   They also allow to find all messages that were supposed to be submitted,
+   if the client submitting them crashes or quits before submitting them.
+   </t>
+
+   <t>Lemonade Message Stores MUST be able to store the $SubmitPending
+   and the $Submitted keyword. Lemonade Message Stores MUST preserve
+   them on the COPY operation.  The servers MUST support the
+   SEARCH KEYWORD $SubmitPending and SEARCH KEYWORD $Submitted.</t>
+   
+</section>
+	
+<section title="Related IMAP extensions">
+
+	<t>This section is non-normative.</t>
+	
+	<t>Server implementations targeting to fulfil OMA MEM requirements <xref target="OMA-MEM-REQ"/>
+	should consider implementing <xref target="IMAP-FILTERS"/>, which provides a way to persist
+	definition of virtual mailboxes on the server.
+	They should also consider implementing <xref target="METADATA">METADATA-SERVER</xref> extension,
+	which provides a way of storing user-defined data associated with a user account.
+	</t>
+	
+</section>
+	
+</section>
+<section anchor="sieve-mda" title="Lemonade Message Delivery Agents">
+    <t>Lemonade Message Delivery Agents MUST support the <xref target="SIEVE"/> filtering language at the point of delivery, allowing the user to control which messages are accepted, and where they are filed.</t>
+
+	<t>Lemonade Message Delivery Agents MUST support the Sieve Vacation extension
+	<xref target="SIEVE-VACATION"/>, which allows the client
+	to setup an auto-responder, typically to report being on vacation (thus the name
+	of the Sieve extension).</t>
+
+	<t>Lemonade Message Delivery Agents MUST support the Sieve Enotify extension
+	<xref target="SIEVE-NOTIFY"/>, which allows a Sieve script
+	to generate notifications (such as XMPP, SIP or email) about received messages.</t>
+
+	<t>Lemonade Message Delivery Agents MUST support the Sieve Variables extension
+	<xref target="SIEVE-VARIABLES"/>, which adds support for variables
+	to the Sieve scripting language. This extension is typically used with Sieve Enotify
+	or Vacation to customize responses/notifications.</t>
+
+	<t>Lemonade Message Delivery Agents MUST support the Sieve Relational extension
+	<xref target="SIEVE-RELATIONAL"/>, which adds support for relational
+	comparisons to the Sieve scripting language. This extension is typically used
+	together with Sieve Enotify.</t>
+
+	<t>Lemonade Message Delivery Agents MUST support the Sieve Imap4Flags extension
+	<xref target="SIEVE-IMAP4FLAGS"/>, which allows a Sieve script
+	to set IMAP flags/keywords when delivering a message to a mailbox. For example
+	this can be used to automatically mark certain messages as interesting, urgent, etc.</t>
+
+	<t>Lemonade Message Delivery Agents MUST support the i;unicode-casemap comparator in Sieve
+	<xref target="UNICODE-CASEMAP"/>. The comparator allows for case-insensitive
+	matching of Unicode characters.</t>
+
+	
+	
+	<t>Lemonade Message Delivery Agents should consider supporting Sieve script management using the
+	<xref target="MANAGESIEVE"/> protocol. If they do, they MUST also advertise
+	
+	in <xref target="MANAGESIEVE"/> all Sieve extensions listed in
+	this section.</t>
+	
+</section>
+<section anchor="client-main" title="Lemonade Mail User Agents">
+    <t>Although all existing IMAP MUAs are Lemonade compliant in as much as all Lemonade services are based on the existing <xref target="IMAP"/> and <xref target="SUBMIT"/> protocols, client implementors are encouraged to take full advantage of the facilities provided by Lemonade Submission Servers and Lemonade Message Stores, as described in <xref target="submit-gen"/> and <xref target="store-gen"/> respectively.</t>
+    
+    <t>Note that the explicit usage of <xref target="SUBMIT"/> means that when opening a connection to the submission server, clients MUST do so using port 587 unless explicitly configured to use an alternate port. If the TCP connection to the submission server fails to open using port 587, the client MAY then immediately retry using a different port, such as 25. See <xref target="SUBMIT"/> information on why using port 25 is likely to fail depending on the current location of the client, and may result in a failure code during the SMTP transaction.</t>
+    
+    <t>In addition, some specifications are useful to support interoperable messaging with an enhanced user experience.</t>
+    
+    <t>Lemonade capable clients SHOULD support the Format and DelSp parameters to the text/plain media type described in <xref target="FLOWED"/>, and generate this format for messages.</t>
+    
+    <t>Lemonade capable clients SHOULD support, and use, the $Forwarded keyword described in <xref target="imap-fwd-keyword"/>.</t>
+    
+</section>
+
+<section anchor="fwd-main" title="Forward without download">
+<section title="Motivations">
+<t>The advent of client/server email using the <xref target="IMAP"/> and <xref target="SUBMIT"/> protocols changed what formerly were local disk
+   operations to become repetitive network data transmissions.</t>
+<t>Lemonade "forward without download" makes use of the <xref target="SMTP-BURL"/>
+   extension to enable access to external sources during the submission
+   of a message.  In combination with the <xref target="IMAP-URLAUTH"/> extension,
+   inclusion of message parts or even entire messages from the IMAP mail
+   store is possible with a minimal trust relationship between the IMAP
+   and SMTP SUBMIT servers.</t>
+<t>Lemonade "forward without download" has the advantage of maintaining
+   one submission protocol, and thus avoids the risk of having multiple
+   parallel and possibly divergent mechanisms for submission. The client
+   can use <xref target="SUBMIT"/> extensions without these being added to
+   IMAP. Furthermore, by keeping the details of message submission in
+   the SMTP SUBMIT server, Lemonade "forward without download" can work
+   with other message retrieval protocols such as POP, NNTP, or whatever
+   else may be designed in the future.</t>
+</section>
+<section title="Message Sending Overview">
+<t>The act of sending an email message can be thought of as involving
+   multiple steps: initiation of a new draft, draft editing, message
+   assembly, and message submission.</t>
+   
+   <t>Initiation of a new draft and draft editing takes place in the MUA.
+   Frequently, users choose to save more complex messages on an
+   <xref target="IMAP"/> server (via the APPEND command with the \Draft flag) for
+   later recall by the MUA and resumption of the editing process.</t>
+   
+   <t>Message assembly is the process of producing a complete message from
+   the final revision of the draft and external sources.  At assembly
+   time, external data is retrieved and inserted in the message.</t>
+   
+   <t>Message submission is the process of inserting the assembled message
+   into the <xref target="ESMTP"/> infrastructure, typically using the <xref target="SUBMIT"/>
+   protocol.</t>
+</section>
+<section title="Traditional Strategy">
+<t>Traditionally, messages are initiated, edited, and assembled entirely
+   within an MUA, although drafts may be saved to an <xref target="IMAP"/> server
+   and later retrieved from the server.  The completed text is then
+   transmitted to an MSA for delivery.</t>
+<t>There is often no clear boundary between the editing and assembly
+   process.  If a message is forwarded, its content is often retrieved
+   immediately and inserted into the message text.  Similarly, when
+   external content is inserted or attached, the content is usually
+   retrieved immediately and made part of the draft.</t>
+<t>As a consequence, each save of a draft and subsequent retrieve of the
+   draft transmits that entire (possibly large) content, as does message
+   submission.</t>
+<t>In the past, this was not much of a problem, because drafts, external
+   data, and the message submission mechanism were typically located on
+   the same system as the MUA.  The most common problem was running out
+   of disk quota.</t>
+</section>
+<section title="Step by step description">
+<figure>
+   <preamble>The model distinguishes between a Messaging User Agent (MUA), an
+   IMAPv4Rev1 Server (<xref target="IMAP"/>) and a SMTP submit server (<xref target="SUBMIT"/>), as
+   illustrated in Figure 1.</preamble>
+<artwork>
+      +--------------------+               +--------------+
+      |                    | &lt;------------ |              |
+      |     MUA (M)        |               | IMAPv4Rev1   |
+      |                    |               |  Server      |
+      |                    | ------------&gt; | (Server I)   |
+      +--------------------+               +--------------+
+             ^    |                              ^     |
+             |    |                              |     |
+             |    |                              |     |
+             |    |                              |     |
+             |    |                              |     |
+             |    |                              |     |
+             |    |                              |     v
+             |    |                        +--------------+
+             |    |----------------------&gt; |   SMTP       |
+             |                             |   Submit     |
+             |-----------------------------|   Server     |
+                                           |  (Server S)  |
+                                           +--------------+
+</artwork>
+<postamble>Figure 1:  Lemonade "forward without download"</postamble>
+</figure>
+   
+   
+   <t>Lemonade "forward without download" allows a Messaging User Agent to
+   compose and forward an e-mail combining fragments that are located in
+   an IMAP server, without having to download these fragments to the
+   client.</t>
+   
+   <t>There are two ways to perform "forward without download" based on
+   where the message assembly takes place.  The first uses extended
+   APPEND command <xref target="IMAP-CATENATE"/> to edit a draft message in the message
+   store and cause the message assembly on the IMAP server. This is most often used when a copy of the message is to be retained on the IMAP server, as discussed in <xref target="fcc-problem"/>.</t>
+   
+   <t>The second
+   uses a succession of BURL and BDAT commands to submit and assemble
+   through concatenation, message data from the client and external data
+   fetched from the provided URL. The two subsequent sections provide
+   step-by-step instructions on how "forward without download" is
+   achieved.</t>
+   
+<section anchor="fwd-catenate" title="Message assembly using IMAP CATENATE extension">
+   
+   <t>In the <xref target="SMTP-BURL"/>/<xref target="IMAP-CATENATE"/> variant of the Lemonade "forward without
+   download" strategy, messages are initially composed and edited within
+   an MUA.  The <xref target="IMAP-CATENATE"/> extension to <xref target="IMAP"/> is then used to create
+   the messages on the IMAP server by transmitting new text and
+   assembling them. The UIDPLUS <xref target="IMAP-UIDPLUS"/> IMAP extension is used by the client
+   in order to learn the UID of the created messages. Finally a
+   <xref target="IMAP-URLAUTH"/> format URL is given to a <xref target="SUBMIT"/> server for submission
+   using the BURL <xref target="SMTP-BURL"/> extension.</t>
+   
+   <t>The flow involved to support such a use case consists of:</t>
+   <t>M: {to I -- Optional} The client connects to the IMAP server,
+     optionally starts TLS (if data confidentiality is required),
+     authenticates, opens a mailbox ("INBOX" in the example below) and
+     fetches body structures (See <xref target="IMAP"/>).</t>
+     
+     <figure><preamble>Example:</preamble>
+<artwork>
+         M: A0051 UID FETCH 25627 (UID BODYSTRUCTURE)
+         I: * 161 FETCH (UID 25627 BODYSTRUCTURE (("TEXT" "PLAIN"
+             ("CHARSET" "US-ASCII") NIL NIL "7BIT" 1152 23)(
+             "TEXT" "PLAIN" ("CHARSET" "US-ASCII" "NAME"
+             "trip.txt")
+             "&lt;960723163407.20117h@washington.example.com&gt;"
+             "Your trip details" "BASE64" 4554 73) "MIXED"))
+         I: A0051 OK completed
+</artwork>
+</figure>
+     
+      <t>M: {to I} The client invokes CATENATE (See <xref target="IMAP-CATENATE"/> for details
+     of the semantics and steps) -- this allows the MUA to create
+     messages on the IMAP server using new data combined with one or
+     more message parts already present on the IMAP server.</t>
+     
+     <t>Note that the example for this step doesn't use the LITERAL+
+     <xref target="IMAP-LITERAL+"/> extension. Without LITERAL+ the new message is
+     constructed using 3 round-trips. If LITERAL+ is used, the new
+     message can be constructed using one round-trip.</t>
+     
+<figure>
+<artwork>
+      M: A0052 APPEND Sent FLAGS (\Draft \Seen $MDNSent)
+          CATENATE (TEXT {475}
+      I: + Ready for literal data
+      M: Message-ID: &lt;419399E1.6000505@caernarfon.example.org&gt;
+      M: Date: Thu, 12 Nov 2004 16:57:05 +0000
+      M: From: Bob Ar &lt;bar@example.org&gt;
+      M: MIME-Version: 1.0
+      M: To: foo@example.net
+      M: Subject: About our holiday trip
+      M: Content-Type: multipart/mixed;
+      M:     boundary="------------030308070208000400050907"
+      M:
+      M: --------------030308070208000400050907
+      M: Content-Type: text/plain; format=flowed
+      M:
+      M: Our travel agent has sent the updated schedule.
+      M:
+      M: Cheers,
+      M: Bob
+      M: --------------030308070208000400050907
+      M:  URL "/INBOX;UIDVALIDITY=385759045/;
+         UID=25627/;Section=2.MIME" URL "/INBOX;
+         UIDVALIDITY=385759045/;UID=25627/;Section=2" TEXT {44}
+      I: + Ready for literal data
+      M:
+      M: --------------030308070208000400050907--
+      M: )
+      I: A0052 OK [APPENDUID 387899045 45] CATENATE Completed
+</artwork>
+</figure>
+     
+      <t>M: {to I} The client uses GENURLAUTH command to request a URLAUTH
+     URL (See <xref target="IMAP-URLAUTH"/>).<vspace blankLines="0"/>
+      I: {to M} The IMAP server returns a URLAUTH URL suitable for later
+     retrieval with URLFETCH (See <xref target="IMAP-URLAUTH"/> for details of the semantics
+     and steps).</t>
+     
+<figure>
+<artwork>
+      M: A0054 GENURLAUTH "imap://bob.ar@example.org/Sent;
+         UIDVALIDITY=387899045/;uid=45;expire=2005-10-
+         28T23:59:59Z;urlauth=submit+bob.ar" INTERNAL
+      I: * GENURLAUTH "imap://bob.ar@example.org/Sent;
+         UIDVALIDITY=387899045/;uid=45;expire=
+         2005-10-28T23:59:59Z;urlauth=submit+bob.ar:
+         internal:91354a473744909de610943775f92038"
+      I: A0054 OK GENURLAUTH completed
+</artwork>
+</figure>
+
+      <t>M: {to S} The client connects to the mail submission server and
+     starts a new mail transaction. It uses BURL to let the SMTP submit
+     server fetch the content of the message from the IMAP server (See
+     <xref target="IMAP-URLAUTH"/> for details of the semantics and steps -- this allows the
+     MUA to authorize the SMTP submit server to access the message
+     composed as a result of the CATENATE step). Note that the second
+     EHLO command is required after a successful STARTTLS command.
+     Also note that there might be a third required EHLO command if the
+     second EHLO response doesn't list any BURL options. <xref target="fwd-chunking"/>
+     demonstrates this.</t>
+     
+<figure>
+<artwork>
+      S: 220 owlry.example.org ESMTP
+      M: EHLO potter.example.org
+      S: 250-owlry.example.com
+      S: 250-8BITMIME
+      S: 250-BINARYMIME
+      S: 250-PIPELINING
+      S: 250-BURL imap
+      S: 250-CHUNKING
+      S: 250-AUTH PLAIN
+      S: 250-DSN
+      S: 250-SIZE 10240000
+      S: 250-STARTTLS
+      S: 250 ENHANCEDSTATUSCODES
+      M: STARTTLS
+      S: 220 Ready to start TLS
+      ...TLS negotiation, subsequent data is encrypted...
+      M: EHLO potter.example.org
+      S: 250-owlry.example.com
+      S: 250-8BITMIME
+      S: 250-BINARYMIME
+      S: 250-PIPELINING
+      S: 250-BURL imap
+      S: 250-CHUNKING
+      S: 250-AUTH PLAIN
+      S: 250-DSN
+      S: 250-SIZE 10240000
+      S: 250 ENHANCEDSTATUSCODES
+      M: AUTH PLAIN aGFycnkAaGFycnkAYWNjaW8=
+      S: 235 2.7.0 PLAIN authentication successful.
+      M: MAIL FROM:&lt;bob.ar@example.org&gt;
+      S: 250 2.5.0 Address Ok.
+      M: RCPT TO:&lt;foo@example.net&gt;
+      S: 250 2.1.5 foo@example.net OK.
+      M: BURL imap://bob.ar@example.org/Sent;UIDVALIDITY=387899045/;
+         uid=45/;urlauth=submit+bar:internal:
+         91354a473744909de610943775f92038 LAST
+</artwork>
+</figure>
+     
+      <t>S: {to I} The mail submission server uses URLFETCH to fetch the
+     message to be sent (See <xref target="IMAP-URLAUTH"/> for details of the semantics and
+     steps. The so-called "pawn-ticket" authorization mechanism uses a
+     URI which contains its own authorization credentials.).<vspace blankLines="0"/>
+      I: {to S} Provides the message composed as a result of the
+     CATENATE step).</t>
+     
+<figure>
+     <preamble>Mail submission server opens IMAP connection to the IMAP server:</preamble>
+     
+<artwork>
+      I: * OK [CAPABILITY IMAP4REV1 STARTTLS NAMESPACE LITERAL+
+          CATENATE URLAUTH UIDPLUS CONDSTORE IDLE] imap.example.com
+          IMAP server ready
+      S: a000 STARTTLS
+      I: a000 Start TLS negotiation now
+      ...TLS negotiation, if successful - subsequent data
+         is encrypted...
+      S: a001 LOGIN submitserver secret
+      I: a001 OK submitserver logged in
+      S: a002 URLFETCH "imap://bob.ar@example.org/Sent;
+         UIDVALIDITY=387899045/;uid=45/;urlauth=submit+bob.ar:
+         internal:91354a473744909de610943775f92038"
+      I: * URLFETCH "imap://bob.ar@example.org/Sent;
+         UIDVALIDITY=387899045/;uid=45/;urlauth=submit+bob.ar:
+         internal:91354a473744909de610943775f92038" {15065}
+      ...message body follows...
+      S: a002 OK URLFETCH completed
+      I: a003 LOGOUT
+      S: * BYE See you later
+      S: a003 OK Logout successful
+</artwork>
+</figure>
+     
+     <t>Note that if the IMAP server doesn't send CAPABILITY response code
+     in the greeting, the mail submission server must issue the
+     CAPABILITY command to learn about supported IMAP extensions as
+     described in <xref target="IMAP"/>.</t>
+     
+     <t>Also, if data confidentiality is not required the mail submission
+     server may omit the STARTTLS command before issuing the LOGIN
+     command.</t>
+     
+<figure>
+      <preamble>S: {to M} Submission server assembles the complete message and if
+     the assembly succeeds it returns OK to the MUA:</preamble>
+<artwork>
+      S: 250 2.5.0 Ok.
+</artwork>
+</figure>
+     
+<figure>
+     <preamble>M: {to I} The client marks the message containing the forwarded attachment on the IMAP
+     server.</preamble>
+     
+<artwork>
+      M: A0053 UID STORE 25627 +FLAGS.SILENT ($Forwarded)
+      I: * 215 FETCH (UID 25627 MODSEQ (12121231000))
+      I: A0053 OK STORE completed
+</artwork>
+</figure>
+     <t>Note: the UID STORE command shown above will only work if the
+     marked message is in the currently selected mailbox; otherwise, it
+     requires a SELECT. This command can be omitted, as it simply changes non-operational metadata not essential to client operations or interoperability.
+     The untagged FETCH response is due to <xref target="IMAP-CONDSTORE"/>.
+     The $Forwarded IMAP keyword is described in <xref target="imap-fwd-keyword"/>.</t>
+</section>
+
+   
+<section anchor="fwd-chunking" title="Message assembly using SMTP CHUNKING and BURL extensions">
+   
+   <t>In the <xref target="IMAP-URLAUTH"/>/<xref target="SMTP-BURL"/> variant of the Lemonade "forward without
+   download" strategy, messages are initially composed and edited within
+   an MUA.  During submission <xref target="SUBMIT"/>, BURL <xref target="SMTP-BURL"/> and BDAT <xref target="SMTP-BINARYMIME"/>
+   commands are used to create the messages from multiple parts. New
+   body parts are supplied using BDAT commands, while existing body
+   parts are referenced using <xref target="IMAP-URLAUTH"/> format URLs in BURL commands.</t>
+   
+   <t>The flow involved to support such a use case consists of:<vspace blankLines="0"/>
+      M: {to I -- Optional} The client connects to the IMAP server,
+     optionally starts TLS (if data confidentiality is required),
+     authenticates, opens a mailbox ("INBOX" in the example below) and
+     fetches body structures (See <xref target="IMAP"/>).</t>
+     
+<figure>
+     <preamble>Example:</preamble>
+<artwork>
+         M: A0051 UID FETCH 25627 (UID BODYSTRUCTURE)
+         I: * 161 FETCH (UID 25627 BODYSTRUCTURE (("TEXT" "PLAIN"
+            ("CHARSET" "US-ASCII") NIL NIL "7BIT" 1152 23)(
+            "TEXT" "PLAIN" ("CHARSET" "US-ASCII" "NAME"
+            "trip.txt")
+            "&lt;960723163407.20117h@washington.example.com&gt;"
+            "Your trip details" "BASE64" 4554 73) "MIXED"))
+         I: A0051 OK completed
+</artwork>
+</figure>
+     
+      <t>M: {to I} The client uses GENURLAUTH command to request URLAUTH
+     URLs (See <xref target="IMAP-URLAUTH"/>) referencing pieces of the message to be
+     assembled.<vspace blankLines="0"/>
+      I: {to M} The IMAP server returns URLAUTH URLs suitable for later
+     retrieval with URLFETCH (See <xref target="IMAP-URLAUTH"/> for details of the semantics
+     and steps).</t>
+     
+<figure>
+<artwork>
+      M: A0054 GENURLAUTH "imap://bob.ar@example.org/INBOX;
+         UIDVALIDITY=385759045/;UID=25627/;Section=2.MIME;
+         expire=2006-10-28T23:59:59Z;urlauth=submit+bob.ar"
+         INTERNAL "imap://bob.ar@example.org/INBOX;
+         UIDVALIDITY=385759045/;UID=25627/;Section=2;
+         expire=2006-10-28T23:59:59Z;urlauth=submit+bob.ar" INTERNAL
+      I: * GENURLAUTH "imap://bob.ar@example.org/INBOX;
+         UIDVALIDITY=385759045/;UID=25627/;Section=2.MIME;
+         expire=2006-10-28T23:59:59Z;urlauth=submit+bob.ar:
+         internal:A0DEAD473744909de610943775f9BEEF"
+         "imap://bob.ar@example.org/INBOX;
+         UIDVALIDITY=385759045/;UID=25627/;Section=2;
+         expire=2006-10-28T23:59:59Z;urlauth=submit+bob.ar:
+         internal:BEEFA0DEAD473744909de610943775f9"
+      I: A0054 OK GENURLAUTH completed
+</artwork>
+</figure>
+
+      <t>M: {to S} The client connects to the mail submission server and
+     starts a new mail transaction. It uses BURL to instruct the SMTP
+     submit server to fetch from the IMAP server pieces of the message
+     to be sent (See <xref target="SMTP-BURL"/> for details of the semantics and steps).</t>
+     <t>Note that the second EHLO command is required after a successful
+     STARTTLS command. The third EHLO command is required if and only if
+     the second EHLO response doesn't list any BURL options. See
+      <xref target="fwd-catenate"/>
+      for an example of submission where the third EHLO
+     command/response is not present.</t>
+     
+<figure>
+<artwork>
+      S: 220 owlry.example.org ESMTP
+      M: EHLO potter.example.org
+      S: 250-owlry.example.com
+      S: 250-8BITMIME
+      S: 250-BINARYMIME
+      S: 250-PIPELINING
+      S: 250-BURL
+      S: 250-CHUNKING
+      S: 250-AUTH DIGEST-MD5
+      S: 250-DSN
+      S: 250-SIZE 10240000
+      S: 250-STARTTLS
+      S: 250 ENHANCEDSTATUSCODES
+      M: STARTTLS
+      S: 220 Ready to start TLS
+      ...TLS negotiation, subsequent data is encrypted...
+      M: EHLO potter.example.org
+      S: 250-owlry.example.com
+      S: 250-8BITMIME
+      S: 250-BINARYMIME
+      S: 250-PIPELINING
+      S: 250-BURL
+      S: 250-CHUNKING
+      S: 250-AUTH DIGEST-MD5 CRAM-MD5 PLAIN EXTERNAL
+      S: 250-DSN
+      S: 250-SIZE 10240000
+      S: 250 ENHANCEDSTATUSCODES
+      M: AUTH PLAIN aGFycnkAaGFycnkAYWNjaW8=
+      S: 235 2.7.0 PLAIN authentication successful.
+      M: EHLO potter.example.org
+      S: 250-owlry.example.com
+      S: 250-8BITMIME
+      S: 250-BINARYMIME
+      S: 250-PIPELINING
+      S: 250-BURL imap imap://imap.example.org
+      S: 250-CHUNKING
+      S: 250-AUTH DIGEST-MD5 CRAM-MD5 PLAIN EXTERNAL
+      S: 250-DSN
+      S: 250-SIZE 10240000
+      S: 250 ENHANCEDSTATUSCODES
+      M: MAIL FROM:&lt;bob.ar@example.org&gt; BODY=BINARY
+      S: 250 2.5.0 Address Ok.
+      M: RCPT TO:&lt;foo@example.net&gt;
+      S: 250 2.1.5 foo@example.net OK.
+      M: BDAT 475
+      M: Message-ID: &lt;419399E1.6000505@caernarfon.example.org&gt;
+      M: Date: Thu, 12 Nov 2004 16:57:05 +0000
+      M: From: Bob Ar &lt;bar@example.org&gt;
+      M: MIME-Version: 1.0
+      M: To: foo@example.net
+      M: Subject: About our holiday trip
+      M: Content-Type: multipart/mixed;
+      M:     boundary="------------030308070208000400050907"
+      M:
+      M: --------------030308070208000400050907
+      M: Content-Type: text/plain; format=flowed
+      M:
+      M: Our travel agent has sent the updated schedule.
+      M:
+      M: Cheers,
+      M: Bob
+      M: --------------030308070208000400050907
+      S: 250 2.5.0 OK
+      M: BURL imap://bob.ar@example.org/INBOX;
+         UIDVALIDITY=385759045/;UID=25627/;Section=2.MIME;
+         expire=2006-10-28T23:59:59Z;urlauth=submit+bob.ar:
+         internal:A0DEAD473744909de610943775f9BEEF
+      S: 250 2.5.0 OK
+      M: BURL imap://bob.ar@example.org/INBOX;
+         UIDVALIDITY=385759045/;UID=25627/;Section=2;
+         expire=2006-10-28T23:59:59Z;urlauth=submit+bob.ar:
+         internal:BEEFA0DEAD473744909de610943775f9
+      S: 250 2.5.0 OK
+      M: BDAT 44 LAST
+      M:
+      M: --------------030308070208000400050907--
+</artwork>
+</figure>
+     
+      <t>S: {to I} The mail submission server uses URLFETCH to fetch the
+     pieces of the message to be sent (See <xref target="SMTP-BURL"/> for details of the
+     semantics and steps. The so-called "pawn-ticket" authorization
+     mechanism uses a URI which contains its own authorization
+     credentials.).<vspace blankLines="0"/>
+      I: {to S} Returns the requested body parts.</t>
+     
+<figure>
+     <preamble>Mail submission server opens IMAP connection to the IMAP server:</preamble>
+     
+<artwork>
+      I: * OK [CAPABILITY IMAP4REV1 STARTTLS NAMESPACE LITERAL+
+          CATENATE URLAUTH UIDPLUS CONDSTORE IDLE] imap.example.com
+          IMAP server ready
+      S: a001 LOGIN submitserver secret
+      I: a001 OK submitserver logged in
+      S: a002 URLFETCH "imap://bob.ar@example.org/INBOX;
+         UIDVALIDITY=385759045/;UID=25627/;Section=2.MIME;
+         expire=2006-10-28T23:59:59Z;urlauth=submit+bob.ar:
+         internal:A0DEAD473744909de610943775f9BEEF" "imap://
+         bob.ar@example.org/INBOX;
+         UIDVALIDITY=385759045/;UID=25627/;Section=2;
+         expire=2006-10-28T23:59:59Z;urlauth=submit+bob.ar:
+         internal:BEEFA0DEAD473744909de610943775f9"
+      I: * URLFETCH "imap://bob.ar@example.org/INBOX;
+         UIDVALIDITY=385759045/;UID=25627/;Section=2.MIME;
+         expire=2006-10-28T23:59:59Z;urlauth=submit+bob.ar:
+         internal:A0DEAD473744909de610943775f9BEEF" {84}
+      ...message section follows...
+          "imap://bob.ar@example.org/INBOX;
+         UIDVALIDITY=385759045/;UID=25627/;Section=2;
+         expire=2006-10-28T23:59:59Z;urlauth=submit+bob.ar:
+         internal:BEEFA0DEAD473744909de610943775f9" {15065}
+      ...message section follows...
+      S: a002 OK URLFETCH completed
+      I: a003 LOGOUT
+      S: * BYE See you later
+      S: a003 OK Logout successful
+</artwork>
+</figure>
+     
+     <t>Note that if the IMAP server doesn't send CAPABILITY response code
+     in the greeting, the mail submission server must issue the
+     CAPABILITY command to learn about supported IMAP extensions as
+     described in <xref target="IMAP"/>.</t>
+     
+     <t>Also, if data confidentiality is required the mail submission
+     server should start TLS before issuing the LOGIN command.</t>
+     
+<figure>
+      <preamble>S: {to M} Submission server assembles the complete message and if
+     the assembly succeeds it acknowledges acceptance of the message by
+     sending 250 response to the last BDAT command:</preamble>
+<artwork>
+      S: 250 2.5.0 Ok, message accepted.
+</artwork>
+</figure>
+     
+<figure>
+     <preamble>M: {to I} The client marks the message containing the forwarded attachment on the IMAP
+     server.</preamble>
+     
+<artwork>
+      M: A0053 UID STORE 25627 +FLAGS.SILENT ($Forwarded)
+      I: * 215 FETCH (UID 25627 MODSEQ (12121231000))
+      I: A0053 OK STORE completed
+</artwork>
+</figure>
+     
+<t>
+     Note: the UID STORE command shown above will only work if the
+     marked message is in the currently selected mailbox; otherwise, it
+     requires a SELECT. As in the previous example, this command is not critical, and can be omitted.
+     The untagged FETCH response is due to <xref target="IMAP-CONDSTORE"/>.
+     The $Forwarded IMAP keyword is described in <xref target="imap-fwd-keyword"/>.
+</t>
+</section>   
+</section>
+   
+<section title="Security Considerations for pawn-tickets.">
+   
+   <t>The so-called "pawn-ticket" authorization mechanism uses a URI, which
+   contains its own authorization credentials using <xref target="IMAP-URLAUTH"/>.  The
+   advantage of this mechanism is that the SMTP submit <xref target="SUBMIT"/> server
+   cannot access any data on the <xref target="IMAP-URLAUTH"/> server without a "pawn-
+   ticket" created by the client.</t>
+   
+   <t>The "pawn-ticket" grants access only to the specific data that the
+   SMTP submit <xref target="SUBMIT"/> server is authorized to access, can be revoked
+   by the client, and can have a time-limited validity.</t>
+   
+   
+</section>
+<section title="Copies of Sent messages: The fcc problem" anchor="fcc-problem">
+   
+   <t>The "fcc problem" refers to delivering a copy of a message to a mailbox, or "file carbon copy".  By far, the most common case of fcc is a
+   client leaving a copy of outgoing mail in a "Sent Mail" or "Outbox"
+   mailbox.</t>
+   
+   <t>In the traditional strategy, the MUA duplicates the effort spent in
+   transmitting to the MSA by writing the message to the fcc destination
+   in a separate step.  This may be a write to a local disk file or an
+   APPEND to a mailbox on an IMAP server.  The latter is one of the "repetitive
+   network data transmissions" which represents the "problem"
+   aspect of the "fcc problem".</t>
+   
+   <t>The BURL <xref target="SMTP-BURL"/> extension can be used to eliminate
+   the additional transmission. The final message is uploaded to the mailbox
+   designed for outgoing mail, by the APPEND command of <xref target="IMAP"/>.
+   Note that APPEND, including when enhanced by <xref target="IMAP-CATENATE"/>, can
+   only create a
+   single copy of the message and this is only of use on the server which stages the outgoing
+   message for submission. Additional copies of the message on the same server can be
+   created by using one or more COPY commands.</t>
+   
+</section>
+   
+</section>
+   
+<section title="Deployment Considerations">
+<t>Deployment considerations are discussed extensively in <xref target="LEMONADE-DEPLOYMENTS"/>.</t>
+</section>
+        
+<section title="Security Considerations">
+   <t>Implementors are advised to examine the Security Considerations of all the referenced documents. This section merely highlights these, and advises implementors on specific issues relating to the combination of extensions.</t>
+   
+   <t>Security considerations on Lemonade "forward without download" are
+   discussed throughout <xref target="fwd-main"/>. Additional security considerations
+   can be found in <xref target="IMAP"/> and other documents describing other SMTP
+   and IMAP extensions comprising the Lemonade Profile.</t>
+   
+   <t>Note that the mandatory-to-implement authentication mechanism for
+   SMTP submission is described in <xref target="SMTP-AUTH"/>. The mandatory-to-implement
+   authentication mechanism for IMAP is described in <xref target="IMAP"/>.</t>
+   
+<section title="Confidentiality Protection of Submitted Messages">
+   
+   <t>When clients submit new messages, link protection such as TLS guards
+   against an eavesdropper seeing the contents of the submitted message.
+   It is worth noting, however, that even if TLS is not used, the
+   security risks are no worse if BURL is used to reference the text
+   than if the text is submitted directly.  If BURL is not used, an
+   eavesdropper gains access to the full text of the message.  If BURL
+   is used, the eavesdropper may or may not be able to gain such access,
+   depending on the form of BURL used.  For example, some forms restrict
+   use of the URL to an entity authorized as a submission server or a
+   specific user.</t>
+  
+</section>
+
+<section title="TLS">
+   
+   <t>When Lemonade clients use the BURL extension to mail submission, an
+   extension that requires sending a URLAUTH token to the mail
+   submission server, such a token should be protected from interception
+   to avoid a replay attack that may disclose the contents of the
+   message to an attacker. TLS based encryption of the mail submission
+   path will provide protection against this attack.</t>
+   
+   <t>Lemonade clients SHOULD use TLS-protected IMAP and mail submission
+   channels when using BURL-based message submission to protect the
+   URLAUTH token from interception.</t>
+   
+   <t>Lemonade compliant mail submission servers SHOULD use TLS-protected
+   IMAP connections when fetching message content using the URLAUTH
+   token provided by the Lemonade client.</t>
+   
+   <t>When a client uses SMTP STARTTLS to send a BURL command which
+   references non-public information, there is a user expectation that
+   the entire message content will be treated confidentially.  To meet
+   this expectation, the message submission server should use STARTTLS
+   or a mechanism providing equivalent data confidentiality when
+   fetching the content referenced by that URL.</t>
+   
+</section>
+
+<section title="Additional extensions and deployment models">
+  <t> This specification provides no additional security measures beyond those in the 
+		    referenced Internet Mail and Lemonade documents.</t>
+		 <t> We note however the security risks associated to:
+		 <list style="symbols">
+		 	<t>Outband notifications</t>
+		 	<t>Server configuration by client</t>
+		 	<t>Client configuration by server</t>
+		 	<t>Presence of proxy servers</t>
+		 	<t>Presence of servers as intermediaries</t>
+		 	<t>In general the deployment models considered by OMA MEM that are not conventional IETF deployment models.</t>
+		 	<t>Measures to address a perceived need to traverse firewalls and mobile network intermediaries.</t>
+        </list></t>
+</section>
+</section>
+        
+        <section title="IANA considerations">
+			<t>
+			IMAP4 capabilities are registered by publishing a standards track or 
+			IESG approved experimental RFC.  The registry is currently located at 
+			&lt;http://www.iana.org/assignments/imap4-capabilities&gt;. This document 
+			defines the URL-PARTIAL IMAP capability <xref target="url-partial"/>.
+			IANA is requested to add this extension to the IANA IMAP Capability registry.
+			</t>
+        </section>
+        
+        <section title="Version history">
+
+		 <t><cref>This section will be converted to the "Changes Since RFC 4550" section
+		 before publication.</cref></t>
+			
+         <t><list style="symbols">
+	  <t> Version 11:
+		  <list style="symbols">
+			  <t>Made ManageSieve reference Informative.</t>
+			  <t>Renamed $PendingSubmission to $SubmitPending, dropped $BeingSubmitted and added $Submitted IMAP keywords.</t>
+		  </list>
+	  </t>
+			 
+			 
+	  <t> Version 10:
+		  <list style="symbols">
+			  <t>Added ManageSieve.</t>
+			  <t>Added a requirement to support i;unicode-casemap in Sieve (already required in IMAP).</t>
+			  <t>Added description of various Sieve extensions.</t>
+			  <t>Added definition of URL-PARTIAL IMAP extension.</t>
+			  <t>Added definition of $PendingSubmission and $BeingSubmitted IMAP keywords.</t>
+		  </list>
+	  </t>
+
+	  <t> Version 9:
+		  <list style="symbols">
+			  <t>Updated references and removed extensions that there was an agreement to remove.</t>
+		  </list>
+	  </t>
+			 
+	  <t> Version 08: <list style="symbols">
+	  <t>Removed LIST-EXTENDED, WITHIN and QUICKSTART.</t>
+	  <t>Updated names of required extensions when they were renamed (e.g. COMPARATOR ==&gt; I18NLEVEL=1).</t>
+	  </list>
+	 </t>
+			 
+	  <t> Version 06: <list style="symbols">
+	  <t>Updated references and added extensions agreed at the Lemonade interim in Spring 2007.</t>
+	  <t>Require any Lemonade compliant IMAP server to support CAPABILITY response code.</t>
+	  </list>
+	 </t>
+			 
+	  <t> Version 04: <list style="symbols">
+	  <t>Major reorganization of text.</t>
+	  <t>Move checklist summary to beginning of document, collate Submission and Store server requirements.</t>
+	  </list>
+	 </t>
+          <t> Version 03: <list style="symbols">
+            <t> Replaced RECONNECT (server side quick reconned) with QRESYNC (client side quick reconnect)</t>
+            <t> Added WITHIN and LIST-EXTENDED.</t>
+            <t> Moved IDLE extension to a separate section.</t>
+            <t> Added requirement for clients to use Format=flowed.</t>
+		  </list></t>
+          <t> Version 02: <list style="symbols">
+            <t> Update of references and how they are displayed in the text (Comments from Randy Gellens)</t>
+            <t> Update of list of extensions to support as MUST by the Lemonade Profile Bis</t>
+            <t> Update of options for compression via placeholder imap-compression section describing compression requirements</t>
+            <t> Update of support of TCP chalenged environments</t>
+            <t> Update of support of object level encryption</t>
+            <t> Clarified the use of $Forwarded in the examples, and demonstrated how to remove the \Draft flag from the sent message</t>
+            <t> Clarified $Forwarded </t>
+            <t> Added RECONNECT to imap-condstore section</t>
+            <t> Add new section imap-bodypart, "Message part handling", describing BINARY and CONVERT requirements</t>
+            <t> Added placeholder section for notifications</t>
+            <t> Added various extensions to imap-other section, and added clarifying comments to IDLE, NAMESPACE, and a further references to TLS DEFLATE compression </t>
+            <t> Added extension names to IMAP table</t>
+            <t> Fixed all issues found with original Lemonade profile so far.</t>
+           </list></t>
+         <t> Version 01: <list style="symbols">
+            <t> Lemonade profile has been introduced in-line, with some updates / corrections. </t>
+            <t> Subsequent re-organization of the text</t>
+            <t> Details of extensions proper to Lemonade Profile-bis have been updated to refer to the drafts newly accepted as WG IETF drafts.</t>
+            <t> Addition of appendix on attachements streaming.</t>
+           </list></t>
+         <t> Version 00: <list style="symbols">
+            <t>It evolved from a combination of the content 
+		of Lemonade profile and the 
+		OMA MEM realization internet draft.</t>
+           </list></t>
+           </list></t>
+        </section>
+        <section title="Acknowledgements">
+            <t>The editors acknowledge and appreciate the work and comments of the IETF Lemonade
+                working group and the OMA MEM working group. </t>
+		<t>In particular, the editors would like to thank Eric Burger, Randall Gellens, Filip Navara, Zoltan Ordogh, Greg Vaudreuil, and Fan Xiaohui for their comments and reviews.</t>
+        </section>
+    </middle>
+    <back>
+        <references title="Normative References">
+<reference anchor="SMTP-8BITMIME">
+
+<front>
+<title abbrev="SMTP 8bit-MIMEtransport">SMTP Service Extension for 8bit-MIMEtransport</title>
+<author initials="J." surname="Klensin" fullname="John Klensin">
+<organization>MCI Data Services Division</organization>
+<address>
+<postal>
+<street>2100 Reston Parkway</street>
+<street>6th floor</street>
+<city>Reston</city>
+<region>VA</region>
+<code>22091</code>
+<country>US</country></postal>
+<phone>+1 703 715 7361</phone>
+<facsimile>+1 703 715 7435</facsimile>
+<email>klensin@mci.net</email></address></author>
+<author initials="N." surname="Freed" fullname="Ned Freed">
+<organization>Innosoft International, Inc.</organization>
+<address>
+<postal>
+<street>1050 East Garvey Avenue South</street>
+<city>West Covina</city>
+<region>CA</region>
+<code>91790</code>
+<country>US</country></postal>
+<phone>+1 818 919 3600</phone>
+<facsimile>+1 818 919 3614</facsimile>
+<email>ned@innosoft.com</email></address></author>
+<author initials="M.T." surname="Rose" fullname="Marshall T. Rose">
+<organization>Dover Beach Consulting, Inc.</organization>
+<address>
+<postal>
+<street>420 Whisman Court</street>
+<city>Mountain View</city>
+<region>CA</region>
+<code>94043-2186</code>
+<country>US</country></postal>
+<phone>+1 415 968 1052</phone>
+<facsimile>+1 415 968 2510</facsimile>
+<email>mrose@dbc.mtview.ca.us</email></address></author>
+<author initials="E." surname="Stefferud" fullname="Einar A. Stefferud">
+<organization>Network Management Associates, Inc.</organization>
+<address>
+<postal>
+<street>17301 Drey Lane</street>
+<city>Huntington Beach</city>
+<region>CA</region>
+<code>92647-5615</code>
+<country>US</country></postal>
+<phone>+1 714 842 3711</phone>
+<facsimile>+1 714 848 2091</facsimile>
+<email>stef@nma.com</email></address></author>
+<author initials="D." surname="Crocker" fullname="Dave Crocker">
+<organization>Silicon Graphics, Inc.</organization>
+<address>
+<postal>
+<street>2011 N. Shoreline Blvd.</street>
+<street>P.O. Box 7311</street>
+<city>Mountain View</city>
+<region>CA</region>
+<code>94039</code>
+<country>US</country></postal>
+<phone>+1 415 390 1804</phone>
+<facsimile>+1 415 962 8404</facsimile>
+<email>dcrocker@sgi.com</email></address></author>
+<date year="1994" month="July"/>
+<abstract>
+<t>This memo defines an extension to the SMTP service whereby an SMTP content body consisting of text containing octets outside of the US-ASCII octet range (hex 00-7F) may be relayed using SMTP.</t></abstract></front>
+
+<seriesInfo name="RFC" value="1652"/>
+<format type="TXT" octets="11842" target="ftp://ftp.isi.edu/in-notes/rfc1652.txt"/>
+</reference>
+<reference anchor="SMTP-SIZE">
+
+<front>
+<title abbrev="SMTP Size Declaration">SMTP Service Extension for Message Size Declaration</title>
+<author initials="J." surname="Klensin" fullname="John Klensin">
+<organization>MCI</organization>
+<address>
+<postal>
+<street>2100 Reston Parkway</street>
+<city>Reston</city>
+<region>VA</region>
+<code>22091</code>
+<country>US</country></postal>
+<phone>+1 703 715 7361</phone>
+<facsimile>+1 703 715 7436</facsimile>
+<email>klensin@mci.net</email></address></author>
+<author initials="N." surname="Freed" fullname="Ned Freed">
+<organization>Innosoft International, Inc.</organization>
+<address>
+<postal>
+<street>1050 East Garvey Avenue South</street>
+<city>West Covina</city>
+<region>CA</region>
+<code>91790</code>
+<country>US</country></postal>
+<phone>+1 818 919 3600</phone>
+<facsimile>+1 818 919 3614</facsimile>
+<email>ned@innosoft.com</email></address></author>
+<author initials="K." surname="Moore" fullname="Keith Moore">
+<organization>University of Tennessee, Computer Science Dept.</organization>
+<address>
+<postal>
+<street>107 Ayres Hall</street>
+<city>Knoxville</city>
+<region>TN</region>
+<code>37996-1301</code>
+<country>US</country></postal>
+<email>moore@cs.utk.edu</email></address></author>
+<date year="1995" month="November"/>
+<abstract>
+<t>This memo defines an extension to the SMTP service whereby an SMTP client and server may interact to give the server an opportunity to decline to accept a message (perhaps temporarily) based on the client's estimate of the message size.</t></abstract></front>
+
+<seriesInfo name="STD" value="10"/>
+<seriesInfo name="RFC" value="1870"/>
+<format type="TXT" octets="18226" target="ftp://ftp.isi.edu/in-notes/rfc1870.txt"/>
+</reference>
+<reference anchor="SMTP-STATUSCODES">
+
+<front>
+<title abbrev="SMTP Enhanced Error Codes">SMTP Service Extension for Returning Enhanced Error Codes</title>
+<author initials="N." surname="Freed" fullname="Ned Freed">
+<organization>Innosoft International, Inc.</organization>
+<address>
+<postal>
+<street>1050 East Garvey Avenue South</street>
+<street>West Covina</street>
+<street>CA 91790</street>
+<country>USA</country></postal>
+<phone>+1 818 919 3600           fax: +1 818 919 3614</phone>
+<email>ned@innosoft.com</email></address></author>
+<date year="1996" month="October"/>
+<area>Applications</area>
+<keyword>SMTP</keyword>
+<keyword>point-to-point protocol</keyword>
+<keyword>simple mail transfer protocol</keyword></front>
+
+<seriesInfo name="RFC" value="2034"/>
+<format type="TXT" octets="10460" target="ftp://ftp.isi.edu/in-notes/rfc2034.txt"/>
+<format type="HTML" octets="21966" target="http://xml.resource.org/public/rfc/html/rfc2034.html"/>
+<format type="XML" octets="10728" target="http://xml.resource.org/public/rfc/xml/rfc2034.xml"/>
+</reference>
+<reference anchor="IMAP-LITERAL+">
+
+<front>
+<title abbrev="LITERAL">IMAP4 non-synchronizing literals</title>
+<author initials="J.G." surname="Myers" fullname="John G. Myers">
+<organization>Carnegie-Mellon University</organization>
+<address>
+<postal>
+<street>5000 Forbes Ave.</street>
+<city>Pittsburgh</city>
+<region>PA</region>
+<code>15213-3890</code>
+<country>US</country></postal>
+<email>jgm+@cmu.edu</email></address></author>
+<date year="1997" month="January"/>
+<abstract>
+<t>The Internet Message Access Protocolcontains the "literal" syntactic construct for communicating strings.  When sending a literal from client to server, IMAP4 requires the client to wait for the server to send a command continuation request between sending the octet count and the string data.  This document specifies an alternate form of literal which does not require this network round trip.</t></abstract></front>
+
+<seriesInfo name="RFC" value="2088"/>
+<format type="TXT" octets="4052" target="ftp://ftp.isi.edu/in-notes/rfc2088.txt"/>
+</reference>
+<reference anchor="KEYWORDS">
+
+<front>
+<title abbrev="RFC Key Words">Key words for use in RFCs to Indicate Requirement Levels</title>
+<author initials="S." surname="Bradner" fullname="Scott Bradner">
+<organization>Harvard University</organization>
+<address>
+<postal>
+<street>1350 Mass. Ave.</street>
+<street>Cambridge</street>
+<street>MA 02138</street></postal>
+<phone>- +1 617 495 3864</phone>
+<email>sob@harvard.edu</email></address></author>
+<date year="1997" month="March"/>
+<area>General</area>
+<keyword>keyword</keyword>
+<abstract>
+<t>
+   In many standards track documents several words are used to signify
+   the requirements in the specification.  These words are often
+   capitalized.  This document defines these words as they should be
+   interpreted in IETF documents.  Authors who follow these guidelines
+   should incorporate this phrase near the beginning of their document:
+
+<list>
+<t>
+      The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+      NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and
+      "OPTIONAL" in this document are to be interpreted as described in
+      RFC 2119.
+</t></list></t>
+<t>
+   Note that the force of these words is modified by the requirement
+   level of the document in which they are used.
+</t></abstract></front>
+
+<seriesInfo name="BCP" value="14"/>
+<seriesInfo name="RFC" value="2119"/>
+<format type="TXT" octets="4723" target="ftp://ftp.isi.edu/in-notes/rfc2119.txt"/>
+<format type="HTML" octets="17491" target="http://xml.resource.org/public/rfc/html/rfc2119.html"/>
+<format type="XML" octets="5777" target="http://xml.resource.org/public/rfc/xml/rfc2119.xml"/>
+</reference>
+<reference anchor="SMTP-PIPELINING">
+
+<front>
+<title>SMTP Service Extension for Command Pipelining</title>
+<author initials="N." surname="Freed" fullname="N. Freed">
+<organization/></author>
+<date year="2000" month="September"/>
+<abstract>
+<t>This memo defines an extension to the Simple Mail Transfer Protocol (SMTP) service whereby a server can indicate the extent of its ability to accept multiple commands in a single Transmission Control Protocol (TCP) send operation. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="STD" value="60"/>
+<seriesInfo name="RFC" value="2920"/>
+<format type="TXT" octets="17065" target="ftp://ftp.isi.edu/in-notes/rfc2920.txt"/>
+</reference>
+<reference anchor="SMTP-AUTH">
+
+<front>
+<title>SMTP Service Extension for Authentication</title>
+<author initials="R." surname="Siemborski" fullname="R. Siemborski">
+<organization/></author>
+<author initials="A." surname="Melnikov" fullname="A. Melnikov">
+<organization/></author>
+<date year="2007" month="July"/>
+<abstract>
+<t>This document defines a Simple Mail Transport Protocol (SMTP) extension whereby an SMTP client may indicate an authentication mechanism to the server, perform an authentication protocol exchange, and optionally negotiate a security layer for subsequent protocol interactions during this session. This extension includes a profile of the Simple Authentication and Security Layer (SASL) for SMTP.&lt;/t&gt;&lt;t&gt; This document obsoletes RFC 2554. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4954"/>
+<format type="TXT" octets="43493" target="ftp://ftp.isi.edu/in-notes/rfc4954.txt"/>
+</reference>
+<reference anchor="SMTP-BINARYMIME">
+
+<front>
+<title>SMTP Service Extensions for Transmission of Large and Binary MIME Messages</title>
+<author initials="G." surname="Vaudreuil" fullname="G. Vaudreuil">
+<organization/></author>
+<date year="2000" month="December"/>
+<abstract>
+<t>This memo defines two extensions to the SMTP (Simple Mail Transfer Protocol) service. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="3030"/>
+<format type="TXT" octets="23405" target="ftp://ftp.isi.edu/in-notes/rfc3030.txt"/>
+</reference>
+<reference anchor="IMAP-BINARY">
+
+<front>
+<title>IMAP4 Binary Content Extension</title>
+<author initials="L." surname="Nerenberg" fullname="L. Nerenberg">
+<organization/></author>
+<date year="2003" month="April"/>
+<abstract>
+<t>This memo defines the Binary extension to the Internet Message Access Protocol (IMAP4).  It provides a mechanism for IMAP4 clients and servers to exchange message body data without using a MIME content-transfer- encoding. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="3516"/>
+<format type="TXT" octets="14598" target="ftp://ftp.isi.edu/in-notes/rfc3516.txt"/>
+</reference>
+<reference anchor="SMTP-DSN">
+
+<front>
+<title>Simple Mail Transfer Protocol (SMTP) Service Extension for Delivery Status Notifications (DSNs)</title>
+<author initials="K." surname="Moore" fullname="K. Moore">
+<organization/></author>
+<date year="2003" month="January"/>
+<abstract>
+<t>This memo defines an extension to the Simple Mail Transfer Protocol (SMTP) service, which allows an SMTP client to specify (a) that Delivery Status Notifications (DSNs) should be generated under certain conditions, (b) whether such notifications should return the contents of the message, and (c) additional information, to be returned with a DSN, that allows the sender to identify both the recipient(s) for which the DSN was issued, and the transaction in which the original message was sent. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="3461"/>
+<format type="TXT" octets="76076" target="ftp://ftp.isi.edu/in-notes/rfc3461.txt"/>
+</reference>
+<reference anchor="IMAP-UIDPLUS">
+
+<front>
+<title>Internet Message Access Protocol (IMAP) - UIDPLUS extension</title>
+<author initials="M." surname="Crispin" fullname="M. Crispin">
+<organization/></author>
+<date year="2005" month="December"/>
+<abstract>
+<t>The UIDPLUS extension of the Internet Message Access Protocol (IMAP) provides a set of features intended to reduce the amount of time and resources used by some client operations.  The features in UIDPLUS are primarily intended for disconnected-use clients. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4315"/>
+<format type="TXT" octets="16629" target="ftp://ftp.isi.edu/in-notes/rfc4315.txt"/>
+</reference>
+<reference anchor="IMAP-NAMESPACE">
+
+<front>
+<title>IMAP4 Namespace</title>
+<author initials="M." surname="Gahrns" fullname="Mike Gahrns">
+<organization>Microsoft</organization>
+<address>
+<postal>
+<street>One Microsoft Way</street>
+<city>Redmond</city>
+<region>WA</region>
+<code>98072</code></postal>
+<phone>(425) 936-9833</phone>
+<email>mikega@microsoft.com</email></address></author>
+<author initials="C." surname="Newman" fullname="Chris Newman">
+<organization>Innosoft International, Inc.</organization>
+<address>
+<postal>
+<street>1050 East Garvey Ave. South</street>
+<city>West Covina</city>
+<region>CA</region>
+<code>91790</code></postal>
+<email>chris.newman@innosoft.com</email></address></author>
+<date year="1998" month="May"/>
+<area>Applications</area>
+<keyword>internet message access protocol</keyword>
+<abstract>
+<t>
+
+   IMAP4 [RFC-2060] does not define a default server namespace. As a
+
+   result, two common namespace models have evolved:
+
+
+<list>
+<t>
+
+   The "Personal Mailbox" model, in which the default namespace that is
+
+   presented consists of only the user's personal mailboxes. To access
+
+   shared mailboxes, the user must use an escape mechanism to reach
+
+   another namespace.
+
+</t>
+<t>
+
+   The "Complete Hierarchy" model, in which the default namespace that
+
+   is presented includes the user's personal mailboxes along with any
+
+   other mailboxes they have access to.
+</t></list></t>
+<t>
+
+
+   These two models, create difficulties for certain client operations.
+
+   This document defines a NAMESPACE command that allows a client to
+
+   discover the prefixes of namespaces used by a server for personal
+
+   mailboxes, other users' mailboxes, and shared mailboxes.  This allows
+
+   a client to avoid much of the manual user configuration that is now
+
+   necessary when mixing and matching IMAP4 clients and servers.
+</t></abstract></front>
+
+<seriesInfo name="RFC" value="2342"/>
+<format type="TXT" octets="19489" target="ftp://ftp.isi.edu/in-notes/rfc2342.txt"/>
+<format type="XML" octets="17890" target="http://xml.resource.org/public/rfc/xml/rfc2342.xml"/>
+</reference>
+<reference anchor="IMAP">
+
+<front>
+<title>INTERNET MESSAGE ACCESS PROTOCOL - VERSION 4rev1</title>
+<author initials="M." surname="Crispin" fullname="M. Crispin">
+<organization/></author>
+<date year="2003" month="March"/>
+<abstract>
+<t>The Internet Message Access Protocol, Version 4rev1 (IMAP4rev1) allows a client to access and manipulate electronic mail messages on a server.  IMAP4rev1 permits manipulation of mailboxes (remote message folders) in a way that is functionally equivalent to local folders.  IMAP4rev1 also provides the capability for an offline client to resynchronize with the server.  IMAP4rev1 includes operations for creating, deleting, and renaming mailboxes, checking for new messages, permanently removing messages, setting and clearing flags, RFC 2822 and RFC 2045 parsing, searching, and selective fetching of message attributes, texts, and portions thereof.  Messages in IMAP4rev1 are accessed by the use of numbers.  These numbers are either message sequence numbers or unique identifiers.  IMAP4rev1 supports a single server.  A mechanism for accessing configuration information to support multiple IMAP4rev1 servers is discussed in RFC 2244.  IMAP4rev1 does not specify a means of posting mail; this function is handled by a mail transfer protocol such as RFC 2821. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="3501"/>
+<format type="TXT" octets="227640" target="ftp://ftp.isi.edu/in-notes/rfc3501.txt"/>
+</reference>
+<reference anchor="IMAP-URLAUTH">
+
+<front>
+<title>Internet Message Access Protocol (IMAP) - URLAUTH Extension</title>
+<author initials="M." surname="Crispin" fullname="M. Crispin">
+<organization/></author>
+<date year="2006" month="May"/>
+<abstract>
+<t>This document describes the URLAUTH extension to the Internet Message Access Protocol (IMAP) (RFC 3501) and the IMAP URL Scheme (IMAPURL) (RFC 2192). This extension provides a means by which an IMAP client can use URLs carrying authorization to access limited message data on the IMAP server.&lt;/t&gt;&lt;t&gt; An IMAP server that supports this extension indicates this with a capability name of "URLAUTH". [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4467"/>
+<format type="TXT" octets="36714" target="ftp://ftp.isi.edu/in-notes/rfc4467.txt"/>
+</reference>
+<reference anchor="SMTP-BURL">
+
+<front>
+<title>Message Submission BURL Extension</title>
+<author initials="C." surname="Newman" fullname="C. Newman">
+<organization/></author>
+<date year="2006" month="May"/>
+<abstract>
+<t>The submission profile of Simple Mail Transfer Protocol (SMTP) provides a standard way for an email client to submit a complete message for delivery.  This specification extends the submission profile by adding a new BURL command that can be used to fetch submission data from an Internet Message Access Protocol (IMAP) server.  This permits a mail client to inject content from an IMAP server into the SMTP infrastructure without downloading it to the client and uploading it back to the server. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4468"/>
+<format type="TXT" octets="28614" target="ftp://ftp.isi.edu/in-notes/rfc4468.txt"/>
+</reference>
+<reference anchor="IMAP-CATENATE">
+
+<front>
+<title abbrev="IMAP CATENATE Extension">Internet Message Access Protocol (IMAP) CATENATE
+            Extension</title>
+<author initials="P." surname="Resnick" fullname="Peter W. Resnick">
+<organization>QUALCOMM Incorporated</organization>
+<address>
+<postal>
+<street>5775 Morehouse Drive</street>
+<city>San Diego</city>
+<region>CA</region>
+<code>92121-1714</code>
+<country>US</country></postal>
+<phone>+1 858 651 4478</phone>
+<email>presnick@qualcomm.com</email>
+<uri>http://www.qualcomm.com/~presnick/</uri></address></author>
+<date year="2006" month="April"/>
+<area>Applications</area>
+<workgroup>LEMONADE</workgroup>
+<keyword/>
+<abstract>
+<t>The CATENATE extension to the Internet Message Access Protocol (IMAP) extends the
+                APPEND command to allow clients to create messages on the IMAP server that may
+                contain a combination of new data along with parts of (or entire) messages already
+                on the server. Using this extension, the client can catenate parts of an already
+                existing message onto a new message without having to first download the data and
+                then upload it back to the server.</t></abstract></front>
+
+<seriesInfo name="RFC" value="4469"/>
+<format type="TXT" octets="21822" target="ftp://ftp.isi.edu/in-notes/rfc4469.txt"/>
+<format type="HTML" octets="37940" target="http://xml.resource.org/public/rfc/html/rfc4469.html"/>
+<format type="XML" octets="34107" target="http://xml.resource.org/public/rfc/xml/rfc4469.xml"/>
+</reference>
+
+<reference anchor="TLS-COMP">
+
+<front>
+<title>Transport Layer Security Protocol Compression Methods</title>
+<author initials="S." surname="Hollenbeck" fullname="S. Hollenbeck">
+<organization/></author>
+<date year="2004" month="May"/>
+<abstract>
+<t>The Transport Layer Security (TLS) protocol (RFC 2246) includes features to negotiate selection of a lossless data compression method as part of the TLS Handshake Protocol and to then apply the algorithm associated with the selected method as part of the TLS Record Protocol.  TLS defines one standard compression method which specifies that data exchanged via the record protocol will not be compressed.  This document describes an additional compression method associated with a lossless data compression algorithm for use with TLS, and it describes a method for the specification of additional TLS compression methods. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="3749"/>
+<format type="TXT" octets="16411" target="ftp://ftp.isi.edu/in-notes/rfc3749.txt"/>
+</reference>
+<reference anchor="SMTP-TLS">
+
+<front>
+<title>SMTP Service Extension for Secure SMTP over Transport Layer Security</title>
+<author initials="P." surname="Hoffman" fullname="P. Hoffman">
+<organization/></author>
+<date year="2002" month="February"/>
+<abstract>
+<t>This document describes an extension to the SMTP (Simple Mail Transfer Protocol) service that allows an SMTP server and client to use TLS (Transport Layer Security) to provide private, authenticated communication over the Internet.  This gives SMTP agents the ability to protect some or all of their communications from eavesdroppers and attackers. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="3207"/>
+<format type="TXT" octets="18679" target="ftp://ftp.isi.edu/in-notes/rfc3207.txt"/>
+</reference>
+<reference anchor="IMAP-IDLE">
+
+<front>
+<title>IMAP4 IDLE command</title>
+<author initials="B." surname="Leiba" fullname="Barry Leiba">
+<organization>IBM T.J. Watson Research Center</organization>
+<address>
+<postal>
+<street>30 Saw Mill River Road</street>
+<street>Hawthorne</street>
+<street>NY  10532</street></postal>
+<email>leiba@watson.ibm.com</email></address></author>
+<date year="1997" month="June"/>
+<area>Applications</area>
+<keyword>IMAP</keyword>
+<keyword>internet message access protocol</keyword></front>
+
+<seriesInfo name="RFC" value="2177"/>
+<format type="TXT" octets="6770" target="ftp://ftp.isi.edu/in-notes/rfc2177.txt"/>
+<format type="HTML" octets="19043" target="http://xml.resource.org/public/rfc/html/rfc2177.html"/>
+<format type="XML" octets="8005" target="http://xml.resource.org/public/rfc/xml/rfc2177.xml"/>
+</reference>
+<reference anchor="SUBMIT">
+
+<front>
+<title>Message Submission for Mail</title>
+<author initials="R." surname="Gellens" fullname="R. Gellens">
+<organization/></author>
+<author initials="J." surname="Klensin" fullname="J. Klensin">
+<organization/></author>
+<date year="2006" month="April"/>
+<abstract>
+<t>This memo splits message submission from message relay, allowing each service to operate according to its own rules (for security, policy, etc.), and specifies what actions are to be taken by a submission server.&lt;/t&gt;&lt;t&gt; Message relay and final delivery are unaffected, and continue to use SMTP over port 25.&lt;/t&gt;&lt;t&gt; When conforming to this document, message submission uses the protocol specified here, normally over port 587.&lt;/t&gt;&lt;t&gt; This separation of function offers a number of benefits, including the ability to apply specific security or policy requirements. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4409"/>
+<format type="TXT" octets="34911" target="ftp://ftp.isi.edu/in-notes/rfc4409.txt"/>
+</reference>
+<reference anchor="IMAP-CONDSTORE">
+
+<front>
+<title>IMAP Extension for Conditional STORE Operation or Quick Flag Changes Resynchronization</title>
+<author initials="A." surname="Melnikov" fullname="A. Melnikov">
+<organization/></author>
+<author initials="S." surname="Hole" fullname="S. Hole">
+<organization/></author>
+<date year="2006" month="June"/>
+<abstract>
+<t>Often, multiple IMAP (RFC 3501) clients need to coordinate changes to a common IMAP mailbox. Examples include different clients working on behalf of the same user, and multiple users accessing shared mailboxes. These clients need a mechanism to synchronize state changes for messages within the mailbox. They must be able to guarantee that only one client can change message state (e.g., message flags) at any time. An example of such an application is use of an IMAP mailbox as a message queue with multiple dequeueing clients.&lt;/t&gt;&lt;t&gt; The Conditional Store facility provides a protected update mechanism for message state information that can detect and resolve conflicts between multiple writing mail clients.&lt;/t&gt;&lt;t&gt; The Conditional Store facility also allows a client to quickly resynchronize mailbox flag changes.&lt;/t&gt;&lt;t&gt; This document defines an extension to IMAP (RFC 3501). [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4551"/>
+<format type="TXT" octets="50265" target="ftp://ftp.isi.edu/in-notes/rfc4551.txt"/>
+</reference>
+<reference anchor="FLOWED">
+
+<front>
+<title>The Text/Plain Format and DelSp Parameters</title>
+<author initials="R." surname="Gellens" fullname="R. Gellens">
+<organization/></author>
+<date year="2004" month="February"/>
+<abstract>
+<t>This specification establishes two parameters (Format and DelSP) to be used with the Text/Plain media type.  In the presence of these parameters, trailing whitespace is used to indicate flowed lines and a canonical quote indicator is used to indicate quoted lines.  This results in an encoding which appears as normal Text/Plain in older implementations, since it is in fact normal Text/Plain, yet provides for superior wrapping/flowing, and quoting.  This document supersedes the one specified in RFC 2646, "The Text/Plain Format Parameter", and adds the DelSp parameter to accommodate languages/coded character sets in which ASCII spaces are not used or appear rarely. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="3676"/>
+<format type="TXT" octets="42441" target="ftp://ftp.isi.edu/in-notes/rfc3676.txt"/>
+</reference>
+
+<reference anchor="IMAP-I18N">
+
+<front>
+<title>Internet Message Access Protocol Internationalization</title>
+<author initials="C." surname="Newman" fullname="C. Newman">
+<organization/></author>
+<author initials="A." surname="Gulbrandsen" fullname="A. Gulbrandsen">
+<organization/></author>
+<author initials="A." surname="Melnikov" fullname="A. Melnikov">
+<organization/></author>
+<date year="2008" month="June"/>
+<abstract>
+<t>Internet Message Access Protocol (IMAP) version 4rev1 has basic support for non-ASCII characters in mailbox names and search substrings.  It also supports non-ASCII message headers and content encoded as specified by Multipurpose Internet Mail Extensions (MIME).  This specification defines a collection of IMAP extensions that improve international support including language negotiation for international error text, translations for namespace prefixes, and comparator negotiation for search, sort, and thread. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5255"/>
+<format type="TXT" octets="41403" target="ftp://ftp.isi.edu/in-notes/rfc5255.txt"/>
+</reference>
+<reference anchor="IMAP-ENABLE">
+
+<front>
+<title>The IMAP ENABLE Extension</title>
+<author initials="A." surname="Gulbrandsen" fullname="A. Gulbrandsen">
+<organization/></author>
+<author initials="A." surname="Melnikov" fullname="A. Melnikov">
+<organization/></author>
+<date year="2008" month="March"/>
+<abstract>
+<t>Most IMAP extensions are used by the client when it wants to and the server supports it.  However, a few extensions require the server to know whether a client supports that extension.  The ENABLE extension allows an IMAP client to say which extensions it supports. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5161"/>
+<format type="TXT" octets="12220" target="ftp://ftp.isi.edu/in-notes/rfc5161.txt"/>
+</reference>
+<reference anchor="IMAP-QRESYNC">
+
+<front>
+<title>IMAP4 Extensions for Quick Mailbox Resynchronization</title>
+<author initials="A." surname="Melnikov" fullname="A. Melnikov">
+<organization/></author>
+<author initials="D." surname="Cridland" fullname="D. Cridland">
+<organization/></author>
+<author initials="C." surname="Wilson" fullname="C. Wilson">
+<organization/></author>
+<date year="2008" month="March"/>
+<abstract>
+<t>This document defines an IMAP4 extension, which gives an IMAP client the ability to quickly resynchronize any previously opened mailbox as part of the SELECT command, without the need for server-side state or additional client round-trips.  This extension also introduces a new response that allows for a more compact representation of a list of expunged messages (and always includes the Unique Identifiers (UIDs) expunged). [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5162"/>
+<format type="TXT" octets="51620" target="ftp://ftp.isi.edu/in-notes/rfc5162.txt"/>
+</reference>
+<reference anchor="IMAP-CONVERT">
+
+<front>
+<title>Internet Message Access Protocol - CONVERT Extension</title>
+<author initials="A." surname="Melnikov" fullname="A. Melnikov">
+<organization/></author>
+<author initials="P." surname="Coates" fullname="P. Coates">
+<organization/></author>
+<date year="2008" month="July"/>
+<abstract>
+<t>CONVERT defines extensions to IMAP allowing clients to request adaptation and/or transcoding of attachments.  Clients can specify the conversion details or allow servers to decide based on knowledge of client capabilities, on user or administrator preferences, or on server settings. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5259"/>
+<format type="TXT" octets="63831" target="ftp://ftp.isi.edu/in-notes/rfc5259.txt"/>
+</reference>
+<reference anchor="IMAP-NOTIFY">
+<front>
+<title>The IMAP NOTIFY Extension</title>
+
+<author initials="A" surname="Gulbrandsen" fullname="Arnt Gulbrandsen">
+    <organization/>
+</author>
+
+<author initials="A" surname="Melnikov" fullname="Alexey Melnikov">
+    <organization/>
+</author>
+
+<author initials="C" surname="King" fullname="Curtis King">
+    <organization/>
+</author>
+
+<date month="August" day="19" year="2008"/>
+
+<abstract><t>This document defines an IMAP extension which allows a client to request specific kinds of unsolicited notifications for specified mailboxes, such as messages being added to or deleted from mailboxes.  [[Add Updates: RFC-CONTEXT to the headers]]</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-lemonade-imap-notify-07"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-lemonade-imap-notify-07.txt"/>
+</reference>
+<reference anchor="IMAP-CONTEXT">
+
+<front>
+<title>Contexts for IMAP4</title>
+<author initials="D." surname="Cridland" fullname="D. Cridland">
+<organization/></author>
+<author initials="C." surname="King" fullname="C. King">
+<organization/></author>
+<date year="2008" month="July"/>
+<abstract>
+<t>The IMAP4rev1 protocol has powerful search facilities as part of the core protocol, but lacks the ability to create live, updated results that can be easily handled.  This memo provides such an extension, and shows how it can be used to provide a facility similar to virtual mailboxes. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5267"/>
+<format type="TXT" octets="36709" target="ftp://ftp.isi.edu/in-notes/rfc5267.txt"/>
+</reference>
+<reference anchor="IMAP-SORT">
+
+<front>
+<title>Internet Message Access Protocol - SORT and THREAD Extensions</title>
+<author initials="M." surname="Crispin" fullname="M. Crispin">
+<organization/></author>
+<author initials="K." surname="Murchison" fullname="K. Murchison">
+<organization/></author>
+<date year="2008" month="June"/>
+<abstract>
+<t>This document describes the base-level server-based sorting and threading extensions to the IMAP protocol.  These extensions provide substantial performance improvements for IMAP clients that offer sorted and threaded views. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5256"/>
+<format type="TXT" octets="40779" target="ftp://ftp.isi.edu/in-notes/rfc5256.txt"/>
+</reference>
+
+
+
+<reference anchor="IMAP-COMPRESS">
+
+<front>
+<title>The IMAP COMPRESS Extension</title>
+<author initials="A." surname="Gulbrandsen" fullname="A. Gulbrandsen">
+<organization/></author>
+<date year="2007" month="August"/>
+<abstract>
+<t>The COMPRESS extension allows an IMAP connection to be effectively and efficiently compressed. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4978"/>
+<format type="TXT" octets="17554" target="ftp://ftp.isi.edu/in-notes/rfc4978.txt"/>
+</reference>
+<reference anchor="IMAP-ESEARCH">
+
+<front>
+<title>IMAP4 Extension to SEARCH Command for Controlling What Kind of Information Is Returned</title>
+<author initials="A." surname="Melnikov" fullname="A. Melnikov">
+<organization/></author>
+<author initials="D." surname="Cridland" fullname="D. Cridland">
+<organization/></author>
+<date year="2006" month="November"/>
+<abstract>
+<t>This document extends IMAP (RFC 3501) SEARCH and UID SEARCH commands with several result options, which can control what kind of information is returned.  The following result options are defined: minimal value, maximal value, all found messages, and number of found messages. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4731"/>
+<format type="TXT" octets="15431" target="ftp://ftp.isi.edu/in-notes/rfc4731.txt"/>
+</reference>
+<reference anchor="IMAP-SASL-IR">
+
+<front>
+<title>IMAP Extension for Simple Authentication and Security Layer (SASL) Initial Client Response</title>
+<author initials="R." surname="Siemborski" fullname="R. Siemborski">
+<organization/></author>
+<author initials="A." surname="Gulbrandsen" fullname="A. Gulbrandsen">
+<organization/></author>
+<date year="2007" month="September"/>
+<abstract>
+<t>To date, the Internet Message Access Protocol (IMAP) has used a Simple Authentication and Security Layer (SASL) profile which always required at least one complete round trip for an authentication, as it did not support an initial client response argument. This additional round trip at the beginning of the session is undesirable, especially when round-trip costs are high.&lt;/t&gt;&lt;t&gt; This document defines an extension to IMAP which allows clients and servers to avoid this round trip by allowing an initial client response argument to the IMAP AUTHENTICATE command. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4959"/>
+<format type="TXT" octets="12284" target="ftp://ftp.isi.edu/in-notes/rfc4959.txt"/>
+</reference>
+<reference anchor="IMAP-URL">
+
+<front>
+<title>IMAP URL Scheme</title>
+<author initials="A." surname="Melnikov" fullname="A. Melnikov">
+<organization/></author>
+<author initials="C." surname="Newman" fullname="C. Newman">
+<organization/></author>
+<date year="2007" month="November"/>
+<abstract>
+<t>IMAP (RFC 3501) is a rich protocol for accessing remote message stores. It provides an ideal mechanism for accessing public mailing list archives as well as private and shared message stores. This document defines a URL scheme for referencing objects on an IMAP server.&lt;/t&gt;&lt;t&gt; This document obsoletes RFC 2192. It also updates RFC 4467. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5092"/>
+<format type="TXT" octets="65197" target="ftp://ftp.isi.edu/in-notes/rfc5092.txt"/>
+</reference>
+
+<reference anchor="SIEVE">
+
+<front>
+<title>Sieve: An Email Filtering Language</title>
+<author initials="P." surname="Guenther" fullname="P. Guenther">
+<organization/></author>
+<author initials="T." surname="Showalter" fullname="T. Showalter">
+<organization/></author>
+<date year="2008" month="January"/>
+<abstract>
+<t>This document describes a language for filtering email messages at time of final delivery.  It is designed to be implementable on either a mail client or mail server.  It is meant to be extensible, simple, and independent of access protocol, mail architecture, and operating system.  It is suitable for running on a mail server where users may not be allowed to execute arbitrary programs, such as on black box Internet Message Access Protocol (IMAP) servers, as the base language has no variables, loops, or ability to shell out to external programs. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5228"/>
+<format type="TXT" octets="87531" target="ftp://ftp.isi.edu/in-notes/rfc5228.txt"/>
+</reference>
+<reference anchor="SIEVE-VARIABLES">
+
+<front>
+<title>Sieve Email Filtering: Variables Extension</title>
+<author initials="K." surname="Homme" fullname="K. Homme">
+<organization/></author>
+<date year="2008" month="January"/>
+<abstract>
+<t>In advanced mail filtering rule sets, it is useful to keep state or configuration details across rules.  This document updates the Sieve filtering language (RFC 5228) with an extension to support variables.  The extension changes the interpretation of strings, adds an action to store data in variables, and supplies a new test so that the value of a string can be examined. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5229"/>
+<format type="TXT" octets="20023" target="ftp://ftp.isi.edu/in-notes/rfc5229.txt"/>
+</reference>
+<reference anchor="SIEVE-VACATION">
+
+<front>
+<title>Sieve Email Filtering: Vacation Extension</title>
+<author initials="T." surname="Showalter" fullname="T. Showalter">
+<organization/></author>
+<author initials="N." surname="Freed" fullname="N. Freed">
+<organization/></author>
+<date year="2008" month="January"/>
+<abstract>
+<t>This document describes an extension to the Sieve email filtering language for an autoresponder similar to that of the Unix "vacation" command for replying to messages.  Various safety features are included to prevent problems such as message loops. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5230"/>
+<format type="TXT" octets="29822" target="ftp://ftp.isi.edu/in-notes/rfc5230.txt"/>
+</reference>
+<reference anchor="SIEVE-RELATIONAL">
+
+<front>
+<title>Sieve Email Filtering: Relational Extension</title>
+<author initials="W." surname="Segmuller" fullname="W. Segmuller">
+<organization/></author>
+<author initials="B." surname="Leiba" fullname="B. Leiba">
+<organization/></author>
+<date year="2008" month="January"/>
+<abstract>
+<t>This document describes the RELATIONAL extension to the Sieve mail filtering language defined in RFC 3028. This extension extends existing conditional tests in Sieve to allow relational operators. In addition to testing their content, it also allows for testing of the number of entities in header and envelope fields.&lt;/t&gt;&lt;t&gt; This document obsoletes RFC 3431. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5231"/>
+<format type="TXT" octets="15243" target="ftp://ftp.isi.edu/in-notes/rfc5231.txt"/>
+</reference>
+<reference anchor="SIEVE-IMAP4FLAGS">
+
+<front>
+<title>Sieve Email Filtering: Imap4flags Extension</title>
+<author initials="A." surname="Melnikov" fullname="A. Melnikov">
+<organization/></author>
+<date year="2008" month="January"/>
+<abstract>
+<t>Recent discussions have shown that it is desirable to set different IMAP (RFC 3501) flags on message delivery. This can be done, for example, by a Sieve interpreter that works as a part of a Mail Delivery Agent.&lt;/t&gt;&lt;t&gt; This document describes an extension to the Sieve mail filtering language for setting IMAP flags. The extension allows setting of both IMAP system flags and IMAP keywords. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5232"/>
+<format type="TXT" octets="21964" target="ftp://ftp.isi.edu/in-notes/rfc5232.txt"/>
+</reference>			
+<reference anchor="SIEVE-NOTIFY">
+<front>
+<title>SIEVE Email Filtering: Extension for Notifications</title>
+
+<author initials="A" surname="Melnikov" fullname="Alexey Melnikov">
+    <organization/>
+</author>
+
+<author initials="B" surname="Leiba" fullname="Barry  Leiba">
+    <organization/>
+</author>
+
+<author initials="W" surname="Segmuller" fullname="Wolfgang Segmuller">
+    <organization/>
+</author>
+
+<author initials="T" surname="Martin" fullname="Tim Martin">
+    <organization/>
+</author>
+
+<date month="December" day="24" year="2007"/>
+
+<abstract><t>Users go to great lengths to be notified as quickly as possible that they have received new mail.  Most of these methods involve polling to check for new messages periodically.  A push method handled by the final delivery agent gives users quicker notifications and saves server resources.  This document does not specify the notification method but it is expected that using existing instant messaging infrastructure such as XMPP, or GSM Short Message Service (SMS) messages will be popular.  This draft describes an extension to the Sieve mail filtering language that allows users to give specific rules for how and when notifications should be sent.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-sieve-notify-12"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-sieve-notify-12.txt"/>
+</reference>
+<reference anchor="UNICODE-CASEMAP">
+
+<front>
+<title>i;unicode-casemap - Simple Unicode Collation Algorithm</title>
+<author initials="M." surname="Crispin" fullname="M. Crispin">
+<organization/></author>
+<date year="2007" month="October"/>
+<abstract>
+<t>This document describes "i;unicode-casemap", a simple case-insensitive collation for Unicode strings.  It provides equality, substring, and ordering operations. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5051"/>
+<format type="TXT" octets="14965" target="ftp://ftp.isi.edu/in-notes/rfc5051.txt"/>
+</reference>
+
+
+</references>
+<references title="Informative References">
+<reference anchor="IMAP-SYNC-HOWTO">
+
+<front>
+<title>Synchronization Operations for Disconnected IMAP4 Clients</title>
+<author initials="A." surname="Melnikov" fullname="A. Melnikov">
+<organization/></author>
+<date year="2006" month="June"/>
+<abstract>
+<t>This document attempts to address some of the issues involved in building a disconnected IMAP4 client. In particular, it deals with the issues of what might be called the "driver" portion of the synchronization tool: the portion of the code responsible for issuing the correct set of IMAP4 commands to synchronize the disconnected client in the way that is most likely to make the human who uses the disconnected client happy.&lt;/t&gt;&lt;t&gt; This note describes different strategies that can be used by disconnected clients and shows how to use IMAP protocol in order to minimize the time of the synchronization process.&lt;/t&gt;&lt;t&gt; This note also lists IMAP extensions that a server should implement in order to provide better synchronization facilities to disconnected clients. This memo provides information for the Internet community.</t></abstract></front>
+
+<seriesInfo name="RFC" value="4549"/>
+<format type="TXT" octets="75417" target="ftp://ftp.isi.edu/in-notes/rfc4549.txt"/>
+</reference>
+
+<reference anchor="LEMONADE-DEPLOYMENTS">
+<front>
+<title>Deployment Considerations for lemonade-compliant Mobile Email</title>
+
+<author initials="R" surname="Gellens" fullname="Randall  Gellens">
+    <organization/>
+</author>
+
+<date month="June" day="20" year="2007"/>
+
+<abstract><t>This document discusses deployment issues and describes requirements for successful deployment of mobile email which are implicit in the IETF lemonade documents.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-lemonade-deployments-09"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-lemonade-deployments-09.txt"/>
+</reference>
+<reference anchor="ESMTP">
+
+<front>
+<title>Simple Mail Transfer Protocol</title>
+<author initials="J." surname="Klensin" fullname="J. Klensin">
+<organization/></author>
+<date year="2001" month="April"/>
+<abstract>
+<t>This document is a self-contained specification of the basic protocol for the Internet electronic mail transport. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="2821"/>
+<format type="TXT" octets="192504" target="ftp://ftp.isi.edu/in-notes/rfc2821.txt"/>
+</reference>
+<reference anchor="FINGER-HACK">
+
+<front>
+<title>Simple New Mail Notification</title>
+<author initials="R." surname="Gellens" fullname="R. Gellens">
+<organization/></author>
+<date year="2005" month="August"/>
+<abstract>
+<t>This memo documents a long-standing technique, supported by a large number of mail servers, which allows users to be notified of new mail. In addition to server support, there are a number of clients that support this, ranging from full email clients to specialized clients whose only purpose is to receive new mail notifications and alert a mail client.&lt;/t&gt;&lt;t&gt; In brief, the server sends the string "nm_notifyuser" CRLF to the finger port on the IP address (either configured or last used) of the user who has received new mail. This memo provides information for the Internet community.</t></abstract></front>
+
+<seriesInfo name="RFC" value="4146"/>
+<format type="TXT" octets="8561" target="ftp://ftp.isi.edu/in-notes/rfc4146.txt"/>
+</reference>
+<reference anchor="METADATA">
+<front>
+<title>IMAP METADATA Extension</title>
+
+<author initials="C" surname="Daboo" fullname="Cyrus Daboo">
+    <organization/>
+</author>
+
+<date month="July" day="13" year="2008"/>
+
+<abstract><t>The METADATA extension to the Internet Message Access Protocol permits clients and servers to maintain "annotations" or "meta data" on IMAP servers.  It is possible to have annotations on a per-mailbox basis or on the server as a whole.  For example, this would allow comments about the purpose of a particular mailbox to be "attached" to that mailbox, or a "message of the day" containing server status information to be made available to anyone logging in to the server.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-daboo-imap-annotatemore-14"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-daboo-imap-annotatemore-14.txt"/>
+</reference>
+<reference anchor="IMAP-FILTERS">
+<front>
+<title>IMAP4 extension for named searches (filters)</title>
+
+<author initials="A" surname="Melnikov" fullname="Alexey Melnikov">
+    <organization/>
+</author>
+
+<author initials="C" surname="King" fullname="Curtis King">
+    <organization/>
+</author>
+
+<date month="September" day="22" year="2008"/>
+
+<abstract><t>The document defines a way to persistently store named IMAP (RFC 3501) searches on the server.  Such named searches can be subsequently referenced in a SEARCH or any other command that accepts a search criteria as a parameter.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-melnikov-imapext-filters-06"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-melnikov-imapext-filters-06.txt"/>
+</reference>
+<reference anchor="MANAGESIEVE">
+<front>
+<title>A Protocol for Remotely Managing Sieve Scripts</title>
+
+<author initials="A" surname="Melnikov" fullname="Alexey Melnikov">
+    <organization/>
+</author>
+
+<author initials="T" surname="Martin" fullname="Tim  Martin">
+    <organization/>
+</author>
+
+<date month="September" day="13" year="2008"/>
+
+<abstract><t>Sieve scripts allow users to filter incoming email.  Message stores are commonly sealed servers so users cannot log into them, yet users must be able to update their scripts on them.  This document describes a protocol "ManageSieve" for securely managing Sieve scripts on a remote server.  This protocol allows a user to have multiple scripts, and also alerts a user to syntactically flawed scripts.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-martin-managesieve-12"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-martin-managesieve-12.txt"/>
+</reference>
+<reference anchor="OMA-EMN">
+                <front>
+                    <title>Open Mobile Alliance Email Notification Version 1.0</title>
+                    <author surname="Open Mobile Alliance"><organization/></author>
+                    <date month="August" year="2002"/>
+                </front>
+                <seriesInfo name="OMA" value="http://www.openmobilealliance.org/tech/docs/EmailNot/OMA-Push-EMN-V1_0-20020830-C.pdf"/>
+                <format type="PDF" target="http://www.openmobilealliance.org/tech/docs/EmailNot/OMA-Push-EMN-V1_0-20020830-C.pdf"/>
+</reference>
+
+<reference anchor="OMA-MEM-ARCH">
+                <front>
+                    <title>Mobile Email Architecture Document</title>
+                    <author surname="Open Mobile Alliance"><organization/></author>
+                    <date month="October" year="2005"/>
+                </front>
+                <seriesInfo name="OMA" value="(Work in Progress), http://www.openmobilealliance.org/"/>
+                <format type="PDF" target="http://www.openmobilealliance.org/"/>
+</reference>
+<reference anchor="OMA-MEM-REQ">
+                <front>
+                    <title>Mobile Email Requirements Document</title>
+                    <author surname="Open Mobile Alliance"><organization/></author>
+                    <date month="Oct" year="2005"/>
+                </front>
+                <seriesInfo name="OMA" value="http://www.openmobilealliance.org/release_program/docs/RD/OMA-RD-MobileEmail-V1_0_20051018-C.pdf"/>
+                <format type="PDF" target="http://www.openmobilealliance.org/release_program/docs/RD/OMA-RD-MobileEmail-V1_0_20051018-C.pdf"/>
+</reference>
+
+
+</references>
+    </back>
+</rfc>

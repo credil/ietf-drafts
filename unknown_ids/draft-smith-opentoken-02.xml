@@ -1,0 +1,810 @@
+<?xml version='1.0'?>
+<!DOCTYPE rfc SYSTEM 'rfc2629.dtd'>
+<?rfc compact='yes'?>
+<?rfc strict='yes'?>
+<?rfc symrefs='yes'?>
+<?rfc toc='yes'?>
+<?rfc tocdepth='2'?>
+<rfc category='info' docName='draft-smith-opentoken-02' ipr='full3978'>
+
+  <front>
+    <title>OpenToken</title>
+    <author initials='D.' surname='Smith' fullname='Dave Smith'>
+      <organization>Individual</organization>
+      <address>
+        <email>dizzyd@dizzyd.com</email>
+      </address>
+    </author>
+    <author initials='P.' surname='Motykowski' fullname='Peter Motykowski'>
+      <organization abbrev="PingID">Ping Identity</organization>
+      <address>
+        <email>peter@motyka.org</email>
+      </address>
+    </author>
+    <author initials='Y.' surname='Faruqi' fullname='Yasir Faruqi'>
+      <organization abbrev="PingID">Ping Identity</organization>
+      <address>
+        <email>yfaruqi@pingidentity.com</email>
+      </address>
+    </author>
+    <author initials='P.' surname='Saint-Andre' fullname='Peter Saint-Andre' role='editor'>
+      <organization>Individual</organization>
+      <address>
+        <email>stpeter@jabber.org</email>
+      </address>
+    </author>
+    <date year='2008' month='August' day='11'/>
+    <area>Applications</area>
+    <abstract>
+      <t>This document describes OpenToken (OTK), a format for the lightweight, secure, cross-application exchange of key-value pairs.  The format is designed primarily for use as an HTTP cookie or query parameter, but can also be used in other scenarios that require a compact, application-neutral token.</t>
+    </abstract>
+  </front>
+
+  <middle>
+
+  <section title='Introduction' anchor='intro'>
+    <section title='Motivation' anchor='motivation'>
+      <t>This document describes OpenToken (OTK), a format for the lightweight, secure, cross-application exchange of key-value pairs between applications that use HTTP (see <xref target='RFC2616'/>) as the transport protocol.  The format is designed primarily for use as an HTTP cookie (see <xref target='RFC2965'/>) or query parameter, but can also be used in other scenarios that require a compact, application-neutral token.</t>
+      <t>The OpenToken technology is not designed to encapsulate formal identity assertions (for which see <xref target='SAML'/>) or authentication credentials (for which see <xref target='SASL'/>).  Instead, OpenToken is designed to encapsulate basic name-value pairs for exchange between applications that use HTTP as the transport protocol.</t>
+      <t>Consider the example of a web application that receives information from an end user via a web browser and subsequently shares that information with a backend system such as a single-sign-on (SSO) application.</t>
+      <figure>
+        <artwork><![CDATA[
++---------+
+| browser |
++---------+
+     |
+     | HTML form
+     |
++---------+            +---------+
+| web app | ---------> | SSO app |
++---------+   (OTK)    +---------+
+        ]]></artwork>
+      </figure>
+      <t>Naturally the web application or the single-sign-on application could exchange the same information with other applications (e.g., billing, customer service, enterprise resource planning) or push the information back to the end user via an HTTP cookie.  The end user could also share that same information with other web applications (e.g., the web application could store the information on the end user's browser via an HTTP cookie, which could be shared with other applications).</t>
+      <t>The use of a consistent data format enables a more seamless exchange of information between applications (e.g., by removing the need to translate between different application-specific data formats).</t>
+    </section>
+    <section title='Terminology' anchor='terminology'>
+      <t>The following keywords are to be interpreted as described in <xref target="RFC2119"/>: "MUST", "SHALL", "REQUIRED"; "MUST NOT", "SHALL NOT"; "SHOULD", "RECOMMENDED"; "SHOULD NOT", "NOT RECOMMENDED"; "MAY", "OPTIONAL".</t>
+    </section>
+  </section>
+
+  <section title='Token Layout' anchor='layout'>
+    <t>The OpenToken format is specified in the following table.</t>
+    <figure>
+      <artwork><![CDATA[
++------------+----------+-------------------------+
+| Byte Range | Length   | Description             |
++------------+----------+-------------------------+
+| 0..2       | 3        | 'O','T','K' literal     |
+| 3          | 1        | Version identifier      |
+| 4          | 1        | Cipher suite identifier |
+| 5..24      | 20       | SHA-1 HMAC              |
+| 25         | 1        | IV length               |
+| 26..x      | x-26     | IV                      |
+| x+1        | 1        | Key Info length         |
+| x+2..y     | y-(x+2)  | Key info                |
+| y+1..y+3   | 2        | Payload length          |
+| y+4..z     | z-(y+4)  | Payload                 |
+| TOTAL      | 29+x+y+z | N/A                     |
++------------+----------+-------------------------+
+      ]]></artwork>
+    </figure>
+    <t>The following notes apply to the foregoing token parameters:</t>
+    <t>
+      <list style='symbols'>
+        <t>The datatype for the version identifier, cipher suite identifier, IV length, and Key Info length is unsigned byte.</t>
+        <t>The initialization vector (IV) has a maximum length of 255 bytes.  This field is OPTIONAL and MAY have a length of 0 (IV length) to indicate that no IV is available for this token.  For details about initialization vectors, see <xref target='RFC2898'/>.</t>
+        <t>The payload is a series of key-value pairs, as described under <xref target='payload'/>.</t>
+        <t>The payload has a maximum (compressed) length of 64k bytes.  While this format supports a payload of 64k bytes, deployment scenarios that pass the token using HTTP (either as a query parameter or cookie) SHOULD limit the token length to less than 4k for optimal compatibility.</t>
+        <t>The <xref target='HMAC'/> used in this version of OpenToken is based on the SHA-1 hashing algorithm specified in <xref target='SHA'/>.  See <xref target='security'/> for further information about the security characteristics of this algorithm.</t>
+        <t>The Key Info field provides a place to store meta-data describing the key used to encrypt the payload.  For example, it can contain a cryptographic hash of the key, or some other identifier, so that the token recipient can select the appropriate key for decryption.  This field is OPTIONAL and MAY have a length of 0 (Key Info length) to indicate that no meta-data is available for this token.</t>
+      </list>
+    </t>
+    <t>Given the limited scope of applicability and the desire for a lightweight exchange format, OpenToken uses a binary format rather than a more generic data-description language such as <xref target='ASN.1'/> or <xref target='XML'/>.</t>
+  </section>
+
+  <section title='Processing Rules' anchor='processing'>
+    <section title='Encoding' anchor='encoding'>
+      <t>Generating an OTK involves the following steps:</t>
+      <t>
+        <list style='numbers'>
+          <t>Generate the payload.</t>
+          <t>Select a cipher suite and generate a corresponding IV.</t>
+          <t>Initialize an <xref target='HMAC'/> using the SHA-1 algorithm specified in <xref target='SHA'/> and the following data (order is significant):
+            <list style='numbers'>
+              <t>OTK version</t>
+              <t>Cipher suite value</t>
+              <t>IV value (if present)</t>
+              <t>Key Info value (if present)</t>
+              <t>Payload length (2 bytes, network order)</t>
+            </list>
+          </t>
+          <t>Update the SHA-1 HMAC (from the previous step) using the clear-text payload.</t>
+          <t>Compress the payload using the DEFLATE specification in accordance with <xref target='RFC1950'/> and <xref target='RFC1951'/>.</t>
+          <t>Encrypt the compressed payload using the selected cipher suite.</t>
+          <t>Construct the binary structure representing the OTK; place the MAC, IV, key info and cipher-text within the structure.</t>
+          <t>Base 64 encode the entire binary structure, following the rules in Section 4 of <xref target='RFC4648'/> and ensuring that the padding bits are set to zero.</t>
+          <t>Replace all Base 64 padding characters "=" with "*" (RFC 4648 does not account for the problems that Base64 padding causes when used as a cookie; this step corrects that issue).</t>
+        </list>
+      </t>
+    </section>
+    <section title='Decoding' anchor='decoding'>
+      <t>Processing an OTK involves the following steps:</t>
+      <t>
+        <list style='numbers'>
+          <t>Replace the "*" padding characters (see Encoding section, step 9) with standard Base 64 "=" characters.</t>
+          <t>Base 64 decode the OTK, following the rules in Section 4 of <xref target='RFC4648'/> and ensuring that the padding bits are set to zero.</t>
+          <t>Validate the OTK header literal and version.</t>
+          <t>Extract the Key Info (if present) and select a key for decryption.</t>
+          <t>Decrypt the payload cipher-text using the selected cipher suite.</t>
+          <t>Decompress the decrypted payload, in accordance with <xref target='RFC1950'/> and <xref target='RFC1951'/>.</t>
+          <t>Initialize an <xref target='HMAC'/> using the SHA-1 algorithm specified in <xref target='SHA'/> and the following data (order is significant):
+            <list style='numbers'>
+              <t>OTK version</t>
+              <t>Cipher suite value</t>
+              <t>IV value (if present)</t>
+              <t>Key Info value (if present)</t>
+              <t>Payload length (2 bytes, network order)</t>
+            </list>
+          </t>
+          <t>Update the HMAC from the previous step with the clear-text payload (after decompressing).</t>
+          <t>Compare the HMAC from step 8 with the HMAC received in the OTK.  If they do not match, halt processing.</t>
+          <t>Process the payload.</t>
+        </list>
+      </t>
+    </section>
+    <section title='Standard Key-Value Pairs' anchor='keyvalue'>
+      <t>The token payload contains key-value pairs, as described under <xref target='payload'/>.  These data pairs are used to describe the token presenter and can vary from application to application.  In the interest of basic interoperability when exchanging an OTK, there is a small set of standardized data pairs.</t>
+      <figure>
+        <artwork><![CDATA[
++-----------------+----------------------+---------------------------+
+| Key Name        | Value Format         | Description               |
++-----------------+----------------------+---------------------------+
+| subject         | string               | Primary identifier for    |
+|                 |                      | the token holder.         |
++-----------------+----------------------+---------------------------+
+| not-before      | ISO 8601 datetime;   | Datetime when token was   |
+|                 | yyyy-MM-ddTHH:mm:ssZ | created; a token received |
+|                 |                      | before this datetime MUST |
+|                 |                      | be rejected as invalid.   |
++-----------------+----------------------+---------------------------+
+| not-on-or-after | ISO 8601 datetime;   | Datetime at which token   |
+|                 | yyyy-MM-ddTHH:mm:ssZ | will expire; a token      |
+|                 |                      | received on or after this |
+|                 |                      | datetime MUST be rejected |
+|                 |                      | as invalid.               |
++-----------------+----------------------+---------------------------+
+| renew-until     | ISO 8601 datetime;   | Datetime at which token   |
+|                 | yyyy-MM-ddTHH:mm:ssZ | MUST NOT automatically    |
+|                 |                      | re-issued without further |
+|                 |                      | authentication; this can  |
+|                 |                      | be viewed as a "session"  |
+|                 |                      | lifetime.                 |
++-----------------+----------------------+---------------------------+
+        ]]></artwork>
+      </figure>
+      <t>The following rules apply:</t>
+      <t>
+        <list style='symbols'>
+          <t>All datetimes MUST be calculated relative to UTC (i.e., no timezone offsets).</t>
+          <t>The predefined key-value pairs MUST NOT be used for any purpose other than what is defined above and SHOULD be included with all issued OTKs.</t>
+        </list>
+      </t>
+    </section>
+  </section>
+
+  <section title='Cipher Suites' anchor='cipher'>
+    <t>A cipher suite groups a cryptographic cipher with a specific key size, cipher mode, and padding scheme.  This grouping provides a convenient way of representing these inter-dependent options and also helps the implementor understand the exact cryptographic requirements for a given OTK.</t>
+    <figure>
+      <artwork><![CDATA[
++----+--------+----------+------+---------+-----------+
+| ID | Cipher | Key Size | Mode | Padding | IV Length |
++----+--------+----------+------+---------+-----------+
+| 0  | Null   | N/A      | N/A  | N/A     | 0         |
+| 1  | AES    | 256 bits | CBC  | PKCS 5  | 16        |
+| 2  | AES    | 128 bits | CBC  | PKCS 5  | 16        |
+| 3  | 3DES   | 168 bits | CBC  | PKCS 5  | 8         |
++----+--------+----------+------+---------+-----------+
+      ]]></artwork>
+    </figure>
+    <t>Note:</t>
+    <t>
+      <list style='symbols'>
+        <t>The Null cipher is meant only for testing purposes.  It MUST NOT be used in production environments, since the payload would be passed in the clear.  When using the Null cipher, the SHA-1 MAC value MUST be replaced with a standard SHA-1 hash of the uncompressed payload.</t>
+        <t>For cipher suites that do not require an IV, the IV length MAY be zero.</t>
+        <t>For information regarding PKCS #5 padding, see <xref target='RFC2898'/>.</t>
+      </list>
+    </t>
+  </section>
+
+  <section title='Payload Format' anchor='payload'>
+    <t>OTK uses a simple, line-based format for encoding the key-value pairs in the payload.  The format is encoded with UTF-8 and thus is guaranteed to support the transport of multi-byte characters.  The syntax for an OpenToken is defined as follows using the Augmented Backus-Naur Form as specified in <xref target="ABNF"/>.</t>
+  <figure>
+    <artwork><![CDATA[
+     line        = key "=" value CRLF
+     key         = [whitespace] identifier [whitespace]
+     whitespace  = HTAB / SP
+     identifier  = anychar
+     value       = [whitespace] data [whitespace] /
+                   [whitespace] quoted-data [whitespace]
+     data        = anychar / ""
+                   ; all characters
+                   ; can be empty to represent null values
+     quoted-data = "\"" anychar "\"" /
+                   "\'" anychar "\'"
+                   ; double and single quotes must be 
+                   ; escaped via preceding backslash
+     anychar     = %x20-%x3C / %x3E-%x7E / %xA0-D7FF / %xF900-FDCF 
+                   / %xFDF0-FFEF / %x10000-1FFFD / %x20000-2FFFD 
+                   / %x30000-3FFFD / %x40000-4FFFD / %x50000-5FFFD 
+                   / %x60000-6FFFD / %x70000-7FFFD / %x80000-8FFFD 
+                   / %x90000-9FFFD / %xA0000-AFFFD / %xB0000-BFFFD 
+                   / %xC0000-CFFFD / %xD0000-DFFFD / %xE1000-EFFFD
+                   ; any Unicode character except "="
+      ]]></artwork>
+    </figure>
+      <t>The following rules apply:</t>
+      <t>
+        <list style='symbols'>
+          <t>Key names might not be unique. OpenToken supports multiple values for a key name by simply adding another key-value pair.</t>
+          <t>Key names are case-sensitive.  It is RECOMMENDED that all key names be lowercase and use hyphens to separate "words".</t>
+          <t>If the value for a key is or includes a Uniform Resource Identifier (URI), the characters "&" and "=" SHOULD be percent-encoded according to the rules specified in <xref target='URI'/>.</t>
+        </list>
+      </t>
+  </section>
+
+  <section title='Canonical Test Data' anchor='data'>
+    <t>It is important to ensure interoperability across tokens generated by different implementations/languages.  The following test cases can be used to test an implementation and ensure that it generates properly encoded tokens.  These tests are not exhaustive, but do cover the basic cipher suites.</t>
+    <t>For each test case, the key that was used to generate the output is included in base64 encoding.  The generated token is also base64 encoded, as specified above.</t>
+    <t>Each token has two name-value pairs present:</t>
+    <figure>
+      <artwork><![CDATA[
+foo = bar
+bar = baz
+      ]]></artwork>
+    </figure>
+    <t>Note: In the following test data, the tokens are wrapped across two lines to fit and the "\" character is used to denote the point of line wrapping.</t>
+    <section title='Test Case 1: AES-128' anchor='data-1'>
+      <figure>
+        <artwork><![CDATA[
+key:
+
+a66C9MvM8eY4qJKyCXKW+w==
+
+token:
+
+UFRLAQK9THj0okLTUB663QrJFg5qA58IDhAb93ondvcx7sY6s44eszNqAAAga5W8Dc\
+4XZwtsZ4qV3_lDI-Zn2_yadHHIhkGqNV5J9kw*
+        ]]></artwork>
+      </figure>
+    </section>
+    <section title='Test Case 2: AES-256' anchor='data-2'>
+      <figure>
+        <artwork><![CDATA[
+key:
+
+a66C9MvM8eY4qJKyCXKW+19PWDeuc3thDyuiumak+Dc=
+
+token:
+
+UFRLAQEujlLGEvmVKDKyvL1vaZ27qMYhTxDSAZwtaufqUff7GQXTjvWBAAAgJJGPta\
+7VOITap4uDZ_OkW_Kt4yYZ4BBQzw_NR2CNE-g*
+        ]]></artwork>
+      </figure>
+    </section>
+    <section title='Test Case 3: 3DES-168' anchor='data-3'>
+      <figure>
+        <artwork><![CDATA[
+key:
+
+a66C9MvM8eY4qJKyCXKW+19PWDeuc3th
+
+token:
+
+UFRLAQNoCsuAwybXOSBpIc9ZvxQVx_3fhghqSjy-pNJpfgAAGGlGgJ79NhX43lLRXA\
+b9Mp5unR7XFWopzw**
+        ]]></artwork>
+      </figure>
+    </section>
+  </section>
+
+  <section title='Security Considerations' anchor='security'>
+      <t>Recent research has shown that in select cases it is possible to compromise the hashes produced by the SHA-1 hashing algorithm (see <xref target='RFC4270'/>).  However, the use to which SHA-1 is put in OpenToken, coupled with employment of a symmetric cipher key, will likely minimize the applicability of the attacks described in the literature.  Furthermore, current estimates suggest that even with the recently-discovered attack, it would still take one year of computing by a government-sized entity to produce a collision.</t>
+      <t>Tokens SHOULD be exchanged over a secure transport (e.g., HTTP Over TLS as described in <xref target='RFC2818'/>) to minimize the possibility that a token can be intercepted by a man-in-the-middle.</t>
+  </section>
+
+  </middle>
+
+  <back>
+
+    <references title='Normative References'>
+
+<reference anchor='ABNF'>
+<front>
+<title abbrev='ABNF for Syntax Specifications'>Augmented BNF for Syntax Specifications: ABNF</title>
+<author initials='D.H.' surname='Crocker' fullname='David H.  Crocker'>
+<organization>Internet Mail Consortium</organization>
+<address>
+<postal>
+<street>675 Spruce Dr.</street>
+<city>Sunnyvale</city>
+<region>CA</region>
+<code>94086</code>
+<country>US</country></postal>
+<phone>+1 408 246 8253</phone>
+<facsimile>+1 408 249 6205</facsimile>
+<email>dcrocker@bbiw.net</email></address></author>
+<author initials='P.' surname='Overell' fullname='Paul Overell'>
+<organization>THUS plc.</organization>
+<address>
+<postal>
+<street>1/3 Berkeley Square</street>
+<street>99 Berkeley Street</street>
+<city>Glasgow</city>
+<code>G3 7HR</code>
+<country>UK</country></postal>
+<email>paulo@turnpike.com</email></address></author>
+<date month='October' year='2005' /></front>
+<seriesInfo name='RFC' value='4234' />
+<format type='TXT' octets='26351' target='ftp://ftp.isi.edu/in-notes/rfc4234.txt' />
+</reference>
+
+<reference anchor="HMAC" target="http://csrc.nist.gov/publications/fips/fips198/fips-198a.pdf">
+<front>
+<title>The Keyed-Hash Message Authentication Code (HMAC)</title>
+<author>
+<organization>National Institute of Standards and Technology</organization>
+</author>
+<date month="March" year="2002" />
+</front>
+<seriesInfo name="FIPS" value="PUB 198" />
+</reference>
+
+<reference anchor='RFC1950'>
+<front>
+<title>ZLIB Compressed Data Format Specification version 3.3</title>
+<author initials='L.P.' surname='Deutsch' fullname='L.  Peter Deutsch'>
+<organization>Aladdin Enterprises</organization>
+<address>
+<postal>
+<street>203 Santa Margarita Ave.</street>
+<city>Menlo Park</city>
+<region>CA</region>
+<code>94025</code>
+<country>US</country></postal>
+<phone>+1 415 322 0103</phone>
+<facsimile>+1 415 322 1734</facsimile>
+<email>ghost@aladdin.com</email></address></author>
+<author initials='J-L.' surname='Gailly' fullname='Jean-Loup Gailly'>
+<organization /></author>
+<date year='1996' month='May' />
+<abstract>
+<t>This specification defines a lossless compressed data format.  The data can be produced or consumed, even for an arbitrarily long sequentially presented input data stream, using only an a priori bounded amount of intermediate storage.  The format presently uses the DEFLATE compression method but can be easily extended to use
+   other compression methods.  It can be implemented readily in a manner not covered by patents.  This specification also defines the ADLER-32 checksum (an extension and improvement of the Fletcher checksum), used for detection of data corruption, and provides an algorithm for computing it.</t></abstract></front>
+<seriesInfo name='RFC' value='1950' />
+<format type='TXT' octets='20502' target='ftp://ftp.isi.edu/in-notes/rfc1950.txt' />
+<format type='PS' octets='37768' target='ftp://ftp.isi.edu/in-notes/rfc1950.ps' />
+<format type='PDF' octets='36393' target='ftp://ftp.isi.edu/in-notes/rfc1950.pdf' />
+</reference>
+
+<reference anchor='RFC1951'>
+<front>
+<title>DEFLATE Compressed Data Format Specification version 1.3</title>
+<author initials='P.' surname='Deutsch' fullname='L.  Peter Deutsch'>
+<organization>Aladdin Enterprises</organization>
+<address>
+<postal>
+<street>203 Santa Margarita Ave.</street>
+<city>Menlo Park</city>
+<region>CA</region>
+<code>94025</code>
+<country>US</country></postal>
+<phone>+1 415 322 0103</phone>
+<facsimile>+1 415 322 1734</facsimile>
+<email>ghost@aladdin.com</email></address></author>
+<date year='1996' month='May' />
+<abstract>
+<t>This specification defines a lossless compressed data format that compresses data using a combination of the LZ77 algorithm and Huffman coding, with efficiency comparable to the best currently available general-purpose compression methods.  The data can be produced or consumed, even for an arbitrarily long sequentially presented input data stream, using only an a priori bounded amount of intermediate storage.  The format can be implemented readily in a manner not covered by patents.</t></abstract></front>
+<seriesInfo name='RFC' value='1951' />
+<format type='TXT' octets='36944' target='ftp://ftp.isi.edu/in-notes/rfc1951.txt' />
+<format type='PS' octets='57408' target='ftp://ftp.isi.edu/in-notes/rfc1951.ps' />
+<format type='PDF' octets='56620' target='ftp://ftp.isi.edu/in-notes/rfc1951.pdf' />
+</reference>
+
+<reference anchor="RFC4648">
+<front>
+<title>The Base16, Base32, and Base64 Data Encodings</title>
+<author initials='S.' surname='Josefsson' fullname='S.  Josefsson'>
+<organization /></author>
+<date year='2006' month='October' />
+<abstract>
+<t>This document describes the commonly used base 64, base 32, and base 16 encoding schemes.  It also discusses the use of line-feeds in encoded data, use of padding in encoded data, use of non-alphabet characters in encoded data, use of different encoding alphabets, and canonical encodings.  [STANDARDS TRACK]</t></abstract></front>
+<seriesInfo name='RFC' value='4648' />
+<format type='TXT' octets='35491' target='ftp://ftp.isi.edu/in-notes/rfc4648.txt' />
+</reference>
+
+<reference anchor="SHA" target="http://csrc.nist.gov/publications/fips/fips180-2/fips180-2withchangenotice.pdf">
+<front>
+<title>Secure Hash Standard</title>
+<author>
+<organization>National Institute of Standards and Technology</organization>
+</author>
+<date month="August" year="2002" />
+</front>
+<seriesInfo name="FIPS" value="PUB 180-2" />
+</reference>
+
+<reference anchor='URI'>
+<front>
+<title abbrev='URI Generic Syntax'>Uniform Resource Identifier (URI): Generic Syntax</title>
+<author initials='T.' surname='Berners-Lee' fullname='Tim Berners-Lee'>
+<organization abbrev='W3C/MIT'>World Wide Web Consortium</organization>
+<address>
+<postal>
+<street>Massachusetts Institute of Technology</street>
+<street>77 Massachusetts Avenue</street>
+<city>Cambridge</city>
+<region>MA</region>
+<code>02139</code>
+<country>USA</country></postal>
+<phone>+1-617-253-5702</phone>
+<facsimile>+1-617-258-5999</facsimile>
+<email>timbl@w3.org</email>
+<uri>http://www.w3.org/People/Berners-Lee/</uri></address></author>
+<author initials='R.' surname='Fielding' fullname='Roy T. Fielding'>
+<organization abbrev='Day Software'>Day Software</organization>
+<address>
+<postal>
+<street>5251 California Ave., Suite 110</street>
+<city>Irvine</city>
+<region>CA</region>
+<code>92617</code>
+<country>USA</country></postal>
+<phone>+1-949-679-2960</phone>
+<facsimile>+1-949-679-2972</facsimile>
+<email>fielding@gbiv.com</email>
+<uri>http://roy.gbiv.com/</uri></address></author>
+<author initials='L.' surname='Masinter' fullname='Larry Masinter'>
+<organization abbrev='Adobe Systems'>Adobe Systems Incorporated</organization>
+<address>
+<postal>
+<street>345 Park Ave</street>
+<city>San Jose</city>
+<region>CA</region>
+<code>95110</code>
+<country>USA</country></postal>
+<phone>+1-408-536-3024</phone>
+<email>LMM@acm.org</email>
+<uri>http://larry.masinter.net/</uri></address></author>
+<date year='2005' month='January' />
+<area>Applications</area>
+<keyword>uniform resource identifier</keyword>
+<keyword>URI</keyword>
+<keyword>URL</keyword>
+<keyword>URN</keyword>
+<keyword>WWW</keyword>
+<keyword>resource</keyword>
+<abstract>
+<t>
+A Uniform Resource Identifier (URI) is a compact sequence of characters
+that identifies an abstract or physical resource.  This specification
+defines the generic URI syntax and a process for resolving URI references
+that might be in relative form, along with guidelines and security
+considerations for the use of URIs on the Internet.
+The URI syntax defines a grammar that is a superset of all valid URIs,
+allowing an implementation to parse the common components of a URI
+reference without knowing the scheme-specific requirements of every
+possible identifier.  This specification does not define a generative
+grammar for URIs; that task is performed by the individual
+specifications of each URI scheme.
+</t></abstract></front>
+<seriesInfo name='STD' value='66' />
+<seriesInfo name='RFC' value='3986' />
+<format type='TXT' octets='141811' target='ftp://ftp.isi.edu/in-notes/rfc3986.txt' />
+<format type='HTML' octets='200858' target='http://xml.resource.org/public/rfc/html/rfc3986.html' />
+<format type='XML' octets='165759' target='http://xml.resource.org/public/rfc/xml/rfc3986.xml' />
+</reference>
+
+    </references>
+
+    <references title='Informative References'>
+
+<reference anchor="ASN.1">
+<front>
+<title>Recommendation X.208: Specification of Abstract Syntax Notation One (ASN.1)
+</title>
+<author>
+<organization>CCITT</organization>
+</author>
+<date year="1988" />
+</front>
+</reference>
+
+<reference anchor='RFC2119'>
+  <front>
+    <title abbrev='RFC Key Words'>Key words for use in RFCs to Indicate Requirement Levels</title>
+    <author initials='S.' surname='Bradner' fullname='Scott Bradner'>
+      <organization>Harvard University</organization>
+      <address>
+        <postal>
+          <street>1350 Mass.  Ave.</street>
+          <street>Cambridge</street>
+          <street>MA 02138</street>
+        </postal>
+        <phone>- +1 617 495 3864</phone>
+        <email>-</email>
+      </address>
+    </author>
+    <date month='March' year='1997'></date>
+    <area>General</area>
+    <keyword>keyword</keyword>
+    <abstract>
+      <t>In many standards track documents several words are used to signify the requirements in the specification.  These words are often capitalized.  This document defines these words as they should be interpreted in IETF documents.  Authors who follow these guidelines should incorporate this phrase near the beginning of their document:
+        <list>
+          <t>The key words &quot;MUST&quot;, &quot;MUST NOT&quot;, &quot;REQUIRED&quot;, &quot;SHALL&quot;, &quot;SHALL NOT&quot;, &quot;SHOULD&quot;, &quot;SHOULD NOT&quot;, &quot;RECOMMENDED&quot;,  &quot;MAY&quot;, and &quot;OPTIONAL&quot; in this document are to be interpreted as described in RFC 2119.</t>
+        </list>
+      </t>
+      <t>Note that the force of these words is modified by the requirement level of the document in which they are used.</t>
+    </abstract>
+  </front>
+  <seriesInfo name='BCP' value='14' />
+  <seriesInfo name='RFC' value='2119' />
+</reference>
+
+<reference anchor='RFC2616'>
+<front>
+<title abbrev='HTTP/1.1'>Hypertext Transfer Protocol -- HTTP/1.1</title>
+<author initials='R.' surname='Fielding' fullname='Roy T.  Fielding'>
+<organization abbrev='UC Irvine'>Department of Information and Computer Science</organization>
+<address>
+<postal>
+<street>University of California, Irvine</street>
+<city>Irvine</city>
+<region>CA</region>
+<code>92697-3425</code></postal>
+<facsimile>+1(949)824-1715</facsimile>
+<email>fielding@ics.uci.edu</email></address></author>
+<author initials='J.' surname='Gettys' fullname='James Gettys'>
+<organization abbrev='Compaq/W3C'>World Wide Web Consortium</organization>
+<address>
+<postal>
+<street>MIT Laboratory for Computer Science, NE43-356</street>
+<street>545 Technology Square</street>
+<city>Cambridge</city>
+<region>MA</region>
+<code>02139</code></postal>
+<facsimile>+1(617)258-8682</facsimile>
+<email>jg@w3.org</email></address></author>
+<author initials='J.' surname='Mogul' fullname='Jeffrey C.  Mogul'>
+<organization abbrev='Compaq'>Compaq Computer Corporation</organization>
+<address>
+<postal>
+<street>Western Research Laboratory</street>
+<street>250 University Avenue</street>
+<city>Palo Alto</city>
+<region>CA</region>
+<code>94305</code></postal>
+<email>mogul@wrl.dec.com</email></address></author>
+<author initials='H.' surname='Frystyk' fullname='Henrik Frystyk Nielsen'>
+<organization abbrev='MIT/LCS'>World Wide Web Consortium</organization>
+<address>
+<postal>
+<street>MIT Laboratory for Computer Science, NE43-356</street>
+<street>545 Technology Square</street>
+<city>Cambridge</city>
+<region>MA</region>
+<code>02139</code></postal>
+<facsimile>+1(617)258-8682</facsimile>
+<email>frystyk@w3.org</email></address></author>
+<author initials='L.' surname='Masinter' fullname='Larry Masinter'>
+<organization abbrev='Xerox'>Xerox Corporation</organization>
+<address>
+<postal>
+<street>MIT Laboratory for Computer Science, NE43-356</street>
+<street>3333 Coyote Hill Road</street>
+<city>Palo Alto</city>
+<region>CA</region>
+<code>94034</code></postal>
+<email>masinter@parc.xerox.com</email></address></author>
+<author initials='P.' surname='Leach' fullname='Paul J.  Leach'>
+<organization abbrev='Microsoft'>Microsoft Corporation</organization>
+<address>
+<postal>
+<street>1 Microsoft Way</street>
+<city>Redmond</city>
+<region>WA</region>
+<code>98052</code></postal>
+<email>paulle@microsoft.com</email></address></author>
+<author initials='T.' surname='Berners-Lee' fullname='Tim Berners-Lee'>
+<organization abbrev='MIT/LCS'>World Wide Web Consortium</organization>
+<address>
+<postal>
+<street>MIT Laboratory for Computer Science, NE43-356</street>
+<street>545 Technology Square</street>
+<city>Cambridge</city>
+<region>MA</region>
+<code>02139</code></postal>
+<facsimile>+1(617)258-8682</facsimile>
+<email>timbl@w3.org</email></address></author>
+<date month='June' year='1999' />
+<abstract>
+<t>
+   The Hypertext Transfer Protocol (HTTP) is an application-level
+   protocol for distributed, collaborative, hypermedia information
+   systems.  It is a generic, stateless, protocol which can be used for
+   many tasks beyond its use for hypertext, such as name servers and
+   distributed object management systems, through extension of its
+   request methods, error codes and headers .  A feature of HTTP is
+   the typing and negotiation of data representation, allowing systems
+   to be built independently of the data being transferred.
+</t>
+<t>
+   HTTP has been in use by the World-Wide Web global information
+   initiative since 1990.  This specification defines the protocol
+   referred to as "HTTP/1.1", and is an update to RFC 2068 .
+</t></abstract></front>
+<seriesInfo name='RFC' value='2616' />
+<format type='TXT' octets='422317' target='ftp://ftp.isi.edu/in-notes/rfc2616.txt' />
+<format type='PS' octets='5529857' target='ftp://ftp.isi.edu/in-notes/rfc2616.ps' />
+<format type='PDF' octets='550558' target='ftp://ftp.isi.edu/in-notes/rfc2616.pdf' />
+<format type='HTML' octets='498891' target='http://xml.resource.org/public/rfc/html/rfc2616.html' />
+<format type='XML' octets='471630' target='http://xml.resource.org/public/rfc/xml/rfc2616.xml' />
+</reference>
+
+<reference anchor='RFC2818'>
+<front>
+<title>HTTP Over TLS</title>
+<author initials='E.' surname='Rescorla' fullname='E.  Rescorla'>
+<organization /></author>
+<date month='May' year='2000' /></front>
+<seriesInfo name='RFC' value='2818' />
+<format type='TXT' octets='15170' target='ftp://ftp.isi.edu/in-notes/rfc2818.txt' />
+</reference>
+
+<reference anchor='RFC2898'>
+<front>
+<title>PKCS #5: Password-Based Cryptography Specification Version 2.0</title>
+<author initials='B.' surname='Kaliski' fullname='B.  Kaliski'>
+<organization /></author>
+<date year='2000' month='September' />
+<abstract>
+<t>This document provides recommendations for the implementation of password-based cryptography, covering key derivation functions, encryption schemes, message-authentication schemes, and ASN.1 syntax identifying the techniques.  This memo provides information for the Internet community.  </t></abstract></front>
+<seriesInfo name='RFC' value='2898' />
+<format type='TXT' octets='68692' target='ftp://ftp.isi.edu/in-notes/rfc2898.txt' />
+</reference>
+
+<reference anchor='RFC2965'>
+<front>
+<title>HTTP State Management Mechanism</title>
+<author initials='D. M.' surname='Kristol' fullname='David M. Kristol'>
+<organization>Bell Laboratories, Lucent Technologies</organization>
+<address>
+<postal>
+<street>600 Mountain Ave.  Room 2A-333</street>
+<city>Murray Hill</city>
+<region>NJ</region>
+<code>07974</code></postal>
+<phone>(908) 582-2250</phone>
+<facsimile>(908) 582-1239</facsimile>
+<email>dmk@bell-labs.com</email></address></author>
+<author initials='L.' surname='Montulli' fullname='Lou Montulli'>
+<organization>Epinions.com, Inc.</organization>
+<address>
+<postal>
+<street>2037 Landings Dr.</street>
+<city>Mountain View</city>
+<region>CA</region>
+<code>94301</code></postal>
+<email>lou@montulli.org</email></address></author>
+<date year='2000' month='October' />
+<abstract>
+<t>
+     This document specifies a way to create a stateful session with
+     Hypertext Transfer Protocol (HTTP) requests and responses.  It
+     describes three new headers, Cookie, Cookie2, and Set-Cookie2, which
+     carry state information between participating origin servers and user
+     agents.  The method described here differs from Netscape's Cookie
+     proposal , but it can interoperate with HTTP/1.0 user
+     agents that use Netscape's method.  (See the HISTORICAL section.)
+    </t>
+<t>
+     This document reflects implementation experience with RFC 2109 and
+     obsoletes it.
+     </t></abstract></front>
+<seriesInfo name='RFC' value='2965' />
+<format type='TXT' octets='56176' target='ftp://ftp.isi.edu/in-notes/rfc2965.txt' />
+<format type='HTML' octets='82578' target='http://xml.resource.org/public/rfc/html/rfc2965.html' />
+<format type='XML' octets='63023' target='http://xml.resource.org/public/rfc/xml/rfc2965.xml' />
+</reference>
+
+<reference anchor='RFC4270'>
+<front>
+<title>Attacks on Cryptographic Hashes in Internet Protocols</title>
+<author initials='P.' surname='Hoffman' fullname='P. Hoffman'>
+<organization /></author>
+<author initials='B.' surname='Schneier' fullname='B. Schneier'>
+<organization /></author>
+<date year='2005' month='November' />
+<abstract>
+<t>Recent announcements of better-than-expected collision attacks in popular hash algorithms have caused some people to question whether common Internet protocols need to be changed, and if so, how.  This document summarizes the use of hashes in many protocols, discusses how the collision attacks affect and do not affect the protocols, shows how to thwart known attacks on digital certificates, and discusses future directions for protocol designers.  This memo provides information for the Internet community.</t></abstract></front>
+<seriesInfo name='RFC' value='4270' />
+<format type='TXT' octets='26641' target='ftp://ftp.isi.edu/in-notes/rfc4270.txt' />
+</reference>
+
+<reference anchor="SAML">
+    <front>
+        <title>Assertions and Protocol for the OASIS Security Assertion Markup Language
+            (SAML) V2.0</title>
+        <author fullname="Scott Cantor" initials="S." surname="Cantor">
+            <organization>Internet2</organization>
+            <address>
+                <email>cantor.2@osu.edu</email>
+            </address>
+        </author>
+        <author fullname="John Kemp" initials="J." surname="Kemp">
+            <organization>Nokia</organization>
+            <address>
+                <email>John.Kemp@nokia.com</email>
+            </address>
+        </author>
+        <author fullname="Rob Philpott" initials="R." surname="Philpott">
+            <organization>RSA Security</organization>
+            <address>
+                <email>rphilpott@rsasecurity.com</email>
+            </address>
+        </author>
+         <author fullname="Eve Maler" initials="E." surname="Maler">
+            <organization>Sun Microsystems</organization>
+            <address>
+                <email>eve.maler@sun.com</email>
+            </address>
+        </author>
+        <date year="2005" month="March"/>
+    </front>
+    <seriesInfo name="OASIS Standard" value="saml-core-2.0-os"/>
+    <format type="PDF" target="http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf"/>
+</reference>
+
+<reference anchor="SASL">
+<front>
+<title>Simple Authentication and Security Layer (SASL)</title>
+<author initials='A.' surname='Melnikov' fullname='A. Melnikov'>
+<organization /></author>
+<author initials='K.' surname='Zeilenga' fullname='K. Zeilenga'>
+<organization /></author>
+<date year='2006' month='June' />
+<abstract>
+<t>&lt;p>The Simple Authentication and Security Layer (SASL) is a framework for providing authentication and data security services in connection-oriented protocols via replaceable mechanisms. It provides a structured interface between protocols and mechanisms. The resulting framework allows new protocols to reuse existing mechanisms and allows old protocols to make use of new mechanisms. The framework also provides a protocol for securing subsequent protocol exchanges within a data security layer.&lt;/p>&lt;p> This document describes how a SASL mechanism is structured, describes how protocols include support for SASL, and defines the protocol for carrying a data security layer over a connection. In addition, this document defines one SASL mechanism, the EXTERNAL mechanism.&lt;/p>&lt;p> This document obsoletes RFC 2222. [STANDARDS TRACK]&lt;/p></t></abstract></front>
+<seriesInfo name='RFC' value='4422' />
+<format type='TXT' octets='73206' target='ftp://ftp.isi.edu/in-notes/rfc4422.txt' />
+</reference>
+
+<reference anchor='XML' target='http://www.w3.org/TR/2006/REC-xml-20060816'>
+<front>
+<title>Extensible Markup Language (XML) 1.0 (Fourth Edition)</title>
+<author initials='J.' surname='Paoli' fullname='Jean Paoli'>
+    <organization />
+</author>
+<author initials='E.' surname='Maler' fullname='Eve Maler'>
+    <organization />
+</author>
+<author initials='C.' surname='Sperberg-McQueen' fullname='C. M. Sperberg-McQueen'>
+    <organization />
+</author>
+<author initials='F.' surname='Yergeau' fullname='François Yergeau'>
+    <organization />
+</author>
+<author initials='T.' surname='Bray' fullname='Tim Bray'>
+    <organization />
+</author>
+<date month='August' day='16' year='2006' />
+</front>
+<seriesInfo name='World Wide Web Consortium Recommendation' value='REC-xml-20060816' />
+<format type='HTML' target='http://www.w3.org/TR/2006/REC-xml-20060816' />
+</reference>
+
+    </references>
+
+  </back>
+
+</rfc>

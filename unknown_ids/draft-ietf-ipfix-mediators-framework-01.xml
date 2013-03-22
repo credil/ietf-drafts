@@ -1,0 +1,1027 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSPY v5 rel. 3 U (http://www.xmlspy.com)
+     by Daniel M Kohn (private) -->
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+
+
+<rfc category="info" ipr="full3978" docName="draft-ietf-ipfix-mediators-framework-01">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+<front>
+<title abbrev="IPFIX Mediation Framework">
+IPFIX Mediation: Framework
+</title>
+
+<author initials="A.K." surname="Kobayashi" fullname="Atsushi Kobayashi"><organization abbrev="NTT PF Lab.">
+NTT Information Sharing Platform Laboratories
+</organization>
+<address>
+<postal>
+<street>3-9-11 Midori-cho</street>
+<city>Musashino-shi</city><region>Tokyo</region>
+<code>180-8585</code>
+<country>Japan</country>
+</postal>
+<phone>+81-422-59-3978</phone>
+<email>akoba@nttv6.net</email>
+</address>
+</author>
+
+<author initials="H.N." surname="Nishida" fullname="Haruhiko Nishida">
+<organization abbrev="NTT PF Lab.">
+NTT Information Sharing Platform Laboratories
+</organization>
+<address>
+<postal>
+<street>3-9-11 Midori-cho</street>
+<city>Musashino-shi</city><region>Tokyo</region>
+<code>180-8585</code>
+<country>Japan</country>
+</postal>
+<phone>+81-422-59-3978</phone>
+<email>nishida.haruhiko@lab.ntt.co.jp</email>
+</address>
+</author>
+
+<author fullname="Benoit Claise" initials="B." surname="Claise">
+<organization abbrev="Cisco Systems">Cisco Systems</organization>
+<address>
+<postal>
+<street>De Kleetlaan 6a b1</street>
+<city>Diegem</city>
+<code>1831</code>
+<country>Belgium</country>
+</postal>
+<phone>+32 2 704 5622</phone>
+<email>bclaise@cisco.com</email>
+</address>
+</author>
+
+<date month="November" year="2008"/>
+<area>Operations and Management</area>
+<workgroup>IPFIX Working Group</workgroup>
+
+<abstract>
+<t>
+This document describes a framework for an IPFIX Mediation. This framework details an IPFIX Mediation reference model and the components of the IPFIX Mediation device (IPFIX Mediator). 
+</t>
+</abstract>
+</front>
+
+<middle>
+
+<section title="Introduction">
+<t>
+IPFIX Mediation reroutes, replicates, filters, aggregates, correlates, or modifies Flow Records/Packet Reports or changes a transport protocol. This document describes the framework for IPFIX Mediation. The motivation for the IPFIX Mediation standard comes from the need for flow-based measurement system support for large-scale networks, interdomain networks, and coexistence with traditional Exporters as described in detail in <xref target="I-D.ietf-ipfix-mediator-ps" />. The standard specification requires a definition of IPFIX Mediation and IPFIX Mediation device (IPFIX Mediator).
+</t>
+<t>
+This document is organized as follows. Section 2 describes terminology related to IPFIX Mediation. Section 3 describes a high level reference model. Section 4 details the components of the IPFIX Mediator. 
+</t>
+
+</section>
+
+<section title="Terminology">
+<t>
+The terms in this section are in line with those in the IPFIX specification document <xref target="RFC5101" /> and the PSAMP specification document <xref target="I-D.ietf-psamp-protocol" />. Additional terms required for the IPFIX Mediation are also defined with those in the IPFIX Mediator problem statement <xref target="I-D.ietf-ipfix-mediator-ps" />. All these terms are capitalized in this document.
+
+<list style="hanging">
+
+<t hangText="Observation Point"> <vspace blankLines="1"/>
+An Observation Point is a location in the network where IP packets can be observed.  Examples include: a line to which a probe is attached, a shared medium, such as an Ethernet-based LAN, a single port of a router, or a set of interfaces (physical or logical) of a router.<vspace blankLines="1"/>
+Note that every Observation Point is associated with an Observation Domain (defined below), and that one Observation Point may be a superset of several other Observation Points.  For example, one Observation Point can be an entire line card. That would be the superset of the individual Observation Points at the line card's interfaces.
+</t>
+
+<t hangText="Observation Domain"> <vspace blankLines="1"/>
+An Observation Domain is the largest set of Observation Points for which Flow information can be aggregated by a Metering Process. For example, a router line card may be an Observation Domain if it is composed of several interfaces, each of which is an Observation Point. In the IPFIX Message it generates, the Observation Domain includes its Observation Domain ID, which is unique per Exporting Process. That way, the Collecting Process can identify the specific Observation Domain from the Exporter that sends the IPFIX Messages.  Every Observation Point is associated with an Observation Domain.  It is RECOMMENDED that Observation Domain IDs also be unique per IPFIX Device.
+</t>
+
+<t hangText="Flow Key"> <vspace blankLines="1"/>
+Each of the fields that:<vspace blankLines="1"/>
+1.  belong to the packet header (e.g., destination IP address),<vspace blankLines="1"/>
+2.  are a property of the packet itself (e.g., packet length),<vspace blankLines="1"/>
+3.  are derived from packet treatment (e.g., Autonomous System (AS) number),<vspace blankLines="1"/>
+and that are used to define a Flow are termed Flow Keys.
+</t>
+
+
+<t hangText="Flow Record"> <vspace blankLines="1"/>
+A Flow Record contains information about a specific Flow that was observed at an Observation Point.  A Flow Record contains measured properties of the Flow (e.g., the total number of bytes for all the Flow's packets) and usually characteristic properties of the Flow (e.g., source IP address).
+</t>
+
+<t hangText="Packet Reports"> <vspace blankLines="1"/>
+Packet Reports comprise a configurable subset of a packet's input to the Selection Process, including the Packet Content, information relating to its treatment (for example, the output interface), and its associated selection state (for example, a hash of the Packet Content).  
+</t>
+
+<t hangText="Exporting Process"> <vspace blankLines="1"/>
+The Exporting Process sends Flow Records to one or more Collecting Processes.  The Flow Records are generated by one or more Metering Processes.
+</t>
+
+<t hangText="Exporter"> <vspace blankLines="1"/>
+A device that hosts one or more Exporting Processes is termed an Exporter.
+</t>
+
+<t hangText="IPFIX Device"> <vspace blankLines="1"/>
+An IPFIX Device hosts at least one Exporting Process. It may host further Exporting Processes and arbitrary numbers of Observation Points and Metering Processes.
+</t>
+
+<t hangText="Collecting Process"> <vspace blankLines="1"/>
+A Collecting Process receives Flow Records from one or more Exporting Processes. The Collecting Process might process or store received Flow Records, but such actions are out of the scope of this document.
+</t>
+
+<t hangText="Collector"> <vspace blankLines="1"/>
+A device that hosts one or more Collecting Processes is termed a Collector.
+</t>
+
+<t hangText="IPFIX Message"> <vspace blankLines="1"/>
+An IPFIX Message is a message originating at the Exporting Process that carries the IPFIX records of this Exporting Process and whose destination is a Collecting Process. An IPFIX Message is encapsulated at the transport layer.
+</t>
+
+<t hangText="Information Element"> <vspace blankLines="1"/>
+An Information Element is a protocol and encoding-independent description of an attribute that may appear in an IPFIX Record. The IPFIX information model <xref target="RFC5102" /> defines the base set of Information Elements for IPFIX.  The type associated with an Information Element indicates constraints on what it may contain and also determines the valid encoding mechanisms for use in IPFIX.
+</t>
+
+
+<t hangText="IPFIX Mediation"> <vspace blankLines="1"/>
+An IPFIX Mediation is a generic term for functions doing something for Flow Records, Packet Reports, and IPFIX Messages. IPFIX Mediation is located in between components: Metering Processes, Exporting Processes, Collecting Processes, and other applications. IPFIX Mediation can be included in any IPFIX Devices. IPFIX Mediation consists of a set of some of the following functions:
+<list style="symbols">
+
+<t>
+rerouting input Flow Records/Packet Reports to an appropriate Collecting Process
+</t>
+<t>
+replicating input Flow Records/Packet Reports
+</t>
+<t>
+filtering and selecting input Flow Records/Packet Reports
+</t>
+
+<t>
+aggregating input Flow Records/Packet Reports based on new Flow Keys
+</t>
+
+<t>
+correlating a set of Flow Records/Packet Reports for creating new Flow Records/Packet Reports with new metrics
+</t>
+
+<t>
+modifying input Flow Records/Packet Reports
+</t>
+
+<t>
+changing transport protocols that carry IPFIX Messages
+</t>
+
+
+</list>
+The modification of Flow Records/Packet Reports includes these processes: 
+
+<list style="symbols">
+<t>
+changing the value of specified Information Elements
+</t>
+<t>
+adding new Information Elements by deriving further Flow or packet properties from existing fields or calculating new metrics
+</t>
+<t>
+deleting specified Information Elements.
+</t>
+</list>
+IPFIX Mediation can be included in any device, such as routers, switches, NMS (Network Management Systems), or stand-alone devices.
+</t>
+
+<t hangText="Flow-Based Collector Selection"><vspace blankLines="1"/>
+The Flow-Based Collector Selection evaluates an input Flow Record/Packet Report based on the value of the specified Information Element and then selects a Collector for each input Flow Record/Packet Report. 
+</t>
+
+<t hangText="IPFIX Mediator"><vspace blankLines="1"/>
+An IPFIX Mediator contains one or more functions defined in IPFIX Mediation. The IPFIX Mediator can be a stand-alone or a virtual device. It also contains one or more Collecting Processes and one or more Exporting Processes.
+</t>
+
+
+<t hangText="Original Exporter"><vspace blankLines="1"/>
+An Original Exporter is an IPFIX Device that hosts Observation Points where IP packets can be directly observed.
+</t>
+
+<t hangText="IPFIX Proxy"><vspace blankLines="1"/>
+An IPFIX Proxy is an IPFIX Mediator that receives IPFIX Messages from an Original Exporter and sends IPFIX Messages to one or more Collectors. It may alter part of an IPFIX Message to comply with IPFIX Protocol specifications. It may also change the type of transport protocol, such as UDP, TCP, SCTP, and PR-SCTP, and  convert a legacy protocol message to an IPFIX Message, if necessary.
+</t>
+
+<t hangText="IPFIX Concentrator"><vspace blankLines="1"/>
+An IPFIX Concentrator is an IPFIX Mediator that receives Flow Records/Packet Reports, aggregates them, then exports the aggregated Flow Records.
+</t>
+
+<t hangText="IPFIX Distributor"> <vspace blankLines="1"/>
+An IPFIX Distributor is an IPFIX Mediator that reroutes input Flow Records/Packet Reports based on the result of Flow-Based Collector Selection. It may filter or replicate input Flow Records/Packet Reports, if necessary.
+</t>
+
+<t hangText="IPFIX Masquerading Proxy"><vspace blankLines="1"/>
+An IPFIX Masquerading Proxy is an IPFIX Mediator that screens out a part of the data of input Flow Records/Packet Reports according to configured policies. It can thus, for example, hide the network topology information or customers' IP addresses.
+</t>
+
+<t hangText="Intermediate Process"><vspace blankLines="1"/>
+An Intermediate Process in IPFIX Mediators can be considered as a partial Metering Process taken from the Metering Process in Original Exporters as described in <xref target="RFC3917" />.<vspace blankLines="1"/>
+The Intermediate Process generates new sets of Data Records/Packet Reports from input Data Records/Packet Reports.
+</t>
+
+<t hangText="Mediator Observation Domain"><vspace blankLines="1"/>
+An IPFIX Mediator does not host the Observation Points and Observation Domain. The Observation Domain ID in the IPFIX header sent by the IPFIX Mediator also indicates the largest set of Observation Points from the viewpoint of a Collector. However, this value does not indicate the physical entity of an Original Exporter.
+</t>
+
+<t hangText="Transport Session Information"><vspace blankLines="1"/>
+The Transport Session is specified in <xref target="RFC5101" />. In SCTP, the Transport Session Information is the SCTP association. In TCP and UDP, the Transport Session Information corresponds to a 5-tuple {Exporter IP address, Collector IP address, Exporter transport port, Collector transport port, and transport protocol}. 
+</t>
+
+</list>
+</t>
+
+</section>
+
+
+<section title="IPFIX Mediation Reference Model">
+<t>
+The figure below shows the high-level reference model for IPFIX Mediation based on <xref target="I-D.ietf-ipfix-architecture" />. This figure covers the various possible scenarios that can exist in an IPFIX measurement system.
+</t>
+
+<figure>
+<preamble>
+</preamble>
+<artwork><![CDATA[
++---------------------------+    +---------------------------+
+| Collector {l}             |    | Collector {k}             |
+|[*Application(s)]          |    |[*Application(s)]          |
+|[IPFIX File Reader/Writer] |    |[IPFIX File Reader/Writer] |
+|[Collecting Process(es)]   |....|[Collecting Process(es)]   |
++---------------------------+    +---------------------------+
+                 ^    ^              ^  ^
+                 |    |              |  |
+                 |    +------....----+  |
+                 |    |                 |
+          IPFIX (Flow Records / Packet Reports)
+                 |    |                 |
++----------------+----+-----+    +-------+-------------------+
+|IPFIX Mediator {j}         |    |IPFIX Mediator {n}         |
+|[*Applications(s)]         |    |[*Applications(s)]         |
+|[Exporting Process(es)]    |    |[Exporting Process(es)]    |
+|[Intermediate Process(es)] |....|[Intermediate Process(es)] |
+|[Collecting Process(es)]   |    |[Collecting Process(es)]   |
++---------------------------+    +---------------------------+
+                 ^    ^               ^
+                 |    |               |
+                 |    +------....-----+
+                 |                    |
+          IPFIX (Flow Records / Packet Reports)
+                 |                    |
++----------------+----------+    +----+----------------------+  
+|IPFIX Original Exporter {i}|    |IPFIX Original Exporter {m}|
+|[Exporting Process(es)]    |    |[Exporting Process(es)]    |
+|[Metering Process(es)]     |....|[Metering Process(es)]     |
+|[Observation Point(s)]     |    |[Observation Point(s)]     |
++---------------------------+    +---------------------------+
+            ^ ^                        ^ ^
+            | |                        | | 
+         Packets coming in to Observation Points
+]]></artwork>
+<postamble>
+Figure A: Reference Model for IPFIX Mediation.
+</postamble>
+</figure>
+<t>
+The various functional components are indicated within brackets []. The functional components within [*] are not part of <xref target="I-D.ietf-ipfix-architecture" />.<vspace blankLines="1"/>
+</t>
+
+<t>
+The figure below shows the basic IPFIX Mediator component model. The IPFIX Mediator is formally defined to consist of one or more Collecting Processes, zero or more Intermediate Processes, and one or more Exporting Processes. Basically, IPFIX Mediator devices, i.e., IPFIX Proxy, IPFIX Masquerading Proxy, IPFIX Distributor, and IPFIX Concentrator, described in <xref target="I-D.ietf-ipfix-mediator-ps" />, are composed of these components.
+</t>
+
+<figure>
+<preamble>
+</preamble>
+<artwork><![CDATA[
+         IPFIX(Flow Records/Packet Reports) 
+                           ^
+                         ^ |
++------------------------|-|---------------------+
+| IPFIX Mediator         | |                     |
+|                        | |                     |
+|  .---------------------|-+-------------------. |
+| .----------------------+--------------------.| |
+| |          Exporting Process (es)           |' |
+| '----------------------^--------------------'  |
+|                        | |                     |
+|  .---------------------|-+-------------------. |
+| .----------------------+--------------------.| |
+| |    Intermediate Process (es) (optional)   |' |
+| '----------------------^--------------------'  |
+|                        | |                     |
+|  .---------------------|-+-------------------. |
+| .----------------------+--------------------.| |
+| |          Collecting Process (es)          |' |
+| '----------------------^--------------------'  |
++------------------------|-|---------------------+
+                         |                      
+         IPFIX(Flow Records/Packet Reports) 
+]]></artwork>
+<postamble>
+Figure B: IPFIX Mediator Basic Component Model.
+</postamble>
+</figure>
+
+<t>
+An Original Exporter with a Mediation function is modeled as follows.
+</t>
+
+<figure>
+<preamble>
+</preamble>
+<artwork><![CDATA[
+            IPFIX (Flow Records/Packet Reports) 
+                            ^ ^
++---------------------------|-|------------------------+
+| Original Exporter         | |                        |
+|                           | |                        |
+|     .---------------------|-+-------------------.    |
+|    .----------------------+--------------------.|    |
+|    |           Exporting Process(es)           |'    |
+|    '----------------------^--------------------'     |
+|                           | |                        |
+|     .---------------------|-+-------------------.    |
+|    .----------------------+--------------------.|    |
+|    |          Intermediate Process(es)         |'    |
+|    '---------^-----------------------^---------'     |
+|              |Flow Record or         |               |
+|              |        Packet Reports |               |
+| .------------+----------.  .---------+-------------. |
+| | Metering Process {i}  |..| Metering Process {n}  | |
+| '------------^----------'  '---------^-------------' |
+|              |                       |               |
+| .------------+----------.  .---------+-------------. |
+| | Observation Point {i} |..| Observation Point {n} | |
+| '------------^----------'  '---------^-------------' |
++--------------|-----------------------|---------------+
+               |                       |
+         Packets coming in to Observation Points
+]]></artwork>
+<postamble>
+Figure C: Component Model for Original Exporter with Mediation.
+</postamble>
+</figure>
+
+</section>
+
+<section title="IPFIX Mediation Functional and Logical Blocks">
+<t>
+The section describes the details of each component and examples applicable to that component for IPFIX Mediation and IPFIX Mediator.
+</t>
+
+<section title="Collecting Process">
+<t>
+The Collecting Processes described in <xref target="RFC5101" /> receive Flow Records/Packet Reports with information relating to their treatment in the Metering Process and Exporting Process in the Original Exporter, such as sampling rate, IPFIX header information, and Transport Session Information. The Collecting Processes forward the set of data to multiple components: Intermediate Processes and Exporting Processes. In other words, the processes may duplicate received Flow Records/Packet Reports and forward them to multiple components in sequence or in parallel.
+</t>
+</section>
+
+<section title="Exporting Process">
+<t>
+The Exporting Processes described in <xref target="RFC5101" /> forward Flow Records/Packet Reports to one or multiple Collectors. The processes manage the reporting Template and make IPFIX Messages.
+</t>
+</section>
+
+<section title="Intermediate Process">
+<t>
+Intermediate Processes generate new sets of Flow Records/Packet Reports from input Flow Records/Packet Reports with IPFIX header information "Export Time" and "Observation Domain ID". The processes host one of several functions defined below or a combination of them, in any sequence or in any set. In the case of a combination, the output of each function can be the input of other functions. The following subsections show the details of each function.
+</t>
+
+<section title="Flow Selection Function">
+<t>
+The Flow Selection function determines which input Flow Records/Packet Reports are selected by matching under a filtering policy and then forwards them to the next processes or functions. The function is similar to the Selection Process described in <xref target="I-D.ietf-psamp-framework" />. The function covers several selection techniques, such as property match filtering and Flow selection, which are described in <xref target="I-D.ietf-psamp-framework" /> and <xref target="I-D.peluso-flowselection" />, respectively. In property match filtering, if the value of a specified Information Element equals a configured value, the function selects Flow Records/Packet Reports to forward.
+</t>
+</section>
+
+<section title="Flow-based Collector Selection Function">
+<t>
+The Flow-based Collector Selection function determines to which Collector input Flow Records/Packet Reports are exported. The function may also determine the type of Transport Session. The function evaluates the value of a specified Information Element in input Flow Records/Packet Reports and then selects the Collector. These selection criteria are similar to the property match filtering in Mediator Selection Function.
+</t>
+<t>
+Applicable examples include exporting Flow Records/Packet Reports to a dedicated Collector on the basis of customers or organizations peering. The function classifies Flow Records/Packet Reports on the basis of a peering AS number, as shown in the following figure. The set of classified Flow Records/Packet Reports is exported to a dedicated Collector on the basis of the peering AS number.
+</t>
+
+<figure>
+<artwork><![CDATA[
+        .----------------------------.
+        | Intermediate Process       |
+        |   .----------------------. |
+        |   | Flow-Based Collector | |
+        |   | Selection Function   | |
+        |   |                      | |
+        |   |     Peering AS #10   | |
+        |   |  +-------------------+-+---> Collector #1
+        |   |  |  Peering AS #20   | |
+Flow  --+---+--+-------------------+-+---> Collector #2
+Records |   |  |  Peering AS #30   | |
+        |   |  +-------------------+-+---> Collector #3
+        |   '----------------------' |
+        '----------------------------'
+]]></artwork>
+<postamble>
+Figure D: Exporting classified Flow Records to dedicated Collector.
+</postamble>
+</figure>
+</section>
+
+
+
+<section title="Aggregation Function">
+<t>
+The Aggregation function creates aggregated Flow Records from input Flow Records/Packet Reports. The aggregation method is divided into three types:
+
+<list style="hanging">
+<t hangText="Choosing Shorter Flow Key"><vspace blankLines="1"/>
+Choosing a shorter Flow Key than the Flow Key of input Flow Records, such as three, two, or a single Flow Key, can create more aggregated Flow Records. The function gathers Flow Records/Packet Reports within a given interval time and then distinguishes Flow Records/Packet Reports that have common properties. If values of a given key field are the same, that means those Flow Records/Packet Reports have common properties, and the function merges them in accordance with aggregation rules described in <xref target="I-D.dressler-ipfix-aggregation" />.<vspace blankLines="1"/>
+In addition, the function can create statistical data and subsidiary information related to the aggregated Flow Records. Examples include the number of input Flow Records/Packet Reports, the given interval time, and a set of a new Flow Key.
+</t>
+
+<t hangText="Time Composition"><vspace blankLines="1"/>
+Time composition is defined as aggregation with the same Flow Key for long-running Flows. The function may also compute Flow Records statistics, such as average, maximum, and minimum value of each counter. The statistics help to visualize the behavior of traffic volume over a long time period.<vspace blankLines="1"/>
+As another approach, the function collects Flow Records/Packet Reports of a shorter time period from an Original Exporter, and then computes these statistics. Even if output Flow Records of the function indicate a general time period, the accuracy of the minimum, maximum, and average value can be improved.
+</t>
+
+<t hangText="Space Composition"><vspace blankLines="1"/>
+Space composition is defined as aggregation on a larger Observation Domain or on a set of Observation Points. In that case, a Flow key can be applied to other properties, such as Exporter IP address and Observation Domain ID.<vspace blankLines="1"/>
+In addition, a group identifier indicating a spatial Observation Domain can also become a new Flow Key. For example, a group can indicate an area on an ISP network, or a link aggregation interface composd of physical interfaces. The group can also make a relation to a set of values of specified Information Elements in Flow Records by the configuring rule. After converting from the values of specified Information Elements to the group identifier, the function can create aggregated Flow Records by a general aggregation process.
+</t>
+
+
+
+</list>
+</t>
+</section>
+
+<section title="Correlation Function">
+<t>
+The Correlation function creates new metrics from by evaluating the correlation among sets of Flow Records/Packets Records. These sets can be Flow Records gathered during a certain period, a pair of consecutive Packet Reports, or Packet Reports exported by different Exporters indicating the same packet. After offering new metrics, the function outputs Flow Records with the new metrics field. Applicable examples are as follows.
+
+
+<list style="symbols">
+<t>
+One way delay follows from correlating Packet Reports exported from different Exporters on the path.
+</t>
+
+<t>
+Packet interval time, or jitter, follows from correlating consecutive Packet Reports exported from the same Exporter.
+</t>
+
+
+<t>
+Difference values follow from correlating Flow Records observed at ingress or egress interfaces. The values help to confirm the result of a queueing or rate-limiting function.
+</t>
+
+<t>
+Average/maximum/minimum values follow from correlating each in a set of Flow Records.
+</t>
+
+</list>
+
+
+</t>
+</section>
+
+
+
+
+<section title="Modification Function">
+<t>
+The Modification function modifies input Flow Records/Packet Reports without changing their granularity. The function can add new Information Elements, delete existing Information Elements, or modify the value of specified Information Elements. If the function modifies the data structure of an original Template, it also needs to modify the value of the "flowKeyIndicator".
+<list style="hanging">
+<t hangText="Adding specified Information Elements"><vspace blankLines="1"/>
+The function obtains the value of a specified Information Element and then adds it into Flow Records/Packet Reports. There are several methods to obtain the value: retrieving the value from a database or calculating the value based on the value of other Information Elements and received traffic data.
+</t>
+<t>
+Applicable examples include adding derived packet property parameters instead of Original Exporters. Doing that can compensate for traditional Exporters or probes unable to add packet property parameters. Therefore, Collectors do not need to recognize the difference among implementations of routers from several vendors or among Exporter types, such as router, switch, or probe. Typical derived packet property parameters include the following.
+<list style="symbols">
+<t>
+The "bgpNextHop{IPv4|IPv6}Address" described in <xref target="RFC5102" /> indicates the egress router of a network domain. That is useful for making a traffic matrix that covers the whole network domain.
+</t>
+
+<t>
+The BGP Community value indicates the same group of destination or source IP addresses.
+</t>
+
+<t>
+The "mplsVpnRouteDistinguisher" described in <xref target="RFC5102" />, which cannot be extracted from the core router in MPLS networks, indicates the VPN customer's identification. Network operators can monitor the traffic behavior of each customer by adding "mplsVpnRouteDistinguisher" to Flow Records/Packet Reports.
+</t>
+</list>
+</t>
+
+<t hangText="Deleting specified Information Elements"><vspace blankLines="1"/> 
+This function deletes existing Information Elements according to instruction rules, which indicate whether an Information Element should be removed.
+</t>
+
+<t>
+Applicable examples include hiding network topology information and private information. In the case of IPFIX exporting across domains, the function can avoid making a vulnerability by deleting unnecessary Information Elements. Examples of network topology information include "ipNextHopIP{v4|v6}Address", "bgpNextHopIP{v4|v6}Address", and "bgp{Next|Prev}AdjacentAsNumber", described in <xref target="RFC5102" />. In addition, MPLS-related Information Elements, such as "mplsLabelStackSection", are useless for customers in the case of feeding Flow Records/Packet Reports to VPN customers.
+</t>
+
+<t hangText="Modifying the value of specified Information Elements"><vspace blankLines="1"/>
+This function modifies the value of specified Information Elements.
+</t>
+<t>
+Applicable examples include anonymizing customers' private information, such as IP address and port number, according to a privacy protection policy. Several annonymization techniques are described in <xref target="I-D.boschi-ipfix-anon" />. The function also reports anonymization methods and part of anonymized data as subsidiary information.
+</t>
+
+</list>
+</t>
+</section>
+
+</section>
+
+<section title="IPFIX File Writer/Reader">
+<t>
+The IPFIX File Writer stores input Flow Records/Packet Reports from any process in a storage system. If received Flow Records/Packet Reports include uninteresting Information Elements, the Modification Function can delete these elements before the IPFIX File Writer handles them. Therefore, IPFIX File Writers can accept input from any process. In either case, input needs to include the IPFIX header information and the Transport Session Information along with Flow Records/Packet Reports.
+</t>
+<t>
+In contrast, the IPFIX File Reader retrieves stored Flow Records/Packet Reports when operators want to retrieve past Flow Records/Packet Reports on the basis of a given time period. If the data structure of output Flow Records/Packet Reports from the IPFIX File Reader is different from what operators want, the Modification function can modify the data structure. Therefore, the output of IPFIX File Readers can be input to any components. The IPFIX File Writer/Reader are described in <xref target="I-D.ietf-ipfix-file" /> in detail.
+</t>
+
+<t>
+The figure shows the IPFIX component model with IPFIX File Writer/Reader. IPFIX File Writer/Reader are located in the same position of Exporting Process/Collecting Process, respectively.
+</t>
+
+<figure>
+<artwork><![CDATA[
+        IPFIX (Flow Records/Packet Reports) 
+                          ^
+                        ^ |
+ .----------------------|-+--------------------.
+.-----------------------+---------------------.|
+| Exporting Process (es) / IPFIX File Writer  |'
+'----^------------------^---------------------' 
+     |                  | |                    
+     |    .-------------|-+--------------------.
+     |   .--------------+---------------------.|
+     |   |     Intermediate Process (es)      |'
+     |   '--------------^-^-------------------' 
+     |                  | |                    
+ .---+------------------|-+--------------------.
+.-----------------------+---------------------.|
+| Collecting Process (es) / IPFIX File Reader |'
+'-----------------------^---------------------' 
+                        |                      
+         IPFIX (Flow Records/Packet Reports) 
+
+]]></artwork>
+<postamble>
+Figure E: IPFIX Mediator Component Model with IPFIX File Writer/Reader.
+</postamble>
+</figure>
+
+
+</section>
+
+<section title="Flow Expiration">
+<t>
+The Aggregation function needs expiration conditions to export cached Flow Records. These conditions are described in <xref target="I-D.ietf-ipfix-architecture" />. In the case of IPFIX Mediation, these conditions are as follows:
+<list style="symbols">
+<t>
+If there are no input/received Flow Records/Packet Reports belonging to a cached Flow for a certain time period, aggregated Flow Records will expire. This time period should be configurable at the Intermediate Process.</t>
+
+<t>
+If the IPFIX Mediator experiences resource constraints, aggregated Flow Records may prematurely expire (e.g., lack of memory to store Flow Records).
+</t>
+<t>
+For long-running Flows, the Intermediate Process should expire the Flow on a regular basis or based on some expiration policy. This periodicity or expiration policy should be configurable at the Intermediate Process.  
+</t>
+</list>
+The Correlation function also needs similar expiration conditions. However, when cached Flow Records/Packet Reports prematurely expire and the function can not compute the correlation among them, cached Flow Records/Packet reports may be discarded.
+</t>
+</section>
+
+<section title="Information Model">
+<t>
+IPFIX Mediation reuse the general information model from <xref target="RFC5101" /> and from <xref target="I-D.ietf-psamp-info" />. The following new Information Elements for IPFIX Mediation are also needed.
+<figure>
+<artwork><![CDATA[
++-----+---------------------------+-----+---------------------------+
+|  ID | Name                      |  ID | Name                      |
++-----+---------------------------+-----+---------------------------+
+| XXX | averageBitRate            | XXX | averagePacketsRate        |
+| XXX | minimumBitRate            | XXX | minimumPacketsRate        |
+| XXX | maximumBitRate            | XXX | maximumPacketsRate        |
++-----+---------------------------+-----+---------------------------+
+]]></artwork>
+</figure>
+</t>
+</section>
+
+
+
+<section title="Examples">
+<t>
+As example, in case of Intermediate Processes having different functions, a Collecting Process/IPFIX File Reader replicates Flow Records/Packet Reports, if necessary, and forwards them to a suitable Intermediate Process/Exporting Process. Example figure is shown below.
+</t>
+<figure>
+<artwork><![CDATA[
+                     IPFIX           IPFIX               IPFIX
+                       ^               ^                   ^
+                       |               |                   |
+ .------------.  .-----+-------. .-----+-------.    .------+------. 
+ | IPFIX File |  | Exporting   | | Exporting   |    | Exporting   |
+ |  Writer    |  |  Process {i}| |  Process {j}|....|  Process {n}|
+ '-----^-^----'  '-----^-------' '-----^-------'    '------^------'
+       | |             |               |                   |
+       | +-------------+               |             Flow Records
+       |          Flow Records / Packet Reports            |
+       |        .------+-------. .-----+--------.   .------+-------.
+       |        | Intermediate | | Intermediate |   | Intermediate |
+       |        |  Process {l} | |  Process {m} |   |  Process {p} |
+       |        |              | |              |...|              |
+       |        |  Flow-based  | |  Flow-based  |   |              |
+       |        |   Collector  | |   Collector  |   |              |
+       |        |   Selection  | |   Selection  |   |              |
+  Flow Records  |      ^       | |      ^       |   |              |
+       |        |      |       | |      |       |   |              |
+       |        |  Correlation | |  Modification|   |  Modification|
+       |        |      ^       | |      ^       |   |      ^       |
+       |        |      |       | |      |       |   |      |       |
+       |        |  Selection   | |  Aggregation |...|  Selection   |
+       |        |      ^       | |     ^ ^      |   |      ^       |
+       |        '------|-------' '-----|-|------'   '------|-------'
+       |               |               | |                 |
+       |               +---------------+ |           Flow Records
+       |               |                 |                 |
+       |          Flow Records / Packet Reports            | 
+.------+------. .------+------.   .------+------.    .-----+------.
+| Collecting  | | Collecting  |   | Collecting  |    | IPFIX File |
+|  Process {i}| |  Process {j}|...|  Process {n}|    |  Reader    |
+'------^------' '------^------'   '------^------'    '------------'
+       |               |                 |
+     IPFIX           IPFIX             IPFIX
+]]></artwork>
+<postamble>
+Figure F: Functional Block Examples for IPFIX Mediator.
+</postamble>
+</figure>
+
+
+</section>
+
+
+
+</section>
+
+
+
+<section title="Security Considerations">
+<t>IPFIX Mediators use the IPFIX protocol. Security considerations about Flow Records are described in <xref target="RFC5101" />.
+</t>
+</section>
+
+<section title="IANA Considerations">
+<t>This document has no actions for IANA.</t>
+</section>
+
+</middle>
+
+<back>
+<references title="Normative References">
+
+<reference anchor="RFC3917">
+	<front>
+	<title>Requirements for IP Flow Information Export(IPFIX)</title>
+	<author initials="J." surname="Quittek"><organization/></author>
+	<author initials="T." surname="Zseby"><organization/></author>
+	<author initials="B." surname="Claise"><organization/></author>
+	<author initials="S." surname="Zander"><organization/></author>
+	<date month="October" year="2004" />
+	</front>
+</reference>
+
+<reference anchor="RFC5101">
+	<front>
+  	<title>Specification of the IP Flow Information Export (IPFIX) Protocol for the Exchange of IP Traffic Flow Information</title> 
+	<author initials="B." surname="Claise"><organization /></author>
+  	<date month="January" year="2008" /> 
+  	</front>
+
+</reference>
+
+<reference anchor="RFC5102">
+	<front>
+	<title>Information Model for IP Flow Information Export</title>
+	<author initials="J." surname="Quittek"><organization/></author>
+	<author initials="S." surname="Bryant"><organization/></author>
+	<author initials="B." surname="Claise"><organization/></author>
+	<author initials="P." surname="Aitken"><organization/></author>
+	<author initials="J." surname="Meyer"><organization/></author>
+	<date month="January" year="2008"/>
+	</front>
+</reference>
+
+<reference anchor="I-D.ietf-ipfix-architecture">
+	<front>
+	<title>Architecture for IP Flow Information Export</title>
+	<author initials="G." surname="Sadasivan"><organization/></author>
+	<author initials="N." surname="Brownlee"><organization/></author>
+	<author initials="B." surname="Claise"><organization/></author>
+	<author initials="J." surname="Quittek"><organization/></author>
+	<date month="September" year="2006"/>
+	</front>
+	<seriesInfo name="draft-ietf-I-D.ietf-ipfix-architectureitecture-12.txt(work in progress)" value=""/>
+</reference>
+
+<reference anchor="I-D.ietf-psamp-protocol">
+	<front>
+	<title>Packet Sampling (PSAMP) Protocol Specifications</title>
+	<author initials="B." surname="Claise"><organization/></author>
+	<author initials="J." surname="Quittek"><organization/></author>
+	<author initials="A." surname="Johnson"><organization/></author>
+	<date month="December" year="2007"/>
+	</front>
+	<seriesInfo name="draft-ietf-psamp-protocol-09.txt" value=""/>
+</reference>
+
+<reference anchor="I-D.ietf-psamp-framework">
+	<front>
+	<title>A Framework for Packet Selection and Reporting</title>
+	<author initials="N." surname="Duffield"><organization/></author>
+	<date month="June" year="2008"/>
+	</front>
+	<seriesInfo name="draft-ietf-psamp-framework-13.txt" value=""/>
+</reference>
+
+<reference anchor="I-D.ietf-psamp-info">
+
+	<front>
+
+	<title>Information Model for Packet Sampling Exports</title>
+
+	<author initials="T." surname="Dietz"><organization/></author>
+	<author initials="B." surname="Claise"><organization/></author>
+	<author initials="P." surname="Aitken"><organization/></author>
+	<author initials="F." surname="Dressler"><organization/></author>
+	<author initials="G." surname="Carle"><organization/></author>
+
+	<date month="October" year="2008"/>
+
+	</front>
+
+	<seriesInfo name="draft-ietf-psamp-info-11.txt (work in progress)" value=""/>
+
+</reference>
+
+
+</references>
+
+<references title="Informative References">
+
+
+
+
+<reference anchor="I-D.dressler-ipfix-aggregation">
+	<front>
+	<title>IPFIX Aggregation</title>
+	<author initials="F." surname="Dressler"><organization/></author>
+	<author initials="C." surname="Sommer"><organization/></author>
+	<author initials="G." surname="Munz"><organization/></author>
+	<author initials="A." surname="Kobayashi"><organization/></author>
+	<date month="July" year="2008"/>
+	</front>
+	<seriesInfo name="draft-dressler-ipfix-aggregation-05.txt (work in progress)" value=""/>
+</reference>
+
+
+
+<reference anchor="I-D.ietf-ipfix-mediator-ps">
+	<front>
+	<title>IPFIX Mediation: Problem Statement</title>
+	<author initials="A." surname="Kobayashi"><organization/></author>
+	<author initials="H." surname="Nishida"><organization/></author>
+	<author initials="C." surname="Sommer"><organization/></author>
+	<author initials="F." surname="Dressler"><organization/></author>
+	<author initials="E." surname="Stephan"><organization/></author>
+	<author initials="B." surname="Claise"><organization/></author>
+	<date month="September" year="2008"/>
+	</front>
+	<seriesInfo name="draft-ietf-ipfix-mediation-problem-statement-01.txt(work in progress)" value=""/>
+</reference>
+
+<reference anchor="I-D.ietf-ipfix-file">
+	<front>
+	<title>An IPFIX-Based File Format</title>
+	<author initials="B." surname="Trammell"><organization/></author>
+	<author initials="E." surname="Boschi"><organization/></author>
+	<author initials="L." surname="Mark"><organization/></author>
+	<author initials="T." surname="Zseby"><organization/></author>
+	<author initials="A." surname="Wagner"><organization/></author>
+	<date month="October" year="2008"/>
+	</front>
+	<seriesInfo name="draft-ietf-ipfix-file-03.txt(work in progress)" value=""/>
+</reference>
+
+<reference anchor="I-D.peluso-flowselection">
+	<front>
+	<title>Flow selection Techniques</title>
+	<author initials="L." surname="Peluso"><organization/></author>
+	<author initials="T." surname="Zseby"><organization/></author>
+	<author initials="S." surname="D'Antonio"><organization/></author>
+	<author initials="M." surname="Molina"><organization/></author>
+	<date month="November" year="2007"/>
+	</front>
+	<seriesInfo name="draft-peluso-flowselection-tech-01.txt(work in progress)" value=""/>
+</reference>
+
+
+<reference anchor="I-D.boschi-ipfix-anon">
+
+	<front>
+
+	<title>IP Flow Anonymisation Support</title>
+
+	<author initials="E." surname="Boschi"><organization/></author>
+	<author initials="B." surname="Trammell"><organization/></author>
+
+	<date month="July" year="2008"/>
+
+	</front>
+
+	<seriesInfo name="draft-boschi-ipfix-anon-01.txt (work in progress)" value=""/>
+
+</reference>
+
+
+
+</references>
+
+<!--
+
+<section title="Solution Scenarios with IPFIX Mediators">
+<section title="Flexible Aggregation">
+<t>An IPFIX Mediator as an IPFIX Concentrator can aggregate Flow Records and reduce the number of Flow Records received by a IPFIX Collector.</t>
+<figure>
+<preamble>
+The following figure indicates a cascade connection of IPFIX Mediators. If an IPFIX Collector measures a traffic matrix to obtain traffic demand, it needs Flow Records of the whole network domain, but does not need detailed Flow Records. The first level IPFIX Mediators aggregate the received Flow Records based on prefix mask aggregation. Next, the second level IPFIX Mediators aggregate them further based on the BGP next-hop address or the IPFIX router address. After this, the IPFIX Collector receives high-level aggregated Flow Records. This method enables step-by-step aggregation of Flow Records without overloading a single node.
+</preamble>
+<artwork><![CDATA[
+.--------.     .--------.
+|IPFIX   |     |IPFIX   |
+|router#1|---->|Mediator|---.
+|        |     |*1      |   |
+'--------'     '--------'   |    .--------.     .---------.
+                            '--->|IPFIX   |     |IPFIX    |
+.--------.     .--------.   .--->|Mediator|---->|Collector|
+|IPFIX   |     |IPFIX   |   |    |*2      |     |         |
+|router#2|---->|Mediator|---'    '--------'     '---------'
+|        |     |*1      |
+'--------'     '--------'
+
+Figure A.A : Flexible Aggregation with Cascading IPFIX Mediators.
+]]></artwork>
+<postamble>
+</postamble>
+</figure>
+</section>
+
+<section title="Distributed Aggregation">
+<t>In case of global ISPs, the distances between PoPs become longer, and the maintenance of a dedicated management network is very expensive. Therefore, the huge number of Flow Records has burdened management networks. An IPFIX Mediator located in each PoP can minimize the number of Flow Records exported to the Collector by aggregating or filtering. If the Collector needs detailed information, it can retrieve Flow Records from IPFIX Mediators that store original Flow Records.</t>
+<figure>
+<preamble>
+</preamble>
+<artwork><![CDATA[
+             POP#Asia
+     .--------. 
+   .--------. |      .---------.
+ .--------. | |----->|IPFIX    |
+ |IPFIX   | |------->|Mediator |----.
+ |router  |---'----->|#1       |    |
+ |#1      |-'        '---------'    |
+ '--------'                         |
+                                    |
+             POP#North America      |
+     .--------.                     |
+   .--------. |      .---------.    |     .---------.
+ .--------. | |----->|IPFIX    |    '---->|IPFIX    |
+ |IPFIX   | |------->|Mediator |--------->|Collector|
+ |router  |---'----->|#2       |    .---->|         |
+ |#4      |-'        '---------'    |     '---------' 
+ '--------'                         |
+                                    |
+             POP#Europe             |
+     .--------.                     |
+   .--------. |      .---------.    |
+ .--------. | |----->|IPFIX    |    |
+ |IPFIX   | |------->|Mediator |----'
+ |router  |---'----->|#3       |
+ |#7      |-'        '---------'
+ '--------'
+
+Figure A.B: Traffic Collection Architecture in Global Networks.
+]]></artwork>
+<postamble>
+</postamble>
+</figure>
+</section>
+
+<section title="Duplication of Flow Records">
+<t>An IPFIX Mediator duplicates Flow Records to achieve redundant storage or utilizes them for several purposes. </t>
+<figure>
+<preamble>
+Several departments in an ISP want to use the same traffic data for each intended purpose. The network design department measures the traffic matrix to obtain traffic demand. The customer service division uses traffic information for performing accounting services for each customer while network operators use traffic data for trouble shooting analysis. That situation is shown in the following figure. 
+</preamble>
+<artwork><![CDATA[
+                                      Measurement traffic matrix.
+.--------.                               .---------.  
+|IPFIX   |                               |IPFIX    | 
+|router#1|----.                    .---->|Collector| 
+|        |    |                    |     |#1       |
+'--------'    |                    |     '---------'
+              |                    |  Using Accounting
+.--------.    |     .---------.    |     .---------.
+|IPFIX   |    '---->|IPFIX    |----'     |IPFIX    |
+|router#2|--------->|Mediator |--------->|Collector|
+|        |    .---->|         |----.     |#2       |
+'--------'    |     '---------'    |     '---------'
+              |                    |  Using Trouble shooting.
+.--------.    |                    |     .---------.
+|IPFIX   |    |                    |     |IPFIX    |
+|router#3|----'                    '---->|Collector|
+|        |                               |#3       | 
+'--------'                               '---------'
+
+Figure A.C: Duplication of Flow Records.
+]]></artwork>
+<postamble>
+</postamble>
+</figure>
+</section>
+
+<section title="Distribution of Flow Records">
+<t>An IPFIX Mediator distribute Flow Records based on the value of specified Information Elements. This function enables load balancing of Collector and sorting Flow Records without extra IPFIX Collector functions. In case of using accounting, IPFIX Mediator can distribute Flow Records to the dedicated IPFIX Collector of each customer.
+</t>
+<figure>
+<preamble>
+When network operators disclose traffic information to each customer, security or the privacy policy should be considered. In that case, the IPFIX Mediator hides private information about each customer. In addition, Mediator distributes traffic data based on RD (Route Distinguisher), ingress IF, peering AS number, or BGP next hop, which identify the customer. In the following figure, the IPFIX Mediator distributes Flow Records based on RD. The system securely allows each customer to access only their own records. 
+</preamble>
+<artwork><![CDATA[
+.--------.                               .---------.  
+|IPFIX   |                               |IPFIX    |
+|router#1|----.                    .---->|Collector|<===> Customer#A
+|        |    |                    |     |#1       |
+'--------'    |                    |     '---------'
+              |                 RD=100:1
+              |     .---------.    |     
+.--------.    '---->|IPFIX    |----'     .---------.
+|IPFIX   |          |Mediator | RD=100:2 |IPFIX    |
+|router#2|--------->|         |--------->|Collector|<===> Customer#B
+|        |          |         |          |#2       |
+'--------'    .---->|         |----.     '---------'
+              |     '---------'    |     
+              |                 RD=100:3
+.--------.    |                    |     .---------.
+|IPFIX   |    |                    |     |IPFIX    |
+|router#3|----'                    '---->|Collector|<===> Customer#C
+|        |                               |#3       | 
+'--------'                               '---------'
+
+Figure A.E: Distribution of Flow Records.
+]]></artwork>
+<postamble>
+</postamble>
+</figure>
+</section>
+
+<section title="Extraction of Suspicious Flow">
+<t>An IPFIX Mediator performs filtering based on the value of specified Information Elements. Filter conditions are set depending on suspicious Flows as follows. The IPFIX Collector receives the specified suspicious flow and detects an anomalous Flow by simply monitoring the traffic volume of each suspicious Flow.
+<vspace blankLines="0"/>
+<list style="symbols">
+<t>TCP Flow Records whose "tcpControlBits" value is set to "null"</t>
+<t>TCP Flow Records whose "tcpControlBits" value is set to the SYN bit only and the packet counter is only 1.</t>
+<t>ICMP Flow Records whose length is too long.</t>
+</list>
+</t>
+</section>
+
+</section>
+
+-->
+
+<section title="Acknowledgements">
+<t>
+The authors gratefully acknowledge the contributions of<vspace blankLines="1"/>
+Keisuke Ishibashi,<vspace blankLines="0"/>
+Tsuyoshi Kondoh, and<vspace blankLines="0"/>
+Daisuke Matsubara.<vspace blankLines="0"/>
+</t>
+</section>
+
+
+
+</back>
+
+</rfc>

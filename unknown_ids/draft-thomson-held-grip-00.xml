@@ -1,0 +1,821 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="rfc2629.xslt"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY RFC2119 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+<!ENTITY RFC1305 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.1305.xml">
+<!ENTITY RFC4330 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4330.xml">
+<!ENTITY RFC2132 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2132.xml">
+<!ENTITY RFC3315 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3315.xml">
+<!ENTITY RFC4075 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4075.xml">
+<!ENTITY RFC4346 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4346.xml">
+<!ENTITY I-D.ietf-geopriv-http-location-delivery PUBLIC "" "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-geopriv-http-location-delivery.xml">
+<!ENTITY I-D.gayraud-dhcpv6-ntp-opt PUBLIC "" "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.gayraud-dhcpv6-ntp-opt.xml">
+<!ENTITY W3C.REC-xpath20-20070123 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml4/reference.W3C.REC-xpath20-20070123.xml">
+<!ENTITY W3C.REC-xml-names-20060816 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml4/reference.W3C.REC-xml-names-20060816.xml">
+<!ENTITY I-D.thomson-geopriv-held-measurements PUBLIC "" "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.thomson-geopriv-held-measurements.xml">
+
+]>
+
+<?rfc rfcedstyle="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="no"?>
+<?rfc iprnotified="yes"?>
+<?rfc strict="yes"?>
+<?rfc toc="yes"?>
+<?rfc tocindent="yes"?>
+
+<rfc category="exp" ipr="full3978">
+  <front>
+    <title abbrev="A-GNSS AD for HELD">
+      Providing Satellite Navigation Assistance Data using HELD
+    </title>
+
+    <author initials="M." surname="Thomson"
+            fullname="Martin Thomson">
+      <organization>Andrew Corporation</organization>
+
+      <address>
+        <postal>
+          <street>PO Box U40</street>
+          <city>Wollongong University Campus</city>
+          <region>NSW</region>
+          <code>2500</code>
+          <country>AU</country>
+        </postal>
+
+        <phone>+61 2 4221 2915</phone>
+        <email>martin.thomson@andrew.com</email>
+        <uri>http://www.andrew.com/</uri>
+      </address>
+    </author>
+
+    <author initials="J." surname="Winterbottom" fullname="James Winterbottom">
+      <organization>Andrew Corporation</organization>
+      <address>
+        <postal>
+          <street>PO Box U40</street>
+          <city>University of Wollongong</city>
+          <region>NSW</region>
+          <code>2500</code>
+          <country>AU</country>
+        </postal>
+        <phone>+61 242 212938</phone>
+        <email>james.winterbottom@andrew.com</email>
+        <uri>http://www.andrew.com/products/geometrix</uri>
+      </address>
+    </author>
+
+    <date month="June" year="2008"/>
+    <area>RAI</area>
+    <workgroup>GEOPRIV</workgroup>
+    <keyword>Internet-Draft</keyword>
+    <keyword>HELD</keyword>
+    <keyword>A-GPS</keyword>
+    <keyword>A-GNSS</keyword>
+
+    <abstract>
+      <t>This document describes a method for providing Global Navigation Satellite System (GNSS) assistance data using the HTTP-Enabled Location Delivery (HELD) protocol.  An assistance data request is included with the HELD location request and the Location Information Server (LIS) provides assistance data along with location information.
+      </t>
+    </abstract>
+  </front>
+
+  <middle>
+
+    <section title="Introduction">
+      <t>A Global Navigation Satellite System (GNSS) provides a signal that enables accurate determination of the position of a receiver in space and time.  A constellation of satellites transmit radio signals that the receiver is able to measure.  From these measurements, the location of the receiver and the time of measurement can be determined using knowledge about the position and velocity of the satellites and signal information.
+      </t>
+
+      <t>Acquisition of satellite signals requires searching for the extremely weak signal transmitted by each satellite.  Each satellite transmits a repeating signal.  Acquiring the signal is done by synchronizing with the received signal in both frequency and time.  In order to synchronize, the receiver searches in two dimensions:
+      <list style="hanging">
+        <t hangText="time/code phase:">The distance between the satellite and receiver means that the receiver sees a signal that is offset in time.  The amount of time shift is known as code phase since it is measured within the window of the repeated code sequence.  Code phase forms the primary measurement used in calculating a position.
+        </t>
+        <t hangText="frequency:">The relative speed of satellite and receiver causes Doppler shift of the satellite signal.</t>
+      </list></t>
+
+      <t>Satellite signals are typically modulated at a low rate with a navigation message.  The navigation message provides information that is used in the final calculation phase including information on satellite orbit, satellite health, time model, atmospheric effects on the signal.  This data is transmitted at very low rates to avoid hampering the acquisition process, therefore acquiring this information can take a signficant amount of time.
+      </t>
+
+      <t>Once satellite signals have been acquired and measured, the measurement information is combined with the information from the navigation message and a position (and time) can be calculated.  Successful calculation of a position typically requires measurement data for a minimum of 5 satellites unless otherwise supplemented.
+      </t>
+
+      <t>If a receiver has to perform all these steps independently, satellite acquisition and receipt of the navigation message can take significant amounts of time.  Improvements in receiver design have increased receiver sensitivity and the speed that signals are acquired.  Use of assistance data provides a dramatic improvement in the time taken to acquire signals and produce a result.
+      </t>
+
+      <t>This document provides a means of combining a request for GNSS assistance data with a <xref target="I-D.ietf-geopriv-http-location-delivery">HELD</xref> request.
+      </t>
+
+      <section title="Advantages of Assistance Data">
+        <t>GNSS assistance data is information provided to a receiver that is provided to improve the quality and timeliness of GNSS measurements or positioning.  The most basic set of assistance data includes the same information provided in the navigation message.  Additional forms of assistance data include information customized to a particular receiver to assist it in acquiring signals, or information about satellite ephemerides (orbits) that is useful over a longer period of time.
+        </t>
+
+        <t>Acquiring assistance data from the network completely removes the need to receive the navigation message.  Navigation message content can be transmitted to the receiver using the vastly more efficient communication paths provided by a data network.  This removes a significant step from the process of determining a position.
+        </t>
+
+        <t>Knowing what satellites to search for can reduce signal acquisition time.  One of the most basic pieces of information provided by assistance data is knowledge of which satellites are above the horizon and can therefore be measured.  Concentrating on "visible" satellites ensures that less time is wasted where signals could not possibly be found.
+        </t>
+
+        <t>Assistance data can provide information about where in the frequency/code phase space to search for a particular satellite signal.  This reduces the time required to acquire a satellite signal.  Since an approximate frequency and code phase can be known, it becomes feasible to spend more time searching for weaker signals, improving receiver sensitivity.  Improved sensitivity ensures that GNSS can be used in areas where signal penetration is poor, like buildings and other areas with poor sky visibility, and increases the likelihood of getting sufficient satellite measurements to calculate a position.
+        </t>
+
+        <t>Assistance data also enables compensation for the effects of the navigation message.  Knowing the content of the navigation message ahead of time means that the receiver is able to anticipate the effect of its modulation on the signal and compensate accordingly.  This increases the sensitivity of the receiver and allows for faster signal acquisition.
+        </t>
+      </section>
+
+    </section>
+
+    <section anchor="conventions" title="Conventions used in this document">
+      <t>The key words "must", "must not", "required", "shall", "shall not", "should", "should not", "recommended", "may", and "optional" in this document are to be interpreted as described in <xref target="RFC2119"/>.
+      </t>
+    </section>
+
+    <section title="The GNSS Reference Information Protocol">
+
+      <t>The GNSS Reference Information Protocol (GRIP) is a protocol that is used for the acquisition of GNSS assistance data.  This document describes how to use GRIP in conjunction with HELD to enable the use of assisted GNSS positioning.
+      </t>
+
+      <t>GRIP response message provides a set of several different types of assistance data.  A set of assistance data types for GPS is shown in <xref target="ad-types"/>.  The scope of each field is also included to shown whether the data applies globally, to a specific area only (local), or could apply to either.
+      </t>
+
+      <texttable anchor="ad-types" title="Assistance Data Types for GPS">
+        <ttcol align="left">Type</ttcol>
+        <ttcol align="left">Scope</ttcol>
+        <ttcol align="left">Description</ttcol>
+        <c>UTC Model</c><c>Global</c><c>models the difference between GPS time and UTC time</c>
+        <c>Ionospheric Model</c><c>Global</c><c>models the propagation delay on satellite signals caused by the ionosphere</c>
+        <c>Almanac</c><c>Either</c><c>a low-detail, long-term model of satellite orbits and clocks</c>
+        <c>Real Time Integrity</c><c>Either</c><c>identifies satellites that should not be used</c>
+        <c>Navigation Model</c><c>Either</c><c>models the orbit of the satellite over time</c>
+        <c>TOW Assist</c><c>Either</c><c>aids in signal acquisition</c>
+        <c>Acquisition Assistance</c><c>Local</c><c>for fast signal acquisition</c>
+        <c>Differential GPS Corrections</c><c>Local</c><c>parameters for fine tuning calculated results</c>
+      </texttable>
+
+      <t>Data marked as either global or specific to a particular location contains information about individual satellites.  This information is localized by constraining the information to the set of satellites that are expected to be visible from that location.  Information on satellites that are on the other side of the Earth or below the horizon is omitted.  This ensures that a receiver is immediately able to restrict the set of satellites that it searches for.
+      </t>
+
+      <t>Acquisition assistance and differential GPS corrections always contain localized information.  Acquisition assistance contains a prediction about the satellite signal for the given location that narrows the size of the code phase and frequency space that needs to be searched.  Differential GPS is information on signal errors provided by another receiver that is near the specified location.  Differential GPS corrections aids in the calculation of results by providing fine tuning of the measurement data.
+      </t>
+
+      <t>A GRIP request can include two parts, a request for global assistance data and a request for localized assistance data.  Each part identifies the assistance data types that are required; a request for localized data must also include location information.  Location information can be provided by-value or by-reference.
+      </t>
+
+      <t><list style="hanging"><t hangText="Note:">GRIP, as reproduced in this document, is an incomplete protocol that has the goal of providing a means for requesting assistance data.  Only the Global Position System (GPS) constellation is supported in the messages that are included in this document.  This protocol does not fall within the scope of the work performed by the target working group (GEOPRIV) and the IETF in general.  It is intended that this work find a more appropriate home before this draft progresses.  The information is included as a temporary measure to ensure that it can be reliably referenced from this document.</t></list></t>
+    </section>
+
+    <section title="Operation">
+      <t>A Device that includes a GNSS receiver is able to request assistance data as part of a HELD location request to a Location Information Server (LIS).  The request is included as an extension to the location request and is ignored by a LIS that does not support this specification, or cannot provide assistance data.  The receiver includes a GRIP assistance data request in a HELD location request.
+      </t>
+
+      <figure>
+        <artwork><![CDATA[
+  <locationRequest xmlns="urn:ietf:params:xml:ns:geopriv:held">
+    <adRequest xmlns="urn:x-grip:ns"
+               xmlns:gps="urn:x-grip:gnss:gps">
+      <global data="gps:utc gps:ionosphere gps:rti"/>
+      <local data="gps:navigation gps:acqassist gps:towassist">
+        <locationURI>
+          urn:x-grip:location:requester
+        </locationURI>
+      </local>
+    </adRequest>
+  </locationRequest>
+]]></artwork>
+      </figure>
+
+      <t>The assistance data request contains two parts, identifying the global and local assistance data types that are requested.  Global assistance data can be provided without any extra information, but localized assistance data requires that a location estimate for the requester be known.  Any request for localized assistance data must include location information.  Location information can be provided by value, preferably using a geodetic form, or by reference.
+      </t>
+
+      <t>GRIP requires location information when localized assistance data is requested because a GRIP server cannot be assumed to have the ability to locate requesters.  However, in the case where the GRIP request is placed in a HELD request, the LIS is certainly able to locate the requester.  To indicate that the LIS should generate the location information necessary to generate localized assistance data a special URN is used in place of the location reference.  The <spanx style="verb">urn:x-grip:location:requester</spanx> URN indicates that the server is expected to generate location information for the requester and use that in generating localized assistance data.  The LIS MAY choose to generate location information for any request and ignore the location information provided.
+      </t>
+
+      <t>The location response, along with the location information, includes the requested assistance data.  (Note: the <spanx style="verb">hexBinary</spanx> navigation data is wrapped due to document constraints.)
+      </t>
+
+      <figure>
+        <artwork><![CDATA[
+  <locationResponse xmlns="urn:ietf:params:xml:ns:geopriv:held">
+    <presence xmlns="urn:ietf:params:xml:ns:pidf"
+              entity="pres:3650n87934c@ls.example.com">
+      <!-- location information -->
+    </presence>
+    <adResponse xmlns="urn:x-grip:ns"
+                xmlns:gps="urn:x-grip:gnss:gps">
+      <global>
+        <gps:utc>00001F0000000890970E4B070E</gps:utc>
+        <gps:ionosphere>0602FFFE2906FFF8</gps:ionosphere>
+        <gps:rti>3 6 8 24</gps:rti>
+      </global>
+      <local unsupported="gps:acqassist">
+        <gps:navigation>
+          <gps:sat num="2">
+            8B065C8CA0A465D0010045A5905BABDA135662BEDBA56B3A0000190E
+  FA448B065C8CA12AA5091B3176377C8F1907A6047F5A5E1653A10CCCA86B3A7E8B
+  065C8CA1AC0079F86A32C9FFF0269127BC14675EF1C04CFFAB23A5E094
+          </gps:sat>
+          <gps:sat num="4">
+            8B065C8CA0A465D0000045A5905BABDA135662BEF4876B3A00FFF801
+  43D38B065C8CA12A870A2130D3A088963508A103EB9A411787A10C990D6B3A7E8B
+  065C8CA1ACFFFBF9331B37FFA6268B1C9813770AD0980CFFAB4C87E6B3
+          </gps:sat>
+          <!-- more gps:sat elements -->
+        </gps:navigation>
+        <gps:towassist>
+          <gps:sat num="2">407 1 0 0</gps:sat>
+          <gps:sat num="4">407 1 0 0</gps:sat>
+          <!-- more gps:sat elements -->
+        </gps:towassist>
+      </local>
+    </adResponse>
+  </locationResponse>
+]]></artwork>
+      </figure>
+
+      <t>The response includes the information that was available to the LIS.  Unsupported or unavailable pieces of information are indicated using the <spanx style="verb">unsupported</spanx> or <spanx style="verb">unavailable</spanx> attributes.
+      </t>
+
+      <section title="Assistance Data Types">
+        <t>Each assistance data type is specified as an XML element that is included in either the <spanx style="verb">global</spanx> or <spanx style="verb">local</spanx> element of the assistance data response.  Assistance data formats for each different GNSS are specified as separate elements.
+        </t>
+
+        <t>A set of assistance data types are defined for GPS in <xref target="gps"/> using the namespace <spanx style="verb">urn:x-grip:gnss:gps</spanx>.
+        </t>
+
+        <t><list style="hanging"><t hangText="Note:">Different satellite systems share a number of key parameters, and it could be useful to have a generic format for assistance data that could be universally applicable.  While the benefits of a generic approach are obvious, this approach enables a more rapid development of a specification without preventing a generic format from being introduced later.
+        </t></list></t>
+
+      </section>
+
+      <section title="Identifying Assistance Data Types">
+        <t>A request for assistance data identifies the XML elements that contain the assistance data by name.  The <spanx style="verb">data</spanx> attribute can be included on either the <spanx style="verb">global</spanx> or <spanx style="verb">local</spanx> element of the assistance data request.  The <spanx style="verb">data</spanx> attribute includes a whitespace-separated list of elements.
+        </t>
+
+        <t>Each item in this list is a qualified element name that identifies the requested element.  Each item can be interpreted as <xref target="W3C.REC-xpath20-20070123">XML Path Language (XPath)</xref> expressions that are evaluated in the context of the matching element in the response.  These statements are restricted to use of qualified names only.  Namespace prefixes are taken from the document context.
+        </t>
+
+        <t>Each type of assistance data that is identified in the request must be included in the corresponding <spanx style="verb">global</spanx> or <spanx style="verb">local</spanx> element of the response.  If information cannot be provided the LIS must indicate which items are either unavailable (a temporary cause of error) or unsupported (a situation that is more likely to be persistent).  The <spanx style="verb">unavailable</spanx> and <spanx style="verb">unsupported</spanx> attributes are used in the response to indicate which items were not provided.  Unsupported assistance data types must be included in the response using the <spanx style="verb">unsupported</spanx> attribute.
+        </t>
+
+        <t>If an assistance data type is requested in an inapplicable category (such as the UTC model in the <spanx style="verb">local</spanx> element), it must be reported as <spanx style="verb">unsupported</spanx>.
+        </t>
+
+        <t>This method of identifying assistance data types enables easy extension to forms of GNSS other than GPS or new types of assistance data.  By relying on the inherent extensibility provided by <xref target="W3C.REC-xml-names-20060816">namespaces in XML</xref>, extensions can be readily addded.  Extensions for other types of GNSS or assistance data need only define elements in a new namespace.
+        </t>
+
+      </section>
+
+      <section title="Time Assistance">
+        <t>Time synchronization is helpful in ensuring rapid signal acquisition.  Satellite signals change with time, so having accurate time ensures that the time-based information provided with assistance data can be more effectively used.  Accurate time also enables position determination with fewer pseudorange measurements.
+        </t>
+
+        <t>Other assistance data protocols define a reference time assistance data type, which includes a time in the GNSS time system.  However, the mechanisms that are used to ensure that this information is correct when received are dependent on the type of network.  Without these mechanisms, network latency and retransmission delays can result in this value being incorrect when it is received.
+        </t>
+
+        <t>This document does not define a mechanism for providing accurate time as part of assistance data, instead relying on general purpose time synchronization protocols.
+        </t>
+
+        <t>The <xref target="RFC1305">Network Time Protocol (NTP)</xref> or <xref target="RFC4330">Simple Network Time Protocol (SNTP)</xref> can be used by GNSS receivers to acquire clock synchronization with Coordinated Universal Time (UTC).  The time model assistance data type (or UTC model for GPS) provides the information necessary to translate from UTC to the time system used by the GNSS.
+        </t>
+
+        <t>A LIS does not provide information about time servers.  Configuration of hosts can be manual, or time server information can be provided by DHCP (<xref target="RFC2132"/>, <xref target="RFC3315"/>, <xref target="RFC4075"/>, <xref target="I-D.gayraud-dhcpv6-ntp-opt"/>).
+        </t>
+      </section>
+
+    </section>
+
+    <section anchor="gps" title="GPS Assistance Data Types">
+      <t>This section defines a set of assistance data types for the GPS GNSS (as shown in <xref target="ad-types"/>).  Each assistance data type is defined as an XML element and is able to be identified by the <xref target="W3C.REC-xml-names-20060816">qualified name</xref> of the element.  The GPS elements are defined in the <spanx style="verb">urn:x-grip:gnss:gps</spanx> namespace.  The <spanx style="verb">gps:</spanx> prefix is used in this section to identify this namespace.
+      </t>
+
+      <t>GPS assistance data is constructed based on the definition of the navigation message defined in <xref target="GPS-ICD">GPS interface control document</xref>.  Assistance data that is provided on a per-satellite, or space vehicle (SV), basis is split into <spanx style="verb">gps:sat</spanx> elements under each data type.  The satellite is identified by its SV-ID, a number between 1 and 32, in the <spanx style="verb">num</spanx> attribute.
+      </t>
+
+      <t>An XML Schema for GRIP messages is included in <xref target="schema-grip"/>.  A schema defining the format of assistance data for GPS is included in <xref target="schema-gps"/>.
+      </t>
+
+      <section title="UTC Model">
+        <t>The UTC model contains the information necessary to convert from UTC time to the time system used by GPS.  The <spanx style="verb">gps:utc</spanx> element contains a string of hexadecimal digits that correspond to bits 151 through 279 of subframe 4, page 18 of the navigation message, with the parity bits removed.
+        </t>
+      </section>
+
+      <section title="Ionosphere Model">
+        <t>The ionosphere model contains parameters for a model of the propagation delay through the ionosphere - the part of the Earth's atmosphere that has the more significant impact on satellite signals.  The <spanx style="verb">gps:ionosphere</spanx> element contains a string of hexadecimal digits that correspond to bits 69 through 145 of subframe 4, page 18 of the navigation message, with the parity bits removed.
+        </t>
+      </section>
+
+      <section title="Almanac">
+        <t>The almanac assistance data type includes information about the satellites in the GPS constellation.  This information is intended to be long-lived and changes rarely.  This information is not useful for calculating a position, but is helpful in determining what satellites could be used.  The <spanx style="verb">gps:almanac</spanx> element contains per-satellite data.  The content of the <spanx style="verb">gps:sat</spanx> element is a string of hexadecimal digits that correspond to the collated almanac data from the navigation message (subframe 5, pages 1 through 24; or subframe 4, pages 2, 3, 4, 5, 7, 8, 9 and 10).
+        </t>
+      </section>
+
+      <section title="Real Time Integrity">
+        <t>This data type contains a list of the satellite (SV) identifiers for those satellites that are either out of service or are otherwise not recommended for use.  The <spanx style="verb">gps:rti</spanx> element contains a whitespace-separated list of satellited identifiers.
+        </t>
+      </section>
+
+      <section title="Navigation Model">
+        <t>The navigation model contains information for each satellite in the chosen set; either all GPS satellites, or those that are expected to be visible from the estimated location of the Device.  To that end, the <spanx style="verb">gps:navigation</spanx> element contains one or more <spanx style="verb">gps:sat</spanx> elements.  The content of the <spanx style="verb">gps:sat</spanx> element is a hex string of 180 characters (90 bytes) that is sub-frames 1 through 3 of the navigation message  for the given satellite with parity bits removed.
+        </t>
+
+        <section title="Issue of Data Ephemeris">
+          <t>[[Editor's Note: Using IODE to save on bits is a practice that comes over from the original bit-miserly protocols like RRLP that provided GPS assistance data.  The complexity of implementing this functionality probably outweighs the relatively small saving in bits.  Candidate for removal.]]
+          </t>
+
+          <t>The navigation model represents the largest and most significant piece of assistance data provided.  This information changes on an hourly basis, and at each change the Issue of Data Ephemeris (IODE) is changed.  For this reason, a request that asks for the navigation model is able to indicate the IODE for each satellite and the time that this data was acquired.  The response can omit satellites with matching IODE.
+          </t>
+
+          <t>An <spanx style="verb">gps:iode</spanx> element can be included in the <spanx style="verb">local</spanx> or <spanx style="verb">global</spanx> element of the request.  It identifies the current time (in UTC or GPS time) and the IODE for each satellite that the receiver knows about.
+          </t>
+
+          <figure>
+<artwork><![CDATA[
+  <locationRequest xmlns="urn:ietf:params:xml:ns:geopriv:held">
+    <adRequest xmlns="urn:x-grip:ns"
+               xmlns:gps="urn:x-grip:gnss:gps">
+      <global data="gps:utc gps:ionosphere gps:rti"/>
+      <local data="gps:navigation">
+        <location-info>
+          <gs:Circle srsName="urn:ogc:def:crs:EPSG::4326"
+            xmlns:gs="urn:ietf:params:xml:ns:pidf:geopriv10:geoShape"
+            xmlns:gml="http://www.opengis.net/gml">
+            <gml:pos>42.5463 -73.2512</gml:pos>
+            <gs:radius uom="urn:ogc:def:uom:EPSG::9001">
+              850.24
+            </gs:radius>
+          </gs:Circle>
+        </location-info>
+        <gps:iode gpsWeek="43" gpsTOW="67234.264">
+          <gps:sat num="2">66</gps:sat>
+          <gps:sat num="4">66</gps:sat>
+        </gps:iode>
+      </local>
+    </adRequest>
+  </locationRequest>
+]]></artwork>
+        </figure>
+
+        <t>Implementation of this feature by a GRIP server is optional.  A GRIP client that uses this option must be prepared to receive navigation model information for satellites that it already has information for.
+        </t>
+
+        </section>
+      </section>
+
+      <section title="Time of Week Assistance">
+        <t>The time of week (TOW) assistance information includes the telemetry (TLM) message, which is included every six seconds as the first word of a subframe or page.  The anti-spoof and alert flags from the handover (HOW) word are also included in this item.  This item can change each time, but it rarely does; therefore, knowing the current telemetry word aids in ensuring that the signal can be more rapidly acquired.  The <spanx style="verb">gps:towassist</spanx> element contains per-satellite data.  The data for each satellite is a whitespace-separated list of four integers, starting with the 14-bits of the TLM message, then the 1-bit anti-spoof flag, the 1-bit alert flag and then the 2-bit reserved portion from the TLM word.
+        </t>
+      </section>
+
+
+      <section title="Acquisition Assistance">
+        <t>Acquisition assistance aids receivers in satellite signal acquisition by attempting to predict signals for a particular location at a certain time.  Acquisition assistance is synthesized from satellite data; it is not a reconstruction of parts of the navigation message.  This data includes prediced code phase and doppler, plus a means to predict how these change over time.  This compact form allows for faster measurement of the signals without necessarily enabling position calculation.
+        </t>
+        <t>The <spanx style="verb">gps:acqassist</spanx> element contains per-satellite data.  Each <spanx style="verb">gps:sat</spanx> element contains a list of floating point numbers as described in <xref target="acqassist"/>.
+        </t>
+        <texttable anchor="acqassist" title="Acquisition Assistance Fields">
+          <ttcol align="left">Order</ttcol>
+          <ttcol align="left">Name</ttcol>
+          <ttcol align="left">Description</ttcol>
+          <c>1</c><c>0th order Doppler</c><c>The predicted Doppler shift in Hz</c>
+          <c>2</c><c>1st order Doppler</c><c>The rate of change of Doppler shift in Hz/s</c>
+          <c>3</c><c>Doppler Search Window</c><c>The range of Doppler shift values to search in Hz</c>
+          <c>4</c><c>Code Phase</c><c>The predicted code phase in chips from 0 to 1022</c>
+          <c>5</c><c>Integer Code Phase</c><c>The number of whole 1023 chip segments</c>
+          <c>6</c><c>Code Phase Uncertainty</c><c>The range of code phase values to search</c>
+          <c>7</c><c>Azimuth</c><c>The azimuth (from Northing) of the satellite in degrees</c>
+          <c>8</c><c>Elevation</c><c>The elevation (from horizontal) of the satellite in degrees</c>
+        </texttable>
+      </section>
+
+      <section title="Differential GPS Corrections">
+        <t>Differential GPS provides a means of compensating for atmospheric effects, orbital model limitation and satellite clock drift.  The <spanx style="verb">gps:dgps</spanx> element includes attributes that indicate the GPS time when measurements were taken and per-satellite information.  The <spanx style="verb">gpsWeek</spanx> and <spanx style="verb">gpsTOW</spanx> attributes used for the IODE time are used to provide a GPS time on the <spanx style="verb">gps:dgps</spanx> element.
+        </t>
+
+        <t>The <spanx style="verb">gps:sat</spanx> element includes a whitespace-separated list of three floating point values:
+        <list style="hanging">
+          <t hangText="UDRE:">an estimate of the accuracy of the pseudorange corrections in metres</t>
+          <t hangText="pseudorange correction:">a correction value in metres, taken at the time indicated</t>
+          <t hangText="pseudorange correction rate of change:">the rate that the pseudorange correction changes in metres per second</t>
+        </list>
+        </t>
+      </section>
+    </section>
+
+    <section anchor="security" title="Security Considerations">
+      <t>Since this document relies on bundling assistance data with a HELD location response, it inherits many of the same security considerations as <xref target="I-D.ietf-geopriv-http-location-delivery">HELD</xref>.  It also inherits all the protections provided therein; largely provided by use of <xref target="RFC4346">TLS</xref>.
+      </t>
+
+      <t>Privacy is a major consideration for location protocol security.  However, assistance data contains less useful information than the location information that is already provided.  The bulk of the assistance data is either publically available or is derived from that publically available data and the estimate location of the Device.
+      </t>
+
+      <t>Requesting localized assistance data from a GRIP server for an arbitrary location provides little additional information over what is provided by requesting global types.  However, a request for acquisition assistance could be used to trivially generate spoofed GNSS measurements.  <xref target="I-D.thomson-geopriv-held-measurements"/> provides suggestions for dealing with spoofed GNSS measurements, but it is recommended that a LIS not provide acquisition assistance for arbitrary locations.
+      </t>
+
+      <t>A Device that relies on assistance data could find that bad assistance data is more of a hindrance than help.  However, the impact of an attack by a LIS on assisted GNSS is limited by the fact that bad assistance data can be readily ignored and autonomous operation used.
+      </t>
+    </section>
+
+    <section anchor="iana" title="IANA Considerations">
+      <t>No registrations are necessary for GRIP namespaces (these are not registered by this document).
+      </t>
+    </section>
+
+   <section title="Acknowledgements">
+      <t>This document uses a modified copy of the GRIP protocol based on the work done by the University of New South Wales through the OSGRS project <eref target="http://osgrs.sourceforge.net/"/>.  Authors of the original GRIP specification were Nam Hoang and Manosh Fernando.  The GPS expertise of Neil Harper was invaluable in assembling this document.
+      </t>
+    </section>
+<!--
+    <appendix title="Change Log">
+      <t>[[The RFC Editor is requested to remove this section at publication.]]</t>
+      <t>Changes since -0-1:
+      <list style="symbols">
+        <t>Document created.</t>
+      </list>
+      </t>
+    </appendix>
+-->
+  </middle>
+
+  <back>
+
+    <references title="Normative References">
+      &RFC2119;
+      &I-D.ietf-geopriv-http-location-delivery;
+      &W3C.REC-xpath20-20070123;
+
+      <reference anchor="GPS-ICD">
+        <front>
+          <title abbrev="GPS-ICD">Navstar GPS Space Segment / Navigation User Interfaces</title>
+          <author>
+            <organization/>
+          </author>
+          <date month="April" day="12" year="2000"/>
+        </front>
+        <seriesInfo name="" value="ICD-GPS-200c"/>
+        <format type="PDF" target="http://www.navcen.uscg.gov/pubs/gps/icd200/"/>
+      </reference>
+
+    </references>
+
+    <references title="Informative References">
+      &RFC1305;
+      &RFC4330;
+      &RFC2132;
+      &RFC3315;
+      &RFC4075;
+      &RFC4346;
+      &I-D.thomson-geopriv-held-measurements;
+      &I-D.gayraud-dhcpv6-ntp-opt;
+      &W3C.REC-xml-names-20060816;
+    </references>
+
+    <section anchor="schema-grip" title="GRIP Schema">
+      <t>The following schema document defines the request and response elements for the GNSS Reference Interface Protocol (GRIP).
+      </t>
+      <figure>
+        <artwork><![CDATA[
+<?xml version="1.0"?>
+<xs:schema
+    xmlns:grip="urn:x-grip:ns"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="urn:x-grip:ns"
+    elementFormDefault="qualified"
+    attributeFormDefault="unqualified">
+
+  <xs:annotation>
+    <xs:documentation>
+      This document describes the format of GNSS assistance data
+      requests.
+    </xs:documentation>
+  </xs:annotation>
+
+  <xs:element name="adRequest" type="grip:adReqType"/>
+  <xs:complexType name="adReqType">
+    <xs:complexContent>
+      <xs:restriction base="xs:anyType">
+        <xs:choice>
+          <xs:sequence>
+            <xs:element name="global" type="grip:dataReqType"/>
+            <xs:element name="local" type="grip:localDataReqType"
+                        minOccurs="0"/>
+          </xs:sequence>
+          <xs:element name="local" type="grip:localDataReqType"/>
+        </xs:choice>
+        <xs:anyAttribute namespace="##any" processContents="lax"/>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="localDataReqType">
+    <xs:complexContent>
+      <xs:restriction base="grip:dataReqType">
+        <xs:sequence>
+          <xs:choice>
+            <xs:element name="location-info" type="xs:anyType"/>
+            <xs:element name="locationURI" type="xs:anyURI"/>
+          </xs:choice>
+          <xs:any namespace="##any" processContents="lax"
+                  minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="dataReqType">
+    <xs:complexContent>
+      <xs:restriction base="xs:anyType">
+        <xs:sequence>
+          <xs:any namespace="##any" processContents="lax"
+                  minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="data" type="grip:elementsType"/>
+        <xs:anyAttribute namespace="##any" processContents="lax"/>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:element name="adResponse" type="grip:adResponseType"/>
+  <xs:complexType name="adResponseType">
+    <xs:complexContent>
+      <xs:restriction base="xs:anyType">
+        <xs:choice>
+          <xs:sequence>
+            <xs:element name="global" type="grip:responseType"/>
+            <xs:element name="local" type="grip:responseType"
+                        minOccurs="0"/>
+          </xs:sequence>
+          <xs:element name="local" type="grip:responseType"/>
+        </xs:choice>
+        <xs:anyAttribute namespace="##any" processContents="lax"/>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="responseType">
+    <xs:complexContent>
+      <xs:restriction base="xs:anyType">
+        <xs:sequence>
+          <xs:any namespace="##any" processContents="lax"
+                  minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="unsupported" type="grip:elementsType"
+                      default=""/>
+        <xs:attribute name="unavailable" type="grip:elementsType"
+                      default=""/>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:simpleType name="elementsType">
+    <xs:list itemType="xs:QName"/>
+  </xs:simpleType>
+
+</xs:schema>
+]]></artwork>
+      </figure>
+
+    </section>
+
+    <section anchor="schema-gps" title="GRIP GPS Data Schema">
+      <t>The following schema document defines the elements for GPS assistance data, based on the outline in <xref target="gps"/>.
+      </t>
+
+      <figure>
+        <artwork><![CDATA[
+<?xml version="1.0"?>
+<xs:schema
+    xmlns:gps="urn:x-grip:gnss:gps"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="urn:x-grip:gnss:gps"
+    elementFormDefault="qualified"
+    attributeFormDefault="unqualified">
+
+  <xs:annotation>
+    <xs:documentation>
+      This document describes the format of GPS assistance data.
+    </xs:documentation>
+  </xs:annotation>
+
+  <!-- Base data types -->
+
+  <xs:complexType name="satData" abstract="true">
+    <xs:complexContent>
+      <xs:restriction base="xs:anyType">
+        <xs:sequence>
+          <xs:element name="sat" type="gps:satBaseType"
+                      minOccurs="0" maxOccurs="32"/>
+        </xs:sequence>
+        <xs:anyAttribute namespace="##any" processContents="lax"/>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="satBaseType" abstract="true">
+    <xs:simpleContent>
+      <xs:extension base="xs:anySimpleType">
+        <xs:attribute name="num" type="gps:satNumType"
+                      use="required"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:simpleType name="satNumType">
+    <xs:restriction base="xs:positiveInteger">
+      <xs:maxInclusive value="32"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:attributeGroup name="gpsTimeGroup">
+    <xs:attribute name="gpsWeek" use="optional">
+      <xs:simpleType>
+        <xs:restriction base="xs:nonNegativeInteger">
+          <xs:maxExclusive value="1023"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="gpsTOW" use="required">
+      <xs:simpleType>
+        <xs:restriction base="xs:double">
+          <xs:minInclusive value="0.0"/>
+          <xs:maxExclusive value="604800.0"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:attributeGroup>
+
+  <xs:simpleType name="doubleList">
+    <xs:list itemType="xs:double"/>
+  </xs:simpleType>
+
+  <!-- GPS element definitions -->
+
+  <xs:element name="utc" type="gps:utcType"/>
+  <xs:simpleType name="utcType">
+    <xs:restriction base="xs:hexBinary">
+      <xs:length value="13"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="ionosphere" type="gps:ionosphereType"/>
+  <xs:simpleType name="ionosphereType">
+    <xs:restriction base="xs:hexBinary">
+      <xs:length value="8"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="rti" type="gps:rtiType"/>
+  <xs:simpleType name="rtiType">
+    <xs:list itemType="gps:satNumType"/>
+  </xs:simpleType>
+
+  <xs:element name="navigation" type="gps:navigationType">
+    <xs:unique name="navigationUnique">
+      <xs:selector xpath="gps:sat"/>
+      <xs:field xpath="@num"/>
+    </xs:unique>
+  </xs:element>
+  <xs:complexType name="navigationType">
+    <xs:complexContent>
+      <xs:restriction base="gps:satData">
+        <xs:sequence>
+          <xs:element name="sat" type="gps:satNavigationType"
+                      minOccurs="0" maxOccurs="32"/>
+        </xs:sequence>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+  <xs:complexType name="satNavigationType">
+    <xs:simpleContent>
+      <xs:restriction base="gps:satBaseType">
+        <xs:simpleType>
+          <xs:restriction base="xs:hexBinary">
+            <xs:length value="90"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:restriction>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:element name="iode" type="gps:iodeType">
+    <xs:unique name="iodeUnique">
+      <xs:selector xpath="gps:sat"/>
+      <xs:field xpath="@num"/>
+    </xs:unique>
+  </xs:element>
+  <xs:complexType name="iodeType">
+    <xs:complexContent>
+      <xs:restriction base="gps:satData">
+        <xs:sequence>
+          <xs:element name="sat" type="gps:satIodeType"
+                      minOccurs="0" maxOccurs="32"/>
+        </xs:sequence>
+        <xs:attributeGroup ref="gps:gpsTimeGroup"/>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+  <xs:complexType name="satIodeType">
+    <xs:simpleContent>
+      <xs:restriction base="gps:satBaseType">
+        <xs:simpleType>
+          <xs:restriction base="xs:nonNegativeInteger">
+            <xs:maxExclusive value="256"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:restriction>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:element name="towassist" type="gps:towassistType">
+    <xs:unique name="towassistUnique">
+      <xs:selector xpath="gps:sat"/>
+      <xs:field xpath="@num"/>
+    </xs:unique>
+  </xs:element>
+  <xs:complexType name="towassistType">
+    <xs:complexContent>
+      <xs:restriction base="gps:satData">
+        <xs:sequence>
+          <xs:element name="sat" type="gps:satTowAssistType"
+                      minOccurs="0" maxOccurs="32"/>
+        </xs:sequence>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+  <xs:complexType name="satTowAssistType">
+    <xs:simpleContent>
+      <xs:restriction base="gps:satBaseType">
+        <xs:simpleType>
+          <xs:restriction base="gps:towAssistList">
+            <xs:length value="4"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:restriction>
+    </xs:simpleContent>
+  </xs:complexType>
+  <xs:simpleType name="towAssistList">
+    <xs:list itemType="xs:nonNegativeInteger"/>
+  </xs:simpleType>
+
+  <xs:element name="acqassist" type="gps:acqassistType">
+    <xs:unique name="acqassistUnique">
+      <xs:selector xpath="gps:sat"/>
+      <xs:field xpath="@num"/>
+    </xs:unique>
+  </xs:element>
+  <xs:complexType name="acqassistType">
+    <xs:complexContent>
+      <xs:restriction base="gps:satData">
+        <xs:sequence>
+          <xs:element name="sat" type="gps:satAcqAssistType"
+                      minOccurs="0" maxOccurs="32"/>
+        </xs:sequence>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+  <xs:complexType name="satAcqAssistType">
+    <xs:simpleContent>
+      <xs:restriction base="gps:satBaseType">
+        <xs:simpleType>
+          <xs:restriction base="gps:doubleList">
+            <xs:length value="8"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:restriction>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:element name="dgps" type="gps:dgpsType">
+    <xs:unique name="dgpsUnique">
+      <xs:selector xpath="gps:sat"/>
+      <xs:field xpath="@num"/>
+    </xs:unique>
+  </xs:element>
+  <xs:complexType name="dgpsType">
+    <xs:complexContent>
+      <xs:restriction base="gps:satData">
+        <xs:sequence>
+          <xs:element name="sat" type="gps:satDgpsType"
+                      minOccurs="0" maxOccurs="32"/>
+        </xs:sequence>
+        <xs:attributeGroup ref="gps:gpsTimeGroup"/>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+  <xs:complexType name="satDgpsType">
+    <xs:simpleContent>
+      <xs:restriction base="gps:satBaseType">
+        <xs:simpleType>
+          <xs:restriction base="gps:doubleList">
+            <xs:length value="3"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:restriction>
+    </xs:simpleContent>
+  </xs:complexType>
+
+</xs:schema>
+        ]]></artwork>
+      </figure>
+
+    </section>
+
+  </back>
+</rfc>

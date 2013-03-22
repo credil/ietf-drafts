@@ -1,0 +1,351 @@
+<?xml version='1.0'?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+<rfc ipr="trust200902" category="exp">
+<front>
+<title abbrev="HIT-TO-IP">Embedding Host Identity Tags Data in DNS</title>
+
+<author initials='O.' surname='Ponomarev' fullname='Oleg Ponomarev'>
+<organization>Helsinki Institute for Information Technology HIIT</organization>
+<address>
+<postal>
+<street>PO Box 9800</street>
+<city>TKK</city>
+<code>FIN-02015</code>
+<country>Finland</country>
+</postal>
+<email>oleg.ponomarev@hiit.fi</email>
+</address>
+</author>
+
+<author initials='A.' surname='Gurtov' fullname='Andrei Gurtov'>
+<organization>Helsinki Institute for Information Technology HIIT</organization>
+<address>
+<postal>
+<street>PO Box 9800</street>
+<city>TKK</city>
+<code>FIN-02015</code>
+<country>Finland</country>
+</postal>
+<email>gurtov@cs.helsinki.fi</email>
+</address>
+</author>
+
+<date day='6' month='March' year='2009' />
+
+<area>Host Identity Protocol</area>
+<workgroup>Host Identity Protocol</workgroup>
+
+<abstract><t>This document proposes conventions to access and manage 
+Host Identity Tag (HIT) mappings using the Domain Name System (DNS) 
+interface.</t></abstract>
+</front>
+
+<middle>
+
+<section title='Introduction'>
+
+<t>One of the approaches to use legacy applications<xref target="RFC5338" 
+/> with Host Identity Protocol<xref target="RFC4423" /> is to use HIT as 
+IPv6 address. The application may receive them from the nameserver, store 
+internally and connect directly to a HIT. The HIP software would receive 
+packet with HIT as a destination IPv6 address without any additional 
+information about the current locator and therefore some HIT resolution 
+service is needed in this case. This document suggests the DNS as a 
+protocol to access such mapping databases in addition to a local list of 
+Host Identities and Distributed Hash Tables (DHT) <xref 
+target="I-D.ahrenholz-hiprg-dht" />.</t>
+
+<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", 
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this 
+document are to be interpreted as described in RFC 2119<xref 
+target="RFC2119"/>.</t></section>
+
+<section title='Domain names for HIT mappings'>
+
+<t>Domain Name System is well-known to systems administrators and there 
+is much experience with operations under high load. It also allows 
+dynamic modifications and has low overhead when compared to many other 
+protocols. It is used now, for example, to get IP address reputations 
+from various blacklists.</t>
+
+<section title='Preconfigured Domain'>
+<t>The systems using this method MUST have the same domain 
+pre-configured, for example hit-to-ip.example.net. If there are 
+multiple parallel services with their own domains, the systems MUST have 
+at least one of them in common to interoperate.</t>
+
+<t>A HIT is represented as a sequence of nibbles separated by dots and 
+followed by the suffix similarly to IPv6 addresses in ip6.arpa<xref 
+target="RFC3596"/>. For example, the domain name corresponding to the 
+HIT</t>
+
+<figure><artwork>
+2001:10:1234:5678:9abc:def0:1234:5678
+</artwork></figure>
+
+<t>would be</t>
+
+<figure><artwork>
+8.7.6.5.4.3.2.1.0.f.e.d.c.b.a.9.8.7.6.5.4.3.2.1.0.1.0.0.1.0.0.2.
+                                                hit-to-ip.example.net
+</artwork></figure>
+</section>
+
+<section title='Listing IP Addresses of the System'>
+
+<t>The A/AAAA resource record types MAY be used to specify the IP/IPv6 
+addresses of the system. There MAY be multiple locators listed for a 
+HIT.</t>
+
+<t>For example, the system with IP address 192.0.2.1 and IPv6 address 
+2001:DB8::1 would have the following records</t>
+
+<figure><artwork>
+8.7.6.5.4.3.2.1.0.f.e.d.c.b.a.9.8.7.6.5.4.3.2.1.0.1.0.0.1.0.0.2.
+                                              hit-to-ip.example.net.
+  1     IN      A       192.0.2.1
+8.7.6.5.4.3.2.1.0.f.e.d.c.b.a.9.8.7.6.5.4.3.2.1.0.1.0.0.1.0.0.2.
+                                              hit-to-ip.example.net.
+  1     IN      AAAA    2001:DB8::1
+</artwork></figure>
+</section>
+
+<section title='Listing host names'>
+
+<t>The PTR resource record types MAY be used to specify name of the host 
+using the Host Identity.</t>
+
+<figure><artwork>
+8.7.6.5.4.3.2.1.0.f.e.d.c.b.a.9.8.7.6.5.4.3.2.1.0.1.0.0.1.0.0.2.
+                                               hit-to-ip.example.net.
+  86400 IN      PTR     alpha.example.com
+</artwork></figure>
+</section>
+
+<section title='Link to another domain'>
+
+<t>The CNAME resource record types MAY be used to specify another domain 
+to lookup the locators of the system.</t>
+
+<figure><artwork>
+8.7.6.5.4.3.2.1.0.f.e.d.c.b.a.9.8.7.6.5.4.3.2.1.0.1.0.0.1.0.0.2.
+                                               hit-to-ip.example.net.
+  86400 IN      CNAME   8.7.6.5.4.3.2.1.0.f.e.d.c.b.a.9.8.7.6.5.
+                    4.3.2.1.0.1.0.0.1.0.0.2.hit-to-ip.domain.example.
+</artwork></figure>
+</section>
+
+<section title='Managing the Records'>
+
+<t>The system MAY send DNS UPDATE<xref target="RFC2136"/> to the server 
+provided by SOA MNAME field of the domain. The system MAY add or delete 
+A,AAAA,PTR,CNAME records for its own HIT representation. The update MUST 
+then originate from the corresponding HIT. If there are multiple 
+identities they should be modified separately.</t>
+
+<t>The domain provided in SOA MNAME field of the preconfigured domain 
+MUST have Host Identity of the server stored in DNS, the IP addresses 
+MUST be listed in that domain using the suggested method and the server 
+MUST accept DNS UPDATE messages, which add or delete A,AAAA,PTR,CNAME 
+records for the HIT representation of the client after successful HIP 
+base exchange. The HIP base exchange serves to authenticate the origin 
+of the DNS UPDATE and server MUST refuse to perform the changes if the 
+update is not originating from the host identity whose data is being 
+updated.</t>
+
+</section>
+</section>
+
+<section title='Usage scenarios'>
+
+<t>The DNS selected as an interface should help in the deployment. There 
+is vast amount of resursive DNS resolvers available to the clients, they 
+can cache mapping information, for example. This section contains ideas 
+about three different designs of the mapping service.</t>
+
+<section title='Initial deployment'>
+
+<t>Such mapping services can be started using the conventional DNS 
+software with minor changes to authenticate DNS updates with HIP. There 
+is hit-to-ip.net zone available for the experiments at the moment. 
+According to the experiments<xref target="ISC-TN-2008-1"/> BIND 9 is 
+able to send 60,361 replies/second under update at 256 updates/sec over 
+IXFR. The performance of DDNS updates was only 93.46 updates/second as 
+they are committed to nonvolatile storage before the response is 
+returned. The version of BIND compiled without the file-system commits 
+performed 471.70 updates/second. The performance of HIP implementations 
+also limits the capacity, but about active 100,000 users may be served 
+assuming 1 hour average update interval, if the peak performance is 100 
+updates/second. Number of mappings that fits into the memory of a modern 
+server has to be studied.</t>
+
+<t>The TTL of the records is selected by the clients. If a Host 
+Identity is used by a server with static IP addresses, its mappings may 
+have long TTLs as any changes are scheduled in advance. This would allow 
+the recursive resolvers to cache records of the frequently accessed 
+static servers.</t>
+
+<t>Delegation of 1.0.0.1.0.0.2.ip6.arpa would allow reverse resolution 
+of HIT to a host name by any system without any changes. The host name 
+does not change often and such mapping may be updated only when needed. 
+</t>
+
+<t>Although the service may be started with existing DNS software, it is 
+not optimal for such a usage pattern and another database engine 
+allowing higher update rate is needed.</t> </section>
+
+<section title='Parallel services'>
+
+<t>Although it is not desirable, there may be multiple independent 
+mapping services. I.e. the host updates its IP addresses only in 
+hit-to-ip.domain1.example, but has to look for IP addresses of an 
+unknown host in hit-to-ip.domain1.example, hit-to-ip.domain2.example and 
+hit-to-ip.domain3.example. This causes extra traffic due to multiple 
+lookups.</t>
+
+<t>Another possibility is that the host updates its IP addresses in 
+hit-to-ip.domain1.example, hit-to-ip.domain2.example and 
+hit-to-ip.domain3.example, but chose only hit-to-ip.domain1.example to 
+lookup unknown hosts. This would cause growth of all three databases 
+with every new user and extra traffic due to multiple updates, but 
+provides redundancy</t>
+
+<t>The delegation of domain for reverse mapping is unlikely in this case 
+and would probably be blackholed similar to reverse subdomains for 
+private-use netblocks <xref target='I-D.ietf-dnsop-as112-ops' /> 
+</t>
+
+</section>
+
+<section title='Two-level mapping'>
+<t>The flat identifiers do not have administrative division as in usual 
+domain names and a single organization should serve all 
+the identifiers. Therefore it is desirable to reduce its workload at the 
+same time TTL of the records cannot be long to allow dynamic changes. 
+Two-level design might help to solve this contradiction.</t>
+
+<t>The first level would contain only links (CNAME) to different second 
+level mapping providers. Such information does not change often and can 
+have long TTL. Furthermore in this case, it would be enough to store in 
+memory only HIT and an index of the second level provider both in binary 
+format. The second level mapping would contain dynamic information about 
+the current IP addresses. For example, there may be the following 
+records in the DNS:</t>
+<figure><artwork>
+8.7.6.5.4.3.2.1.0.f.e.d.c.b.a.9.8.7.6.5.4.3.2.1.0.1.0.0.1.0.0.2.
+                                        hit-to-ip.arpa.
+  86400 IN      CNAME   8.7.6.5.4.3.2.1.0.f.e.d.c.b.a.9.8.7.6.5.
+                  4.3.2.1.0.1.0.0.1.0.0.2.hit-to-ip.domain.example.
+
+8.7.6.5.4.3.2.1.0.f.e.d.c.b.a.9.8.7.6.5.4.3.2.1.0.1.0.0.1.0.0.2.
+                                        ip6.arpa.
+  86400 IN      CNAME   8.7.6.5.4.3.2.1.0.f.e.d.c.b.a.9.8.7.6.5.
+                  4.3.2.1.0.1.0.0.1.0.0.2.hit-to-host.domain.example.
+
+8.7.6.5.4.3.2.1.0.f.e.d.c.b.a.9.8.7.6.5.4.3.2.1.0.1.0.0.1.0.0.2.
+                                        hit-to-ip.domain.example.
+  1     IN      A       192.0.2.1
+
+8.7.6.5.4.3.2.1.0.f.e.d.c.b.a.9.8.7.6.5.4.3.2.1.0.1.0.0.1.0.0.2.
+                                        hit-to-ip.domain.example.
+  1     IN      AAAA    2001:DB8::1
+
+8.7.6.5.4.3.2.1.0.f.e.d.c.b.a.9.8.7.6.5.4.3.2.1.0.1.0.0.1.0.0.2.
+                                        hit-to-host.domain.example.
+  86400 IN      PTR     alpha.example.com
+</artwork></figure>
+
+<t>The information about frequently accessed static hosts may be 
+available already at the first level.</t>
+
+</section>
+</section>
+
+<section anchor="Security" title="Security Considerations">
+
+<t>SHA1 is used now as a hash function to get HITs, but the complexity 
+of an existing attack<xref target="SHA1-attack"/> is only 2**63. Since 
+only HIT, but not complete HI is used for lookups, SHA1 should be phased 
+out, for example, in favor of the SHA-2 variants. </t> 
+
+<t>The actions, when multiple hosts share the same identity and start to 
+constantly update their mappings, should be discussed.</t>
+
+</section>
+
+<section title="IANA Considerations">
+<t>This draft would require that the IANA delegates
+1.0.0.1.0.0.2.IP6.ARPA subdomain and HIT-TO-IP.ARPA for the Host 
+Identity Protocol usage.</t>
+</section>
+
+<section title="Acknowledgments">
+
+<t>The authors would like to thank Tom Henderson and Miika Komu, who 
+provided comments and helped to improve this document.</t>
+
+</section>
+</middle>
+<back>
+
+<references title="Normative References">
+<?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.5338.xml"?>
+<?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.4423.xml"?>
+<?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml"?>
+<?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2136.xml"?>
+</references>
+
+<references title="Informative References">
+<?rfc include="http://xml.resource.org/public/rfc/bibxml3/reference.I-D.draft-ahrenholz-hiprg-dht-03.xml"?>
+<?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.3596.xml"?>
+
+<reference anchor='I-D.ietf-dnsop-as112-ops'>
+<front>
+<title>AS112 Nameserver Operations</title>
+<author initials='J' surname='Abley' fullname='Joe Abley'>
+    <organization>Afilias Canada Corp.</organization>
+</author>
+<author initials='W' surname='Maton' fullname='William F. Maton Sotomayor'>
+    <organization>National Research Council of Canada</organization>
+</author>
+<date month='November' day='16' year='2008' />
+</front>
+
+<seriesInfo name='Internet-Draft' value='draft-ietf-dnsop-as112-ops-01' />
+<format type='TXT'
+        target='http://www.ietf.org/internet-drafts/draft-ietf-dnsop-as112-ops-01.txt' />
+</reference>
+
+<reference anchor='ISC-TN-2008-1' target='http://new.isc.org/proj/dnsperf/ISC-TN-2008-1.html'>
+<front>
+<title>BIND 9 performance while serving large zones under update</title>
+<author initials='B' surname='Reid' fullname='Brian Reid'>
+    <organization>ISC</organization>
+</author>
+
+<date month='February' day='29' year='2008' />
+</front>
+</reference>
+
+<reference anchor='SHA1-attack' target='http://www.schneier.com/blog/archives/2005/08/new_cryptanalyt.html'>
+<front>
+<title>New Cryptanalytic Results Against SHA-1</title>
+<author initials='B' surname='Schneier' fullname='Bruce Schneier'>
+<organization />
+</author>
+
+<date month='August' day='17' year='2005' />
+</front>
+</reference>
+
+</references>
+</back>
+</rfc>

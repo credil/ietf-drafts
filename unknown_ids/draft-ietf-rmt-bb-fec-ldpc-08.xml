@@ -1,0 +1,2058 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+
+<rfc category="std" ipr="full3978" docName="draft-ietf-rmt-bb-fec-ldpc-08.txt">
+
+<!--
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+-->
+<?xml-stylesheet type='text/xsl'
+                href='http://xml.resource.org/authoring/rfc2629.xslt' ?>
+
+
+<?rfc toc="yes" ?>
+<!--<?rfc symrefs="no" ?>-->
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="no"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+    <front>
+        <title abbrev='LDPC Staircase and Triangle FEC'>
+            Low Density Parity Check (LDPC) Staircase and Triangle Forward Error Correction (FEC) Schemes
+        </title>
+        <author initials='V.R.' surname="Roca" fullname='Vincent Roca'>
+            <organization>INRIA</organization>
+            <address>
+                <postal>
+                    <street>655, av. de l'Europe</street>
+                    <street>Inovallee; Montbonnot</street>
+                    <city>ST ISMIER cedex</city>
+                    <code>38334</code>
+                    <country>France</country>
+                </postal>
+                <email>vincent.roca@inria.fr</email>
+        	<uri>http://planete.inrialpes.fr/people/roca/</uri>
+            </address>
+        </author>
+        <author initials='C.N.' surname="Neumann" fullname='Christoph Neumann'>
+            <organization>Thomson</organization>
+            <address>
+                <postal>
+                    <street>12, bd de Metz</street>
+                    <city> Rennes</city>
+                    <code>35700</code>
+                    <country>France</country>
+                </postal>
+                <email>christoph.neumann@thomson.net</email>
+        	<uri>http://planete.inrialpes.fr/people/chneuman/</uri>
+            </address>
+        </author>
+        <author initials='D.F.' surname="Furodet" fullname='David Furodet'>
+            <organization>STMicroelectronics</organization>
+            <address>
+                <postal>
+                    <street>12, Rue Jules Horowitz</street>
+                    <street>BP217</street>
+                    <city>Grenoble Cedex</city>
+                    <code>38019</code>
+                    <country>France</country>
+                </postal>
+                <email>david.furodet@st.com</email>
+                <uri>http://www.st.com/</uri>
+            </address>
+        </author>
+	
+        <date day="23" month="January" year="2008"/>
+        <area>Transport</area>
+        <workgroup>RMT</workgroup>
+        <keyword>LDPC</keyword>
+        <keyword>FEC</keyword>
+        <abstract>
+		<t>This document describes two Fully-Specified FEC Schemes,
+		LDPC-Staircase and LDPC-Triangle, and their application to the
+		reliable delivery of data objects on the packet erasure channel
+		(i.e., a communication path where packets are either received
+		without any corruption or discarded during transmission).
+		These systematic FEC codes belong to the well known class of
+		``Low Density Parity Check'' (LDPC) codes, and are large block
+		FEC codes in the sense of RFC3453. </t>
+        </abstract>
+    </front>
+
+    <middle>
+
+<section anchor="intro" title="Introduction">
+<!-- ==================================== -->
+
+<t><xref target="RFC3453"/>
+introduces large block FEC codes as an alternative to small
+block FEC codes like Reed-Solomon.
+The main advantage of such large block codes is the possibility to operate
+efficiently on source blocks of size several tens of thousands (or more)
+source symbols.
+The present document introduces 
+the Fully-Specified FEC Encoding ID 3 that is intended to be used with
+the LDPC-Staircase FEC codes, and 
+the Fully-Specified FEC Encoding ID 4 that is intended to be used with
+the LDPC-Triangle FEC codes
+<xref target="RN04"/><xref target="MK03"/>.
+Both schemes belong to the broad class of large block codes.
+For a definition of the term Fully-Specified Scheme, see
+<xref target="RFC5052"/>, section 4.
+</t>
+
+<t>
+LDPC codes rely on a dedicated matrix, called a "Parity Check
+Matrix", at the encoding and decoding ends. The parity check matrix
+defines relationships (or constraints) between the various encoding
+symbols (i.e., source symbols and repair symbols), that are later used
+by the decoder to reconstruct the original k source symbols if some
+of them are missing. These codes are systematic, in the sense that
+the encoding symbols include the source symbols in addition to the
+repair symbols.</t>
+
+<t>
+Since the encoder and decoder must operate on the same parity
+check matrix, information must be communicated between them as
+part of the FEC Object Transmission Information.</t>
+
+<t>
+A publicly available reference implementation of these codes is available
+and distributed under a GNU/LGPL license <xref target="LDPC-codec"/>.
+Besides, the code extracts included in this document
+are directly contributed to the IETF process by the authors of this
+document and by Radford M. Neal.
+</t>
+</section>
+
+
+<section title="Requirements notation">
+<!-- ==================================== -->
+
+<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+    "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+    and "OPTIONAL" in this document are to be interpreted as
+    described in <xref target="RFC2119"/>.</t>
+</section>
+
+
+<section title="Definitions, Notations and Abbreviations">
+<!-- ================================================= -->
+
+  <section title="Definitions">
+  <!-- ==================== -->
+
+<t>This document uses the same terms and definitions as those
+specified in <xref target="RFC5052"/>.
+Additionally, it uses the following definitions:
+<list style="empty">
+<t>Source symbol:		unit of data used during the encoding process</t>
+<t>Encoding symbol:		unit of data generated by the encoding process</t>
+<t>Repair symbol:		encoding symbol that is not a source symbol</t>
+<t>Code rate:			the k/n ratio, i.e., the ratio between the number
+				of source symbols and the number of encoding symbols. The code
+				rate belongs to a ]0; 1] interval. A code rate close to 1 indicates
+				that a small number of repair symbols have been produced during
+				the encoding process</t>
+<t>Systematic code:		FEC code in which the source symbols are part
+				of the encoding symbols</t>
+<t>Source block:		a block of k source symbols that are considered
+				together for the encoding</t>
+<t>Encoding Symbol Group:	a group of encoding symbols that are
+				sent together, within the same packet, and
+				whose relationships to the source object can
+				be derived from a single Encoding Symbol
+				ID</t>
+<t>Source Packet:		a data packet containing only source
+				symbols</t>
+<t>Repair Packet:		a data packet containing only repair
+				symbols</t>
+<t>Packet Erasure Channel:	a communication path where packets are either
+				dropped (e.g., by a congested router, or because the
+				number of transmission errors exceeds the correction
+				capabilities of the physical layer codes) or
+				received. When a packet is received, it is assumed
+				that this packet is not corrupted</t>
+</list>
+</t>
+
+  </section>
+
+  <section title="Notations">
+  <!-- ================== -->
+
+<t>This document uses the following notations:
+<list style="empty">
+<t>L		denotes the object transfer length in bytes</t>
+<t>k		denotes the source block length in symbols,
+		i.e., the number of source symbols of a source block</t>
+<t>n		denotes the encoding block length, i.e., the number of
+		encoding symbols generated for a source block</t>
+<t>E		denotes the encoding symbol length in bytes</t>
+<t>B		denotes the maximum source block length in symbols,
+		i.e., the maximum number of source symbols per source block</t>
+<t>N		denotes the number of source blocks into which the object
+		shall be partitioned</t>
+<t>G		denotes the number of encoding symbols per group, i.e., the
+		number of symbols sent in the same packet</t>
+<t>CR		denotes the "code rate", i.e., the k/n ratio</t>
+<t>max_n	denotes the maximum number of encoding symbols generated
+		for any source block.
+		This is in particular the number of encoding symbols
+		generated for a source block of size B</t>
+<t>H		denotes the parity check matrix</t>
+<!--
+<t>pmms_srand(s)		denotes the initialization function of the pseudo-random
+		number generator defined in <xref target="prng"/>, where s is the seed (s > 0)</t>
+-->
+<t>pmms_rand(m)		denotes the pseudo-random number generator defined in <xref target="prng"/>
+		that returns a new random integer in [0; m-1] each time it is called</t>
+</list></t>
+  </section>
+
+  <section title="Abbreviations">
+  <!-- ====================== -->
+
+<t>This document uses the following abbreviations:
+<list style="empty">
+<t>ESI:		Encoding Symbol ID</t>
+<t>FEC OTI:	FEC Object Transmission Information</t>
+<t>FPI:		FEC Payload ID</t>
+<t>LDPC:	Low Density Parity Check</t>
+<t>PRNG:	Pseudo Random Number Generator</t>
+</list></t>
+  </section>
+
+</section>
+
+
+<section title="Formats and Codes">
+<!-- ========================== -->
+
+  <section title="FEC Payload IDs" anchor="FPI">
+  <!-- =========================-->
+
+<t>The FEC Payload ID is composed of the Source Block 
+   Number and the Encoding Symbol ID:</t>
+
+<t>
+<list style="empty">
+<t>The Source Block Number (12 bit field) identifies from which source block
+   of the object the encoding symbol(s) in the packet payload is(are) generated.
+   There are a maximum of 2^^12 blocks per object. Source block numbering starts at 0.</t>
+
+<t>The Encoding Symbol ID (20 bit field) identifies which encoding
+   symbol(s) generated from the source block is(are) carried in the packet payload.
+   There are a maximum of 2^^20 encoding symbols per block.
+   The first k values (0 to k-1) identify source symbols, the remaining n-k
+   values (k to n-k-1) identify repair symbols.</t>
+</list>
+</t>
+
+<t>There MUST be exactly one FEC Payload ID per packet.
+In case of an Encoding Symbol Group,
+when multiple encoding symbols are sent in the same packet,
+the FEC Payload ID refers to the first symbol of the packet.
+The other symbols can be deduced from the ESI of the first symbol
+thanks to a dedicated function, as explained in
+<xref target="encoding_symbol_group"></xref>
+</t>
+
+
+<figure anchor="fig_fec_payload_id_for_1" title="FEC Payload ID encoding format for FEC Encoding ID 3 and 4"> 
+  <artwork>
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|  Source Block Number  |      Encoding Symbol ID (20 bits)     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  </artwork>
+</figure>
+
+
+  </section>
+
+  <section title="FEC Object Transmission Information" anchor="FEC_OTI">
+  <!-- =============================================-->
+
+    <section title="Mandatory Element">
+    <!-- ============================-->
+   
+<t>
+<list style="symbols">
+   <t>FEC Encoding ID: 
+   the LDPC-Staircase and LDPC-Triangle Fully-Specified FEC Schemes use
+   respectively the FEC Encoding ID 3 (Staircase) and 4 (Triangle).
+   </t>
+</list>
+</t>
+
+
+    </section>
+
+    <section title="Common Elements" anchor="common_elements">
+    <!-- =========================-->
+
+   <t> The following elements MUST be defined with the present FEC Schemes:</t>
+
+<t>
+<list style="symbols">
+   <t>Transfer-Length (L): a non-negative integer indicating the length of the
+      object in bytes.
+      There are some restrictions on the maximum Transfer-Length that
+      can be supported:
+      <list style="empty">
+	<t>maximum transfer length = 2^^12 * B * E</t>
+      </list>
+      For instance, if B=2^^19 (because of a code rate of 1/2, 
+      <xref target="max_source_block_length"/>), and if E=1024 bytes,
+      then the maximum transfer length is 2^^41 bytes (or 2 TB).
+      The upper limit, with symbols of size 2^^16-1 bytes and a code rate
+      larger or equal to 1/2, amounts to 2^^47 bytes (or 128 TB).
+      </t>
+
+   <t>Encoding-Symbol-Length (E): a non-negative integer indicating the length
+      of each encoding symbol in bytes.</t>
+
+   <t>Maximum-Source-Block-Length (B): a non-negative integer indicating the
+      maximum number of source symbols in a source block.
+      There are some restrictions on the maximum B value, as explained in
+      <xref target='max_source_block_length'/>.
+      </t>
+
+   <t>Max-Number-of-Encoding-Symbols (max_n): a non-negative integer
+      indicating the maximum number of encoding symbols generated for
+      any source block.
+      There are some restrictions on the maximum max_n value.
+      In particular max_n is at most equal to 2^^20.
+      </t>
+</list>
+</t>
+
+   <t><xref target="procedures"></xref> explains how to define the values
+      of each of these elements.</t>
+
+    </section>
+
+    <section title="Scheme-Specific Elements" anchor="scheme_specific_elt">
+    <!-- ==================================-->
+
+<t> The following elements MUST be defined with the present FEC Scheme:</t>
+
+<t>
+<list style="symbols">
+    <t> G: a non-negative integer indicating the number of encoding symbols
+    per group (i.e., per packet). The default value is 1, meaning that
+    each packet contains exactly one symbol.
+    Values greater than 1 can also be defined, as explained in
+    <xref target="encoding_symbol_length"/>.
+    </t>
+
+    <t> PRNG seed: the seed is a 32 bit unsigned integer between 1 and 
+    0x7FFFFFFE (i.e., 2^^31-2) inclusive. This value is used to initialize the
+    Pseudo Random Number Generator (<xref target="prng"/>).</t>
+</list>
+</t>
+
+    </section>
+
+    <section title="Encoding Format" anchor="FEC_OTI_encoding_format">
+    <!-- =========================-->
+    
+    <t>This section shows two possible encoding formats of the above FEC OTI.
+    The present document does not specify when or how these encoding
+    formats should be used.</t>
+    
+        <section title="Using the General EXT_FTI Format">
+        <!-- =========================-->
+
+<t>
+The FEC OTI binary format is the following, when the EXT_FTI mechanism
+is used (e.g., within the ALC <xref target="draft-ietf-rmt-pi-alc-revised"/>
+ or NORM <xref target="draft-ietf-rmt-pi-norm-revised"/> protocols).
+</t>
+
+<figure anchor="fig_ext_fti"
+	title="EXT_FTI Header for FEC Encoding ID 3 and 4.">
+    <artwork>
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|   HET = 64    |    HEL = 5    |                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+|                      Transfer-Length (L)                      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|   Encoding Symbol Length (E)  |       G       |   B (MSB)     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|        B (LSB)        |   Max Nb of Enc. Symbols  (max_n)     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           PRNG seed                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      </artwork>
+    </figure>
+    
+<t>
+In particular:
+<list style="symbols">
+	<t>The Transfer-Length (L) field size (48 bits) is larger than the
+	size required to store the maximum transfer length
+	(<xref target="common_elements"/>) for field alignment purposes.</t>
+	<t>The Maximum-Source-Block-Length (B) field (20 bits)
+	is split into two parts:
+	the 8 most significant bits (MSB) are in the third 32-bit
+	word of the EXT_FTI, and the remaining 12 least significant
+	bits (LSB) are in the fourth 32-bit word.</t>
+</list>
+</t>
+
+        </section>
+
+        <section title="Using the FDT Instance (FLUTE specific)">
+        <!-- =========================-->
+
+<t>When it is desired that the FEC OTI be carried in the FDT Instance
+of a FLUTE session <xref target="draft-ietf-rmt-flute-revised"/>,
+the following XML attributes must be described for the associated object:
+<list style="symbols">
+	<t>FEC-OTI-FEC-Encoding-ID</t>
+	<t>FEC-OTI-Transfer-length</t>
+	<t>FEC-OTI-Encoding-Symbol-Length</t>
+	<t>FEC-OTI-Maximum-Source-Block-Length</t>
+	<t>FEC-OTI-Max-Number-of-Encoding-Symbols</t>
+	<t>FEC-OTI-Scheme-Specific-Info</t>
+</list>
+The FEC-OTI-Scheme-Specific-Info contains the string resulting from
+the Base64 encoding (in the XML Schema xs:base64Binary sense) <xref target="RFC4648"/> of the
+following value:
+</t>
+
+<figure anchor="fig_scheme_specific"
+	title="FEC OTI Scheme Specific Information to be Included in the FDT Instance
+	for FEC Encoding ID 3 and 4."> 
+  <artwork>
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        PRNG seed                              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|       G       |
++-+-+-+-+-+-+-+-+
+  </artwork>
+</figure>
+
+<t>
+During Base64 encoding, the 5 bytes of the FEC OTI Scheme Specific Information
+are transformed into a string of 8 printable characters (in the 64-character
+alphabet) that is added to the FEC-OTI-Scheme-Specific-Info attribute.
+</t>
+
+        </section>
+
+    </section>
+
+  </section>
+
+</section>
+
+
+<section title="Procedures" anchor="procedures">
+<!-- =================== -->
+
+<t>This section defines procedures that are common to FEC Encoding IDs
+3 and 4.</t>
+
+  <section title="General" anchor="general">
+  <!-- ================ -->
+
+<t>
+The B (maximum source block length in symbols), E (encoding symbol length in bytes)
+and G (number of encoding symbols per group) parameters are first determined.
+The algorithms of <xref target="max_source_block_length"/> and
+<xref target="encoding_symbol_length"/> MAY be used to that purpose.
+Using other algorithms is possible without compromising interoperability
+since the B, E and G parameters are communicated to the receiver by means
+of the FEC OTI.
+</t>
+
+<t>
+Then, the source object MUST be partitioned using the
+block partitioning algorithm specified in <xref target="RFC5052"/>.
+To that purpose, the B, L (object transfer length in bytes), and E
+arguments are provided.
+As a result, the object is partitioned into N source blocks.
+These blocks are numbered consecutively from 0 to N-1.
+The first I source blocks consist of A_large source symbols, the
+remaining N-I source blocks consist of A_small source symbols.
+Each source symbol is E bytes in length, except perhaps the last
+symbol which may be shorter.
+</t>
+
+<t>
+Then, the max_n (maximum number of encoding symbols generated for any
+source block) parameter is determined.
+The algorithm of <xref target="max_n-algorithm"/> MAY be used to
+that purpose.
+Using another algorithm is possible without compromising interoperability
+since the max_n parameter is communicated to the receiver by means
+of the FEC OTI.
+</t>
+
+<t>
+For each block, the actual number of encoding symbols, n, MUST then be
+determined using the "n-algorithm" detailed in <xref target="n-algorithm"/>.
+</t>
+
+<t>
+Then, FEC encoding and decoding can be done block per block, independently.
+To that purpose, a parity check matrix is created, that forms
+a system of linear equations between the source and repair symbols of a
+given block, where the basic operator is XOR.
+</t>
+
+<t>
+This parity check matrix is logically divided into two parts:
+the left side (from column 0 to k-1) describes
+the occurrences of each source symbol in the system of linear
+equations;
+the right side (from column k to n-1) describes
+the occurrences of each repair symbol in the system of linear
+equations.
+The only difference between the LDPC-Staircase and LDPC-Triangle
+schemes is the construction of this right sub-matrix.
+An entry (a "1") in the matrix at position (i,j) (i.e.,
+at row i and column j) means that the symbol with ESI j
+appears in equation i of the system.
+</t>
+
+<t>
+When the parity symbols have been created, the sender transmits
+source and parity symbols.
+The way this transmission occurs can largely impact the erasure recovery
+capabilities of the LDPC-* FEC.
+In particular, sending parity symbols in sequence is suboptimal.
+Instead it is usually recommended the shuffle these symbols.
+The interested reader will find more details in <xref target="NRFF05"/>.
+</t>
+
+<t>
+The following sections detail how the B, E, G, max_nand n parameters are determined
+(respectively in
+<xref target="max_source_block_length"/>, <xref target="encoding_symbol_length"/>,
+<xref target="max_n-algorithm"/> and <xref target="n-algorithm"/>),
+how encoding symbol groups are created
+(<xref target="encoding_symbol_group"/>), and
+finally <xref target="prng"/> details the PRNG.
+</t>
+
+</section>
+
+
+  <section title="Determining the Maximum Source Block Length (B)"
+           anchor="max_source_block_length">
+  <!-- ================ -->
+
+<t>
+The B parameter (maximum source block length in symbols) depends
+on several parameters:
+the code rate (CR), the Encoding Symbol ID field length of the FEC
+Payload ID (20 bits), as well as possible internal codec limitations.
+</t>
+
+<t>
+The B parameter cannot be larger than the following values, derived
+from the FEC Payload ID limitations, for a given code rate:
+      <list style="empty">
+	<t>max1_B = 2^^(20 - ceil(Log2(1/CR)))</t>
+      </list>
+</t>
+
+<t>
+Some common max1_B values are:
+<list style="symbols">
+	<t>CR == 1 (no repair symbol): max1_B = 2^^20 = 1,048,576</t>
+	<t>1/2 &le; CR &lt; 1: max1_B = 2^^19 = 524,288 symbols</t>
+	<t>1/4 &le; CR &lt; 1/2: max1_B = 2^^18 = 262,144 symbols</t>
+	<t>1/8 &le; CR &lt; 1/4: max1_B = 2^^17 = 131,072 symbols</t>
+</list>
+</t>
+
+<t>Additionally, a codec MAY impose other limitations on the maximum
+block size. 
+For instance, this is the case when the codec uses internally 16 bit
+unsigned integers to store the Encoding Symbol ID, since it does not enable to
+store all the possible values of a 20 bit field.
+In that case, if for instance 1/2 &le; CR &lt; 1, then the maximum source block
+length is 2^^15.
+Other limitations may also apply, for instance because of a limited working
+memory size.
+This decision MUST be clarified at implementation time, when the target
+use case is known. This results in a max2_B limitation.</t>
+
+<t>
+Then, B is given by:
+      <list style="empty">
+	<t>B = min(max1_B, max2_B)</t>
+      </list>
+Note that this calculation is only required at the coder, since the
+B parameter is communicated to the decoder through the FEC OTI.
+</t>
+
+  </section>
+
+
+  <section title="Determining the Encoding Symbol Length (E) and Number of
+Encoding Symbols per Group (G)"
+           anchor="encoding_symbol_length">
+  <!-- ================ -->
+
+
+<t>
+The E parameter usually depends on the maximum transmission unit on the
+path (PMTU) from the source to each receiver.
+In order to minimize the protocol header overhead
+(e.g., the LCT/UDP/IPv4 or IPv6 headers in case of ALC), E is chosen as large
+as possible.
+In that case, E is chosen so that the size of a packet composed of a single
+symbol (G=1) remains below but close to the PMTU.
+</t>
+
+<t>
+However other considerations can exist.
+For instance, the E parameter can be made a function of the object transfer
+length.
+Indeed, LDPC codes are known to offer better protection for large blocks.
+In case of small objects, it can be advantageous to reduce the encoding
+symbol length (E) in order to artificially increase the number of symbols,
+and therefore the block size.
+</t>
+
+<t>
+In order to minimize the protocol header overhead, several symbols can
+be grouped in the same Encoding Symbol Group (i.e., G &gt; 1).
+Depending on how many symbols are grouped (G) and on the packet loss rate
+(G symbols are lost for each packet erasure), this strategy might or might
+not be appropriate.
+A balance must therefore be found.
+</t>
+
+<t>
+The current specification does not mandate any value for either E or G.
+The current specification only provides an example of possible choices for E and G.
+Note that this choice is done by the sender, and the E and G parameters are then
+communicated to the receiver thanks to the FEC OTI.
+Note also that the decoding algorithm used influences the choice of the E and G
+parameters.
+Indeed, increasing the number of symbols will negatively impact the processing
+load when decoding is based (in part or totally) on Gaussian elimination,
+whereas the impacts will be rather low when decoding is based on the
+trivial algorithm sketched in <xref target="decoding_staircase"/>.
+</t>
+
+<t>
+Example:
+</t>
+
+<t>
+Let us assume that the trivial decoding algorithm sketched in <xref target="decoding_staircase"/>
+is used.
+First define the target packet payload size, pkt_sz (at most equal to the PMTU
+minus the size of the various protocol headers).
+The pkt_sz must be chosen in such a way that the symbol size is an
+integer. This can require that pkt_sz be a multiple of 4, 8 or 16 (see the table below).
+Then calculate the number of packets in the object: nb_pkts = ceil(L / pkt_sz).
+Finally, thanks to nb_pkts, use the following table to find a possible G value.
+</t>
+<texttable>
+	<preamble></preamble>
+	<ttcol align='center'>Number of packets</ttcol>
+	<ttcol align='center'>G</ttcol>
+	<ttcol align='center'>Symbol size</ttcol>
+	<ttcol align='center'>k</ttcol>
+	<c>4000 &le; nb_pkts</c>
+	<c>1</c>
+	<c>pkt_sz</c>
+	<c>4000 &le; k</c>
+
+	<c>1000 &le; nb_pkts &lt; 4000</c>
+	<c>4</c>
+	<c>pkt_sz / 4</c>
+	<c>4000 &le; k &lt; 16000</c>
+
+	<c>500 &le; nb_pkts &lt; 1000</c>
+	<c>8</c>
+	<c>pkt_sz / 8</c>
+	<c>4000 &le; k &lt; 8000</c>
+
+	<c>1 &le; nb_pkts &lt; 500</c>
+	<c>16</c>
+	<c>pkt_sz / 16</c>
+	<c>16 &le; k &lt; 8000</c>
+</texttable>
+
+  </section>
+
+  <section title="Determining the  Maximum Number of Encoding Symbols Generated for Any Source Block (max_n)"
+           anchor="max_n-algorithm">
+  <!-- ================ -->
+
+<t>
+The following algorithm MAY be used by a sender to determine the maximum number of
+encoding symbols generated for any source block (max_n) as a function of B and the
+target code rate.
+Since the max_n parameter is communicated to the decoder by means of the FEC OTI,
+another method MAY be used to determine max_n.
+</t>
+
+<t> Input:
+<list style="empty">
+<t>B:		Maximum source block length, for any source block.
+		<xref target="max_source_block_length"/> MAY be used to
+		determine its value.</t>
+
+<t>CR:		FEC code rate, which is provided by the user (e.g., when
+		starting a FLUTE sending application).
+		It is expressed as a floating point value.
+		The CR value must be such that the resulting number of
+		encoding symbols per block is at most equal to 2^^20
+		(<xref target="FPI"/>).</t>
+</list>
+</t>
+
+<t>
+Output:
+<list style="empty">
+
+<t>max_n:	Maximum number of encoding symbols generated for any
+		source block.</t>
+</list>
+</t>
+
+<t>
+      Algorithm:
+      <list style="empty">
+	<t>max_n = ceil(B / CR);</t>
+	<t>if (max_n &gt; 2^^20) then return an error ("invalid code rate");</t>
+	<t>(NB: if B has been defined as explained in
+		<xref target="max_source_block_length"/>, this
+		error should never happen)</t>
+      </list>
+</t>
+
+  </section>
+
+
+  <section title="Determining the Number of Encoding Symbols of a Block (n)"
+           anchor="n-algorithm">
+  <!-- ================ -->
+
+<t>The following algorithm, also called "n-algorithm", MUST be used by the sender
+and the receiver to determine the number of encoding symbols for a given block (n)
+as a function of B, k, and max_n.
+</t>
+
+<t> Input:
+<list style="empty">
+<t>B:		Maximum source block length, for any source block.
+		At a sender, <xref target="max_source_block_length"/> MAY be used to
+		determine its value.
+		At a receiver, this value MUST be extracted from the received FEC OTI.</t>
+
+<t>k:		Current source block length.
+		At a sender or receiver, the block partitioning algorithm MUST be used
+		to determine its value.</t>
+
+<t>max_n:	Maximum number of encoding symbols generated for any
+		source block.
+		At a sender, <xref target="max_n-algorithm"/> MAY be used to determine its value.
+		At a receiver, this value MUST be extracted from the received FEC OTI.</t>
+
+</list>
+</t>
+
+<t>
+Output:
+<list style="empty">
+<t>n:		Number of encoding symbols generated for this source block.</t>
+</list>
+</t>
+
+<t>
+      Algorithm:
+      <list style="empty">
+	<t>n = floor(k * max_n / B);</t>
+      </list>
+</t>
+
+
+  </section>
+
+
+  <section title="Identifying the G Symbols of an Encoding Symbol Group"
+           anchor="encoding_symbol_group">
+  <!-- ================ -->
+
+<t>
+When multiple encoding symbols are sent in the same packet, the
+FEC Payload ID information of the packet MUST refer to the first
+encoding symbol.
+It MUST then be possible to identify each symbol from this single FEC Payload
+ID. To that purpose, the symbols of an Encoding Symbol Group (i.e., packet):
+<list style="symbols">
+<t>MUST all be either source symbols, or repair symbols.
+	Therefore only source packets and repair packets are
+	permitted, not mixed ones.</t>
+
+<t>are identified by a function, sender(resp. receiver)_find_ESIs_of_group(),
+	that takes as argument:
+	<list style="symbols">
+	<t> for a sender, the index of the Encoding Symbol Group
+	(i.e., packet) that the application wants to create,</t>
+	<t> for a receiver, the ESI information contained in the
+	FEC Payload ID.</t>
+	</list>
+	and returns a list of G Encoding Symbol IDs.
+	In case of a source packet, the G Encoding Symbol IDs are
+	chosen consecutively, by incrementing the ESI.
+	In case of a repair packet, the G repair symbols are
+	chosen randomly, as explained below.</t>
+
+<t>are stored in sequence in the packet, without any padding.
+	In other words, the last byte of the i-th symbol
+	is immediately followed by the first byte of (i+1)-th symbol.</t>
+</list>
+</t>
+
+<t>
+The system must first be initialized by creating a random permutation
+of the n-k indexes.
+This initialization function MUST be called immediately after creating
+the parity check matrix.
+More precisely, since the PRNG seed is not re-initialized, no call to
+the PRNG function must have happened between the time the parity check
+matrix has been initialized and the time the following initialization
+function is called.
+This is true both at a sender and at a receiver.
+
+<figure>
+<artwork>
+int *txseqToID;
+int *IDtoTxseq;
+
+/*
+ * Initialization function.
+ * Warning: use only when G > 1.
+ */
+void
+initialize_tables ()
+{
+    int i;
+    int randInd;
+    int backup;
+
+    txseqToID = malloc((n-k) * sizeof(int));
+    IDtoTxseq = malloc((n-k) * sizeof(int));
+    if (txseqToID == NULL || IDtoTxseq == NULL)
+        handle the malloc failures as appropriate...
+    /* initialize the two tables that map ID
+     * (i.e., ESI-k) to/from TxSequence. */
+    for (i = 0; i < n - k; i++) {
+        IDtoTxseq[i] = i;
+        txseqToID[i] = i;
+    }
+    /* now randomize everything */
+    for (i = 0; i < n - k; i++) {
+        randInd = pmms_rand(n - k);
+        backup  = IDtoTxseq[i];
+        IDtoTxseq[i] = IDtoTxseq[randInd];
+        IDtoTxseq[randInd] = backup;
+        txseqToID[IDtoTxseq[i]] =  i;
+        txseqToID[IDtoTxseq[randInd]] = randInd;
+    }
+    return;
+}
+</artwork>
+</figure>
+</t>
+
+<t>
+It is then possible, at the sender, to determine the sequence of
+G Encoding Symbol IDs that will be part of the group.
+
+<figure>
+<artwork>
+/*
+ * Determine the sequence of ESIs for the packet under construction
+ * at a sender.
+ * Warning: use only when G > 1.
+ * PktIdx (IN):  index of the packet, in 
+ *               {0..ceil(k/G)+ceil((n-k)/G)} range
+ * ESIs[] (OUT): list of ESIs for the packet
+ */
+void
+sender_find_ESIs_of_group (int      PktIdx,
+                           ESI_t    ESIs[])
+{
+    int i;
+
+    if (PktIdx < nbSourcePkts) {
+        /* this is a source packet */
+        ESIs[0] = PktIdx * G;
+        for (i = 1; i < G; i++) {       
+                ESIs[i] = (ESIs[0] + i) % k;
+        }
+    } else {
+        /* this is a repair packet */
+        for (i = 0; i < G; i++) {
+            ESIs[i] =
+                k +
+                txseqToID[(i + (PktIdx - nbSourcePkts) * G)
+                          % (n - k)];
+        }
+    }
+    return;
+}
+</artwork>
+</figure>
+</t>
+
+<t>
+Similarly, upon receiving an Encoding Symbol Group (i.e., packet),
+a receiver can determine the sequence of G Encoding Symbol IDs
+from the first ESI, esi0, that is contained in the FEC Payload ID.
+
+<figure>
+<artwork>
+/*
+ * Determine the sequence of ESIs for the packet received.
+ * Warning: use only when G > 1.
+ * esi0 (IN):  : ESI contained in the FEC Payload ID
+ * ESIs[] (OUT): list of ESIs for the packet
+ */
+void
+receiver_find_ESIs_of_group (ESI_t    esi0,
+                             ESI_t    ESIs[])
+{
+    int i;
+
+    if (esi0 < k) {
+        /* this is a source packet */
+        ESIs[0] = esi0;
+        for (i = 1; i < G; i++) {
+            ESIs[i] = (esi0 + i) % k;
+        }
+    } else { 
+        /* this is a repair packet */
+        for (i = 0; i < G; i++) {
+            ESIs[i] =
+                k +
+                txseqToID[(i + IDtoTxseq[esi0 - k])
+                          % (n - k)];
+        }
+    }
+}
+</artwork>
+</figure>
+</t>
+
+  </section>
+
+
+  <section title="Pseudo Random Number Generator" anchor="prng">
+  <!-- ======================================= -->
+
+<t>
+The FEC Encoding IDs 3 and 4 rely on a pseudo-random number
+generator (PRNG) that must be fully specified, in particular in order
+to enable the receivers and the senders to build the same parity
+check matrix.
+</t>
+
+<t>
+The Park-Miler "minimal standard" PRNG <xref target="PM88"/> MUST be used.
+It defines a simple multiplicative congruential algorithm: Ij+1 = A * Ij
+(modulo M), with the following choices: A = 7^^5 = 16807 and
+M = 2^^31 - 1 = 2147483647.
+A validation criteria of such a PRNG is the following:
+if seed = 1, then the 10,000th value returned MUST be equal to 1043618065.
+</t>
+
+<t>
+Several implementations of this PRNG are known and discussed in
+the literature.
+An optimized implementation of this algorithm, using only
+32 bit mathematics and which does not require any division,
+can be found in <xref target="rand31pmc"/>.
+It uses the Park and Miller algorithm <xref target="PM88"/> with the
+optimization suggested by D. Carta in <xref target="CA90"/>.
+The history behind this algorithm is detailed in <xref target="WI08"/>.
+Yet any other implementation of the PRNG algorithm that matches the above validation
+criteria, like the ones detailed in <xref target="PM88"/>, is appropriate.
+</t>
+
+<t>
+This PRNG produces natively a 31 bit value between 1 and 0x7FFFFFFE (2^^31-2) inclusive.
+Since it is desired to scale the pseudo random number between 0 and maxv-1
+inclusive, one must keep the most significant bits of the value returned by the
+PRNG (the least significant bits are known to be less random and modulo based
+solutions should be avoided <xref target="PTVF92"/>).
+The following algorithm MUST be used:
+</t>
+
+<t> Input:
+<list style="empty">
+<t>raw_value:	random integer generated by the inner PRNG algorithm,
+		between 1 and 0x7FFFFFFE (2^^31-2) inclusive.</t>
+<t>maxv:	upper bound used during the scaling operation.</t>
+</list>
+Output:
+<list style="empty">
+<t>scaled_value: random integer between 0 and maxv-1 inclusive.</t>
+</list>
+Algorithm:
+<list style="empty">
+	<t>scaled_value = (unsigned long) ((double)maxv * (double)raw_value / (double)0x7FFFFFFF);</t>
+	<t>(NB: the above C type casting to unsigned long is equivalent to using floor() with positive
+	floating point values)</t>
+</list>
+</t>
+
+<t>
+In this document, pmms_rand(maxv) denotes the PRNG function that implements the
+Park-Miller "minimal standard" algorithm defined above and that scales
+the raw value between 1 and maxv-1 inclusive, using the above scaling
+algorithm.
+Additionally, a function should be provided to enable the initialization
+of the PRNG with a seed (i.e., a 31 bit interger between 1 and 0x7FFFFFFE
+inclusive) before calling pmms_rand(maxv) the first time.
+</t>
+
+
+  </section>
+
+</section>
+
+
+<section title="Full Specification of the LDPC-Staircase Scheme" anchor="ldpc_staircase">
+<!-- ======================================================== -->
+
+<section title="General">
+<!-- ==================================-->
+
+<t>The LDPC-Staircase scheme is identified by the Fully-Specified FEC Encoding ID 3.
+</t>
+
+<t>
+The PRNG used by the LDPC-Staircase scheme must be initialized by a seed.
+This PRNG seed is an instance-specific FEC OTI attribute
+(<xref target="scheme_specific_elt"/>).
+</t>
+ 
+</section>
+
+  <section title="Parity Check Matrix Creation" anchor="staircase_matrix">
+  <!-- ==================================-->
+
+<t>
+The LDPC-Staircase matrix can be divided into two parts: 
+the left side of the matrix defines in which equations the source symbols
+are involved;
+the right side of the matrix defines in which equations the repair symbols
+are involved.
+</t>
+
+<t>
+The left side MUST be generated by using the following function:
+
+<figure>
+<artwork>
+
+/*
+ * Initialize the left side of the parity check matrix.
+ * This function assumes that an empty matrix of size n-k * k has
+ * previously been allocated/reset and that the matrix_has_entry(),
+ * matrix_insert_entry() and degree_of_row() functions can access it.
+ * (IN): the k and n parameters.
+ */
+void left_matrix_init (int k, int n)
+{
+    int i;      /* row index or temporary variable */
+    int j;      /* column index */
+    int h;
+    int t;      /* left limit within the list of possible choices u[] */
+    int u[3*MAX_K]; /* table used to have a homogeneous 1 distrib. */
+
+    /* Initialize a list of all possible choices in order to
+     * guarantee a homogeneous "1" distribution */
+    for (h = 3*k-1; h >= 0; h--) {
+        u[h] = h % (n-k);
+    }
+
+    /* Initialize the matrix with 3 "1s" per column, homogeneously */
+    t = 0; 
+    for (j = 0; j < k; j++) { /* for each source symbol column */
+        for (h = 0; h < 3; h++) { /* add 3 "1s" */
+            /* check that valid available choices remain */
+            for (i = t; i < 3*k && matrix_has_entry(u[i], j); i++);
+ 
+            if (i < 3*k) {
+                /* choose one index within the list of possible
+                 * choices */
+                do {
+                    i = t + pmms_rand(3*k-t);
+                } while (matrix_has_entry(u[i], j));
+                matrix_insert_entry(u[i], j);
+
+                /* replace with u[t] which has never been chosen */
+                u[i] = u[t];
+                t++;	        
+            } else {		
+                /* no choice left, choose one randomly */
+                do {
+                    i = pmms_rand(n-k);
+                } while (matrix_has_entry(i, j));
+                matrix_insert_entry(i, j);
+            }
+        }
+    }
+
+    /* Add extra bits to avoid rows with less than two "1s".
+     * This is needed when the code rate is smaller than 2/5. */
+    for (i = 0; i < n-k; i++) { /* for each row */
+        if (degree_of_row(i) == 0) {
+            j = pmms_rand(k);
+            matrix_insert_entry(i, j);
+        }
+        if (degree_of_row(i) == 1) { 
+            do { 
+                j = pmms_rand(k); 
+            } while (matrix_has_entry(i, j));
+            matrix_insert_entry(i, j);
+        }
+    }
+}
+</artwork>
+</figure>
+
+The right side (the staircase) MUST be generated by using the following function:
+
+<figure>
+<artwork>
+/*
+ * Initialize the right side of the parity check matrix with a
+ * staircase structure.
+ * (IN): the k and n parameters.
+ */
+void right_matrix_staircase_init (int k, int n)
+{
+    int i;      /* row index */
+
+    matrix_insert_entry(0, k);    /* first row */
+    for (i = 1; i < n-k; i++) {   /* for the following rows */
+        matrix_insert_entry(i, k+i);   /* identity */   
+        matrix_insert_entry(i, k+i-1); /* staircase */ 
+    }
+}
+</artwork>
+</figure>
+</t>
+
+<t>
+Note that just after creating this parity check matrix, when
+encoding symbol groups are used (i.e., G &gt; 1), the
+function initializing the two random permutation tables 
+(<xref target="encoding_symbol_group"/>) MUST be called.
+This is true both at a sender and at a receiver.
+</t>
+
+  </section>
+
+
+  <section title="Encoding" anchor="encoding_staircase">
+  <!-- ==================================-->
+
+<t>
+Thanks to the staircase matrix, repair symbol creation is straightforward:
+each repair symbol is equal to the sum of all source symbols in the
+associated equation, plus the previous repair symbol (except for the first repair symbol).
+Therefore encoding MUST follow the natural repair symbol order:
+start with the first repair symbol, and generate repair symbol with
+ESI i before symbol with ESI i+1.
+</t>
+
+   </section>
+
+  <section title="Decoding" anchor="decoding_staircase">
+  <!-- ==================================-->
+
+<t>
+Decoding basically consists in solving a system of n-k linear equations
+whose variables are the n source and repair symbols.
+Of course, the final goal is to recover the value of the k source symbols only.
+</t>
+<t>
+To that purpose, many techniques are possible.
+One of them is the following trivial algorithm <xref target="ZP74"/>:
+given a set of linear equations, if one of them has only one
+remaining unknown variable, then the value of this variable is
+that of the constant term.
+So, replace this variable by its value in all the remaining linear
+equations and reiterate. The value of several variables can
+therefore be found recursively.
+Applied to LDPC FEC codes working over an erasure channel, the
+parity check matrix defines a set of linear equations whose
+variables are the source symbols and repair symbols.
+Receiving or decoding a symbol is equivalent to having the
+value of a variable.
+<xref target="trivial_decoding"/> sketches a possible implementation
+of this algorithm.
+</t>
+
+<t>
+A Gaussian elimination (or any optimized derivative) is another
+possible decoding technique. Hybrid solutions that start by using the
+trivial algorithm above and finish with a Gaussian elimination are also
+possible.
+</t>
+
+<t>
+Because interoperability does not depend on the decoding algorithm used,
+the current document does not recommend any particular technique.
+This choice is left to the codec developer.
+</t>
+
+<t>
+However choosing a decoding technique will have great practical impacts.
+It will impact the erasure capabilities: a Gaussian elimination 
+enables to solve the system with a smaller number of known symbols
+compared to the trivial technique.
+It will also impact the CPU load:
+a Gaussian elimination requires more processing than the above trivial algorithm.
+Depending on the target use case, the codec developer will
+favor one feature or the other.
+</t>
+
+   </section>
+   
+</section>
+
+<section title=" Full Specification of the LDPC-Triangle Scheme" anchor="ldpc_triangle">
+<!-- ======================================================== -->
+
+
+<section title="General">
+<!-- ==================================-->
+ 
+<t> LDPC-Triangle is identified by the Fully-Specified FEC Encoding ID 4.</t>
+
+<t>
+The PRNG used by the LDPC-Triangle scheme must be initialized by a seed.
+This PRNG seed is an instance-specific FEC OTI attribute
+(<xref target="scheme_specific_elt"/>).
+</t>
+
+</section>
+
+
+  <section title="Parity Check Matrix Creation">
+  <!-- ==================================-->
+
+<t>
+The LDPC-Triangle matrix can be divided into two parts: 
+the left side of the matrix defines in which equations the source symbols
+are involved;
+the right side of the matrix defines in which equations the repair symbols
+are involved.
+</t>
+
+<t>
+The left side MUST be generated by using the same left_matrix_init() function
+as with LDPC-Staircase (<xref target="staircase_matrix"></xref>).
+</t>
+
+<t>
+The right side (the triangle) MUST be generated by using the following function:
+
+<figure>
+<artwork>
+/*
+ * Initialize the right side of the parity check matrix with a
+ * triangle structure.
+ * (IN): the k and n parameters.
+ */
+void right_matrix_staircase_init (int k, int n)
+{
+    int i;      /* row index */
+    int j;      /* randomly chosen column indexes in 0..n-k-2 */
+    int l;      /* limitation of the # of "1s" added per row */
+
+    matrix_insert_entry(0, k);    /* first row */
+    for (i = 1; i < n-k; i++) {   /* for the following rows */
+        matrix_insert_entry(i, k+i);   /* identity */   
+        matrix_insert_entry(i, k+i-1); /* staircase */ 
+        /* now fill the triangle */
+        j = i-1;
+        for (l = 0; l < j; l++) { /* limit the # of "1s" added */
+            j = pmms_rand(j);
+            matrix_insert_entry(i, k+j);
+        }
+    }
+}
+</artwork>
+</figure>
+</t>
+
+<t>
+Note that just after creating this parity check matrix, when
+encoding symbol groups are used (i.e., G &gt; 1), the
+function initializing the two random permutation tables 
+(<xref target="encoding_symbol_group"/>) MUST be called.
+This is true both at a sender and at a receiver.
+</t>
+
+  </section>
+
+
+  <section title="Encoding" anchor="encoding_triangle">
+  <!-- ==================================-->
+<t>
+Here also repair symbol creation is straightforward: each repair
+symbol of ESI i is equal to the sum of all source and repair symbols
+(with ESI lower than i) in the associated equation.
+Therefore encoding MUST follow the natural repair symbol order:
+start with the first repair symbol, and generate repair symbol with
+ESI i before symbol with ESI i+1.
+</t>
+
+   </section>
+
+     <section title="Decoding">
+  <!-- ==================================-->
+
+<t>
+Decoding basically consists in solving a system of n-k linear equations,
+whose variables are the n source and repair symbols.
+Of course, the final goal is to recover the value of the k source symbols only.
+To that purpose, many techniques are possible, as explained in
+<xref target="decoding_staircase"/>.
+</t>
+
+<t>
+Because interoperability does not depend on the decoding algorithm used,
+the current document does not recommend any particular technique.
+This choice is left to the codec implementer.
+</t>
+
+  </section>
+ 
+</section>
+
+
+<section title="Security Considerations">
+<!-- ==================================== -->
+
+
+  <section title="Problem Statement">
+  <!-- ================ -->
+
+<t>
+A content delivery system is potentially subject to many attacks:
+some of them target the network (e.g., to compromise the routing infrastructure,
+by compromising the congestion control component), others target
+the Content Delivery Protocol (CDP) (e.g., to compromise its normal behavior),
+and finally some attacks target the content itself.
+Since this document focuses on a FEC building block independently of any
+particular CDP (even if ALC and NORM are two natural candidates), this
+section only discusses the additional threats that an arbitrary CDP may be exposed
+to when using this building block.
+</t>
+
+<t>
+More specifically, several kinds of attacks exist:
+<list style="symbols">
+	<t> those that are meant to give access to a confidential content (e.g., in
+	  case of a non-free content),</t>
+	<t> those that try to corrupt the object being transmitted (e.g., to
+	  inject malicious code within an object, or to prevent a receiver
+	  from using an object),</t>
+	<t> and those that try to compromise the receiver's behavior (e.g., by
+	  making the decoding of an object computationally expensive).</t>
+</list>
+These attacks can be launched either against the data flow itself (e.g.,
+by sending forged symbols) or against the FEC parameters that are
+sent either in-band (e.g., in an EXT_FTI or FDT Instance) or out-of-band (e.g., in
+a session description).
+</t>
+
+  </section>
+
+  <section title="Attacks Against the Data Flow">
+  <!-- ================ -->
+
+<t>
+First of all, let us consider the attacks against the data flow.
+</t>
+
+
+	<section title="Access to Confidential Objects">
+	<!-- ================ -->
+
+<t>
+Access control to a confidential object being transmitted is typically provided by means
+of encryption.
+This encryption can be done over the whole object (e.g., by the content provider, before the
+FEC encoding process), or be done on a packet per packet basis (e.g., when IPsec/ESP
+is used <xref target="RFC4303"/>).
+If confidentiality is a concern, it is RECOMMENDED that one of these solutions be used.
+Even if we mention these attacks here, they are not related nor facilitated by
+the use of FEC.
+</t>
+
+	</section>
+
+	<section title="Content Corruption">
+	<!-- ================ -->
+
+<t>
+Protection against corruptions (e.g., after sending forged packets) is achieved
+by means of a content integrity verification/sender authentication scheme.
+This service can be provided at the object level, but in that case a receiver
+has no way to identify which symbol(s) is(are) corrupted if the object is detected
+as corrupted.
+This service can also be provided at the packet level. In this case, after 
+removing all forged packets, the object may be in some case recovered.
+Several techniques can provide this source authentication/content integrity
+service:
+<list style="symbols">
+<t> at the object level, the object MAY be digitally signed (with public key
+  cryptography), for instance by using RSASSA-PKCS1-v1_5 <xref target="RFC3447"/>.
+  This signature enables a receiver to check the object integrity, once this latter has
+  been fully decoded. Even if digital signatures are computationally expensive,
+  this calculation occurs only once per object, which is usually acceptable;</t>
+
+<t> at the packet level, each packet can be digitally signed. A major limitation is
+  the high computational and transmission overheads that this solution requires
+  (unless perhaps if Elliptic Curve Cryptography (ECC) is used).
+  To avoid this problem, the signature may span a set of symbols (instead of a
+  single one) in order to amortize the signature calculation.
+  But if a single symbol is missing, the integrity of the whole set cannot be checked;</t>
+
+<t> at the packet level, a Group Message Authentication Code (MAC) <xref target="RFC2104"/>
+  scheme can be used, for instance by using HMAC-SHA-1 with a secret key shared by all
+  the group members, senders and receivers.
+  This technique creates a cryptographically secured (thanks to the secret key)
+  digest of a packet that is sent along with the packet.
+  The Group MAC scheme  does not create prohibitive processing load nor transmission
+  overhead, but it has a major limitation: it only provides a group authentication/integrity
+  service since all group members share the same secret group key, which means that each
+  member can send a forged packet. It is therefore restricted to situations where
+  group members are fully trusted (or in association with another technique as a
+  pre-check);</t>
+
+<t> at the packet level, TESLA <xref target="RFC4082"/> is an attractive
+  solution that is robust to losses, provides a true authentication/integrity
+  service, and does not create any prohibitive processing load or transmission overhead.
+  Yet checking a packet requires a small delay (a second or more) after its reception;</t>
+</list>
+</t>
+
+<t>
+Techniques relying on public key cryptography (digital signatures and TESLA during
+the bootstrap process, when used) require that public keys be securely associated
+to the entities. This can be achieved by a Public Key Infrastructure (PKI), or by a
+PGP Web of Trust, or by pre-distributing the public keys of each group member.
+</t>
+
+<t>
+Techniques relying on symmetric key cryptography (group MAC) require that a
+secret key be shared by all group members. This can be achieved by means of a
+group key management protocol, or simply by pre-distributing the secret key
+(but this manual solution has many limitations).
+</t>
+
+<t>
+It is up to the CDP developer, who knows the security requirements and
+features of the target application area, to define which solution is the most appropriate.
+Nonetheless, in case there is any concern of the threat of object corruption, it is
+RECOMMENDED that at least one of these techniques be used.
+</t>
+	</section>
+
+  </section>
+
+  <section title="Attacks Against the FEC Parameters">
+  <!-- ================ -->
+
+<t>
+Let us now consider attacks against the FEC parameters (or FEC OTI).
+The FEC OTI can either be sent in-band (i.e., in an EXT_FTI or in an FDT Instance
+containing FEC OTI for the object) or out-of-band (e.g., in a session description).
+Attacks on these FEC parameters can prevent the decoding of the associated object:
+for instance modifying the B parameter will lead to a different block partitioning.
+</t>
+
+<t>
+It is therefore RECOMMENDED that security measures be taken to guarantee the
+FEC OTI integrity.
+To that purpose, the packets carrying the FEC parameters sent in-band
+in an EXT_FTI header extension SHOULD be protected by one of the
+per-packet techniques described above: digital signature, group MAC, or TESLA.
+When FEC OTI is contained in an FDT Instance, this object SHOULD be protected,
+for instance by digitally signing it with XML digital signatures <xref target="RFC3275"/>.
+Finally, when FEC OTI is sent out-of-band (e.g., in a session description)
+this latter SHOULD be protected, for instance by digitally signing it with
+<xref target="RFC3852"/>.
+</t>
+
+<t>
+The same considerations concerning the key management aspects apply here also.
+</t>
+
+  </section>
+
+
+
+</section>
+
+			<section anchor="iana-cons" title="IANA Considerations">
+			<!-- =============================================== -->
+<t>
+Values of FEC Encoding IDs and FEC Instance IDs are subject to IANA registration.
+For general guidelines on IANA considerations as they
+apply to this document, see <xref target="RFC5052"/>.
+</t>
+<t>
+This document assigns the Fully-Specified FEC Encoding ID 3 
+under the "ietf:rmt:fec:encoding" name-space to "LDPC Staircase Codes".
+</t>
+<t>
+This document assigns the Fully-Specified FEC Encoding ID 4
+under the "ietf:rmt:fec:encoding" name-space to "LDPC Triangle Codes".
+</t>
+
+			</section>
+
+
+<section title="Acknowledgments">
+<!-- ==================================== -->
+<t><xref target="n-algorithm"></xref> is derived from a previous Internet-Draft,
+and we would like to thank S. Peltotalo and J. Peltotalo for their contribution.
+We would also like to thank Pascal Moniot, Laurent Fazio,
+Aurelien Francillon, Shao Wenjian, Magnus Westerlund, Brian Carpenter, Tim Polk,
+Jari Arkko, Chris Newman, Robin Whittle and Alfred Hoenes for their comments.</t>
+
+<t>Last but not least, the authors are grateful to Radford M. Neal (University of Toronto)
+whose LDPC software (http://www.cs.toronto.edu/~radford/ldpc.software.html)
+inspired this work.
+</t>
+</section>
+
+
+    </middle>
+
+    <back>
+
+<references title="Normative References">
+<!-- ==================================== -->
+
+
+      <reference anchor="RFC2119">
+	<front>
+	  <title>Key words for use in RFCs to Indicate Requirement Levels</title>
+	  <author initials="S." surname="Bradner">
+	    <organization />
+	  </author>
+	  <date month="March" year="1997" />
+	</front>
+	<seriesInfo name="RFC" value="2119" />
+	<seriesInfo name="BCP" value="14" />
+      </reference>
+
+<!--
+      <reference anchor='RFC3452'>
+        <front>
+          <title>Forward Error Correction (FEC) Building Block</title>
+          <author initials='M.' surname='Luby'>
+            <organization />
+          </author>
+          <author initials='L.' surname='Vicisano'>
+            <organization />
+          </author>
+          <author initials='J.' surname='Gemmell'>
+            <organization />
+          </author>
+          <author initials='L.' surname='Rizzo'>
+            <organization />
+          </author>
+          <author initials='M.' surname='Handley'>
+            <organization />
+          </author>
+          <author initials='J.' surname='Crowcroft'>
+            <organization />
+          </author>
+          <date month='December' year='2002' />
+        </front>
+        <seriesInfo name='RFC' value='3452' />
+      </reference>
+-->
+
+	<reference anchor="RFC5052">
+		<front>
+			<title>Forward Error Correction (FEC) Building Block</title>
+			<author initials="M." surname="Watson">
+				<organization/>
+			</author>
+			<author initials='M.' surname='Luby'>
+				<organization />
+			</author>
+			<author initials='L.' surname='Vicisano'>
+				<organization />
+			</author>
+			<date month="August" year="2007"/>
+		</front>
+		<seriesInfo name="RFC" value="5052"/>
+	</reference>
+
+     <reference anchor="RFC3453">
+        <front>
+          <title>The Use of Forward Error Correction (FEC) in Reliable Multicast</title>
+          <author initials="M." surname="Luby">
+            <organization />
+          </author>
+          <author initials='L.' surname='Vicisano'>
+            <organization />
+          </author>
+          <author initials='J.' surname='Gemmell'>
+            <organization />
+          </author>
+          <author initials='L.' surname='Rizzo'>
+            <organization />
+          </author>
+          <author initials='M.' surname='Handley'>
+            <organization />
+          </author>
+          <author initials='J.' surname='Crowcroft'>
+            <organization />
+          </author>
+          <date month="December" year="2002" />
+        </front>
+        <seriesInfo name="RFC" value="3453" />
+     </reference>
+
+
+
+</references>
+
+
+<references title="Informative References">
+<!-- ==================================== -->
+
+      <reference anchor="ZP74">
+	<front>
+	  <title>Decoding Complexity of Low-Density Codes for Transmission in a Channel
+                 with Erasures</title>
+          <author initials="V.V." surname="Zyablov">
+            <organization /></author>
+          <author initials="M.S." surname="Pinsker">
+            <organization /></author>
+          <date month="January-March" year="1974" />
+        </front>
+        <seriesInfo name="" value="Translated from Problemy Peredachi Informatsii, Vol.10, No. 1, pp.15-28" />
+      </reference>
+
+      <reference anchor="RN04">
+        <front>
+          <title>Design, Evaluation and Comparison of Four
+		Large Block FEC Codecs: LDPC, LDGM, LDGM-Staircase and LDGM-Triangle, Plus
+		a Reed-Solomon Small Block FEC Codec</title>
+          <author initials="V." surname="Roca">
+            <organization />
+          </author>
+          <author initials="C." surname="Neumann">
+            <organization />
+          </author>
+ 	  <date month="June" year="2004" />
+	</front>
+        <seriesInfo name="" value="INRIA Research Report RR-5225"/>
+      </reference>
+
+      <reference anchor="NRFF05">
+        <front>
+          <title>Impacts of Packet Scheduling and Packet Loss Distribution on FEC Performances: Observations and Recommendations</title>
+          <author initials="C." surname="Neumann">
+            <organization />
+          </author>
+          <author initials="V." surname="Roca">
+            <organization />
+          </author>
+          <author initials="A." surname="Francillon">
+            <organization />
+          </author>
+          <author initials="D." surname="Furodet">
+            <organization />
+          </author>
+ 	  <date month="October" year="2005" />
+	</front>
+        <seriesInfo name="" value="ACM CoNEXT'05 Conference, Toulouse, France
+		(an extended version is available as INRIA Research Report RR-5578)"/>
+      </reference>
+
+      <reference anchor="LDPC-codec">
+        <front>
+          <title>LDPC-Staircase/LDPC-Triangle Codec Reference Implementation</title>
+          <author initials="V." surname="Roca"> <organization />
+          </author>
+          <author initials="C." surname="Neumann"> <organization />
+          </author>
+          <author initials="M." surname="Cunche"> <organization />
+          </author>
+          <author initials="J." surname="Laboure"> <organization />
+          </author>
+          <date month="" year="" />
+        </front>
+        <seriesInfo name="" value="INRIA Rhone-Alpes and STMicroelectronics, http://planete-bcast.inrialpes.fr/" />
+      </reference>
+
+      <reference anchor="MK03">
+	<front>
+	  <title>Information Theory, Inference and Learning Algorithms</title>
+          <author initials="D." surname="MacKay">
+            <organization />
+          </author>
+          <date month="" year="2003" />
+        </front>
+        <seriesInfo name="Cambridge University Press," value="ISBN: 0-521-64298-1" />
+      </reference>
+
+      <reference anchor="PM88">
+	<front>
+	  <title>Random Number Generators: Good Ones are Hard to Find</title>
+          <author initials="S.K." surname="Park">
+            <organization />
+          </author>
+          <author initials="K.W." surname="Miller">
+            <organization />
+          </author>
+          <date month="" year="1988" />
+        </front>
+        <seriesInfo name="" value="Communications of the ACM, Vol. 31, No. 10, pp.1192-1201" />
+      </reference>
+
+      <reference anchor="CA90">
+	<front>
+	  <title>Two Fast Implementations of the Minimal Standard Random Number Generator</title>
+          <author initials="D.G." surname="Carta">
+            <organization />
+          </author>
+          <date month="January" year="1990" />
+        </front>
+        <seriesInfo name="" value="Communications of the ACM, Vol. 33, No. 1, pp.87-88" />
+      </reference>
+
+      <reference anchor="WI08">
+	<front>
+	  <title>Park-Miller-Carta Pseudo-Random Number Generator</title>
+          <author initials="R." surname="Whittle">
+            <organization />
+          </author>
+          <date month="January" year="2008" />
+        </front>
+        <seriesInfo name="" value="http://www.firstpr.com.au/dsp/rand31/" />
+      </reference>
+
+      <reference anchor="rand31pmc">
+	<front>
+	  <title>31 bit pseudo-random number generator</title>
+          <author initials="R." surname="Whittle">
+            <organization />
+          </author>
+          <date month="September" year="2005" />
+        </front>
+        <seriesInfo name="" value="http://www.firstpr.com.au/dsp/rand31/rand31-park-miller-carta.cc.txt" />
+      </reference>
+
+      <reference anchor="PTVF92">
+	<front>
+	  <title>Numerical Recipies in C; Second Edition</title>
+          <author initials="W." surname="Press"> <organization /> </author>
+          <author initials="S." surname="Teukolsky"> <organization /> </author>
+          <author initials="W." surname="Vetterling"> <organization /> </author>
+          <author initials="B." surname="Flannery"> <organization /> </author>
+          <date year="1992" />
+        </front>
+        <seriesInfo name="Cambridge University Press," value="ISBN: 0-521-43108-5" />
+      </reference>
+
+			<reference anchor="draft-ietf-rmt-pi-alc-revised">
+				<front>
+					<title>Asynchronous Layered Coding (ALC) Protocol Instantiation</title>
+					<author initials='M.' surname='Luby'>
+						<organization />
+					</author>
+					<author initials="M." surname="Watson">
+						<organization/>
+					</author>
+					<author initials='L.' surname='Vicisano'>
+						<organization />
+					</author>
+					<date month="February" year="2007"/>
+				</front>
+				<seriesInfo name="" value="draft-ietf-rmt-pi-alc-revised-04.txt (work in progress)"/>
+			</reference>
+
+			<reference anchor="draft-ietf-rmt-pi-norm-revised">
+				<front>
+					<title>Negative-acknowledgment (NACK)-Oriented Reliable Multicast (NORM) Protocol</title>
+					<author initials='B.' surname='Adamson'>
+						<organization />
+					</author>
+					<author initials="C." surname="Bormann">
+						<organization/>
+					</author>
+					<author initials='M.' surname='Handley'>
+						<organization />
+					</author>
+					<author initials='J.' surname='Macker'>
+						<organization />
+					</author>
+					<date month="March" year="2007"/>
+				</front>
+				<seriesInfo name="" value="draft-ietf-rmt-pi-norm-revised-05.txt (work in progress)"/>
+			</reference>
+
+			<reference anchor="draft-ietf-rmt-flute-revised">
+				<front>
+					<title>FLUTE - File Delivery over Unidirectional Transport</title>
+					<author initials='T.' surname='Paila'>
+						<organization />
+					</author>
+					<author initials="R." surname="Walsh">
+						<organization/>
+					</author>
+					<author initials='M.' surname='Luby'>
+						<organization />
+					</author>
+					<author initials='R.' surname='Lehtonen'>
+						<organization />
+					</author>
+					<author initials='V.' surname='Roca'>
+						<organization />
+					</author>
+					<date month="October" year="2007"/>
+				</front>
+				<seriesInfo name="" value="draft-ietf-rmt-flute-revised-05.txt (work in progress)"/>
+			</reference>
+
+			<reference anchor="RFC3447">
+				<front>
+					<title>Public-Key Cryptography Standards (PKCS) #1: RSA Cryptography Specifications Version 2.1</title>
+					<author initials="J." surname="Jonsson" fullname="J. Jonsson"> <organization/> </author>
+					<author initials="B." surname="Kaliski" fullname="B. Kaliski"> <organization/> </author>
+					<date year="2003" month="February"/>
+				</front>
+				<seriesInfo name="RFC" value="3447"/>
+				<format type="TXT" octets="143173" target="ftp://ftp.isi.edu/in-notes/rfc3447.txt"/>
+			</reference>
+
+			<reference anchor="RFC4303">
+				<front>
+					<title>IP Encapsulating Security Payload (ESP)</title>
+					<author initials="S." surname="Kent" fullname="S. Kent"> <organization/> </author>
+					<date year="2005" month="December"/>
+				</front>
+				<seriesInfo name="RFC" value="4303"/>
+				<format type="TXT" octets="114315" target="ftp://ftp.isi.edu/in-notes/rfc4303.txt"/>
+			</reference>
+
+			<reference anchor="RFC2104">
+				<front>
+					<title>HMAC: Keyed-Hashing for Message Authentication</title>
+					<author fullname="H. Krawczyk">
+						<organization/>
+					</author>
+					<author fullname="M. Bellare">
+						<organization/>
+					</author>
+					<author fullname="R. Canetti">
+						<organization/>
+					</author>
+					<date month="February" year="1997"/>
+				</front>
+				<seriesInfo name="RFC" value="2104"/>
+			</reference>
+
+			<reference anchor="RFC4082">
+				<front>
+					<title>Timed Efficient Stream Loss-Tolerant Authentication (TESLA):
+						Multicast Source Authentication Transform Introduction</title>
+					<author fullname="A. Perrig">
+						<organization/>
+					</author>
+					<author fullname="D. Song">
+						<organization/>
+					</author>
+					<author fullname="R. Canetti">
+						<organization/>
+					</author>
+					<author fullname="J.D. Tygar">
+						<organization/>
+					</author>
+					<author fullname="B. Briscoe">
+						<organization/>
+					</author>
+					<date month="June" year="2005"/>
+				</front>
+				<seriesInfo name="RFC" value="4082"/>
+			</reference>
+
+			<reference anchor="RFC3275">
+				<front>
+					<title>(Extensible Markup Language) XML-Signature Syntax and Processing</title>
+					<author initials="D." surname="Eastlake" fullname="D. Eastlake"> <organization/>
+					</author>
+					<author initials="J." surname="Reagle" fullname="J. Reagle"> <organization/>
+					</author>
+					<author initials="D." surname="Solo" fullname="D. Solo"> <organization/>
+					</author>
+					<date year="2002" month="March"/>
+				</front>
+				<seriesInfo name="RFC" value="3275"/>
+				<format type="TXT" octets="164198" target="ftp://ftp.isi.edu/in-notes/rfc3275.txt"/>
+			</reference>
+
+			<reference anchor='RFC3852'>
+				<front>
+					<title>Cryptographic Message Syntax (CMS)</title>
+					<author initials='R.' surname='Housley' fullname='R. Housley'>
+					<organization /></author>
+					<date year='2004' month='July' />
+				</front>
+				<seriesInfo name='RFC' value='3852' />
+				<format type='TXT' octets='15541' target='ftp://ftp.isi.edu/in-notes/rfc3852.txt' />
+			</reference>
+
+			<reference anchor='RFC4648'>
+				<front>
+					<title>The Base16, Base32, and Base64 Data Encodings</title>
+					<author initials='S.' surname='Josefsson' fullname='S. Josefsson'>
+					<organization /></author>
+					<date year='2006' month='October' />
+				</front>
+				<seriesInfo name='RFC' value='4648' />
+				<format type='TXT' octets='35491' target='ftp://ftp.isi.edu/in-notes/rfc4648.txt' />
+			</reference>
+</references>
+
+
+<section title="Trivial Decoding Algorithm (Informative Only)" anchor="trivial_decoding">
+<!-- =================================================== -->
+
+<t>
+A trivial decoding algorithm is sketched below (please see <xref target="LDPC-codec"/>
+for the details omitted here):
+
+<figure>
+<artwork>
+  Initialization: allocate a table partial_sum[n-k] of buffers, each
+                  buffer being of size the symbol size. There's one
+                  entry per equation since the buffers are meant to
+                  store the partial sum of each equation; Reset all
+                  the buffers to zero;
+
+  /*
+   * For each newly received or decoded symbol, try to make progress
+   * in the decoding of the associated source block.
+   * NB: in case of a symbol group (G>1), this function is called for
+   * each symbol of the received packet.
+   * NB: a callback function indicates to the caller that new symbol(s)
+   *     has(have) been decoded.
+   * new_esi  (IN):  ESI of the new symbol received or decoded
+   * new_symb (IN):  Buffer of the new symbol received or decoded
+   */
+  void
+  decoding_step(ESI_t     new_esi,
+                symbol_t  *new_symb)
+  {
+      If (new_symb is an already decoded or received symbol) {
+          Return;        /* don't waste time with this symbol */
+      }
+
+      If (new_symb is the last missing source symbol) {
+          Remember that decoding is finished;
+          Return;        /* work is over now... */
+      }
+
+      Create an empty list of equations having symbols decoded
+      during this decoding step;
+
+      /*
+       * First add this new symbol to the partial sum of all the
+       * equations where the symbol appears.
+       */
+      For (each equation eq in which new_symb is a variable and
+           having more than one unknown variable) {
+
+          Add new_symb to partial_sum[eq];
+
+          Remove entry(eq, new_esi) from the H matrix;
+
+          If (the new degree of equation eq == 1) {
+              /* a new symbol can be decoded, remember the
+               * equation */
+              Append eq to the list of equations having symbols
+              decoded during this decoding step;
+          }
+      }
+
+      /*
+       * Then finish with recursive calls to decoding_step() for each
+       * newly decoded symbol.
+       */
+      For (each equation eq in the list of equations having symbols
+           decoded during this decoding step) {
+
+          /*
+           * Because of the recursion below, we need to check that
+           * decoding is not finished, and that the equation is
+           * __still__ of degree 1
+           */
+          If (decoding is finished) {
+              break;        /* exit from the loop */
+          }
+
+          If ((degree of equation eq == 1) {
+              Let dec_esi be the ESI of the newly decoded symbol in
+              equation eq;
+
+              Remove entry(eq, dec_esi);
+
+              Allocate a buffer, dec_symb, for this symbol and
+              copy partial_sum[eq] to dec_symb;
+
+              Inform the caller that a new symbol has been
+              decoded via a callback function;
+
+              /* finally, call this function recursively */
+              decoding_step(dec_esi, dec_symb);
+          }
+      }
+
+      Free the list of equations having symbols decoded;
+      Return;
+  }
+</artwork>
+</figure>
+</t>
+
+
+</section>
+
+
+
+    </back>
+
+</rfc>

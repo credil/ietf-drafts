@@ -1,0 +1,547 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc tocompact="yes"?>
+<?rfc tocdepth="3"?>
+<?rfc tocindent="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc comments="yes"?>
+<?rfc inline="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<?rfc authorship="yes"?>
+<?rfc tocappendix="yes"?>
+<rfc category="std" docName="draft-ietf-roll-of0-04" ipr="trust200902">
+  <front>
+    <title abbrev="draft-ietf-roll-of0">RPL Objective Function 0</title>
+
+
+    <author fullname="Pascal Thubert" initials="P" role="editor"
+            surname="Thubert">
+      <organization abbrev="Cisco Systems">Cisco Systems</organization>
+
+      <address>
+        <postal>
+          <street>Village d'Entreprises Green Side</street>
+
+          <street>400, Avenue de Roumanille</street>
+
+          <street>Batiment T3</street>
+
+          <city>Biot - Sophia Antipolis</city>
+
+          <code>06410</code>
+
+          <country>FRANCE</country>
+        </postal>
+
+        <phone>+33 497 23 26 34</phone>
+
+        <email>pthubert@cisco.com</email>
+      </address>
+    </author>
+
+    <date />
+
+    <area>Routing Area</area>
+
+    <workgroup>ROLL</workgroup>
+
+    <keyword>Draft</keyword>
+
+    <abstract>
+      <t>The Routing Protocol for Low Power and Lossy Networks (RPL)
+	  defines a generic Distance Vector protocol for 
+	  Low Power and Lossy Networks (LLNs). RPL is instantiated 
+	  to honor a particular routing objective/constraint
+	  by the adding a specific Objective Function (OF) that 
+	  is designed to solve that problem. This specification defines a basic OF, 
+	  OF0, that uses only the abstract properties exposed in RPL messages
+	   to maximize connectivity.
+		</t>
+    </abstract>
+
+    <note title="Requirements Language">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119">RFC 2119</xref>.</t>
+    </note>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>The IETF ROLL Working Group has defined
+      application-specific routing requirements for a Low Power and Lossy
+      Network (LLN) routing protocol, specified in <xref
+      target="I-D.ietf-roll-building-routing-reqs"></xref>, <xref
+      target="I-D.ietf-roll-home-routing-reqs"></xref>, <xref
+      target="RFC5673"></xref>, and <xref
+      target="RFC5548"></xref>. 
+	  </t>
+	  <t>Considering the wide variety of use cases, link types and metrics,
+	 <xref target="I-D.ietf-roll-rpl"> the Routing Protocol for Low Power and Lossy Networks </xref>
+	 was designed as a generic core that is agnostic to metrics and instantiated using Objective Functions.</t>
+	  
+	<t>RPL forms Destination Oriented Directed Acyclic Graphs (DODAGs) within instances of the protocol,
+	each instance being set up to honor a particular routing objective/constraint of a given deployment. 
+	This instantiation is achieved by plugging into the RPL core a specific Objective Function (OF) that is designed to solve
+	that problem to be addressed by that instance.</t>
+	
+	<t>the Objective Function selects the DODAG iteration that a device joins, and a number
+	of neighbor routers within that iteration as parents and siblings.
+    The OF is also responsible for computing the Rank of the device, 
+	that abstracts a relative position within the DODAG and is used by the RPL core 
+	to enable a degree of loop avoidance and verify forward progression towards a destination,
+	as specified in <xref target="I-D.ietf-roll-rpl"/>.</t>
+		
+
+
+          <t>This specification defines the Objective Function 0 (OF0), 
+		  that corresponds to the Objective Code Point 0. 
+		  OF0 does not leverage link layer metrics such as
+          described in <xref target="I-D.ietf-roll-routing-metrics">the metrics draft</xref>,
+          but is only based on abstract information from the DIO base
+          container, such as Rank and an administrative preference, that is transported
+		  in DIOs as DODAGPreference in <xref target="I-D.ietf-roll-rpl"/>.</t>
+    </section>
+
+    <section anchor="Terminology" title="Terminology">
+      <t>The terminology used in this document is consistent with and
+      incorporates that described in `Terminology in Low power And Lossy
+      Networks' <xref target="I-D.ietf-roll-terminology"></xref>
+	  and <xref target="I-D.ietf-roll-rpl"/>.</t>
+
+    </section>
+<!--
+    <section title="Objective Functions">
+          <t>An Objective Function (OF) allows for the selection of a DAG to
+          join, and a number of peers in that DAG as parents. The OF is used
+          to compute an ordered list of parents and provides load balancing
+          guidance. The OF is also responsible to compute the Rank of the
+          device within the DAG.</t>
+		  
+		  <t><xref target="I-D.ietf-roll-rpl"/> defines the operation of RPL
+		  and the generic interfaces that all OFs need to implement. OF0
+		  does not require additional headers and is implemented using
+		  only the information in the DIO Base.</t>
+
+          <t>The Objective Function is specified in the RA-DIO message using
+          an objective code point (OCP) and indicates the objective function
+          that has been used to compute the DAG (e.g. "minimize the path cost
+          using the ETX metric and avoid `Blue' links"). The objective code
+          points are specified in <xref
+          target="I-D.ietf-roll-routing-metrics" />. This document specifies
+          the OCP 0, in support of default operation.</t>
+
+          <t>OFO follows the same abstract behavior specified in < xref
+          target="I-D.ietf-roll-rpl" />: </t>
+
+          <list style="symbols">
+            <t>The parent selection is triggered each time an event indicates
+            that a potential next_hop information is updated. This might
+            happen upon the reception of a RA-DIO message, a timer elapse, or
+            a trigger indicating that the state of a candidate neighbor has
+            changed.</t>
+
+            <t>An OF scans all the interfaces on the device. Although there
+            may typically be only one interface in most application scenarios,
+            there might be multiple of them and an interface might be
+            configured to be usable or not for RPL operation. An interface can
+            also be configured with a preference or dynamically learned to be
+            better than another by some heuristics that might be link-layer
+            dependent and are out of scope. Finally an interface might or not
+            match a required criterion for an Objective Function, for instance
+            a degree of security. As a result some interfaces might be
+            completely excluded from the computation, while others might be
+            more or less preferred.</t>
+
+            <t>The OF scans all the candidate neighbors on the possible
+            interfaces to check whether they can act as an attachment router
+            for a DAG. There might be multiple of them and a candidate
+            neighbor might need to pass some validation tests before it can be
+            used. In particular, some link layers require experience on the
+            activity with a router to enable the router as a next_hop.</t>
+
+            <t>The OF computes self's Rank by adding the step of Rank to that
+            candidate to the Rank of that candidate. The step of Rank is
+            estimated as follows:</t>
+
+            <list style="symbols">
+              
+			  <t>The step of Rank might vary from MINIMUM_RANK_INCREMENT to
+			  MAXIMUM_RANK_INCREMENT.
+			  </t>
+              <list style="symbols">
+                <t>MINIMUM_RANK_INCREMENT indicates a unusually good link, for instance a link
+                between powered devices in a mostly battery operated
+                environment.</t>
+
+                <t>DEFAULT_RANK_INCREMENT indicates a `normal'/typical link, as qualified by the
+                implementation.</t>
+
+                <t>MAXIMUM_RANK_INCREMENT indicates a link that can hardly be used to forward any
+                packet, for instance a radio link with quality indicator or
+                expected transmission count that is close to the acceptable
+                threshold.</t>
+              </list>
+
+              <t>Candidate neighbors that would cause self's Rank to increase
+              are ignored</t>
+            </list>
+
+            <t>Candidate neighbors that advertise an OF incompatible with the
+            set of OF specified by the policy functions are ignored.</t>
+
+            <t>As it scans all the candidate neighbors, the OF keeps the
+            current best parent and compares its capabilities with the current
+            candidate neighbor. The OF defines a number of tests that are
+            critical to reach the Objective. A test between the routers
+            determines an order relation.</t>
+
+            <list style="symbols">
+              <t>If the routers are roughly equal for that relation then the
+              next test is attempted between the routers,</t>
+
+              <t>Else the best of the 2 becomes the current best parent and
+              the scan continues with the next candidate neighbor</t>
+
+              <t>Some OFs may include a test to compare the Ranks that would
+              result if the node joined either router</t>
+            </list>
+
+            <t>When the scan is complete, the preferred parent is elected and
+            self's Rank is computed as the preferred parent Rank plus the step
+            in Rank with that parent.</t>
+
+            <t>Other rounds of scans might be necessary to elect alternate
+            parents and siblings. In the next rounds:</t>
+
+            <list style="symbols">
+              <t>Candidate neighbors that are not in the same DAG are
+              ignored</t>
+
+              <t>Candidate neighbors that are of worse Rank than self are
+              ignored</t>
+
+              <t>Candidate neighbors of a better Rank than self (non-siblings)
+              are preferred</t>
+            </list>
+          </list>
+        </section>
+-->
+        		  
+<!--
+          <t>This document specifies a default objective metric, called OF0,
+          and using the OCP 0. OF0 is the default objective function of RPL,
+          and can be used if allowed by the policy of the processing node when
+          no objective function is included in the RA-DIO message, or if the
+          OF indicated in the RA-DIO message is unknown to the node. If not
+          allowed, then the RA-DIO message is simply ignored and not processed
+          by the node.</t>
+
+		  -->
+          <section title="Goal">
+		    <t> The Goal of the OF0 is to join a DODAG iteration that
+			offers connectivity to a specific set of nodes or to 
+			a larger routing infrastructure. 
+			For the purpose of OF0, Grounded thus means that the root
+			provides such connectivity. How that connectivity is asserted
+			and maintained is out of scope.</t>
+			
+            <t>Objective Function 0 is designed to find the nearest Grounded 
+			root. In the absence of a Grounded root, LLN inner connectivity 
+			is still desirable and floating DAGs will form, rooted at the
+			nodes with the highest administrative preference.</t>
+			
+			<t>The metric used in OF0 is an administratively defined scalar cost that
+			is trivially added up along a path to compute the RPL Rank, as defined 
+			in <xref target="I-D.ietf-roll-rpl"/>. As a result, the Rank if a node
+			is analogous to a weighted hop count of the path to the root.
+			Using a metric that in essence is similar to hop count
+			implies that the quality of the connectivity should be asserted so that
+			only neighbors with a good enough connectivity are presented to the OF. 
+			How that connectivity is asserted and maintained is out of scope.
+			</t>
+			
+			<t>
+			
+			Hop count used in wireless networks will tend to favor paths with long distance links
+		    and non optimal connectivity properties. As a result, the link selection must be
+			very conservative, and the available link set is thus constrained. In some situations, 
+			this might end up partitioning the network. 
+			For those reasons, though it can be used on wired links and wired link emulations such
+			as WIFI infrastructure mode, OF0 is generally not recommended for wireless networks.
+						
+			</t>
+
+            <t>The default step of Rank is DEFAULT_RANK_INCREMENT for each hop. An implementation
+			MAY allow a step between MINIMUM_RANK_INCREMENT and MAXIMUM_RANK_INCREMENT 
+			to reflect a large variation of link quality by units of MINIMUM_RANK_INCREMENT.
+			In other words, the least significant octet in the Rank is not used.</t>
+			<t>
+			It MAY stretch its step of Rank by up to MAXIMUM_RANK_STRETCH in order
+			to enable the selection of a sibling when only one parent is available.
+			For instance, say that a node computes a step of Rank of 4 units of MINIMUM_RANK_INCREMENT
+			from a preferred parent with a Rank of 6 units resulting in a Rank of 10 units for this node.
+			Say that with that Rank of 10 units, this node would end up with only one
+			parent and no sibling, though there is a neighbor with a Rank of 12 units. 
+			In that case, the node is entitled to stretch its step of Rank by a value of 2 units,
+			thus using a step of Rank of 6 units so as to reach a Rank of 12 units and find a sibling.
+			But the node is not entitled to use a step of Rank larger than 6 units
+			since that would be a greedy behavior that would deprive the neighbor
+			of this node of a successor. 
+			Also, if the neighbor had exposed a Rank of 16 units, the stretch
+			of Rank from 10 to 16 units would have exceeded MAXIMUM_RANK_STRETCH of 4 units
+			and thus the neighbor would not have been selectable even as a sibling.
+			</t>
+			
+			<t>Optionally, the administrative preference of a root MAY be configured
+			to supercede the goal to reach Grounded root. In that case, nodes will
+			associate to the root with the highest preference available, regardless
+			of whether that root is Grounded or not. Compared to a deployment with
+			a multitude of Grounded roots that would result in a same multitude of DODAGs,
+			such a configuration may result in possibly less but larger DODAGs, as many as 
+			roots configured with the highest priority in the reachable vincinity.</t>
+
+            <t>OF0 selects a preferred parent and a backup next_hop if one is
+            available. The backup next_hop might be a parent or a sibling. All
+            the traffic is routed via the preferred parent. When the link
+            conditions do not let a packet through the preferred parent,
+            the packet is passed to the backup next_hop.</t>
+
+          </section>
+
+          <section title="Selection of the Preferred Parent">
+            <t>As it scans all the candidate neighbors, OF0 keeps the parent
+            that is the best for the following criteria (in order):</t>
+
+            <t><list style="numbers">
+				
+                <t><xref target="I-D.ietf-roll-rpl"/> spells out the generic
+				rules for a node to reparent and in particular the boundaries 
+				to augment its Rank within a DODAG iteration.
+				A candidate that would not satisfy those rules MUST NOT be considered.</t>
+
+                <t>An implementation should validate a router prior to selecting it
+				as preferred. This validation process is implementation and link type
+				dependent, and is out of scope. A router that has been validated
+				is preferrable.</t>
+				
+				<t>When multiple interfaces are available,
+				a policy might be locally configured to prioritize them and that policy applies first;
+				that is a router on a higher order interface is preferable.</t>
+				
+				<t>In the absence of a Grounded DODAG iteration, the router with a higher
+                administrative preference SHOULD be preferred. Optionally, this selection applies
+				regardless of whether the DODAG is Grounded or not.</t>
+
+                <t>A router that offers connectivity to a grounded DODAG iteration SHOULD be
+                preferred over one that does not.</t>
+				
+                <t>When comparing 2 routers that belong to the same DODAG, a router that
+				offers connectivity to the freshest sequence SHOULD be preferred.</t>
+
+                <t>When computing a resulting Rank for this node from a parent Rank and a Step of Rank
+				from that parent, the parent that causes the lesser resulting Rank SHOULD be preferred.</t>
+
+                <t>A DODAG iteration for which there is an alternate parent SHOULD be preferred.
+                This check is optional. It is performed by computing the
+                backup next_hop while assuming that the router that is currently examined 
+				is finally selected as preferred parent.</t>
+
+                <t>The DODAG iteration that was in use already SHOULD be preferred.</t>
+
+                <t>The preferred parent that was in use already SHOULD be preferred.</t>
+
+                <t>A router that has announced a DIO message more recently SHOULD be preferred.</t>
+              </list></t>
+          </section>
+
+          <section title="Selection of the Backup next_hop">
+            <list style="symbols">
+			  <t>When multiple interfaces are available,
+               a router on a higher order interface is preferable.</t>
+
+              <t>The preferred parent MUST be ignored.</t>
+
+              <t>A Router that is not in the same DODAG as the preferred
+			  parent, either in the current or a subsequent iteration, MUST be ignored.</t>
+				
+              <t>A Router with a Rank that is higher than the Rank computed for this node 
+			  out of the preferred parent SHOULD NOT be selected as parent, to avoid greedy behaviors.
+			  It MAY still be selected as sibling if no better Back-up next hop is found.</t>
+				
+              <t>A router with a lesser Rank SHOULD be preferred.</t>
+
+              <t>A router that has been validated as usable by an implementation dependant
+			  validation process SHOULD be preferred.</t>
+
+              <t>The backup next_hop that was in use already SHOULD be preferred.</t>
+            </list>
+          </section>
+
+          <section title="Abstract Interface with RPL core">
+		  
+        <t>Objective Function 0 interacts with the core RPL in the following ways:
+		<list
+            hangIndent="11" style="hanging">
+            <t hangText="Processing DIO:">This core RPL triggers the OF when a new
+            DIO was received. OF0 analyses the information in the DIO and may select
+			the source as a parent or sibling.</t>
+
+            <t hangText="Providing DAG information">The OF0 support can be required to
+            provide the DAG information for a given instance to the RPL core. This includes
+            the material that is contained in a DIO base header.</t>
+
+            <!-- t>
+            hangText="Generating Options">The OF0 support can be required to
+            provide the material that is necessary to build a DIO option.</t -->
+
+            <t hangText="Providing a Parent List">The OF0 support can be required to
+            provide the list of the parents for a given instance to the RPL core.
+			This includes the material that is contained in the transit option for
+			that parent.</t>
+
+            <t hangText="Trigger">The OF0 support may trigger the RPL core
+			to inform it that a change occurred. This indicates whether the change 
+			requires a new DIO to be fired, trickle timers to be reset, etc...</t>
+          </list></t>
+   
+		  </section>
+    <section anchor="const" title="OF0 Constants and Variables">
+      <t>OF0 uses the following constants:
+	  <list  style="hanging">
+	  <t hangText="MinHopRankIncrease:">256</t>
+	  <t hangText="DEFAULT_RANK_INCREMENT:">4 * MinHopRankIncrease</t>
+	  <t hangText="MINIMUM_RANK_INCREMENT:">1 * MinHopRankIncrease</t>
+	  <t hangText="MAXIMUM_RANK_INCREMENT:">16 * MinHopRankIncrease</t>
+	  <t hangText="MAXIMUM_RANK_STRETCH:">4 * MinHopRankIncrease</t>
+	  </list></t>
+    </section>
+	
+    <section anchor="IANA" title="IANA Considerations">
+	<t>IThis specification requires the assignment of an OCP for OF0. The value of 0 is suggested.</t>
+	
+        </section>
+		
+    <section anchor="Sec" title="Security Considerations">
+      <t>Security Considerations for OCP/OF are to be developed in accordance
+      with recommendations laid out in, for example, <xref
+      target="I-D.tsao-roll-security-framework"></xref>.</t>
+    </section>
+    <section anchor="Acknowledgements" title="Acknowledgements">
+
+      <t>Most specific thanks to Tim Winter, JP Vasseur, Julien Abeille, Mathilde
+	  Durvy, Teco Boot, Navneet Agarwal and Henning Rogge for in-depth review and first 
+	  hand implementer's feedback.</t>
+    </section>
+
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.RFC.2119"?>
+    </references>
+
+    <references title="Informative References">
+      <?rfc include='reference.I-D.draft-ietf-roll-building-routing-reqs-07.xml'?>
+
+      <?rfc include='reference.I-D.draft-ietf-roll-home-routing-reqs-08.xml'?>
+
+      <?rfc include='reference.I-D.ietf-roll-rpl.xml'?>
+
+      <?rfc include="reference.RFC.5548"?>
+
+      <?rfc include='reference.I-D.ietf-roll-terminology.xml'?>
+	  
+      <?rfc include="reference.RFC.5673"?>
+
+      <?rfc include='reference.I-D.ietf-roll-routing-metrics.xml'?>
+
+      <?rfc include='reference.I-D.tsao-roll-security-framework.xml'?>
+<!--
+      <?rfc include="reference.RFC.2453"?>
+
+      <?rfc include="reference.RFC.3819"?>
+
+      <?rfc include="reference.RFC.4101"?>
+
+      <?rfc include="reference.RFC.4191"?>
+
+      <?rfc include="reference.RFC.4461"?>
+
+      <?rfc include="reference.RFC.4861"?>
+
+      <?rfc include="reference.RFC.4875"?>
+
+      <?rfc include="reference.RFC.4915"?>
+
+      <?rfc include="reference.RFC.5120"?>
+
+      <?rfc include="reference.I-D.draft-ietf-bfd-base-09.xml"?>
+
+      <?rfc include="reference.I-D.draft-ietf-manet-nhdp-10.xml"?>
+
+      <reference anchor="Levis08"
+                 target="http://portal.acm.org/citation.cfm?id=1364804">
+        <front>
+          <title abbrev="Levis08">The Emergence of a Networking Primitive in
+          Wireless Sensor Networks</title>
+
+          <author fullname="Philip Levis" initials="P." surname="Levis">
+            <organization></organization>
+          </author>
+
+          <author fullname="Eric Brewer" initials="E." surname="Brewer">
+            <organization></organization>
+          </author>
+
+          <author fullname="David Culler" initials="D." surname="Culler">
+            <organization></organization>
+          </author>
+
+          <author fullname="David Gay" initials="D." surname="Gay">
+            <organization></organization>
+          </author>
+
+          <author fullname="Samuel Madden" initials="S." surname="Madden">
+            <organization></organization>
+          </author>
+
+          <author fullname="Neil Patel" initials="N." surname="Patel">
+            <organization></organization>
+          </author>
+
+          <author fullname="Joe Polastre" initials="J." surname="Polastre">
+            <organization></organization>
+          </author>
+
+          <author fullname="Scott Shenker" initials="S." surname="Shenker">
+            <organization></organization>
+          </author>
+
+          <author fullname="Robert Szewczyk" initials="R." surname="Szewczyk">
+            <organization></organization>
+          </author>
+
+          <author fullname="Alec Woo" initials="A." surname="Woo">
+            <organization></organization>
+          </author>
+
+          <date month="July" year="2008" />
+        </front>
+
+        <seriesInfo name="Communications of the ACM," value="v.51 n.7" />
+
+        <format target="http://portal.acm.org/citation.cfm?id=1364804"
+                type="HTML" />
+
+				</reference>
+				-->
+    </references>
+
+
+  </back>
+</rfc>

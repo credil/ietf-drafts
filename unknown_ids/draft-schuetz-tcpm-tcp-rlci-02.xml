@@ -1,0 +1,1069 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="rfc2629.xslt" ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc tocompact="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<?rfc tocdepth="2"?>
+<?rfc symrefs="yes"?>
+<?rfc comments="yes" ?>
+<!--<?rfc rfcedstyle="yes"?>-->
+<?rfc sortrefs="yes" ?>
+
+<!-- With strict="yes", can't have more than five authors. -->
+<?rfc strict="no"?>
+
+<rfc category="exp" ipr="noModification3978" docName="draft-schuetz-tcpm-tcp-rlci-02">
+<front>
+	<title abbrev="TCP Response to Connectivity Indications">
+		TCP Response to Lower-Layer Connectivity-Change Indications
+	</title>
+
+	<author initials="S." surname="Schuetz" fullname="Simon Schuetz">
+		<organization abbrev="NEC">NEC Laboratories Europe</organization>
+		<address>
+			<postal>
+				<street>Kurfuerstenanlage 36</street>
+				<code>69115</code> <city>Heidelberg</city>
+				<country>Germany</country>
+			</postal>
+			<phone>+49 6221 4342 165</phone>
+			<facsimile>+49 6221 4342 155</facsimile>
+			<email>simon.schuetz@nw.neclab.eu</email>
+			<uri>http://www.nw.neclab.eu</uri>
+		</address>
+	</author>
+	<author initials="N." surname="Koutsianas" fullname="Nikolaos Koutsianas">
+        <organization abbrev="Nokia">
+                Nokia Research Center
+        </organization>
+        <address>
+                <postal>
+                        <street>P.O. Box 407</street>
+                        <code>00045</code> <city>Nokia Group</city>
+                        <country>Finland</country>
+                </postal>
+                <phone>+358 50 48 36197</phone>
+                <email>nikolaos.koutsianas@nokia.com</email> 
+        </address>
+</author>
+<author initials="L." surname="Eggert" fullname="Lars Eggert">
+        <organization abbrev="Nokia">
+                Nokia Research Center
+        </organization>
+        <address>
+                <postal>
+                        <street>P.O. Box 407</street>
+                        <code>00045</code> <city>Nokia Group</city>
+                        <country>Finland</country>
+                </postal>
+                <phone>+358 50 48 24461</phone>
+                <email>lars.eggert@nokia.com</email>
+                <uri>
+                        http://research.nokia.com/people/lars_eggert/
+                </uri>
+        </address>
+</author>
+	<author initials="W.M." surname="Eddy" fullname="Wesley M. Eddy">
+		<organization abbrev="Verizon">Verizon Federal Network Systems</organization>
+		<address>
+			<postal>
+				<street>NASA Glenn Research Center</street>
+				<street>21000 Brookpark Road, MS 54-5</street>
+				<city>Cleveland</city><region>OH</region>
+				<code>44135</code>
+				<country>USA</country>
+			</postal>
+			<email>weddy@grc.nasa.gov</email>
+		</address>
+	</author>
+	<author initials="Y.P." surname="Swami" fullname="Yogesh Prem Swami">
+		<organization abbrev="Nokia">Nokia Research Center, Dallas</organization>
+		<address>
+			<postal>
+				<street>955 Page Mill Road</street>
+				<city>Palo Alto</city>
+				<region>California</region>
+				<code>94304</code>
+				<country>USA</country>
+			</postal>
+			<phone>+1 972 374 0669</phone>
+			<email>yogesh.swami@nokia.com</email>
+		</address>
+	</author>
+	<author initials="K." surname="Le" fullname="Khiem Le">
+		<organization abbrev="NSN">Nokia Siemens Networks</organization>
+		<address>
+			<postal>
+				<street>6000 Connection Drive</street>
+				<city>Irving</city>
+				<region>TX</region>
+				<code>75039</code>
+				<country>USA</country>
+			</postal>
+			<phone>+1 972 342 3502</phone>
+			<email>khiem.le@nsn.com</email>
+		</address>
+	</author>
+
+	<date year="2007"/>
+	<area>Transport</area>
+	<workgroup>TCPM Working Group</workgroup>
+	<keyword>TCP</keyword>
+	<keyword>retransmission trigger</keyword>
+	<keyword>connectivity indication</keyword>
+	<keyword>immediate retransmission</keyword>
+	<keyword>intermittent connectivity</keyword>
+	<keyword>mobility</keyword>
+	<abstract>
+		<t>
+When the path characteristics between two hosts change abruptly, TCP can experience significant delays before resuming transmission in an efficient manner or TCP can behave unfairly to competing traffic. This document describes TCP extensions that improve transmission behavior in response to advisory, lower-layer connectivity-change indications. The proposed TCP extensions modify the local behavior of TCP and introduce a new TCP option to signal locally received connectivity-change indications to remote peers. Performance gains result from a more efficient transmission behavior and there is no difference in aggressiveness in comparison to a newly-started connection.
+		</t>
+	</abstract>
+</front>
+
+
+<middle>
+<section title="Introduction">
+		<t>
+The Transmission Control Protocol (TCP) <xref target="RFC0793"/> generally assumes that the end-to-end path between two hosts has characteristics that are relatively stable over the lifetime of a connection. Although TCP's congestion control algorithms <xref target="RFC2581"/> can adapt to changes to the path characteristics after several round-trip times, they fail to support efficient operation in the few round-trip times immediately after a significant path change. This is due to the granularity of TCP's sampling mechanisms. Significant changes to path connectivity include loss or reestablishment of connectivity, and drastic, abrupt changes in round-trip time (RTT) or available bandwidth. Connectivity changes that occur on such short time-scales are becoming more common, due to host mobility or intermittent network attachment. 
+		</t>
+		
+		<t>
+This document describes a set of complementary TCP extensions that improve behavior when transmitting over paths whose characteristics can change on short time-scales. TCP implementations that support these extensions respond to receiving generic, link-technology-independent, per-connection connectivity-change indications from lower layers. A connectivity-change indication signals that the characteristics of the end-to-end path between the local node and its peer have changed in some undefined way. The response mechanisms proposed for TCP act on this information in a conservative fashion. The specific response depends on the state of a connection.
+		</t>
+
+		<t>
+It is important to note that this addition of response mechanisms to lower-layer information is following an established precedent. TCP and other transport protocols already react to information and signals from lower layers; the proposed connectivity-change indications thus extend an established interface between layers in the protocol stack. TCP measures the end-to-end path to implicitly derive network-layer information. TCP also directly reacts to network-layer signals delivered via ICMP, for example, "Port Unreachable" or the now-deprecated "Source Quench" <xref target="RFC1122"/>. Explicit Congestion Notification (ECN) <xref target="RFC3168"/> and Quick-Start <xref target="RFC4782"/> are other sources of network-layer information for which response mechanisms for TCP have been defined. Connectivity-change indications are yet another source of lower-layer information that TCP can use to improve its operation. 
+		</t>
+
+		<t>
+A second important point to note is that the TCP response mechanisms to connectivity-change indications are purely optional efficiency improvements. In the absence of connectivity-change indications, a TCP that implements these changes behaves identically to an unmodified TCP. When lower layers provide connectivity-change indications that trigger the response mechanisms, they enhance TCP operation based on the explicit lower-layer information that is signaled. These response mechanisms do not increase the aggressiveness of TCP.
+ 		</t>	
+
+		<t>
+Note that the IAB has recently described architectural issues of "link indications" <xref target="RFC4907" />. The authors feel that this term is not quite accurate in this environment, because transport mechanisms should remain link-technology-agnostic. However, transport protocols have always acted on network-layer information and signals, such as measured path characteristics or ICMP-signaled conditions. Because of the growing proliferation of shim layers between the traditional network and transport layers, this document uses the term "lower-layer indication" to remain independent of specific network or shim layers.
+		</t>
+
+		<t>
+Note that it is currently an open question as to whether additional lower-layer indications can provide further information to transport protocols. Also, this document only describes response mechanisms for TCP, although other transport protocols may benefit from similar response mechanisms to react to connectivity-change indications.
+		</t>
+
+	<t>
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target="RFC2119"/>.
+	</t>
+			
+</section>
+
+<section title="Motivation and Overview">
+		<t>
+Several proposed network-layer extensions support host mobility, including Mobile IPv4 <xref target="RFC3344" />, Mobile IPv6 <xref target="RFC3775" /> and HIP <xref target="I-D.ietf-hip-mm"/>. Typically, they shield transport-layer protocols from mobility events and enable them to sustain established connections across mobility events. However, the path characteristics that established connections experience after a mobility event may have changed drastically and on short time-scales. Congestion control, RTT and path-MTU state gathered over an old path before the move generally have no meaning for the new path. Because TCP uses stale information when resuming transmission over the new path, it can be either too aggressive or highly inefficient.  Similar conditions may be found when fail-overs occur for multihomed hosts through the shim6 protocol.  Some background on the types of scenarios that the technology described in this document is designed to work within is found in <xref target="classification"/>.
+	</t>
+
+	<t>
+TCP already forces a slow-start restart in some cases where the network state becomes unknown, such as after an idle period or heavy losses. A first part of the response specified in this document involves a similar return to initial slow-start state in response to connectivity-change indications that are received while a connection is transmitting in steady-state. Note that this behavior is more conservative than the standard TCP response or lack of response. Some performance gains with the proposed mechanisms are due to either avoiding overloading the new path, which typically incurs an RTO, or using slow-start to quickly detect new capacity far above the point where steady-state had previously been near.
+		</t>
+	
+		<t>
+A second response component improves TCP operation in the presence of temporary connectivity disruptions. These disruptions can occur independently of mobility events and, for example, may be due to insufficient wireless access coverage or nomadic computer use. Connectivity disruptions can severely decrease TCP performance. The main reason for this decrease is TCP's retransmission behavior after a connectivity disruption <xref target="SCHUETZ" />. TCP uses periodic retransmission attempts in exponentially increasing intervals, which can unnecessarily delay retransmissions after connectivity returns. In the extreme case, TCP connections can even abort, if the disruption is longer than the TCP "user timeout." (Connection aborts are out of scope for this document but can be prevented by the TCP User Timeout Option <xref target="I-D.ietf-tcpm-tcp-uto"/>.)
+	</t>
+
+	<t>
+This second response action executes when receiving a connectivity-change indication while a connection is stalled in exponential back-off. It improves TCP retransmission behavior after connectivity is restored through an immediate speculative retransmission attempt
+			<cref anchor="footnote-1">
+The authors have heard the idea of triggering retransmits based on connectivity events of directly-connected links being attributed to Phil Karn ("kick" operation in the KAQ9 TCP stack).  A thread from the PILC mailing list in 2000 discusses some thoughts on this (http://www.isi.edu/pilc/list/archive/0691.html).
+			</cref>.
+Similar to the first response component, the second one also increases TCP performance through a more intelligent transmission behavior that uses periods of connectivity more efficiently. In comparison to startup of a new connection, it does not cause significant amounts of additional traffic and it does not change TCP's congestion control algorithms.
+		</t>
+		
+		<t>
+Finally, this draft specifies a third response component, which is a new TCP option that notifies the connection's remote peer of a connectivity-change event detected locally. This is useful because connectivity-change indications typically require appropriate responses at both ends of a connection, but may only be received or detected by one end. The other parts of the response to a connectivity-change indication are independent of the indication's source (locally notified or remotely signaled) and depend only on the specific indication and the state of the connection for which it was received.
+		</t>
+</section>
+
+
+
+
+<section title="Connectivity-Change Indications">
+	<t>
+The focus of this document is on specifying TCP response mechanisms to lower-layer connectivity-change indications. This section briefly describes how different network- and shim-layer mechanisms underneath the transport layer may provide these connectivity-change indications to TCP. This section is included for clarification only; details on connectivity indication sources are out of scope of this document.
+	</t>
+
+	<t>
+When lower layers detect a connectivity-change event, they generate corresponding connectivity-change indications. Lower-layer events that could trigger such an indication include (but are not limited to): 
+	<list style="symbols">
+		<t>
+the IP address of the local outbound interface used for a given connection has changed, e.g., due to DHCP <xref target="RFC2131"/> or IPv6 router advertisements <xref target="RFC2460"/>
+		</t>
+		<t>
+link-layer connectivity of the local outbound interface used for a given connection has changed, e.g., link-layer "link up" event <xref target="RFC4957" />
+		</t>
+		<t>
+the local outbound interface used for a given connection has changed, due to routing changes or link-layer connectivity changes at other interfaces (including tunnel establishment or teardown, e.g., in response to IKE events <xref target="RFC4306"/>) 
+		</t>
+
+		<t>
+a Mobile IP binding update has completed <xref target="RFC3775"/>
+		</t>
+		
+		<t>
+a HIP readdressing update has completed <xref target="I-D.ietf-hip-mm"/>
+		</t>
+
+		<t>
+a path-change signal from the network has arrived (possible in theory, depends on network capabilities)
+		</t>
+		
+		<t>
+other notifications as defined by the IETF's Detecting Network Attachment (DNA) working group have occurred <xref target="RFC4957" />
+		</t>
+
+	</list>
+Note that the list above only describes some potential sources for connectivity-change events. Other sources exist, but the details on when to generate such events are out of the scope of this document, which focuses on the TCP response mechanisms when such events are received.	
+	</t>
+
+</section>
+
+
+<section title="TCP Response to Connectivity-Change Indications" anchor="sec-tcp-response-cci">
+	<t>
+A TCP connection can receive a connectivity-change indication (CCI) either from its local stack ("local CCI") or through a new "connectivity-change indication TCP option" from its peer ("remote CCI"). <xref target="sec-option"/> specifies this new TCP option. In either case, upon reception of a CCI, the TCP response mechanisms defined in this document immediately re-probe path characteristics. They do this by either performing a speculative retransmission or by sending a single segment of new data or a pure ACK, depending on whether the connection is currently stalled in exponential back-off or transmitting in steady-state, respectively. A connection is "stalled in exponential back-off", if at least one segment was retransmitted due to a RTO expiration but has not been ACK'ed yet. 
+	</t>
+	
+	<t>
+The remainder of this section first defines the format of the new CCI option in <xref target="sec-option" /> and then describes the two TCP response mechanisms triggered by receiving CCIs - re-probing path characteristics and speculative retransmission - in <xref target="sec-cong-resp" /> and <xref target="sec-rxnow" />.
+	</t>
+	<t>
+The RLCI mechanisms defined in this document depend on the TCP Timestamps option (TSopt) <xref target="RFC1323"/>. Consequently, it is REQUIRED that an end host that wishes to use the RLCI mechanisms for TCP connection negotiate the use of TCP Timestamps options with its peer. If this negotiation fails, a host MUST NOT use RLCI mechanisms for a connection. TCP Timestamps options are needed by the RLCI mechanisms during the following operations:
+		</t>
+		<t>
+		<list style="symbols">
+		<t>
+To re-probe the path characteristics after a connectivity-change indication. A host uses the TS Echo Reply (TSecr) field of a TCP Timestamps option to distinguish whether incoming ACKs are for segments that have been transmitted before or after CCI.
+		</t>
+		<t>
+To identify a new remote CCI. A host uses the TS Value (TSval) field of an incoming TCP Timestamps option to distinguish a new remote CCI from the delayed reception of an old one. As a result, last remote CCI is defined as the one received with the highest TS Value.
+		</t>
+		</list>
+	</t>
+	<t>
+<xref target="procgen" /> and <xref target="sec-cong-resp" /> give more details about how RLCI mechanisms use TCP Timestamps options. 
+	</t>
+	<t>
+<!--To implement the RLCI mechanisms defined in this document, TCP implementations maintain eight new state variables per TCP connection. -->An implementation of the RLCI mechanism defined in this document maintains nine new state variables per TCP connection. <cref anchor="footnote-2">Although this specification introduces eight new per-connection state variables, a preliminary implementation of an earlier revision of this mechanism [I-D.swami-tcp-lmdr] only required around a hundred lines of kernel code.</cref> 
+		<list style="hanging">
+            <t hangText="LOCAL_CCI">
+<vspace blankLines="0" />It is a 1-bit counter, having an initial value of 0, used for distinguishing the existence of a new local CCI. It changes value every time a new local CCI received from the local stack starts being processed. <!-- You can receive a local cci but as you are processing another you discard it => no new local_cci -->
+			</t>
+            <t hangText="REMOTE_CCI">
+<vspace blankLines="0" />It holds a copy of the last CCI value advertised by the peer through a CCI TCP option. This is a 1-bit counter initialized to 0 and is updated in response to remote CCIs according to the rules defined in <xref target="procgen" />.
+			</t>
+            <t hangText="LOCAL_CCI_STATUS">
+<vspace blankLines="0" />It holds the status of the local CCI. It can have three possible values: LOCAL_CCI_IDLE (0), LOCAL_CCI_NEW (1), LOCAL_CCI_ECHO_ACK (2). The initial value is LOCAL_CCI_IDLE.
+			</t>
+            <t hangText="REMOTE_CCI_STATUS">
+<vspace blankLines="0" />It holds the status of the last remote CCI advertised by the peer through a CCI TCP option. It is a Boolean variable that can have 2 possible values: REMOTE_CCI_IDLE (0), REMOTE_CCI_ECHO (1). The initial value is REMOTE_CCI_IDLE.
+			</t>
+            <t hangText="LAST_CCI_TIME">
+<vspace blankLines="0" />It holds the local time when the last CCI (either local or remote) was received. It is updated every time either LOCAL_CCI or REMOTE_CCI is modified.
+			</t>
+			<t hangText="REMOTE_CCI_PEER_TIME">
+<vspace blankLines="0" />This variable is used in order to distinguish the new remote CCIs from the retransmissions of the past ones. It holds the TS Value (TSval) of the Timestamps option of the segment advertising the last remote CCI. It is initialized when receiving the first segment from the peer and it is updated every time REMOTE_CCI is modified. 
+			</t>
+			<t hangText="LOCAL_CCI_PEER_ECHO_TIME">
+<vspace blankLines="0" />This variable is used in order to distinguish the echo of a new local CCI from the delayed retransmissions of echoes of older local CCIs. It holds the TS Value (TSval) of the Timestamps option of the segment echoed the last local CCI. It is initialized when receiving the first segment from the peer and it is updated every time LOCAL_CCI_STATUS changes from LOCAL_CCI_NEW to LOCAL_CCI_ECHO_ACK. 
+			</t>
+            <t hangText="CCI_SNDMAX">
+<vspace blankLines="0" />Retains the highest sequence number transmitted when the most recent CCI (either local or remote) was received.
+			</t>
+			<t hangText="CCI_CONTROLLED_CWND">
+<vspace blankLines="0" />It is a Boolean variable that sets an additional condition controlling the increment of the congestion window. Having an initial value of false, it is updated according to the rules defined in <xref target="procgen" />.
+			</t>
+
+		</list>
+	</t>
+
+<section anchor="sec-option" title="Connectivity-Change Indication TCP Option">
+	<t>
+Connectivity-change indications (CCIs) are generally asymmetric, i.e., they may occur or be detected by one end but not the other. The basic idea behind the CCI TCP option is to signal the occurrence of local CCIs to the other end, in order to allow it to respond appropriately. Note that this assumes that paths will generally be symmetric, meaning that a CCI received by one end for its path to the peer will imply that the characteristics of the reverse path have also changed. 
+	</t>
+
+		<figure anchor="fig-cci-opt" title="Format of the connectivity-change indication TCP option.">
+		<artwork align="center">
+                     1                   2              
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 
++---------------+---------------+-----+-+-+---+-+
+|               |               |  R  | | |   |E|
+|   Kind = X    |  Length = 3   |  E  |C|E| C |C|
+|               |               |  S  | |C| S |S|
++---------------+---------------+-----+-+-+---+-+
+    		</artwork>
+		</figure>
+
+		<t>
+<xref target="fig-cci-opt"/> shows the format of the CCI TCP option. It contains these fields:
+			<list style="hanging">
+<t hangText="Kind (8 bits)">
+<vspace blankLines="0" />The TCP option number X <xref target="RFC0793"/> allocated by IANA upon publication of this document (see <xref target="ianacons"/>).
+			</t>
+
+<t hangText="Length (8 bits)">
+<vspace blankLines="0" />Length of the TCP option in octets <xref target="RFC0793"/>; its value MUST be 3.			
+</t>
+
+<t hangText="RES (3 bits)">
+<vspace blankLines="0" />Reserved bits. The sender SHOULD set these to zero and the receiver MUST ignore them.
+
+   			</t>
+<t hangText="C (1 bit)">
+<vspace blankLines="0" /> Current value of LOCAL_CCI of the end sending the option.
+
+			</t>
+<t hangText="EC (1 bit)">
+<vspace blankLines="0" />Echoed value of C, i.e., the current value of REMOTE_CCI of the end sending the option.
+			</t>
+			<t hangText="CS (2 bit)">
+<vspace blankLines="0" />Current value of LOCAL_CCI_STATUS of the end sending the option.
+			</t>
+			<t hangText="ECS (1 bit)">
+<vspace blankLines="0" />Current value of REMOTE_CCI_STATUS of the end sending the option.
+			</t>
+
+			</list>
+		</t>
+		<t>
+CCI TCP option contains two single-bit fields (C and EC) used for distinguishing new CCIs from delayed retransmissions of the old ones. It also contains some flags representing the status of each CCI. These flags are used for a 3-way handshake that ensures that both parties have been informed of a new CCI. At the beginning of a connection, LOCAL_CCI and REMOTE_CCI MUST be set to 0. LOCAL_CCI_STATUS and REMOTE_CCI_STATUS MUST be set to LOCAL_CCI_IDLE and REMOTE_CCI_IDLE, respectively.
+		</t>
+		<t>
+A host opening a connection includes a CCI option <!--(and a Timestamps option) -->in its SYN segment with C := 0, CS := LOCAL_CCI_IDLE, EC := 0 and ECS := REMOTE_CCI_IDLE in order to advertise support for the CCI mechanism. <!--This is an exception to the rule that does not allow sending the CCI option when having the above variable values. -->A host receiving a SYN segment MUST NOT include a CCI option in its SYN-ACK, unless it has received a CCI option <!--(and a Timestamps option)-->in the corresponding SYN. In case a host has received a CCI option in the SYN segment, it MUST echo the same CCI option in its SYN-ACK segment, i.e., it MUST set C := 0, CS := LOCAL_CCI_IDLE, EC := 0 and ECS := REMOTE_CCI_IDLE. A host MUST NOT process any following CCI options unless one was included in both the SYN and SYN-ACK and both peers have enabled TCP Timestamps for the connection.
+		</t>
+		<t>
+After the SYN exchange, a host SHOULD send a CCI option only if receiving a new local CCI, or in response to receiving a new CCI option from the other end. <xref target="sec-initiator" /> and <xref target="sec-responder" /> describe the processing rules in detail.
+		</t>
+		<t>
+A host MUST send a CCI option in all outgoing segments whenever LOCAL_CCI_STATUS is not LOCAL_CCI_IDLE or REMOTE_CCI_STATUS is not REMOTE_CCI_IDLE. A host MUST NOT send a CCI option when LOCAL_CCI_STATUS is LOCAL_CCI_IDLE and REMOTE_CCI_STATUS is REMOTE_CCI_IDLE, i.e., when the host is not currently processing any CCI. The only exceptions to that rule are SYN and SYN-ACK segments. Whenever sending any CCI option, C MUST be set to the current LOCAL_CCI, EC MUST be set to the current REMOTE_CCI, CS MUST be set to LOCAL_CCI_STATUS and ECS MUST be set to REMOTE_CCI_STATUS, respectively.
+		</t>
+
+</section>
+<section anchor="procgen" title="Generation and Processing of Connectivity-Change Indication TCP Options">
+
+		<t>
+Processing of a connectivity-change indication can be separated into two parts:
+		<list style="numbers">
+			<t>
+Processing in "initiator" mode, i.e., when a host receives a local CCI and forwards it to the other end through a CCI option.
+			</t>
+			<t>
+Processing in "responder" mode, i.e., when a host that receives a remote CCI in  a CCI option from the other end. 
+			</t>
+		</list>
+<xref target="sec-initiator"/> and <xref target="sec-responder"/> describe the state machines at an initiator and a responder, respectively. Note that a single host can be both initiator and responder at the same time, if a local CCI happens to occur while processing for a remote CCI is ongoing, or vice versa..
+		</t>
+		<t>
+The following events, conditions and actions are used in the definition of the two state machines:
+		</t>
+		<t>
+Events:
+			<list style="hanging">
+<t hangText="E_LOCAL_CCI">
+<vspace blankLines="0" />Local end received a local CCI. 
+				</t>
+
+<t hangText="E_REMOTE_CCI">
+<vspace blankLines="0" />Local end received information about a remote CCI, i.e., received a TCP segment that includes a CCI TCP option.			
+				</t>
+<t hangText="E_SEGMENT_SENT">
+<vspace blankLines="0" />Local end sent a TCP segment that includes the CCI option.
+				</t>
+<!--
+<t hangText="E_NONE">
+<vspace blankLines="0" />Local end received a TCP segment that does not include a CCI TCP option.
+				</t>
+-->
+			</list>
+		</t>		
+		<t>
+Conditions:
+			<list style="hanging">
+<t hangText="C_NEW_REMOTE_CCI">
+<vspace blankLines="0" />A received CCI option signals a new remote CCI, i.e., C != REMOTE_CCI, CS == LOCAL_CCI_NEW and the TSval of the Timestamps option of the received segment is greater than the current REMOTE_CCI_PEER_TIME (TSval > REMOTE_CCI_PEER_TIME).
+				</t>
+<t hangText="C_ECHOED_LOCAL_CCI">
+<vspace blankLines="0" />A received CCI option echoes the last local CCI, i.e., EC == LOCAL_CCI, ECS == REMOTE_CCI_ECHO and the TSval of the Timestamps option of the received segment is greater than the current LOCAL_CCI_PEER_ECHO_TIME (TSval > LOCAL_CCI_PEER_ECHO_TIME).
+				</t>
+<t hangText="C_ECHOED_REMOTE_CCI">
+<vspace blankLines="0" />A received CCI option acknowledges that the peer has received the echo of its last local CCI, i.e., C == REMOTE_CCI,  CS == LOCAL_CCI_ECHO_ACK and the TSval of the Timestamps option of the received segment is greater than the current REMOTE_CCI_PEER_TIME (TSval > REMOTE_CCI_PEER_TIME).
+				</t>
+			</list>
+		</t>
+		<t>
+Actions:
+			<list style="hanging">
+<t hangText="A_TGL_LOCAL_CCI">
+<vspace blankLines="0" />Toggle LOCAL_CCI.
+				</t>
+<t hangText="A_TGL_REMOTE_CCI">
+<vspace blankLines="0" />Toggle REMOTE_CCI.
+				</t>
+<t hangText="A_REPROBE_PATH">
+<vspace blankLines="0" /> TCP discards all congestion control information gathered on the current path, initializes them to the defaults and re-probes path characteristics based only on the segments transmitted after this event, as  described in <xref target="sec-cong-resp"/>. In other words, CCI_CONTROLLED_CWND := 1, LAST_CCI_TIME := current local time, CCI_SNDMAX := highest sequence number transmitted so far and the congestion control state (CWND and SS_THRESH), round-trip time measurement (RTTM) state and RTO timer are reset to the initial values for a new connection.  Additionally, if the connection is stalled in exponential back-off, TCP MUST act as if RTO had expired and start the speculative retransmission procedure described at <xref target="sec-rxnow" />. <!-- Has it also to be mentioned here or just at A_FORCE_SEND? -->
+				</t>
+<t hangText="A_FORCE_SEND">
+<vspace blankLines="0" />Force transmission of a segment that MUST include a CCI option, in order to inform the other peer about the local CCI. If the connection is stalled in exponential back-off, this is taken care of by the speculative retransmission procedure described at <xref target="sec-rxnow" />. If the connection is in steady-state and there is new data to be sent, TCP MUST immediately send a single segment of new data. If there is no new data to be sent, TCP MUST immediately send a pure ACK.
+				</t>
+<t hangText="A_UPD_CCI_PEER_TIME">
+<vspace blankLines="0" /> Set REMOTE_CCI_PEER_TIME to the TSval value of the TCP Timestamps option of the received segment.
+				</t>
+<t hangText="A_UPD_CCI_PEER_E_TIME">
+<vspace blankLines="0" /> Set LOCAL_CCI_PEER_ECHO_TIME to the TSval value of the TCP Timestamps option of the received segment.
+				</t>
+			</list>
+		</t>
+
+			<section title="Initiator Mode Processing" anchor="sec-initiator">
+			<t>
+This section describes the initiator mode processing of a TCP host implementing RLCI. In initiator mode, a host signals the occurrence of a local CCI to its peer, until the peer echoes reception of that CCI. After receiving the echo, the host needs to acknowledge the echo reception, resulting in a 3-way handshake. <xref target="fig-init-state-machine"/> shows the corresponding state machine.
+			</t>
+			<t>
+At the beginning of a connection, i.e., before the first local CCI occurs, LOCAL_CCI is 0 and LOCAL_CCI_STATUS is LOCAL_CCI_IDLE. This remains the case until TCP receives a local CCI (E_LOCAL_CCI). 
+			</t>
+			<t>
+When that happens, TCP toggles LOCAL_CCI (A_TGL_LOCAL_CCI), sets LOCAL_CCI_STATUS := LOCAL_CCI_NEW, starts re-probing the new path (A_REPROBE_PATH) and forces a segment to be sent to the peer (A_FORCE_SEND).
+			</t>
+			<t>
+Note that all subsequently transmitted segments MUST contain a CCI option until LOCAL_CCI_STATUS becomes LOCAL_CCI_IDLE. After the host receives the echo of the local CCI (C_ECHOED_LOCAL_CCI), it updates LOCAL_CCI_PEER_ECHO_TIME (A_UPD_CCI_PEER_E_TIME) and sets LOCAL_CCI_STATUS := LOCAL_CCI_ECHO_ACK. The initiator remains in this state until it can send a segment with the CCI option (E_SEGMENT_SENT) that acknowledges reception of the CCI echo. At that time, it sets LOCAL_CCI_STATUS := LOCAL_CCI_IDLE.
+			</t>
+			<t>
+The transition from LOCAL_CCI_IDLE to LOCAL_CCI_ECHO_ACK occurs if a segment acknowledging the reception of a CCI echo is lost, and the initiator retransmits the echo acknowledgment.
+			</t>
+			<t>
+When a local CCI occurs (E_LOCAL_CCI) while LOCAL_CCI_STATUS != LOCAL_CCI_IDLE, the host MUST ignore it and MUST NOT toggle LOCAL_CCI, because it is already processing another local CCI. 
+			</t>
+			<t>
+			<figure anchor="fig-init-state-machine" title="State machine for initiator processing.">
+				<artwork align="center">
+<![CDATA[
+
+        E_LOCAL_CCI =>
+        A_TGL_LOCAL_CCI        E_REMOTE_CCI
+        A_REPROBE_PATH         C_ECHOED_LOCAL_CCI=>
+        A_FORCE_SEND           A_UPD_CCI_PEER_E_TIME
+        +----------------+    +----------------+
+        |                |    |                |
+        |                |    |                |
+        |                |    |                |
+        |                V    |                V
++----------------+  +----------------+  +----------------+
+|                |  |                |  |                |
+|LOCAL_CCI_STATUS|  |LOCAL_CCI_STATUS|  |LOCAL_CCI_STATUS|
+|       ==       |  |       ==       |  |       ==       |
+|LOCAL_CCI_IDLE  |  |LOCAL_CCI_NEW   |  |LOCAL_CCI_ECHO_ |
+|                |  |                |  |ACK             |
++----------------+  +----------------+  +----------------+
+       ^  |                                   ^  |
+       |  |                                   |  |
+       |  +-----------------------------------+  |
+       |           E_REMOTE_CCI                  |
+       |           C_ECHOED_LOCAL_CCI            |
+       |                                         |
+       |                                         |
+       +-----------------------------------------+
+                      E_SEGMENT_SENT
+
+]]>
+				</artwork>
+			</figure>
+			</t>
+			</section>
+			<section title="Responder Mode Processing" anchor="sec-responder">
+			<t>
+This section describes the responder mode processing of CCIs for a TCP host implementing the CCI TCP option. In responder mode, a host echoes the last received remote CCI to its peer, until it can be sure that the peer correctly received the echo. <xref target="fig-resp-state-machine"/> shows the corresponding state machine.
+			</t>
+			<t>
+At the beginning of a connection, REMOTE_CCI is 0 and REMOTE_CCI_STATUS is REMOTE_CCI_IDLE, i.e., the local host is not processing any remote CCIs.
+			</t>
+			<t>
+When TCP receives a segment with a CCI TCP option (E_REMOTE_CCI) signaling a new remote CCI (C_NEW_REMOTE_CCI), it toggles REMOTE_CCI (A_TGL_REMOTE_CCI), changes REMOTE_CCI_STATUS to REMOTE_CCI_ECHO, updates REMOTE_CCI_PEER_TIME according to TSval (A_UPD_CCI_PEER_TIME), starts re-probing the new path (A_REPROBE_PATH) and forces a segment to be sent to the peer (A_FORCE_SEND).
+			</t>
+			<t>
+Note that all subsequently transmitted segments MUST contain a CCI TCP option until REMOTE_CCI_STATUS is again REMOTE_CCI_IDLE. This transition occurs when the peer acknowledges the reception of the CCI echo (C_ECHOED_REMOTE_CCI). 
+			</t>
+			<t>
+			<figure anchor="fig-resp-state-machine" title="State machine for responder processing.">
+				<artwork align="center">
+<![CDATA[
+       E_REMOTE_CCI             E_REMOTE_CCI
+       C_NEW_REMOTE_CCI =>      C_NEW_REMOTE_CCI =>
+       A_TGL_REMOTE_CCI         A_TGL_REMOTE_CCI
+       A_UPD_CCI_PEER_TIME      A_UPD_CCI_PEER_TIME
+       A_REPROBE_PATH           A_REPROBE_PATH
+       A_FORCE_SEND             A_FORCE_SEND
+       +-----------------+      +-------------+
+       |                 |      |             |
+       |                 V      |             |
++-----------------+  +-----------------+      |
+|REMOTE_CCI_STATUS|  |REMOTE_CCI_STATUS|      |
+|        ==       |  |        ==       |      |
+|REMOTE_CCI_IDLE  |  |REMOTE_CCI_ECHO  |      |
++-----------------+  +-----------------+      |
+        ^                 |     ^             |
+        |                 |     |             |
+        +-----------------+     +-------------+
+         E_REMOTE_CCI
+         C_ECHOED_REMOTE_CCI
+]]>
+				</artwork>
+			</figure>
+			</t>
+		<t>
+If TCP receives a new remote CCI while REMOTE_CCI_STATUS == REMOTE_CCI_ECHO, this indicates that the acknowledgment of a previous CCI echo may have been lost and that the peer had a new CCI occur. In this case, TCP MUST perform the same actions as if REMOTE_CCI_STATUS == REMOTE_CCI_IDLE.
+		</t>
+
+		</section>
+</section>
+
+<section anchor="sec-cong-resp" title="Re-Probing Path Characteristics">
+	<t>
+When a TCP connection receives a CCI, it MUST re-probe path characteristics in order to prevent causing congestion by transmitting based on stale path state. In principle, this occurs similarly to the initial slow-start: The sender MUST NOT transmit more than the default initial window (INIT_WINDOW) of data after a CCI is received and it MUST reset the congestion control state (CWND and SS_THRESH), round-trip time measurement (RTTM) state and RTO timer, as if this were a new connection <xref target="RFC2581"/><xref target="RFC2988"/>. If Path MTU Discovery (PMTUD) is in use, the PMTUD state MUST also be reset <xref target="RFC1191"/><xref target="RFC1981"/><xref target="RFC4821"/>.
+	</t>
+	<t>
+One difference to an initial slow-start is that after a CCI, the connection may have segments in flight towards the destination along a previous path. Therefore, after a CCI, TCP MUST ignore any ACKs received for data that was sent before the CCI and it MUST update the congestion window solely based on ACKs for data that was sent after the CCI occurred.
+	</t>
+	<t>
+The mechanism used for distinguishing ACKs for data sent after a CCI occurred from ACKs for data sent before a CCI occurred uses TCP Timestamps options. When a host receives a new CCI (either local or remote), LAST_CCI_TIME MUST be set to the current local time, CCI_SNDMAX MUST be set to the highest sequence number transmitted so far and CCI_CONTROLLED_CWND MUST be set to true.
+	</t>
+	<t>
+While CCI_CONTROLLED_CWND == true, TCP MUST update the congestion window based only on inbound ACKs that contain a TS Echo Reply (TSecr) value greater than or equal to LAST_CCI_TIME. Any inbound ACK with a TS Echo Reply (TSecr) value less than LAST_CCI_TIME MUST NOT cause an update to the congestion window, even if it advances the window. If CCI_CONTROLLED_CWND is true and the host receives an ACK with a sequence number greater than or equal to CCI_SNDMAX, CCI_CONTROLLED_CWND MUST be set to false and the congestion control algorithm MUST begin to process all ACKs normally, without checking their Timestamps options. 
+	</t>
+</section>
+
+
+<section anchor="sec-rxnow" title="Speculative Retransmission">
+	<t>
+The basic idea behind the speculative retransmission is to allow TCP to resume stalled connections as soon as it receives an indication that connectivity to previously unreachable peers may have returned. 
+	</t>
+
+	<t>
+When a TCP connection receives a connectivity-change indication - either from the local stack or in a connectivity-change TCP option from the peer - and is currently stalled in exponential back-off, it MUST immediately initiate the standard retransmission procedure, just as if the RTO for the connection had expired.
+	</t>
+</section>
+
+</section>
+
+
+<section title="Discussion">
+	<t>
+This section discusses some design choices of the RLCI mechanism that can affect TCP performance under certain circumstances.
+	</t>
+<!-- It better for the following to be removed! 
+It's very special case... Not possible a lot to happen -->
+<!--
+	<section title="Effectiveness of the Timestamps option for RLCI mechanism">
+	<t>
+RLCI mechanism defined in this document depends on TCP Timestamps option (TSopt) <xref target="RFC1323"/> that has to be used by both peers during the connection duration. After a connectivity-change indication, RLCI mechanism uses the information provided by the Timestamps option in order to distinguish the ACKs for segments sent along the path after CCI and uses only those in the computation of the congestion window (CWND). 
+	</t>
+	<t>
+A point to note is that TS Echo Reply field of the TCP Timestamps option echoes the transmission time of the last segment that advanced the left edge of the send window (and caused an ACK to be sent, in case of delayed ACKs). In case of packet reordering due to different bandwidth-delay product between the paths before and after CCI, there is a possibility of ACK generation that acknowledge a continuous range of sequence numbers that some of them have been send along the path after CCI, while TS Echo Reply field of the Timestamps option echoes a time before CCI. CWND is not increased based on that ACKs, resulting a conservative behaviour.
+	</t>
+	<t>
+A simplified scenario that focus on the previous case is the following one:
+	</t>
+	<t>
+A connection in steady-state having one unacknowledged segment with sequence number x in flight receives a connectivity-change indication. After CCI, sender sends one more segment with sequence number (x+1). In case the second segment reaches first the destination, a duplicate ACK with sequence number x is generated. When segment x reaches the destination, an ACK with sequence number (x+2) is generated but the TS Echo Reply field of the TCP Timestamps option echoes the creation time of segment x that is before the CCI time. As a result, CWND is not increased based on that ACK, even if it indicates that a segment sent along the path after CCI has also been received. 
+	</t>
+	</section>
+
+-->
+
+	<section title="Triggered Segment Transmission During Steady-State">
+	<t>
+A TCP stack that implements RLCI and receives a local connectivity-change indication immediately sends a TCP segment (A_FORCE_SEND) in order to inform the peer of the CCI, after resetting all path information (A_REPROBE_PATH). When TCP is stalled in exponential back-off, this is taken care of by the <!--standard --> speculative retransmission procedure that is triggered by the connectivity-change indication. 
+	</t>
+	<t>
+On the other hand, when TCP is in steady-state, it sends a new segment (A_FORCE_SEND) if there is any new data queued for transmission. As usual, the number of the unacknowledged segments is limited by CWND. However, CWND has just been reset to its initial value. This means that there is a possibility that the transmission sends a segment that is outside the current congestion window. Although this behavior may appear to be aggressive, it is in fact as conservative as a newly starting connection, because only a single unacknowledged segment is sent along the path after CCI.
+	</t>
+	</section>
+	<section title="Impact of Packet Loss">
+	<t>
+If a connection is in exponential back-off when a connectivity-change indication occurs, TCP considers all unacknowledged segments to be lost and the speculative retransmission procedure immediately starts.
+	</t>
+	<t>
+On the other hand, if the connection is in steady-state when a CCI occurs, TCP considers all unacknowledged segments to still be in flight and continues sending new data. Depending on what caused a CCI, four scenarios are possible that differ in what happens to segments and ACKs in flight:
+	</t>
+	<t>
+<list style="numbers">
+		<t>
+All (or at least the vast majority of) segments and ACKs in flight reach their respective destinations, i.e., there are no losses. In this case, TCP acts as if a new connection had started and re-probes the new path.
+</t>
+		<t>
+Some of the ACKs in flight from the receiver to sender are lost. In this case, TCP behaves exactly as above, because a cumulative ACK for the new segment sent along the path after the CCI acknowledges all the previous unacknowledged segments.
+</t>
+		<t>
+Some of the data segments in flight from the sender to the receiver are lost. In this case, the new data segment transmitted after the CCI causes a duplicate ACK. As this duplicate ACK does not cause TCP to send another data segment, the connection stalls and a RTO occurs. After RTO, the standard retransmission procedure takes place with SS_THRESH equal to INITIAL_WINDOW/2 (i.e., the minimum allowed). This disables slow start and causes a severely decreased performance. A possible solution is to execute the speculative retransmission procedure after receiving a CCI even if the connection is in steady-state.
+</t>
+
+		<t>
+Some of the data segments and some of the ACKs that are in flight are lost. This case is similar to the previous one.
+</t>
+</list>
+	</t>
+<t>
+
+In all these cases, it is also possible that the path delay changes significantly after the CCI, reordering data segments and ACKs that are still in flight with ones sent after the CCI. These reorderings appear to TCP as losses, and may result in the connection experiencing one of the above cases even if there was no actual packet loss.
+</t>
+
+	</section>
+	<section title="Use of Limited Transmit with RLCI">
+<t>
+As described at the previous section, when connection is in steady-state, a connectivity-change indication (CCI) resets all path information of TCP and causes one new data segment to be sent. In case of significant data segments loss before CCI, the new data segment transmitted after CCI causes a duplicate ACK. As this duplicate ACK does not trigger TCP to send another data segment, the connection stalls and an RTO occurs. 
+</t>
+<t>
+Limited Transmit <xref target="RFC3042"/> can be used in case of packet loss in order to cause the transmission of three duplicate ACKs and trigger the fast retransmission procedure. As it must not cause an amount of outstanding data more than the congestion window plus two segments, it cannot always be used after a CCI due to the initialized CWND. If the connection has more outstanding data than INITIAL_WINDOW plus two segments before a CCI, resetting of CWND to the initial value after CCI causes an amount of outstanding data greater than the new CWND plus two segments and disables Limited Transmit.
+</t>
+<t>
+A modified Limited Transmit algorithm can be used in combination with RLCI:
+</t>
+
+
+	<list style="hanging">
+<t hangText="If CCI_CONTROLLED_CWND is true:">
+<vspace blankLines="0" />Limited Transmit Algorithm as described at <xref target="RFC3042"/> should be followed but without checking the amount of outstanding data, i.e., if TCP sender has previously unsent data queued for transmission it should transmit new data upon the arrival of the first two consecutive duplicate ACKs when the receiver's advertised window allows this transmission.
+				</t>
+<t hangText="If CCI_CONTROLLED_CWND is false:">
+<vspace blankLines="0" />Limited Transmit Algorithm as described at <xref target="RFC3042"/> should be followed.
+				</t>
+
+	</list>
+<t>
+When fast retransmission procedure is triggered by the modified Limited Transmit after a CCI, SS_THRESH is set to INITIAL_WINDOW/2 (i.e., the minimum allowed) as CWND before fast retransmission was equal to INITIAL_WINDOW. As a result, slow-start is disabled causing decreased TCP performance.
+</t>
+<t>
+A minor modification can keep SS_THRESH unmodified in the previous case, i.e., if CCI_CONTROLLED_CWND == true and CWND == INITIAL_WINDOW, keep SS_THRESH unmodified (having its initial value) upon the reception of the third duplicate ACK that triggers the fast retransmission procedure.
+</t>
+	</section>
+	<section title="Simultaneous processing of connectivity-change indications">
+	<t>
+As mentioned in <xref target="sec-initiator"/>, if a local CCI occurs (E_LOCAL_CCI) while LOCAL_CCI_STATUS !=  LOCAL_CCI_IDLE, the host MUST ignore it, because it is already processing another local CCI. As a result, it cannot be processed more than one local CCI at each end any time. As every remote CCI at one end is triggered by a local CCI at the other end, it cannot be processed more than one remote CCI at each end any time.
+	</t>
+	<t>
+On the other hand, if both hosts receive connectivity-change indications from their local stacks (local CCIs) at almost the same time, there is a possibility of simultaneous processing of local and remote CCIs at both ends. In that case, path re-probing is triggered twice at each end in a very short time that can be lower than RTT. As this does not improve TCP performance, it can be avoided by triggering the A_REPROBE_PATH action only if CCI_CONTROLLED_CWND == false.
+	</t>
+	</section>
+</section>
+
+<section title="Security Considerations">
+	<t>
+The only foreseen security considerations with the techniques presented in this document result from either an attacker's ability to spoof valid TCP segments with options that seemingly indicate connectivity changes, or an attacker's ability to generate bogus connectivity-change indications locally.  An attacker might produce a stream of such false indicators that could keep a connection in slow-start at the initial window.  One possible defense against this type of attack is to rate-limit the response to connectivity indicators (whether local or remote).  This is also probably less serious than other attacks such an empowered adversary could perform, like resetting the connection or injecting data.  A similar effect could be achieved without the new option by forging duplicate ACKs that would keep a sender in loss recovery.  If both sets of IP addresses, port numbers, and sequence numbers are guessable for a connection, then the connection should employ other measures <xref target="RFC4953" /> for protection against
+spoofed segments.
+	</t>
+</section>
+
+<section title="IANA Considerations" anchor="ianacons">
+	<t>
+This section is to be interpreted according to <xref target="I-D.narten-iana-considerations-rfc2434bis"/>.
+	</t>
+
+<t>This document does not define any new namespaces. It requests that IANA allocate a new 8-bit TCP option number for the CCI option from the registry maintained at
+http://www.iana.org/assignments/tcp-parameters.</t>
+</section>
+
+<section title="Acknowledgments">
+	<t>
+This draft combines and obsoletes <xref target="I-D.swami-tcp-lmdr"/> and <xref target="I-D.eggert-tcpm-tcp-retransmit-now"/>. The authors would like to thank Mark Allman, Marcus Brunner, Shashikant Maheshwari, Kacheong Poon, Juergen Quittek, Stefan Schmid and Joe Touch for their comments and suggestions on this draft as well as the two original drafts.
+	</t>
+
+	<t>
+Simon Schuetz is partly funded by Ambient Networks, a research project supported by the European Commission under its Sixth Framework Program.
+	</t>
+	<t>
+Wesley Eddy's work on this document was performed at NASA's Glenn Research
+Center, while in support of the NASA Space Communications Architecture Working
+Group (SCAWG), and the FAA/Eurocontrol Future Communications Study (FCS).
+	</t>
+</section>
+
+</middle>
+
+<back>
+	<!-- REFERENCE TEMPLATE
+	<reference anchor="reference.XXX">
+		<front>
+			<title>XXX</title>
+			<author initials="X." surname="XXX" fullname="XXX">
+				<organization abbrev="XXX">XXX</organization>
+				<address>
+					<postal>
+						<street>XXX</street>
+						<city>XXX</city>
+						<region>XXX</region>
+						<code>XXX</code>
+						<country>XXX</country>
+					</postal>
+					<phone>XXX</phone>
+					<facsimile>XXX</facsimile>
+					<email>XXX</email>
+					<uri>XXX</uri>
+				</address>
+
+			</author>
+			<date month="XXX" year="XXX"/>
+		</front>
+		<seriesInfo name="XXX" value="XXX"/>
+		<format type="XXX" target="XXX"/>			
+	</reference>
+	-->
+
+	<references title="Normative References">
+	<?rfc include="reference.RFC.2581" ?>
+	<?rfc include="reference.RFC.2119" ?>
+	<?rfc include="reference.RFC.0793" ?>
+	<?rfc include="reference.RFC.2988" ?>
+	<?rfc include="reference.I-D.narten-iana-considerations-rfc2434bis" ?>
+	<?rfc include="reference.RFC.1191" ?>
+	<?rfc include="reference.RFC.1981" ?>
+	<?rfc include="reference.RFC.1323" ?>
+	<?rfc include="reference.RFC.4821" ?>
+	<?rfc include="reference.RFC.3042" ?>
+	</references>
+
+	<references title="Informative References">
+        <?rfc include="reference.RFC.3168" ?>
+        <?rfc include="reference.RFC.1122" ?>
+        <?rfc include="reference.RFC.2460" ?>
+        <?rfc include="reference.RFC.4306" ?>
+        <?rfc include="reference.RFC.2131" ?>
+	    <?rfc include="reference.RFC.3344" ?>
+        <?rfc include="reference.RFC.3775" ?>
+        <?rfc include="reference.RFC.4782" ?>
+        <?rfc include="reference.I-D.swami-tcp-lmdr" ?>
+	    <?rfc include="reference.I-D.ietf-hip-mm" ?>
+        <?rfc include="reference.RFC.3819" ?>	
+        <?rfc include="reference.I-D.dawkins-trigtran-linkup" ?>	
+        <?rfc include="reference.I-D.ietf-tcpm-tcp-uto" ?>
+        <?rfc include="reference.RFC.4907" ?>
+        <?rfc include="reference.I-D.eggert-tcpm-tcp-retransmit-now" ?>
+	    <?rfc include="reference.RFC.4953" ?>
+	    <?rfc include="reference.RFC.4957" ?>
+        	
+	<reference anchor="OTT">
+		<front>
+			<title>OTT Internet: IEEE 802.11b for Automobile Users</title>
+			<author initials="J." surname="Ott" fullname="Joerg Ott">
+				<organization abbrev="TZI">TZI</organization>
+			</author>
+			<author initials="D." surname="Kutscher" fullname="Dirk Kutscher">
+				<organization abbrev="TZI">TZI</organization>
+			</author>
+			<date month="March" year="2004"/>
+		</front>
+		<seriesInfo name="Proc. Infocom" value="2004"/>
+	</reference>
+
+	<reference anchor="SCHUETZ">
+		<front>
+			<title>Protocol Enhancements for Intermittently Connected Hosts</title>
+			<author initials="S." surname="Schuetz" fullname="Simon Schuetz">
+				<organization abbrev="NEC">NEC Network Laboratories</organization>
+			</author>
+			<author initials="L." surname="Eggert" fullname="Lars Eggert">
+				<organization abbrev="NEC">NEC Network Laboratories</organization>
+			</author>
+			<author initials="S." surname="Schmid" fullname="Stefan Schmid">
+				<organization abbrev="NEC">NEC Network Laboratories</organization>
+			</author>
+			<author initials="M." surname="Brunner" fullname="Marcus Brunner">
+				<organization abbrev="NEC">NEC Network Laboratories</organization>
+			</author>
+		
+			<date month="July" year="2005"/>
+		</front>
+		<seriesInfo name="ACM Computer Communication Review," value="Vol. 35, No. 3"/>
+	</reference>
+	
+	<reference anchor="KOODLI">
+		<front>
+			<title>Fast Handovers and Context Transfers in Mobile Networks</title>
+			<author initials="R." surname="Koodli"><organization></organization></author>
+			<author initials="C." surname="Perkins"><organization></organization></author>
+			<date month="October" year="2001"/>
+		</front>
+		<seriesInfo name="ACM Computer Communication Review," value="Vol. 31, No. 5"/>
+	</reference>
+	
+	<reference anchor="SCOTT">
+		<front>
+			<title>Link layer-based TCP optimization for disconnecting networks</title>
+			<author initials="J." surname="Scott" fullname="James Scott">
+				<organization abbrev="Intel">Intel Research Cambridge</organization>
+			</author>
+			<author initials="G." surname="Mapp" fullname="Glenford Mapp">
+				<organization abbrev="Middlesex University">Middlesex University</organization>
+			</author>
+			<date month="October" year="2003"/>
+		</front>
+		<seriesInfo name="ACM Computer Communication Review," value="Vol. 33, No. 5"/>
+	</reference>
+
+	<reference anchor="DUKE">
+		<front>
+			<title>Experience with ``Link-UP Notification'' Over a Mobile Satellite Link</title>
+			<author initials="M." surname="Duke" fullname="Martin Duke">
+				<organization abbrev="Boeing">Boeing Phantom Works</organization>
+			</author>
+			<author initials="T." surname="Henderson" fullname="Thomas R. Henderson">
+				<organization abbrev="Boeing">Boeing Phantom Works</organization>
+			</author>
+			<author initials="J." surname="Meegan" fullname="Jeff Meegan">
+				<organization abbrev="Boeing">Boeing Phantom Works</organization>
+			</author>
+			<date month="July" year="2004"/>
+		</front>
+		<seriesInfo name="ACM Computer Communication Review," value="Vol. 34, No. 3"/>
+	</reference>
+	
+        <reference anchor="EDDY">
+          <front>
+            <title>Adapting End-host Congestion Control for Mobility</title>
+            <author initials="W." surname="Eddy"><organization></organization></author>
+            <author initials="Y." surname="Swami"><organization></organization></author>
+            <date month="July" year="2005"/>
+          </front>
+          <seriesInfo name="NASA Glenn Research Center Technical Report," value="CR-2005-213838"/>
+        </reference>
+
+	<reference anchor="I-D.ietf-tcpimpl-restart">
+		<front>
+			<title>Issues in TCP Slow-Start Restart After Idle</title>
+			<author initials="A." surname="Hughes" fullname="Amy Hughes">
+				<organization />
+			</author>
+			<author initials="J." surname="Touch" fullname="Joe Touch">
+				<organization />
+			</author>
+			<author initials="J." surname="Heidemann" fullname="John Heidemann">
+				<organization />
+			</author>
+			<date month="March" year="1998"/>
+		</front>
+		<seriesInfo name="draft-ietf-tcpimpl-restart-00" value="(work in progress)"/>
+	</reference>
+	</references>
+
+<section anchor="classification" title="Background: Classification of Connectivity Disruptions">
+	<t>
+Connectivity disruptions can occur in many different situations. They can be due to wireless interference, movement out of a wireless coverage area, switching between access networks, or simply due to unplugging an Ethernet cable. Depending on the situation in which they occur, the implications of connectivity disruptions are different and must be handled appropriately. This section attempts to classify different types of connectivity disruptions and discusses their implications and impact on TCP.
+	</t>
+	
+	<t>
+Two main properties of connectivity disruptions affect how TCP reacts to them: their duration and whether the path characteristics have significantly changed after they end. This document distinguishes between "short" and "long" disruptions and "changed" and "unchanged" path characteristics. Note that these two categories are orthogonal to each other, i.e., four types of connectivity disruptions exist.
+	</t>
+
+	<t>
+Connectivity disruptions are "short" for a given TCP connection, if connectivity returns before the RTO fires for the first time, i.e., when TCP is still in steady-state. In this case, standard TCP recovers lost data segments through Fast Retransmit and lost ACKs through successfully delivered later ACKs. <xref target="short"/> briefly describes this case.
+	</t>
+
+	<t>
+Connectivity disruptions are "long" for a given TCP connection, if the RTO fires at least once before connectivity returns, i.e., when TCP is in exponential back-off. In this case, TCP can be inefficient in its retransmission scheme, as described in <xref target="long"/>.
+	</t>
+
+	<t>
+Whether or not path characteristics change when connectivity returns is a second important factor for TCP's retransmission scheme. Standard TCP implicitly assumes that path characteristics remain unchanged across short disruptions by performing Fast Retransmit using the path parameters collected before the disruption. For long disruptions, standard TCP is more conservative and performs slow-start, re-probing the path characteristics from scratch. However, the standard behavior can be inefficient due to when it is initiated.
+	</t>
+
+	<t>
+These implicit assumptions can cause standard TCP to misbehave or perform inefficiently in some scenarios. <xref target="standard-behavior"/> illustrates the standard TCP behavior.
+	</t>
+
+	<figure anchor="standard-behavior" title="Standard TCP behavior.">
+		<artwork align="center">
+         +-----------------------+-----------------------+
+Short    | Fast Retransmit using | Fast Retransmit using |
+Duration | currently collected   | currently collected   |
+&lt; RTO    | path characteristics  | path characteristics  |
+         +-----------------------+-----------------------+
+Long     |                       |                       |
+Duration | Slow-start            | Slow-start            |
+&gt;= RTO   |                       |                       |
+         +-----------------------+-----------------------+
+             Unchanged Path          Changed Path
+             Characteristics         Characteristics
+
+	     	</artwork>
+	</figure>
+
+	<section anchor="short" title="Short Connectivity Disruptions">
+		<t>
+
+One common cause of short connectivity disruptions that result in a change of
+the end-to-end path characteristics is transparent network layer mobility, via
+protocols such as Mobile IP, NEMO, or HIP.  These protocols generally hide mobility events from the transport layer, but cannot mask the resulting changes to the end-to-end path that established TCP connections transmit over.
+
+		</t>
+		<t>
+
+Consider a Mobile IP scenario as shown in <xref target="fig-path-change"/>. At time T, a mobile node MN attaches to access network
+Net-1, connected to the Internet through access router AR-1 and has the care-of
+address &lt;Net-1, MN&gt;.  It establishes a TCP connection to the
+correspondent node CN.  While MN attaches to AR-1, packets between CN and
+&lt;Net-1, MN&gt; follow PATH-1 (via Cloud-1 and AR-1). Assume
+that at some time T+1, MN moves and then attaches to Net-2, which is
+reachable through AR-2 with the care-of address &lt;Net-2, MN&gt;.  While MN attaches to AR-2, all packets between CN and &lt;Net-2, MN&gt; follow
+PATH-2 (through Cloud-2 and AR-2).
+
+</t>
+		
+		<figure anchor="fig-path-change" title="Mobility example.">
+<artwork align="center">
+
+             &lt;---------PATH-1----------&gt;
+
+              /---------\   +------+
+              |         |   |      | Net-1
+          +---+ Cloud-1 +---+ AR-1 +-----> MN (time=T)
+          |   |         |   |      | 
+          |   \----+----/   +---+--+        |
+          |        |                        |
+CN &lt;------+        | PATH-3                 |
+          |        |                        |
+          |   /----V----\   +-------+       V
+          |   |         |   |       | 
+          +---+ Cloud-2 +---+ AR-2  +-----> MN (time=T+1)
+              |         |   |       | Net-2
+              \---------/   +-------+
+
+             &lt;--------PATH-2-----------&gt;
+		 </artwork>
+		 </figure>
+
+		 <t>
+During a transient disconnected period, MN may have disconnected from Net-1 and not yet attached to Net-2. Consequently, AR-1 may not be able to deliver packets to MN.  This could result in a burst of packet losses.  Several approaches for "fast" or "seamless" handovers exist that involve adding machinery to the ARs to buffer and redirect packets originally sent to Net-1 towards Net-2, rather than dropping them (e.g., <xref target="KOODLI"/>).
+
+               </t>
+
+		<t>
+
+ As long as MN remains in Net-1, standard congestion control algorithms
+<xref target="RFC2581"/> are sufficient. However, once MN moves from Net-1 to
+Net-2, two different scenarios are possible depending on network
+topology:
+
+		</t>
+<t>
+<list style="symbols">
+		<t>
+
+In the first scenario, with standard Mobile IPv4, all packets destined to &lt;Net-1, MN&gt;
+are dropped by AR-1 once MN has moved.  Since the latency involved
+in establishing a new tunnel to the HA is on the order of the RTT (2*RTT in case of Mobile IPv6), roughly an entire window's worth of data and ACKs will be dropped by AR-1.  Because of this burst loss, CN and MN are likely to incur
+expensive retransmission timeouts.
+
+                </t>
+		<t>
+
+In the second scenario, with a fast handover mechanism in place, losses are masked through buffering and tunneling between routers AR-1 and AR-2.  The exact sequence of buffering and forwarding between the ARs is not guaranteed to occur in a manner consistent with the available bandwidth of PATH-3 or conformant to TCP's clocking expectations.  This can cause TCP's behavior over PATH-2 to be based on the unrelated properties of PATH-1 and PATH-3.
+
+                </t>
+</list>
+</t>
+                <t>
+
+After attaching to Net-2, reception of stale ACKs (for data sent on PATH-1) will cause MN to incorrectly inflate its congestion window.  These stale ACKs do not provide any indication of the congestion along PATH-2. CN's congestion window becomes similarly inflated by ACKs that MN sends for data segments redirected over PATH-3.  If the congestion windows from PATH-1 are already too big for PATH-2, this can overload Net-2 or PATH-2, causing packet loss and timeouts.
+
+               </t>
+               <t>
+
+On the other hand, if the available bandwidth along PATH-2 is greater than along PATH-1, and if the sender is in congestion avoidance, it will need potentially many RTTs before utilizing the available path capacity.  This is due to relatively slow bandwidth increase during congestion avoidance caused by a stale SS_THRESH. (See <xref target="EDDY"/> for details.)
+
+		</t>
+	</section>
+
+
+	<section anchor="long" title="Long Connectivity Disruptions">
+		<t>
+For long disruptions, standard TCP performs slow-start after connectivity returns, because the retransmission timeout (RTO) has expired. This conservative strategy avoids overloading the new path. However, TCP's general exponential back-off retransmission strategy can time these slow-starts such that performance decreases.
+		</t>
+		
+		<t>
+When a long connectivity disruption occurs along the path between a host and its peer while the host is transmitting data, it stops receiving ACKs. After the RTO expires, the host attempts to retransmit the first unacknowledged segment. TCP implementations that follow the recommended RTO management proposed in <xref target="RFC2988"/> double the RTO after each retransmission attempt until it exceeds 60 seconds. This scheme causes a host to attempt to retransmit across established connections roughly once a minute. (More frequently during the first minute or two of the connectivity disruption, while the RTO is still being backed off.)
+		</t>
+
+		<t>
+When the long connectivity disruption ends, standard TCP implementations still wait until the RTO expires before attempting retransmission. <xref target="default-rto"/> illustrates this behavior. Depending on when connectivity becomes available again, this can waste up to a minute of connectivity for TCPs that implement the recommended RTO management described in <xref target="RFC2988"/>. For TCP implementations that do not implement <xref target="RFC2988"/>, even longer connectivity periods may be wasted. For example, Linux uses 120 seconds as the maximum RTO by default.
+		</t>
+
+		<figure anchor="default-rto" title="Standard TCP behavior in the presence of disrupted connectivity.">
+			<artwork align="center">
+Sequence
+number      X = Successfully transmitted segment
+ ^          O = Lost segment
+ |     :                     :              : X
+ |     :                     :              :X
+ |     OO O  O    O        O :              X
+ |    X:                     :              :
+ |   X :                     :&lt;------------&gt;:
+ |  X  :                     :    Wasted    :
+ | X   :                     :  connection  :
+ |X    :                     :     time     :
+ +-----:---------------------:--------------:--------&gt;
+       :                     :              :       Time
+  Connectivity          Connectivity       TCP 
+     gone                  back         retransmit
+			</artwork>
+		</figure>
+
+		<t>
+This retransmission behavior is not efficient, especially in scenarios where connectivity periods are short and connectivity disruptions are frequent <xref target="OTT"/>. Experiments show that TCP performance across a path with frequent disruptions is significantly worse, compared to a similar path without disruptions <xref target="SCHUETZ"/>.
+		</t>
+
+		<t>
+In the ideal case, TCP would attempt a retransmission as soon as connectivity to its peer was re-established. <xref target="ideal-rto"/> illustrates the ideal behavior.
+		</t>
+
+		<figure anchor="ideal-rto" title="Ideal TCP behavior in the presence of disrupted connectivity">
+			<artwork align="center">
+Sequence
+number      X = Successfully transmitted segment
+ ^          O = Lost segment
+ |     :                     : X            : 
+ |     :                     :X             :
+ |     OO O  O    O        O X              :
+ |    X:                     :              :
+ |   X :                     :&lt;------------&gt;:
+ |  X  :                     :  Efficiency  :
+ | X   :                     :  improvement :
+ |X    :                     :              :
+ +-----:---------------------:--------------:--------&gt;
+       :                     :              :       Time
+  Connectivity          Connectivity      Next
+     gone             back := immediate  scheduled
+                       TCP retransmit   retransmit
+		       </artwork>
+		</figure>
+
+		<t>
+The ideal behavior is difficult to achieve for arbitrary connectivity disruptions. One obviously problematic approach would use higher-frequency retransmission attempts to enable earlier detection of whether connectivity has returned. This can generate significant amounts of extra traffic. Other proposals attempt to trigger faster retransmissions by retransmitting buffered or newly-crafted segments from inside the network <xref target="SCOTT"/><xref target="I-D.dawkins-trigtran-linkup"/><xref target="DUKE" /><xref target="RFC3819"/>. <!-- <xref target="comparison"/> compares these approaches to the "immediate retransmission" extension.-->
+		</t>
+
+		<t>
+Note that scenarios exist where path characteristics remain unchanged after long connectivity disruptions. In this case, even an intelligently scheduled slow-start is inefficient, because TCP could safely resume transmitting at the old rate instead of slow-starting. Although originally developed to avoid line-rate bursts, techniques for the well-known "slow-start after idle" case <xref target="I-D.ietf-tcpimpl-restart"/> may be useful to further improve performance after a disruption ends in such a scenario. This document does not currently describe this additional optimization, and an open question remains on how unchanged path characteristics after long connectivity disruptions could be validated by an end host.
+		</t>
+		</section>	
+</section>
+
+<section title="Document Revision History">
+<texttable>
+<ttcol>Revision</ttcol><ttcol width="85%">Comments</ttcol>
+<c>02</c>
+<c>Major modification to the RLCI mechanism for implementing a 3-way handshake that ensures that both peers are informed about a connectivity-change indication. CCI TCP option format, RLCI variables maintained by the TCP peers and the related state machines are affected by that modification.</c>
+<c>&nbsp;</c><c>&nbsp;</c>
+<c>01</c>
+<c>Major revision of the description of the  connectivity-change indication TCP option and its processing in <xref target="sec-tcp-response-cci"/>.  Other formatting changes to the document include moving some background material to the appendix.</c>
+<c>&nbsp;</c><c>&nbsp;</c>
+<c>00</c>
+<c>Initial version. This document is a merge of and obsoletes <xref target="I-D.eggert-tcpm-tcp-retransmit-now"/> and <xref target="" target="I-D.swami-tcp-lmdr"/>. </c>
+</texttable>
+</section>
+</back>
+
+</rfc>

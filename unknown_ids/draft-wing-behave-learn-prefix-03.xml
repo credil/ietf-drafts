@@ -1,0 +1,556 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY rfc2119 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+<!ENTITY rfc4848 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4848.xml">
+<!ENTITY rfc4861 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4861.xml">
+<!ENTITY I-D.bagnulo-behave-dns64 SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.bagnulo-behave-dns64.xml">
+<!ENTITY I-D.van-beijnum-behave-ftp64 SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.van-beijnum-behave-ftp64.xml">
+<!ENTITY I-D.venaas-behave-v4v6mc-framework SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.venaas-behave-v4v6mc-framework.xml">
+<!ENTITY rfc2428 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2428.xml">
+<!ENTITY rfc4291 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4291.xml">
+<!ENTITY I-D.wing-behave-nat64-referrals SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.wing-behave-nat64-referrals.xml">
+<!ENTITY I-D.venaas-behave-mcast46 SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.venaas-behave-mcast46.xml">
+<!ENTITY rfc3596 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3596.xml">
+<!ENTITY I-D.thomson-geopriv-res-gw-lis-discovery SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.thomson-geopriv-res-gw-lis-discovery.xml">
+<!ENTITY I-D.savolainen-mif-dns-server-selection SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.savolainen-mif-dns-server-selection.xml">
+]>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes" ?>
+<?rfc rfcprocack="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc colonspace='yes' ?>
+<?rfc tocindent='yes' ?>
+<rfc category="std" docName="draft-wing-behave-learn-prefix-03"
+     ipr="trust200902">
+  <front>
+    <title abbrev="Learning IPv6 Prefix of 6/4 Translator">Learning the IPv6
+    Prefixes of an IPv6/IPv4 Translator</title>
+
+    <author fullname="Dan Wing" initials="D." surname="Wing">
+      <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+
+      <address>
+        <postal>
+          <street>170 West Tasman Drive</street>
+
+          <city>San Jose</city>
+
+          <region>CA</region>
+
+          <code>95134</code>
+
+          <country>USA</country>
+        </postal>
+
+        <email>dwing@cisco.com</email>
+      </address>
+    </author>
+
+    <author fullname="Xuewei Wang" initials="X." surname="Wang">
+      <organization abbrev="Huawei">Huawei Technologies Co.,Ltd</organization>
+
+      <address>
+        <postal>
+          <street>No.9 Xinxi Rd.</street>
+
+          <city>Beijing</city>
+
+          <region>Hai-Dian District</region>
+
+          <code>100085</code>
+
+          <country>P.R. China</country>
+        </postal>
+
+        <email>wangxuewei@huawei.com</email>
+      </address>
+    </author>
+
+    <author fullname="Xiaohu Xu" initials="X." surname="Xu">
+      <organization abbrev="Huawei">Huawei Technologies Co.,Ltd</organization>
+
+      <address>
+        <postal>
+          <street>No.9 Xinxi Rd.</street>
+
+          <city>Beijing</city>
+
+          <region>Hai-Dian District</region>
+
+          <code>100085</code>
+
+          <country>P.R. China</country>
+        </postal>
+
+        <email>xuxh@huawei.com</email>
+      </address>
+    </author>
+
+    <date year="2009" />
+
+    <workgroup>BEHAVE Working Group</workgroup>
+
+    <abstract>
+      <t>Some IPv6 applications obtain IPv4 address literals and want
+      to communicate with those IPv4 hosts through an IPv6/IPv4
+      translator. The IPv6 application can send an IPv6 packet through
+      the translator if it knows the IPv6 prefix of the IPv6/IPv4
+      translator. In many IPv6/IPv4 translation deployments, that IPv6
+      prefix is not fixed; rather, the prefix is chosen by the network
+      operator. This specification provides three methods for a host
+      to learn the IPv6 prefix of its IPv6/IPv4 translator.  Unicast,
+      any-source multicast (ASM), and source-specific multicast (SSM)
+      are supported.
+</t> 
+</abstract> </front>
+
+  <middle>
+    <section title="Terminology">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119"></xref>.</t>
+
+      <t>AFT: Address Family Translator. A device that translates between IP
+      address families.</t>
+
+      <t>DNS64: The function of synthesizing an AAAA record from an A record
+      (also called "DNS rewriting" or "DNS-ALG"), described in <xref
+      target="I-D.bagnulo-behave-dns64"></xref>.</t>
+
+      <t>LIR Prefix: A prefix assigned to an IPv6/IPv4 translator that uses
+      the same LIR (Local Internet Registry) prefix as assigned to the network
+      by that network's local Internet registry.</t>
+
+      <t>Edge router: The routers with some interfaces which attach to the
+      same multicast link with some hosts.</t>
+    </section>
+
+    <section anchor="introduction" title="Introduction">
+      <t>Certain applications, operating in certain translation scenarios, can
+      benefit from knowing the IPv6 prefix of their IPv6/IPv4 translator.
+      First, the host must be operating in an IPv6-initiated scenario with a
+      local translator. The <xref target="Charter">BEHAVE charter</xref>
+      describes these as Scenario 1, "IPv6 network to IPv4 Internet", and
+      Scenario 5, "An IPv6 network to an IPv4 network". Learning the prefix is
+      useful for both stateful translation and stateless translation.</t>
+
+      <t>With those scenarios, the IPv6 host usually performs a DNS AAAA query
+      which is processed by a DNS64 server. The DNS64 server generates a
+      synthetic AAAA response, when necessary. This synthetic AAAA response
+      contains the prefix of the IPv6/IPv4 translator. When the IPv6 host
+      sends a packet to that address returned in the AAAA response, the packet
+      is routed to the translator which translates it to IPv4. This
+      functionality is transparent to the IPv6 host, for the most part.</t>
+
+      <t>Second, the IPv6 application obtains an IPv4 address literal via a
+      means outside of DNS, and wants to communicate with that IPv4 address.
+      So far, the authors have identified the following applications which can
+      benefit knowing the IPv6 prefix of the host's IPv6/IPv4 translator:
+      <list style="symbols">
+          <t>host-based DNSSEC validation (Section 4.3 of <xref
+          target="I-D.bagnulo-behave-dns64"></xref>)</t>
+
+          <t>BitTorrent (<xref
+          target="I-D.wing-behave-nat64-referrals">Section 2.2 of </xref>)</t>
+
+          <t>multicast translation (<xref target="I-D.venaas-behave-v4v6mc-framework"></xref> and Section 4 of <xref
+          target="I-D.venaas-behave-mcast46"></xref>)</t>
+
+          <t>URI schemes with host IPv4 address literals rather than domain
+          names (e.g., http://192.0.2.1, ftp://192.0.2.1, imap://192.0.2.1,
+          ipp://192.0.2.1)).</t>
+        </list></t>
+
+      <t>When an IPv6/IPv4 translator is used with an LIR prefix (rather than
+      the well-known prefix), it is necessary for such applications to learn
+      the IPv6 prefix (and length) of the translator so that the application
+      can create an IPv6 packet that will be routed to the translator and be
+      translated to IPv4.</t>
+    </section>
+
+    <section title="Mechanisms to Learn the IPv6 Prefix and Length">
+      <t>Both the IPv6 prefix of the translator and the prefix length of the
+      translator need to be learned. With that information, the application
+      can generate an appropriate IPv6 address that will be routed to the
+      translator for the translator to process.</t>
+
+      <t>The host can learn the necessary information using DNS, DHCP, or
+      Router Alert, as described in the following sections.</t>
+
+      <t><list style="empty">
+          <t>Issue: If a conflict exists between DNS, DHCP, or RA, which
+          should take precedence? Should we choose one mechanism??</t>
+        </list></t>
+
+      <section anchor="learn_dns" title="Using DNS">
+        <t>This specification defines a new <xref
+        target="RFC4848">U-NAPTR</xref> application to discover the
+        translator's IPv6 prefix and length. The input domain name is the
+        exact same as would be used for a reverse DNS lookup, derived from the
+        host's IPv6 in the ".ip6.arpa." tree and follows the construction
+        rules in <xref target="RFC3596">Section 2.5 of</xref>. This is
+        shortened to 20 labels (representing a /64 network prefix) and, if DNS
+        returns an error is shortened to 16 labels (representing a /48 network
+        prefix).</t>
+
+        <t>If an IPv6/IPv4 translator is present on the network, the
+        successful result of one of those queries will produce a NAPTR record
+        with the desired service tag "TRANSLATE64:" which contains the 
+        unicast IPv6
+        prefix and prefix length of the translator, separated by a "/" (the
+        same syntax as specified in <xref target="RFC4291">Section 2.3 of
+        </xref>). The service tags "ASMTRANSLATE64:" and "SSMTRANSLATE:"
+are used for ASM and SSM.</t>
+
+        <t>For example, a host with the IP address 2001:db8:1:2:3:4:567:89ab
+        would first send an NAPTR query for
+        3.0.0.0.2.0.0.0.1.0.0.0.8.b.d.0.1.0.0.2.IP6.ARPA (20 elements,
+        representing a /64 network prefix). If that fails (returns NXDOMAIN),
+        it would send an NAPTR query for
+        2.0.0.0.1.0.0.0.8.b.d.0.1.0.0.2.IP6.ARPA (16 elements, representing a
+        /48 network prefix).<list>
+            <t>Note: Both /64 and /48 prefix lengths are shown in this version
+            of the document for illustrative purposes. The number of elements
+            of this query will depend on the prefix length(s) defined by the
+            BEHAVE working group for a translator. If the BEHAVE working group
+            decides that all translators will have a certain prefix length,
+            then only one DNS query is sent.</t>
+          </list></t>
+
+        <t>If the host needs to authenticate the prefix it just learned (e.g.,
+        because the host is running a DNSSEC validator) the host performs the
+        additional authentication steps described in <xref
+        target="auth"></xref>.</t>
+      </section>
+
+      <section anchor="learn_dhcp" title="Using DHCP">
+        <t>A new DHCP option, OPTION_AFT_PREFIX_DHCP, is defined. It contains
+        the IPv6 unicast prefix, IPv6 ASM prefix, and IPv6 SSM prefix 
+(and their lengths) for the IPv6/IPv4 translator on this network.</t>
+
+
+        <figure anchor="dhcp-option"
+                title="DHCP option OPTION_AFT_PREFIX_DHCP">
+          <preamble></preamble>
+
+          <artwork align="center"><![CDATA[
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|     OPTION_AFT_PREFIX_DHCP    |         option-length         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| u-prefix-len  | asm-prefix-len| ssm-prefix-len|               :
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+               :
+:                       IPv6 unicast prefix                     :
+:                        (up to 16 octets)                      :
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+:                       IPv6 ASM prefix                         :
+:                       (up to 16 octets)                       :
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+:                       IPv6 SSM prefix                         :
+:                       (up to 16 octets)                       :
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+    option-code:      OPTION_AFT_PREFIX_DHCP (TBD)
+
+    option-length:    (varies)
+
+    u-prefix-length:  Length for the unicast prefix in bits
+
+    IPv6 unicast prefix:      The translator's IPv6 unicast prefix
+   
+    IPv6 ASM prefix:          The translator's IPv6 ASM prefix.  If
+                              none is provided, the length is 0.
+
+    IPv6 SSM prefix:          The translator's IPv6 SSM prefix.  If 
+                              none is provided, the length is 0.      
+]]></artwork>
+        </figure>
+
+        <t>If the host needs to authenticate the prefix it just learned (e.g.,
+        because the host is running a DNSSEC validator) the host performs the
+        additional authentication steps described in <xref
+        target="auth"></xref>.</t>
+      </section>
+
+      <section anchor="learn_ra" title="Using IPv6 Router Advertisements (RA)">
+        <t>The IPv6 prefix and the prefix length can be advertised to IPv6
+        hosts by routers in Router Advertisement (RA) messages <xref
+        target="RFC4861"></xref>.</t>
+
+        <figure anchor="learn_prefix_ra"
+                title="using RA message to learn prefix and length">
+          <preamble></preamble>
+
+          <artwork align="center"><![CDATA[
+                              +------+
+                              |IPv6-A|
+                              +------+
+                                 |                  ,--------.
++------+  +--------+  +--------+ | +----------+   ,'          `.
+|IPv6-B|--|router-B|--|router-A|-+-|translator|--( IPv4 Network )
++------+  +--------+  +--------+   +----------+   `.          ,'
+                                                    `--------'
+<---------IPv6 network------------------>|<---- IPv4 network --->
+        ]]></artwork>
+        </figure>
+
+        <t>In the scenario where the IPv6 hosts attach to the same multicast
+        link as the translator (i.e., IPv6-A in <xref
+        target="learn_prefix_ra"></xref>), the translator can transmit the
+        IPv6 prefix and the length to IPv6 hosts in the RA messages advertised
+        periodically or in the responses to valid Router Solicitation
+        messages.</t>
+
+        <t>In the scenarios where IPv6 hosts are attached to a different
+        multicast link than the translator (i.e., IPv6-B in <xref
+        target="learn_prefix_ra"></xref>), the IPv6 prefix and the prefix
+        length could be manually configured for edge routers in the IPv6
+        domain such as router-B. Either the translator can use the IGP
+        (Interior Gateway Protocol, e.g., OSPF, ISIS, RIP) to announce the
+        IPv6 prefix and the prefix length to edge routers in the IPv6 domain.
+        Thus edge routers can transfer the IPv6 prefix and the length to IPv6
+        hosts in the RA messages advertised periodically or in the responses
+        to valid Router Solicitation messages.</t>
+
+        <t>This mechanism requires extensions to both the RA message of
+        Neighbor Discovery protocol <xref target="RFC4861"></xref> and IGP
+        allowing the IPv6 prefix and prefix length to be communicated to IPv6
+        hosts or routers.</t>
+
+        <t>In the extension of RA messages, a new option type,
+        OPTION_AFT_PREFIX_RA, is defined. It contains the IPv6 prefix and its
+        length.</t>
+
+        <figure anchor="ra-option" title="RA option OPTION_AFT_PREFIX_RA">
+          <preamble></preamble>
+
+          <artwork align="center"><![CDATA[
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|   Type(TBD)   |     Length    |     unicast Prefix-length     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|      ASM prefix length        |      SSM prefix length        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+:                                                               :
+:                  unicast IPv6 prefix (variable)               :
+:                                                               :
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+:                                                               :
+:                     ASM IPv6 prefix (variable)                :
+:                                                               :
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+:                                                               :
+:                     SSM IPv6 prefix (variable)                :
+:                                                               :
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     ]]></artwork>
+        </figure>
+
+        <t>The definition of each field is similar to OPTION_AFT_PREFIX_DHCP
+        of <xref target="learn_dhcp"></xref>.</t>
+
+        <t>Extending OSPF requires defining a new TLV type, TLV_AFT_PREFIX, of
+        Router Information LSA (Link State Advertisement) to transfer the IPv6
+        prefix and the prefix length. The format of TLV_AFT_PREFIX is the same
+        as OPTION_AFT_PREFIX_DHCP of <xref target="learn_dhcp"></xref>.</t>
+
+        <t>Extending other IGPs (e.g., ISIS, RIP) will be discussed in a
+        future version of this document.</t>
+
+        <t>If the host needs to authenticate the prefix it just learned (e.g.,
+        because the host is running a DNSSEC validator) the host performs the
+        additional authentication steps described in <xref
+        target="auth"></xref>.</t>
+      </section>
+    </section>
+
+    <section anchor="auth" title="Authenticating the Learned Prefix">
+      <t>In some cases (e.g., a host performing DNSSEC validation), the host
+      needs to authenticate the translator's IPv6 prefix learned via one of
+      the mechanisms described earlier. To allow such authentication the
+      operator of the translator first creates a PTR record for the translator
+      (with 0's for the elements after the translator's IPv6 prefix) which
+      points to a hostname. The hostname has a signed AAAA record for the same
+      0-padded IPv6 address returned by the PTR query. Once those
+      configuration steps are done, a host can validate the translator's IPv6
+      prefix by performing the following steps: <list style="format %c.">
+          <t>The host sends a DNS PTR query for the IPv6 address of the
+          translator (for "ipv6.arpa"), using 0 for the elements after the
+          prefix length. This will return the fully-qualified hostname of that
+          translator device.</t>
+
+          <t>Verify the full-qualified hostname is on the host's configured
+          list of authorized translators (e.g.,
+          seattle.translator.example.net).</t>
+
+          <t>Send a DNS AAAA query for that hostname.</t>
+
+          <t>Verify the AAAA response matches the IPv6 address obtained in
+          step 1.</t>
+
+          <t>Perform DNSSEC validation of the AAAA response.</t>
+        </list></t>
+
+      <t>For example, if the translator's IPv6 prefix length is /48, the host
+      would send a PTR query for 2.0.0.0.1.0.0.0.0.0.0.0.1.2.3.4.IP6.ARPA
+      which would return a hostname, seattle.translator.example.net. The host
+      verifies that seattle.translator.example.net is on its configured list
+      of authorized translators, as maintained in a text file. The host sends
+      an AAAA query for seattle.translator.example.net and verifies the AAAA
+      response contains the same IPv6 address. The host then validates the
+      DNSSEC signature for seattle.translator.example.net.</t>
+    </section>
+
+    <section anchor="security_considerations" title="Security Considerations">
+      <t>After learning the IPv6 prefix of its translator by following the
+      procedures in this specification, the IPv6 host will utilize this
+      information for subsequent actions (e.g., sending a packet to it, or
+      using that information to synthesize DNS records or to perform DNSSEC
+      validation). If an attacker provides a fraudulent IPv6 to the IPv6 host,
+      the attacker can become on-path for traffic to/from that IPv6 host and
+      preform passive or active eavesdropping or traffic analysis. To protect
+      against this attack, it is RECOMMENDED that IPv6 hosts be configured
+      with the names of authorized translators and RECOMMENDED that IPv6 hosts
+      uses DNSSEC to validate that name matches the IPv6 prefix learned via
+      DNS, DHCPv6 or RA message, as described in <xref
+      target="auth"></xref>.</t>
+    </section>
+
+    <section anchor="iana" title="IANA Considerations">
+      <t>A new DHCPv6 option, OPTION_AFT_PREFIX_DHCP, and RA option,
+      OPTION_AFT_PREFIX_RA, needs to be assigned by IANA.</t>
+
+      <t>A new TLV type, TLV_AFT_PREFIX, of Router Information LSA for OSPF
+      needs to be assigned by IANA.</t>
+
+      <t>The new NAPTR Application Service tag "TRANSLATE64" is registered
+      with IANA.</t>
+    </section>
+
+    <section title="Acknowledgements">
+      <t>This draft was fostered by discussion on the 46translation mailing
+      list and at the v4v6 Interim in Montreal. Special thanks to Iljitsch van
+      Beijnum, Andrew Sullivan, Marcelo Bagnulo Braun, Fred Baker, and Xing Li
+      for their comments and dialog.</t>
+
+      <t>The mechanism to perform a shortened NAPTR query was described first
+      by Martin Thomson <xref
+      target="I-D.thomson-geopriv-res-gw-lis-discovery"></xref>.</t>
+
+      <t>Thanks to Ralph Droms for his help with DHCPv6. Thanks to John
+      Schnizlein for improving the DNS learning algorithm. Thanks to Keith
+      Moore and Scott Brim for suggesting HTTP IPv4 address literals.  
+Thanks to Stig Venaas for help with multicast.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      &rfc2119;
+
+      &rfc4848;
+
+      &rfc4861;
+    </references>
+
+    <references title="Informative References">
+      &I-D.bagnulo-behave-dns64;
+
+&I-D.van-beijnum-behave-ftp64;
+
+      &rfc4291;
+
+      &I-D.wing-behave-nat64-referrals;
+
+      &I-D.venaas-behave-mcast46;
+&I-D.venaas-behave-v4v6mc-framework;
+      &rfc3596;
+
+      &I-D.thomson-geopriv-res-gw-lis-discovery;
+
+      &I-D.savolainen-mif-dns-server-selection;
+
+      <reference anchor="Charter"
+                 target="http://www.ietf.org/html.charters/behave-charter.html">
+        <front>
+          <title>BEHAVE Charter</title>
+
+          <author fullname="IETF" surname="IETF">
+            <organization></organization>
+          </author>
+
+          <date month="May" year="2009" />
+        </front>
+      </reference>
+    </references>
+
+    <section title="For future study">
+      <section title="multi-homed hosts">
+        <t>A multi-homed host may have different translation devices available
+        on each of its networks, and can learn those via DNS, DHCP, or RA.</t>
+
+        <t>When using DNS to learn the translator's prefix (<xref
+        target="learn_dns"></xref>) or using DNS to authenticate the
+        translator prefix (<xref target="auth"></xref>, it is possible a split
+        horizon DNS exists. Such a split DNS requires the host to query the
+        DNS server associated with that network prefix as described in <xref
+        target="I-D.savolainen-mif-dns-server-selection"></xref>.</t>
+      </section>
+
+      <section title="Unicast and multicast translators">
+        <t>It may be necessary to use different prefixes for unicast, any
+        source multicast (ASM), and source-specific multicast (SSM) (Section 2
+        of <xref target="I-D.venaas-behave-mcast46"></xref>).</t>
+      </section>
+    </section>
+
+    <section title="Changes">
+<section title="Changes from -02 to -03">
+<t><list style="symbols">
+<t>Removed FTP interworking, because <xref target="I-D.van-beijnum-behave-ftp64"></xref> proposes that FTP
+clients use the same IP address for the data connection as the 
+control connection.  This eliminates the need for the FTP client
+to learn the translator's prefix.</t>
+<t>Added multicast to DHCP and RA messages.</t>
+</list></t>
+</section>
+      <section title="Changes from -01 to -02">
+        <t><list style="symbols">
+            <t>provided another method of using RA message for a host to learn
+            its translator's IPv6 prefix and length</t>
+
+            <t>added IPv4 address literals in URIs and multicast as
+            benefactors for learning the translator's prefix.</t>
+
+            <t>added FTP interworking using PASV</t>
+
+            <t>clarified which Scenarios this applies to, and that this is for
+            stateful and stateless.</t>
+          </list></t>
+      </section>
+
+      <section title="Changes from -00 to -01">
+        <t><list style="symbols">
+            <t>made clearer this is for NAT64 prefix (changed title and some
+            text).</t>
+
+            <t>changed from querying for "_aft_prefix" TXT record to querying
+            ipv6.arpa NAPTR record.</t>
+
+            <t>BitTorrent is another application that benefits from knowing
+            the NAT64 prefix; previously only DNSSEC was listed.</t>
+
+            <t>changed to standards track.</t>
+          </list></t>
+      </section>
+    </section>
+  </back>
+</rfc>

@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!-- This template is for creating an Internet Draft using xml2rfc,
+     which is available here: http://xml.resource.org. -->
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!-- One method to get references from the online citation libraries.
+     There has to be one entity for each item to be referenced. 
+     An alternate method (rfc include) is described in the references. -->
+]>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<!-- used by XSLT processors -->
+<!-- For a complete list and description of processing instructions (PIs), 
+     please see http://xml.resource.org/authoring/README.html. -->
+<!-- Below are generally applicable Processing Instructions (PIs) that most I-Ds might want to use.
+     (Here they are set differently than their defaults in xml2rfc v1.32) -->
+<?rfc strict="yes" ?>
+<!-- give errors regarding ID-nits and DTD validation -->
+<!-- control the table of contents (ToC) -->
+<?rfc toc="yes"?>
+<!-- generate a ToC -->
+<?rfc tocdepth="4"?>
+<!-- the number of levels of subsections in ToC. default: 3 -->
+<!-- control references -->
+<?rfc symrefs="no"?>
+<!-- use symbolic references tags, i.e, [RFC2119] instead of [1] -->
+<?rfc sortrefs="yes" ?>
+<!-- sort the reference entries alphabetically -->
+<!-- control vertical white space 
+     (using these PIs as follows is recommended by the RFC Editor) -->
+<?rfc compact="yes" ?>
+<!-- do not start each main section on a new page -->
+<?rfc subcompact="no" ?>
+<!-- keep one blank line between list items -->
+<!-- end of list of popular I-D processing instructions -->
+<rfc category="std" docName="draft-atlas-bryant-shand-lf-timers-04"
+     ipr="full3978">
+  <front>
+    <title abbrev="Abbreviated Title">Synchronisation of Loop Free Timer
+    Values</title>
+
+    <author fullname="Alia K, Atlas" initials="A" surname="Atlas">
+      <organization>BT</organization>
+
+      <address>
+        <postal>
+          <street></street>
+
+          <city></city>
+
+          <code></code>
+        </postal>
+
+        <email>akatlas@bt.com</email>
+      </address>
+    </author>
+
+    <author fullname="Stewart Bryant" initials="S" surname="Bryant">
+      <organization>Cisco Systems</organization>
+
+      <address>
+        <postal>
+          <street>250, Longwater Ave,</street>
+
+          <city>Reading,</city>
+
+          <code>RG2 6GB,</code>
+
+          <country>UK</country>
+        </postal>
+
+        <email>stbryant@cisco.com</email>
+      </address>
+    </author>
+
+    <author fullname="Mike Shand" initials="M" surname="Shand">
+      <organization>Cisco Systems</organization>
+
+      <address>
+        <postal>
+          <street>250, Longwater Ave,</street>
+
+          <city>Reading,</city>
+
+          <code>RG2 6GB,</code>
+
+          <country>UK</country>
+        </postal>
+      </address>
+    </author>
+
+    <date month="February" year="2008" />
+
+    <area>Routing</area>
+
+    <workgroup>Network Working Group</workgroup>
+
+    <keyword>Draft</keyword>
+
+    <abstract>
+      <t>This draft describes a mechanism that enables routers to agree on a
+      common convergence delay time for use in loop-free convergence.<vspace
+      blankLines="2" /></t>
+    </abstract>
+
+    <note title="Requirements Language">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119">RFC2119</xref>.</t>
+    </note>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>Most of the loop-free convergence mechanisms <xref format="default"
+      target="I-D.bryant-shand-lf-conv-frmwk"></xref> require one or more
+      convergence delay timers that MUST have a duration that is consistent
+      throughout the routing domain. This time is the worst case time that any
+      router will take to calculate the new topology, and to make the
+      necessary changes to the FIB. The timer is used by the routers to know
+      when it is safe to transition between the loop- free convergence
+      states.</t>
+
+      <t>The time taken by a router to complete each phase of the loop-free
+      transition will be dependent on the size of the network and the design
+      and implementation of the router. It can therefore be expected that the
+      optimum delay will need to be tuned from time to time as the network
+      evolves.</t>
+
+      <t>Manual configuration of the timer is fraught for two reasons, firstly
+      it is always difficult to ensure that the correct value is installed in
+      all of the routers, and secondly, if any change is introduced into the
+      network that results in a need to change the timer, for example due to a
+      change in hardware or software version, then all of the routers need to
+      be reconfigured to use the new timer value.</t>
+
+      <t>It is therefore desirable that a means be provided by which the
+      convergence delay timer can be automatically synchronized throughout the
+      network.</t>
+    </section>
+
+    <section title="Required Properties">
+      <t>The timer synchronization mechanism MUST have the following
+      properties: <list>
+          <t>o The convergence delay time must be consistent amongst all
+          routers that are converging on the new topology.</t>
+
+          <t>o The convergence delay time must be the highest delay required
+          by any router in the new topology.</t>
+
+          <t>o The mechanism must increase the delay when a new router in
+          introduced to the network that requires a higher delay than is
+          currently in use.</t>
+
+          <t>o When the router that had the longest delay requirements is
+          removed from the topology, the convergence delay timer value must,
+          within some reasonable time, be reduced to the longest delay
+          required by the remaining routers.</t>
+
+          <t>o It must be possible for a router to change the convergence
+          delay timer value that it requires.</t>
+
+          <t>o A router which is in multiple routing areas, or is running
+          multiple routing protocols may signal a different loop-free
+          convergence delay for each area, and for each protocol.</t>
+        </list></t>
+
+      <t>How a router determines the time that it needs to execute each
+      convergence phase is an implementation issue, and outside the scope of
+      this specification. However a router that dynamically determines its
+      proposed timer value must do so in such a way that it does not cause the
+      synchronized value to continually fluctuate.</t>
+    </section>
+
+    <section title="Mechanism  ">
+      <t>The following mechanism is proposed.</t>
+
+      <t>A new information element is introduced into the routing protocol
+      that specifies the maximum time (in milliseconds) that the router will
+      take to calculate the new topology and to update its FIB as a result of
+      any topology change.</t>
+
+      <t>When a topology change occurs, the largest convergence delay time
+      required by any router in the new topology is used by the loop-free
+      convergence mechanism.</t>
+
+      <t>If a routing protocol message is issued that changes the convergence
+      delay timer value, but does not change the topology, the new timer value
+      MUST be taken into consideration during the next loop-free transition,
+      but MUST NOT instigate a loop-free transition.</t>
+
+      <t>If a routing protocol message is issued that changes the convergence
+      timer value and changes the topology, a loop-free transition is
+      instigated and the new timer value is taken into consideration.</t>
+
+      <t>The loop-free convergence mechanism should specify the action to be
+      taken if a timer change (only) message and a topology change message are
+      independently generated during the hold-off time. A suitable action
+      would be to take the same action that would be taken if two uncorrelated
+      topology changes occurred in the network.</t>
+
+      <t>All routers that support loop-free convergence MUST advertise a
+      loop-free convergence delay time. The loop-free convergence mechanism
+      MUST specify the action to be taken if a router does not advertise a
+      convergence delay time.</t>
+    </section>
+
+    <section title="Protocol Details">
+      <t>This section describes the protocol changes needed to implement the
+      timer synchronization function.</t>
+
+      <section title="ISIS"></section>
+
+      <t>The controlled convergence timer value will be carried in a new
+      Sub-TLV of the capability TLV as defined in <xref
+      target="I-D.ietf-isis-caps"></xref> .</t>
+
+      <t>This draft defines one such SUB-TLV where the type is for the
+      worst-case FIB compute/install time, the value is 16 bits and is
+      specified in milliseconds; this gives a max value of about 65s.</t>
+
+      <t>The format of the Sub-TLV is as shown below.<list>
+          <t>Sub-TLV FIB-Convergence Timer</t>
+
+          <t>TYPE: &lt;TBD&gt;</t>
+
+          <t>Length: 2 octets</t>
+
+          <t>Value: &lt;16-bit timer value expressed in milliseconds&gt;</t>
+        </list></t>
+
+      <t>This MUST be carried in a capability TLV with the S-bit set to zero
+      (indicating that it MUST NOT be leaked between levels).</t>
+
+      <section title="OSPF"></section>
+
+      <t>A new type-10 opaque LSA (the controlled convergence LSA) will be
+      defined as part of OSPF changed needed to define the loop-free
+      convergence mechanism. This will consist of one or more TLVs. This draft
+      defines one such TLV where the type is for the worst-case FIB
+      compute/install time, the value is 16 bits and is specified in
+      milliseconds; this gives a max value of about 65s.</t>
+    </section>
+
+    <section title="IANA considerations">
+      <t>There will be IANA considerations that arise as a result of this
+      draft, but they are not yet determined.</t>
+    </section>
+
+    <section title="Security Considerations">
+      <t>If an abnormally large timer value is proposed by a router, the there
+      is a danger that the loop-free convergence process will take an
+      excessive time. If during that time the routing protocol signals the
+      need for another transition, the loop-free transition will be abandoned
+      and the default best case (traditional) convergence mechanism used.</t>
+
+      <t>It is still undesirable that the routers select a convergence delay
+      time that has an excessive value. The maximum value that can be
+      specified in the LSP/LSA is limited through the use of a 16 bit field to
+      about 65 seconds. When sufficient implementation experience is gained,
+      an architectural constant will be specified which sets the upper limit
+      of the convergence delay timer.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.RFC.2119"?>
+
+      <?rfc include='reference.I-D.ietf-isis-caps'?>
+
+      <?rfc ?>
+    </references>
+
+    <references title="Informative References">
+      <?rfc include='reference.I-D.bryant-shand-lf-conv-frmwk'?>
+
+      <?rfc ?>
+    </references>
+  </back>
+</rfc>

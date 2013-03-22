@@ -1,0 +1,750 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="rfc2629.xslt" ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY RFC2119   PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+<!ENTITY RFC3693   PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3693.xml">
+<!ENTITY RFC3688   PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3688.xml">
+<!ENTITY I-D.ietf-geopriv-http-location-delivery PUBLIC "" "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-geopriv-http-location-delivery.xml">
+<!ENTITY I-D.ietf-geopriv-l7-lcp-ps PUBLIC "" "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-geopriv-l7-lcp-ps.xml">
+<!ENTITY I-D.ietf-geopriv-lbyr-requirements PUBLIC "" "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-geopriv-lbyr-requirements.xml">
+]>
+
+
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="no"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc toc="yes" ?>
+<rfc category="std" ipr="full3978" docName="draft-winterbottom-geopriv-held-context-03.txt">
+  <front>
+    <title abbrev="HELD Context">HELD Protocol Context Management Extensions</title>
+    <author initials="J." surname="Winterbottom" fullname="James Winterbottom">
+      <organization>Andrew Corporation</organization>
+      <address>
+        <postal>
+          <street>PO Box U40</street>
+          <city>University of Wollongong</city>
+          <region>NSW</region>
+          <code>2500</code>
+          <country>AU</country>
+        </postal>
+        <phone>+61 242 212938</phone>
+        <email>james.winterbottom@andrew.com</email>
+        <uri>http://www.andrew.com/products/geometrix</uri>
+      </address>
+    </author>
+
+    <author initials="H." surname="Tschofenig" fullname="Hannes Tschofenig"> 
+      <organization>Nokia Siemens Networks</organization> 
+      <address> 
+        <postal> 
+          <street>Linnoitustie 6</street> 
+          <city>Espoo</city> 
+          <code>02600</code> 
+          <country>Finland</country> 
+        </postal> 
+        <phone>+358 (50) 4871445</phone> 
+        <email>Hannes.Tschofenig@gmx.net</email> 
+        <uri>http://www.tschofenig.priv.at</uri> 
+      </address> 
+    </author> 
+
+
+    <author initials="M." surname="Thomson" fullname="Martin Thomson">
+      <organization>Andrew Corporation</organization>
+      <address>
+        <postal>
+          <street>PO Box U40</street>
+          <city>University of Wollongong</city>
+          <region>NSW</region>
+          <code>2500</code>
+          <country>AU</country>
+        </postal>
+        <phone>+61 242 212915</phone>
+        <email>martin.thomson@andrew.com</email>
+        <uri>http://www.andrew.com/products/geometrix</uri>
+      </address>
+    </author>
+
+    <date month="September" year="2008"/>
+    <area>Real-Time Applications and Infrastructure</area>
+    <workgroup>Geopriv</workgroup>
+    <keyword>Internet-Draft</keyword>
+    <abstract>
+      <t>This document describes a protocol extension for the HTTP Enabled Location Delivery (HELD) protocol.
+        It allows a Target to manage their
+        location information on a Location Information Server (LIS)
+        through the application of constraints invoked by accessing a
+        location URI. Constraints described in this memo restrict how often location can be accessed
+        through a location URI, how long the URI is valid for, and the type of location information
+        returned when a location URI is accessed. Extension points are also provided. </t>
+    </abstract>
+  </front>
+
+
+  <middle>
+
+    <section anchor="intro" title="Introduction">
+      <t>The HTTP Enabled Location Delivery (HELD) protocol specification <xref target="I-D.ietf-geopriv-http-location-delivery"/> provides a
+        set of features that can be used by a Target to retrieve location information from a Location Information Server (LIS).
+        The basic HELD specification does this in a more or less stateless manner, and when a
+        location URI is retrieved the Target has no way of controlling
+        how the URI is used; a Location Recipient in pocession of the location URI can get the
+        Target's location until the URI expires. This basic mechanism may be reasonable in a limited
+        set of applications, but is unacceptable in a broader range of applications. This position
+        is highlighted in <xref target="I-D.ietf-geopriv-lbyr-requirements"/> which describes
+        requirements for constraints relating to location URIs. This specification provides support for
+        these requirements in HELD. </t>
+    </section>
+
+    <section anchor="terminology" title="Terminology">
+
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+        "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in
+        <xref target="RFC2119"/>. </t>
+
+      <t>This document reuses the terms Target, as defined in <xref target="RFC3693"/>. </t>
+      <t> This document uses the term Location Information Server (LIS) as the node in the access
+        network that provides location information about a Target. This term is also used in <xref
+          target="I-D.ietf-geopriv-l7-lcp-ps"/>. </t>
+    </section>
+
+    <section anchor="context" title="What is a Context?">
+      <t>A Location URI points to a LIS that is able to provide the location of a specific Target.
+        The LIS is able to map the URI to the location of the Target inside its administrative domain.
+        We call this mapping a &quot;context&quot;. In the basic HELD specification the context is implicitly
+        created with the request for a location URI in the locationRequest message. The Target
+        has no control of the mapping from the URI to the Target's location. This
+        specification provides a degree of control to the Target, allowing it to specify rules to
+        the LIS on how a context should map a URI to location information. </t>
+      <t>A context expires when it reaches a certain age, at which time the mapping between the URI
+        and the Target's location ceases. In the basic HELD specification the exiry time of the context is determined
+        by the LIS when the Target requests a location URI. By allowing the Target to specify and
+        change the life time of a context the Target is able to create URIs for limited periods, or to
+        terminate URIs for which it no longer wishes its location to be returned. This specification
+        provides explicit support for this functionality.</t>
+    </section>
+
+    <section anchor="policies" title="Constraints">
+      <t>Constraints restrict the ability of a Location Recipient to resolve a location URI to location
+        information. The constraints are selected by the Target and they are provided to the LIS
+        that maintains them along with the context. A LIS, understanding this specification, receives
+        constraints provided by the Target, and returns a set of URIs influenced by the constraints.
+      </t>
+       <t> A single Target may want to place different contraints on different references
+        and hence may have multiple contexts on the LIS.
+        The constraints describe what actions the LIS MUST take when a URI associated with
+        the context is accessed. This document describes two basic constraints that a Target can use in
+        combination for the same context. Once set, these rules remain in force of the life of the
+        context. </t>
+
+      <section anchor="useuri" title="Limited Use URIs">
+        <t>A limited use URI can only be accessed a fixed number of times to yield the location of
+          the Target. Each time the URI is used to provide the location of the Target one usage is
+          consumed. Once the limit is reached the URI no longer yields the location of the Target
+          and the URI is deemed spent. </t>
+        <t>By setting the usage limit to 1, the Target is able to create a one-time-URI permitting a
+          Location Recipient to obtain the Target's location only once. Setting the usage limit to
+          something higher than 1 creates functionality analogous to a metro-ticket, where a Location
+          Recipient in possession of the URI can access the Target's location many more times, but
+          not exceeding the imposed limit. </t>
+        <t>Not setting a usage limit provides similar semantics to the URI in the base HELD
+          specification, enabling a Location Recipient to continually obtain the Target's location
+          until the URI expires due to age. </t>
+        <t> When a HELD URI is assigned to a context, the limit is the number of times that the URI
+          can be accessed before the LIS returns an error. In the case of SIP or pres URIs it is the number of
+          NOTIFY messages that are sent prior to the LIS returning an error. Where a context
+          supports SIP, pres, and HELD URIs it is the combination of URI accesses and NOTIFY messages
+          that constitutes the usage value, each time the Target's location is provided constitutes
+          a usage. </t>
+      </section>
+
+      <section anchor="snapshoturi" title="Snapshot URIs">
+        <t>A snapshot URI points to the location of the Target at a specific point in time, and no
+          matter how many times the URI is accessed it will always yield the same location. This is
+          useful if, for example, the Target does not want to be tracked. In this
+          specification the location snapshot to which a snapshot URIs points is captured when the
+          context is created on the LIS. </t>
+      </section>
+    </section>
+
+    <section anchor="details" title="Protocol Details">
+      <t>This specification introduces three new HELD messages, create context (&lt;createContext&gt;), update
+        context (&lt;updateContext&gt;), and context response (&lt;contextResponse&gt;).
+        A LIS that does not understand this
+        specification is expected to return a HELD <spanx style="emph">unsupportedMessage</spanx>
+        error code in a HELD error message. A LIS that does understand this specification
+        returns errors associated with context operations in a HELD error message. New error codes
+        relating to failed context operations are defined in this specification.
+      </t>
+      <t>The specification assumes that the LIS was discovered as part of the general HELD LIS
+        discovery process. All messages are sent using the application/held+xml MIME type as defined
+        in <xref target="I-D.ietf-geopriv-http-location-delivery"/>. </t>
+
+      <section anchor="createcontext" title="Create Context Message">
+        <t>The Target creates a context on the LIS using a create context message. The basic
+          create context message supports the constraints described in <xref target="policies"/> and
+          consist of two attributes and one element described below:</t>
+        <t><list style="symbols">
+            <t><spanx style="verb">uses</spanx>: an optional attribute instructing the LIS on how
+              many times a URI may yield the location of the Target. This is a positive integer, and
+              has a default value of <spanx style="emph">unlimited</spanx>. The LIS SHOULD support
+              the Target specifying up to at least 100 uses.</t>
+            <t><spanx style="verb">snapshot</spanx>: an optional attribute instructing the LIS to
+              take a snapshot of the Target's location for use with the context. This a boolean
+              value and has a default of <spanx style="emph">false</spanx> meaning that a snapshot
+              is not taken, and the Target's location is determined each time the URI is accessed.</t>
+            <t><spanx style="verb">lifeTime</spanx>: is a mandatory element that defines the maximum
+              period in seconds that the LIS should keep the context for. The LIS MAY create the
+              context with a shorter life time than was requested, but the life time MUST NOT be
+              longer than was requested.</t>
+          </list>
+        </t>
+        <t>
+          <figure anchor="ex1" title="createContext Example">
+            <artwork><![CDATA[
+<createContext
+     xmlns="urn:ietf:params:xml:ns:geopriv:held:context"
+     uses="10"
+     snapshot="false">
+  <lifeTime>7200</lifeTime>
+</createContext>
+]]></artwork>
+          </figure>
+        </t>
+        <t><xref target="ex1"/> shows a create context message defining a context which: <list
+            style="symbols">
+            <t>may be accessed 10 times</t>
+            <t>will determine the location of the Target each time it is accessed</t>
+            <t>will be valid for 2 hours from the time of context creation</t>
+          </list>
+        </t>
+      </section>
+      <section anchor="updatecontext" title="Update Context Message">
+        <t>A Target can change the life time of a context using an update context message. As stated
+          in <xref target="policies"/> the two attributes used in the context creation, <spanx
+            style="verb">uses</spanx> and <spanx style="verb">snapshot</spanx> cannot be changed once a context is created. 
+        </t>
+        <t> Since the Target may have more than one context on the LIS, the Target needs to identify
+          the context to be updated. It does this by including a context identifier that is provided
+          to it by the LIS when the context is created. </t>
+        <t>
+          <figure anchor="ex2" title="updateContext Life Time Change Example">
+            <artwork><![CDATA[
+<updateContext
+    xmlns="urn:ietf:params:xml:ns:geopriv:held:context"
+    id="uhvuhdbnuiehudbnvcujevuijeijcvij3">
+  <lifeTime>3600</lifeTime>
+</updateContext>
+]]></artwork>
+          </figure>
+        </t>
+        <t>When a Target includes a life time element in an update context message, the LIS needs to
+          calculate a new context expiry time. The LIS MUST do this by adding the new life time
+          value to the current time on the LIS. This mechanism means the Target can terminate a
+          context at any time. It does this by updating the context with a life time of 0, which
+          results in the LIS setting the context expiry time to the present. The LIS MAY also
+          terminate a context if the life time value is set to less than 10 seconds. </t>
+        <t>
+          <figure anchor="ex3" title="updateContext Termination Example">
+            <artwork><![CDATA[
+<updateContext
+    xmlns="urn:ietf:params:xml:ns:geopriv:held:context"
+    id="uhvuhdbnuiehudbnvcujevuijeijcvij3">
+  <lifeTime>0</lifeTime>
+</updateContext>
+]]></artwork>
+          </figure>
+        </t>
+      </section>
+
+      <section anchor="contextresponse" title="Context Response Message">
+        <t>The LIS informs the Target about the outcome of context operations through the context
+          response message. The LIS MUST always send a context response message to a Target in response
+          to a create context or update context message when the outcome was successful.
+          The context response message contains a <spanx style="verb">code</spanx> attribute indicating
+          the performed operation, and the other attributes and elements indicating the state of the context. </t>
+
+        <t>The <spanx style="verb">code</spanx> attribute is an enumerated type and has one of the
+          following values: <list style="symbols">
+            <t><spanx style="emph">created</spanx>: The context was successfully created.</t>
+            <t><spanx style="emph">destroyed</spanx>: The context was destroyed.</t>
+            <t><spanx style="emph">updated</spanx>: The context was successfully updated.</t>
+          </list>
+        </t>
+        <t>The following list details the other attributes that may be returned in a context response
+          message. <list style="hanging">
+            <t hangText="id:">The identifier allocated to the context by the LIS. This identifier is
+              unique in the scope of the LIS. The Target MUST keep this secret and MUST included it
+              in all update requests. The LIS MUST return an <spanx style="verb">id</spanx> in all
+              context response messages. </t>
+
+            <t hangText="uses:">The number of times that the context will yield the Target's
+              location. The LIS MAY report either the original value, or the number of remaining
+              uses. The LIS MUST report this value for all responses pertaining to a known and valid
+              context. This value MAY be ommitted when indicating that a context has been destroyed. </t>
+
+            <t hangText="snapshot:">The value of the snapshot attribute in the context. The LIS MUST
+              report this value for all responses pertaining to a known and valid context. This
+              value MAY be ommitted when indicating that a context has been destroyed. </t>
+
+            <t hangText="expiry:">The time at which the context will expire. After this time, all
+              location URIs that reference this context no longer work. The LIS MUST report this
+              value for all responses pertaining to a known context. This attribute MUST be provided
+              even when a <spanx style="verb">code</spanx> value of <spanx style="emph"
+              >destroyed</spanx> is included in the context repsonse message. </t>
+          </list>
+        </t>
+        <t>In addition to the above attributes, the LIS also provides a set of URIs that can used to
+          access the Target's location with the surety that the context constraints will be
+          applied. A URI set is returned whenever a context is successfully created on the LIS, and
+          this set remains unchanged for the lifetime of the context. A context response message
+          sent in reply to the create context message in <xref target="ex1"/> might look like <xref
+            target="ex4"/>. </t>
+        <t>
+          <figure anchor="ex4" title="contextResponse Example">
+            <artwork><![CDATA[
+<contextResponse
+          xmlns="urn:ietf:params:xml:ns:geopriv:held:context"
+          code="created"
+          id="uhvuhdbnuiehudbnvcujevuijeijcvij4"
+          uses="10"
+          snapshot="false"
+          expires="2007-11-01T13:30:00">
+    <locationUriSet>
+      <locationURI>
+         held://lis.example.com:9768/357yc6s64ceyoiuy5ax3o4
+      </locationURI>
+      <locationURI>
+         sips:357yc6s64ceyoiuy5ax3o4@lis.example.com:9769
+      </locationURI>
+    </locationUriSet>
+</contextResponse>
+]]></artwork>
+          </figure>
+        </t>
+      </section>
+
+      <section anchor="contexterrors" title="Context Errors">
+        <t>When the LIS is unable to perform the requested context operation it need to inform the
+          Target of this. It does this using a held error message. New codes are defined for context operation errors:
+        </t>
+        <t><list style="symbols">
+            <t><spanx style="emph">badContextMessage</spanx>: The LIS was unable to understand the content
+              of the message. In general this will apply to context messages containing extensions that the LIS
+              does not understand.</t>
+            <t><spanx style="emph">unknownContext</spanx>: The LIS was unable to find the context.</t>
+            <t><spanx style="emph">updateContextFailed</spanx>: The LIS was unable to updated the requested
+              context.</t>
+            <t><spanx style="emph">createContextFailed</spanx>: The LIS was unable to created the requested
+              context.</t>
+          </list> A Target implementing this specification MUST accept a any HELD error message as a
+          valid response to a create context or update context message as a LIS may not understand context messages.
+          A LIS that does understand context messages is expected to return the error codes above under the prescribed circumstances.</t>
+        <t>
+          <figure anchor="ex5" title="Example Error Message">
+            <artwork><![CDATA[
+<error xmlns="urn:ietf:params:xml:ns:geopriv:held"
+       code="createContextFailed"
+       message="Snapshot is not supported"/>
+]]></artwork>
+          </figure>
+        </t>
+        <t>
+        </t>
+
+      </section>
+
+      <section anchor="idandurirules" title="Location URI and Context Identifier Generation Rules">
+        <t>A primary aim of this specification is to provide a Target a means to cancel a location
+          URI so that it can no longer be used to provide its location. To achieve this, a location
+          URI generated as part of a context creation needs to be unique with in the scope of the
+          LIS, and identify only that context. If the Target destroys a context and subsequently
+          creates a new one, URIs associated the new context MUST be different from those generated
+          for the previous context. <xref target="I-D.ietf-geopriv-http-location-delivery"/> and
+            <xref target="I-D.ietf-geopriv-lbyr-requirements"/> provide guidance on the creation
+          and desired characteristcs of a location URI. </t>
+        <t>The context identifier provided by the LIS to the Target in the context response message
+          MUST be unique and MUST be different from the identifier provided in any location URI, and it
+          MUST NOT be feasible to determine the context-ID from the location URI.
+          This constraint ensures that possession of a location URI does not automatically
+          provide access and control over the internals of the context. It MAY be feasible to determined
+          the location URI knowing the context-ID however.</t>
+        <t>A context identifier is generated by a LIS to uniquely identify a context. It MUST NOT be
+          feasible for a third-party to easily determine a context identifier by knowing the
+          identity of the Target. This implies that internal correlation (using a hash-table or
+          similar) is the only method that the LIS can use to associate a context id with a
+          particular Target. </t>
+      </section>
+
+    </section>
+
+    <section title="XML Schema">
+      <t>
+        <figure anchor="schema" title="Context Management Schema">
+          <artwork><![CDATA[
+<?xml version="1.0"?>
+<xs:schema
+    targetNamespace="urn:ietf:params:xml:ns:geopriv:held:context"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:heldCx="urn:ietf:params:xml:ns:geopriv:held:context"
+    xmlns:xml="http://www.w3.org/XML/1998/namespace"
+    elementFormDefault="qualified" attributeFormDefault="unqualified">
+
+  <xs:simpleType name="codeType">
+    <xs:restriction base="xs:token">
+      <xs:enumeration value="created"/>
+      <xs:enumeration value="updated"/>
+      <xs:enumeration value="destroyed"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="useType">
+    <xs:union memberTypes="xs:positiveInteger">
+      <xs:simpleType>
+        <xs:restriction base="xs:token">
+          <xs:enumeration value="unlimited"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:union>
+  </xs:simpleType>
+
+  <xs:complexType name="createContextMsg">
+    <xs:complexContent>
+      <xs:restriction base="xs:anyType">
+        <xs:sequence>
+          <xs:element name="lifeTime" type="xs:nonNegativeInteger "
+                  minOccurs="1" maxOccurs="1"/>
+          <xs:any namespace="##other" processContents="lax"
+                  minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="uses" type="heldCx:useType"
+                      use="optional" default="unlimited"/>
+        <xs:attribute name="snapshot" type="xs:boolean"
+                      use="optional" default="false"/>
+        <xs:anyAttribute namespace="##any" processContents="lax"/>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:complexType name="uriSetType">
+       <xs:complexContent>
+        <xs:restriction base="xs:anyType">
+          <xs:sequence>
+            <xs:element name="locationURI" type="xs:anyURI"
+                        minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:restriction>
+       </xs:complexContent>
+   </xs:complexType>
+
+  <xs:complexType name="contextResponseMsg">
+    <xs:complexContent>
+      <xs:restriction base="xs:anyType">
+        <xs:sequence>
+          <xs:element name="locationUriSet" type="heldCx:uriSetType"
+                  minOccurs="1" maxOccurs="1"/>
+          <xs:any namespace="##other" processContents="lax"
+                  minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="id" type="xs:token"
+                      use="required"/>
+        <xs:attribute name="expires" type="xs:dateTime"
+                      use="required"/>
+        <xs:attribute name="uses" type="xs:positiveInteger"
+                      use="optional"/>
+        <xs:attribute name="snapshot" type="xs:boolean"
+                      use="optional"/>
+        <xs:attribute name="code" type="heldCx:codeType"
+                      use="required"/>
+        <xs:anyAttribute namespace="##any" processContents="lax"/>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+
+ <xs:complexType name="updateContextMsg">
+    <xs:complexContent>
+      <xs:restriction base="xs:anyType">
+        <xs:sequence>
+          <xs:element name="lifeTime" type="xs:nonNegativeInteger "
+                  minOccurs="0" maxOccurs="1"/>
+          <xs:any namespace="##other" processContents="lax"
+                  minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="id" type="xs:token"
+                      use="required"/>
+        <xs:anyAttribute namespace="##any" processContents="lax"/>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <xs:element name="createContext" type="heldCx:createContextMsg"/>
+  <xs:element name="updateContext" type="heldCx:updateContextMsg"/>
+  <xs:element name="contextResponse" type="heldCx:contextResponseMsg"/>
+
+</xs:schema>
+]]></artwork>
+        </figure>
+      </t>
+    </section>
+
+    <section anchor="security-considerations" title="Security Considerations">
+      <t>There are several security concerns associated with the details in this specification. The
+        first is to do with the nature of the sensitivity of any data passed from the Target to the
+        LIS for inclusion in a context. The second is the ability of the LIS to contain the number
+        of contexts that it will permit to exist for a given Target address. Finally, there is a
+        threat of Targets performing DoS attacks on the LIS by trying to create large numbers of
+        short-lived contexts that result in the LIS expending resources in message processing. </t>
+      <t>HELD <xref target="I-D.ietf-geopriv-http-location-delivery"/> mandates the use of TLS for
+        exchanges between a Target and the LIS. This is deemed adequate to provide confidentiality
+        to any contextual data in transit. The LIS implementation and the operator of the LIS need
+        to take sufficient steps to ensure that active contextual data on the LIS is not readily
+        available to anyone other than the Target. The Target MUST NOT provide any information to
+        the LIS that it does not want the LIS to know or be able to use in some capacity associated
+        with determination or providing of the Target's location.</t>
+      <t>It is quite conceivable that a LIS will be required to provide location to Targets residing
+        behind a NAT; a DSL home router with 5 PCs attached is a good example this situation. In
+        this case it is reasonable for each device to create its own context on the LIS, and for the
+        LIS to treat each context individually even though the LIS cannot make any other distinction
+        between the end hosts; that is, they share a common IP address/identity from the LIS
+        perspective. </t>
+      <t>Given the constraints that can be added to a context and the way that a Target might want
+        to manage expiry separately, a Target may use multiple contexts as a way to isolate
+        applications from each other. For instance, a Target can create a context for each
+        application so that it can revoke access to its location information for each without
+        affecting other applications&apos; access. This environment, however, opens the LIS to a
+        type of denial of service attack through an overload of contexts. It is RECOMMENDED that an
+        implementer of this specification include mechanisms to restrict to the maximum number of
+        contexts that can be created on the LIS by an individual Target. </t>
+      <t>Using short-term location URIs in a carefully controlled manner may obviate the need for
+        individual location authorization policies on the LIS. This leads to reduced LIS complexity
+        and the amount of private information that the Target need share with the LIS. This
+        specification provides the ability for a Target to cancel a location URI which extends the
+        Target's ability to enforce its entitlement to privacy. Using the mechanisms described in
+        this memo a target can create URIs with short validity periods; this restricts how long a
+        third-party is able to obtain the location of the Target while still allowing the Target the
+        convenience of using a location reference. </t>
+      <t>The generation of context identifiers by the LIS is a critical component to supporting the
+        functionality described in this memo. The LIS MUST follow the rules described in <xref
+          target="idandurirules"/> for generating context identifiers. </t>
+    </section>
+
+    <section anchor="iana" title="IANA Considerations">
+      <t>This document registers the schema and associated namespace with IANA. </t>
+      <section
+        title="URN Sub-Namespace Registration for urn:ietf:params:xml:ns:geopriv:held:context">
+        <t>This section registers a new XML namespace, <spanx style="verb"
+            >urn:ietf:params:xml:ns:geopriv:held:context</spanx>, as per the guidelines in <xref
+            target="RFC3688"/>. <list style="empty">
+            <t>URI: urn:ietf:params:xml:ns:geopriv:held:context</t>
+            <t>Registrant Contact: IETF, GEOPRIV working group, (geopriv@ietf.org), James
+              Winterbottom (james.winterbottom@andrew.com).</t>
+
+            <t>XML: <figure>
+                <artwork><![CDATA[
+      BEGIN
+        <?xml version="1.0"?>
+        <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+        <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+          <head>
+            <title>HELD Context Management Messages</title>
+          </head>
+          <body>
+            <h1>Namespace for HELD Context Management Messages</h1>
+            <h2>urn:ietf:params:xml:ns:geopriv:held:context</h2>
+[[NOTE TO IANA/RFC-EDITOR: Please update RFC URL and replace XXXX
+    with the RFC number for this specification.]]
+            <p>See <a href="[[RFC URL]]">RFCXXXX</a>.</p>
+          </body>
+        </html>
+      END
+]]></artwork>
+              </figure>
+            </t>
+          </list>
+        </t>
+      </section>
+
+      <section title="XML Schema Registration">
+        <t>This section registers an XML schema as per the guidelines in <xref target="RFC3688"/>.
+            <list style="hanging">
+            <t hangText="URI:">urn:ietf:params:xml:schema:geopriv:held:context</t>
+            <t hangText="Registrant Contact:">IETF, GEOPRIV working group, (geopriv@ietf.org), James
+              Winterbottom (james.winterbottom@andrew.com).</t>
+            <t hangText="Schema:">The XML for this schema can be found as the entirety of <xref
+                target="schema"/> of this document. </t>
+          </list>
+        </t>
+      </section>
+
+      <section title="New HELD Error Code Registration">
+        <t>Reference: RFC-XXXX (i.e., this document)requires the following new HELD error codes to be
+           added the HELD error code respository defined in <xref target="I-D.ietf-geopriv-http-location-delivery"/>.
+           <list>
+              <t>Error code: badContextMessage</t>
+              <t>Error code: unknownContext</t>
+              <t>Error code: updateContextFailed</t>
+              <t>Error code: createContextFailed</t>
+           </list>
+        </t>
+      </section>
+
+    </section>
+
+
+    <section title="Acknowledgements">
+      <t>Thanks to Adam Muhlbauer and Neil Justusson for their comments on the pre-version of this
+        draft. </t>
+      <t>Thanks also to Tim Zelinski and Michael Diponio , who pointed out a problems
+         while implementing an early revision of this specification.
+      </t>
+    </section>
+
+    <appendix title="Context Extensions">
+      <t>A context contains specific information about a Target and is stored on the LIS. As with other protocols
+        it is necessary to consider extensibility.
+        When defining context data extensions it is necessary to consider how they will be used;
+        this includes not only how to provide the information from the Target to the LIS, but also
+        acceptance and error indications from the LIS back to the Target. For example, a context may
+        be created with several extensions included, how does the LIS indicate that extensions 1 and
+        3 were successful but that extension 2 had a problem in its formatting? Guidelines for
+        designing context extensions that provide functionality are described below. </t>
+      <t>Two basic types of context data extension are envisioned. The first consist of data
+        provided by the Target to be consumed by the LIS; for example information pertaining to
+        PIDF-LO construction, usage-rules, and authorization policies. The second type of data
+        consists of a two way exchange between the Target and the LIS; for example exchanging
+        location determination capabilities. Extensibility to the context scheme is to allow
+        additional elements to be added to the context easily. The general idea is shown in <xref
+          target="fig1"/>. </t>
+      <t>
+        <figure anchor="fig1" title="Create Context with Extensions">
+          <artwork><![CDATA[
+  <hc:createContext
+          xmlns:hc="urn:ietf:params:xml:ns:geopriv:held:context">
+    <lifeTime>7200</lifeTime>
+    <ex1:extension-1
+          xmlns:ex1="urn:ietf:params:xml:ns:geopriv:held:ex1">
+      <ex1:value>7200</ex1:value>
+    </ex1:extension-1>
+    <extension-2 xmlns="urn:ietf:params:xml:ns:geopriv:held:ex2"/>
+    <extension-3 xmlns="urn:ietf:params:xml:ns:geopriv:held:ex3"/>
+    .
+    .
+    .
+    <extension-N xmlns="urn:ietf:params:xml:ns:geopriv:held:exN"/>
+</hc:createContext>
+]]></artwork>
+        </figure>
+      </t>
+
+      <t>When defining a context data extension it is necessary to ensure that the LIS can provide
+        an adequate response to the Target indicating acceptance or rejection of the data provided.
+        This may be an explicit OK or FAIL message within the extension namespace, it may be an
+        attribute associated with part of a larger data exchange, or it may result in the LIS
+        failing to create the context at all. Regardless, it is mandatory for a context data
+        extension to provide an indication of success or failure. </t>
+      <t>
+        <figure anchor="fig2" title="LIS response to createContext">
+          <artwork><![CDATA[
+  <hc:contextResponse
+          xmlns:hc="urn:ietf:params:xml:ns:geopriv:held:context"
+          code="created"
+          id="uhvuhdbnuiehudbnvcujevuijeijcvij"
+          uses="unlimited"
+          snapshot="false"
+          expires="2007-08-01T13:00:00">
+    <locationUriSet>
+      <locationURI>
+         held//ls.example.com:9768/357yc6s64ceyoiuy5ax3o
+      </locationURI>
+      <locationURI>
+         sips:357yc6s64ceyoiuy5ax3o@ls.example.com:9769
+      </locationURI>
+    </locationUriSet>
+    <ex1:extension-1 xmlns:ex1="urn:ietf:params:xml:ns:geopriv:held:ex1"
+                  ex1:response="OK"/>
+    <ex2:extension-2 xmlns:ex2="urn:ietf:params:xml:ns:geopriv:held:ex2"
+                  ex2:response="OK"/>
+
+    <ex3:extension-3
+         xmlns:ex3="urn:ietf:params:xml:ns:geopriv:held:ex3">
+      <datum-3>data</datum-3>
+      <stuff>guff in here for extension</stuff>
+    </ex3:extension-3>
+</hc:contextRresponse>
+]]></artwork>
+        </figure>
+      </t>
+
+      <t>When defining information to be included in a context data extension consideration should
+        be given to how that data can be removed from the context. In some cases it may be necessary
+        to void the context on the LIS in order to remove information, but this SHOULD be treated as
+        a last resort and not used as the primary mechanism for removing data from the context. </t>
+    </appendix>
+
+    <appendix
+      title="HELD Compliance to IETF Location Configuration Protocol Location Reference Requirements">
+      <t>This section describes how HELD and this specification comply to the LCP location reference
+        requirements stipulated in <xref target="I-D.ietf-geopriv-lbyr-requirements"/>. </t>
+      <t>High-level requirements for a location configuration protocol. <list style="format C%d."
+          counter="HLLCP-LbyRreq">
+          <t><spanx style="verb">Location URI support - LCP: The configuration protocol MUST support
+              a location reference in URI form.</spanx>
+            <vspace blankLines="2"/> COMPLY. HELD only provides location references in URI form.
+              <vspace blankLines="1"/>
+          </t>
+
+          <t><spanx style="verb">Location URI expiration: The LCP MUST support the ability to
+              specify to the server, the length of time that a location URI will be valid.</spanx>
+            <vspace blankLines="2"/> COMPLY. HELD with the context management extensions described
+            in this document provide the Target the ability to specify expiry times for location
+            URIs. <vspace blankLines="1"/>
+          </t>
+
+          <t><spanx style="verb">Location URI cancellation: The LCP MUST support the ability to
+              request a cancellation of a specific location URI.</spanx>
+            <vspace blankLines="2"/> COMPLY. HELD with the context management extensions described
+            in this document provide the Target the ability to void location URIs when required.
+              <vspace blankLines="1"/>
+          </t>
+
+          <t><spanx style="verb">Random Generated: The location URI MUST be hard to guess, i.e., it
+              MUST contain a cryptographically random component.</spanx>
+            <vspace blankLines="2"/> COMPLY. The HELD specification and this document provide
+            specific guidance on the security surrounding location URI generation. <vspace
+              blankLines="1"/>
+          </t>
+
+          <t><spanx style="verb">Identity Protection - LCP: The location URI MUST NOT contain any
+              information that identifies the user, device or address of record within the URI form.</spanx>
+            <vspace blankLines="2"/> COMPLY. The HELD specification and this document provide
+            specific guidance on the anonymity of the Target with regards to the generation of
+            location URIs. <vspace blankLines="1"/>
+          </t>
+
+          <t><spanx style="verb">Reuse flag default: The LCP MUST support the default condition of a
+              requested location URI being repeatedly reused.</spanx>
+            <vspace blankLines="2"/> COMPLY. HELD with the context management extensions described
+            in this document provide the Target the ability to specify how many times a location URI
+            may yield the location of Target. <vspace blankLines="1"/>
+          </t>
+
+          <t><spanx style="verb">One-time-use: The LCP MUST support the ability for the client to
+              request a 'one-time-use' location URI (e.g., via a reuse flag setting).</spanx>
+            <vspace blankLines="2"/> COMPLY. HELD with the context management extensions described
+            in this document provide the Target the ability to specify how many times a location URI
+            may yield the location of Target. This value may be set to 1 to create a one-time URI.
+              <vspace blankLines="1"/>
+          </t>
+        </list>
+      </t>
+    </appendix>
+
+  </middle>
+  <back>
+    <references title="Normative References"> &RFC2119; &RFC3693; &RFC3688;
+      &I-D.ietf-geopriv-http-location-delivery; &I-D.ietf-geopriv-l7-lcp-ps;
+      &I-D.ietf-geopriv-lbyr-requirements; </references>
+  </back>
+</rfc>

@@ -1,0 +1,497 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" []>
+<rfc category="std" ipr="trust200902" docName="draft-ietf-geopriv-loc-filters-04.txt">
+  <?rfc toc="yes" ?>
+  <?rfc symrefs="yes" ?>
+  <?rfc sortrefs="yes"?>
+  <?rfc iprnotified="no" ?>
+  <?rfc strict="yes" ?>
+  <front>
+    <title abbrev="Location Event Filters"> A Document Format for Filtering and Reporting Location
+      Notications in the Presence Information Document Format Location Object (PIDF-LO) </title>
+    <author initials="R." surname="Mahy" fullname="Rohan Mahy">
+      <organization>Plantronics</organization>
+      <address>
+        <postal>
+          <street>345 Encincal Street</street>
+          <city>Santa Cruz</city>
+          <region>CA</region>
+          <country>USA</country>
+        </postal>
+      	<email>rohan@ekabal.com</email>
+      </address>
+    </author>
+    <author role="editor" fullname="Brian Rosen" initials="B.R" surname="Rosen">
+      <organization>NeuStar</organization>
+      <address>
+        <postal>
+          <street>470 Conrad Dr.</street>
+          <city>Mars</city>
+          <region>PA</region>
+          <code>16046</code>
+          <country>US</country>
+        </postal>
+        <phone>+1 724 382 1051</phone>
+        <email>br@brianrosen.net</email>
+      </address>
+    </author>
+    <author initials="H." surname="Tschofenig" fullname="Hannes Tschofenig">
+      <organization>Nokia Siemens Networks</organization>
+      <address>
+        <postal>
+          <street>Linnoitustie 6</street>
+          <city>Espoo</city>
+          <code>02600</code>
+          <country>Finland</country>
+        </postal>
+        <phone>+358 (50) 4871445</phone>
+        <email>Hannes.Tschofenig@gmx.net</email>
+        <uri>http://www.tschofenig.priv.at</uri>
+      </address>
+    </author>
+    <date year="2009"/>
+    <area>RAI</area>
+    <workgroup>GEOPRIV</workgroup>
+    <keyword>I-D</keyword>
+    <keyword>Internet-Draft</keyword>
+    <keyword>geopriv</keyword>
+    <keyword>location</keyword>
+    <abstract>
+      <t> This document describes filters that limit asynchronous location notifications to
+        compelling events, designed as an extension to RFC 4661 "An XML-Based Format for Event
+        Notification Filtering". The resulting location information is conveyed in existing location
+        formats wrapped in the Presence Information Document Format (PIDF-LO).</t>
+    </abstract>
+  </front>
+  <middle>
+
+    <section title="Terminology">
+      <t> The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD
+        NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as
+        described in <xref target="RFC2119">RFC 2119</xref>.</t>
+    </section>
+
+    <!-- ******************************************************************************* -->
+
+    <section title="Introduction">
+      <t> Conveying location in <xref target="RFC4119">PIDF-LO</xref> bodies is described in <xref
+          target="I-D.ietf-sip-location-conveyance"/>. Asynchronous notification of location
+        information is unfortunately more complex since many forms of location are measured as a
+        continuous gradient. Unlike notifications using discret quantities, it is difficult to know
+        when a change in location is large enough to warrant a notification. The mechanism described
+        in this document defines filters as an extension to RFC 4661 <xref target="RFC4661"/>, which
+        limits location notification to events that are of relevance to the subscriber. These
+        filters persist until they are changed with a replacement filter. </t>
+      <t> The frequency of notifications necessary for various geographic location applications
+        varies dramatically. The subscriber should be able to get asynchronous notifications with
+        appropriate frequency and granularity, without having to issue a large number of
+        notifications that are not important to the application. This section of this document
+        defines an extension to <xref target="RFC4661"/>'s TriggerType element to describe
+        interesting conditions or events. The terminal elements in this format are utilizing <xref
+          target="GML">Geographic Markup Language (GML)</xref> data types and civic address
+        elements. </t>
+      <t> This document also defines a MIME type for this location filter format, namely
+        'application/location-delta-filter+xml'. </t>
+      <t> This document defines the following as an initial list of events that could be interesting
+        to a subscriber:<list style="numbers">
+          <t> the Target moves more than a specified distance horizontally or vertically since the
+            last notification </t>
+          <t>the Target exceeds a specified speed </t>
+          <t>the Target enters or exits one or more GML objects (for example, a set of 2-dimensional
+            or 3-dimensional regions) included or referenced in the filter. </t>
+          <t>one or more of the values of the specified address labels has changed for the location
+            of the Target (for example, the value of the &lt;A1&gt; civic address element
+            has changed from 'California' to 'Nevada') </t>
+        </list></t>
+
+    </section>
+
+    <!-- ******************************************************************************* -->
+
+    <section title="Filter Definitions">
+
+      <section title="Horizontal and Vertical Movement">
+
+        <t>Changes in the position of the Target require extensions to the functionality of RFC 4661
+          and a simplying assumption. The former aspect refers to the need to enhance the capability
+          to extract a value from inside an XML element, in our example from the &lt;pos&gt;
+          element, which describes the user's location. Regarding the latter aspect we assume that
+          the user's location information of any shape and uncertainty is converted into a point
+          before the comparison regarding the movement with the previously notified location takes
+          place. </t>
+
+        <t>The example shown in <xref target="movement-example"/> references the latitude value
+          (using the "gml:pos[1]" notation) and the 'by' attribute of the &lt;changed&gt;
+          element indicates the desired change that triggers a notification to be sent.</t>
+        <t>
+          <figure anchor="movement-example" title="Movement Filter Example">
+            <artwork><![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+<filter-set xmlns="urn:ietf:params:xml:ns:simple-filter">
+    <ns-bindings>
+        <ns-binding prefix="pidf" 
+              urn="urn:ietf:params:xml:ns:pidf"/>
+        <ns-binding prefix="gp" 
+              urn="urn:ietf:params:xml:ns:pidf:geopriv10"/>
+        <ns-binding prefix="dyn" 
+              urn="http://www.opengis.net/gml"/>        
+    </ns-bindings>
+    <filter id="123" uri="sip:presentity@example.com">
+        <trigger>
+            <changed by="100">
+                /pidf:presence/pidf:device/gp:geopriv/
+                 gp:location-info/gml:Point/gml:pos[1]
+            </changed>
+        </trigger>
+    </filter>
+</filter-set>
+    ]]></artwork>
+          </figure>
+        </t>
+
+      </section>
+
+      <section title="Changes in Speed">
+        <t>Speed changes can be filtered with the help of RFC 4661 and the functionality provided in
+            <xref target="I-D.singh-geopriv-pidf-lo-dynamic"/>, which extends the PIDF-LO with
+          support for spatial orientation, speed, heading, and acceleration. </t>
+        <t><xref target="speed-example"/> shows an example for a trigger that fires when the speed
+          of the Target changes by 20 meters per second.</t>
+        <t>
+          <figure anchor="speed-example" title="Speed Change Example">
+            <artwork><![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+<filter-set xmlns="urn:ietf:params:xml:ns:simple-filter">
+    <ns-bindings>
+        <ns-binding prefix="pidf" 
+            urn="urn:ietf:params:xml:ns:pidf"/>
+        <ns-binding prefix="gp" 
+            urn="urn:ietf:params:xml:ns:pidf:geopriv10"/>
+        <ns-binding prefix="dyn" 
+            urn="urn:ietf:params:xml:schema:pidf:dynamic"/>        
+    </ns-bindings>
+    <filter id="123" uri="sip:presentity@example.com">
+        <trigger>
+            <changed by="3">
+                /pidf:presence/pidf:tuple/pidf:status/
+                 gp:geopriv/gp:location-info/dyn:Dynamic/dyn:speed
+            </changed>
+        </trigger>
+    </filter>
+</filter-set>
+]]></artwork>
+          </figure>
+        </t>
+      </section>
+
+      <section title="Changes in Value">
+        <t>Changes in values, for example related to civic location information, can be provided by
+          the base functionality offered with RFC 4661. <xref target="value-change"/> shows an
+          example where a notification is sent when the civic address tokens A1, A2, A3, or PC
+          change. </t>
+        <t>
+          <figure anchor="value-change" title="Speed Change Example">
+            <artwork><![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+<filter-set xmlns="urn:ietf:params:xml:ns:simple-filter">
+    <ns-bindings>
+        <ns-binding prefix="pidf" 
+              urn="urn:ietf:params:xml:ns:pidf"/>
+        <ns-binding prefix="gp" 
+              urn="urn:ietf:params:xml:ns:pidf:geopriv10"/>
+        <ns-binding prefix="cl" 
+              urn="urn:ietf:params:xml:ns:pidf:geopriv10:civilLoc"/>
+    </ns-bindings>
+    <filter id="123" uri="sip:presentity@example.com">
+        <trigger>
+            <changed>
+                /pidf:presence/pidf:tuple/pidf:status/gp:geopriv/
+                 gp:location-info/cl:civilAddress/cl:A1 
+            </changed>
+            <changed>
+                /pidf:presence/pidf:tuple/pidf:status/gp:geopriv/
+                 gp:location-info/cl:civilAddress/cl:A2 
+            </changed>
+            <changed>
+                /pidf:presence/pidf:tuple/pidf:status/gp:geopriv/
+                 gp:location-info/cl:civilAddress/cl:A3 
+            </changed>
+            <changed>
+                /pidf:presence/pidf:tuple/pidf:status/gp:geopriv/
+                 gp:location-info/cl:civilAddress/cl:PC
+            </changed>
+        </trigger>
+    </filter>
+</filter-set>
+]]></artwork>
+          </figure>
+        </t>
+      </section>
+      <section title="Enter or Exit a Region">
+        <t> The &lt;enterOrExit&gt; condition is satisfied when the Target enters or exits a
+          named 2-dimensional or 3-dimensional region described by a polygon (as defined in Section
+          5.2.2 of <xref target="RFC5491"/>), or a circle (as defined in Section 5.2.3 of <xref
+            target="RFC5491"/>). </t>
+        <t><xref target="containment-2d"/> and <xref target="containment-3d"/> shows filter examples
+          whereby a notification is sent when the Target enters or exits an area described by a
+          circle and by a 3d polygon.</t>
+
+        <t>
+          <figure anchor="containment-2d" title="&lt;enterOrExit&gt; (2D) Filter Example">
+            <artwork><![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+<filter-set 
+    xmlns="urn:ietf:params:xml:ns:simple-filter"
+    xmlns:con="urn:ietf:params:xml:ns:pidf:geopriv10:containment"
+    xmlns:gml="http://www.opengis.net/gml" 
+    xmlns:gs="http://www.opengis.net/pidflo/1.0">
+
+    <filter id="123" uri="sip:presentity@example.com">
+        <con:enterOrExit>
+            <gs:Circle srsName="urn:ogc:def:crs:EPSG::4326">
+                <gml:pos>42.5463 -73.2512</gml:pos>
+                <gs:radius uom="urn:ogc:def:uom:EPSG::9001"> 
+                    850.24 
+                </gs:radius>
+            </gs:Circle>
+        </con:enterOrExit>
+    </filter>
+</filter-set>
+            ]]></artwork>
+          </figure>
+        </t>
+        <t>
+          <figure anchor="containment-3d" title="&lt;enterOrExit&gt; (3D) Filter Example">
+            <artwork><![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+<filter-set xmlns="urn:ietf:params:xml:ns:simple-filter"
+    xmlns:con="urn:ietf:params:xml:ns:pidf:geopriv10:containment"
+    xmlns:gml="http://www.opengis.net/gml">
+
+    <filter id="123" uri="sip:presentity@example.com">
+        <con:enterOrExit>
+            <gml:Polygon srsName="urn:ogc:def:crs:EPSG::4326">
+                <gml:exterior>
+                    <gml:LinearRing>
+                        <gml:posList>
+                        43.311 -73.422 43.111 -73.322
+                        43.111 -73.222 43.311 -73.122
+                        43.411 -73.222 43.411 -73.322
+                        43.311 -73.422
+                    </gml:posList>
+                    </gml:LinearRing>
+                </gml:exterior>
+            </gml:Polygon>
+        </con:enterOrExit>
+    </filter>
+</filter-set>
+            ]]></artwork>
+          </figure>
+        </t>
+      </section>
+
+    </section>
+
+    <!-- ******************************************************************************* -->
+
+    <section title="Rate Control">
+      <t>The throttle mechanisms <xref target="I-D.ietf-sipcore-event-rate-control"/> can be used to
+        control the rate of notifications. The "throttle", "force" and "average" settings can filter
+        notications by time.</t>
+    </section>
+
+    <!-- ******************************************************************************* -->
+
+    <section anchor="schema" title="XML Schema">
+      <t>
+        <figure anchor="schema-fig" title="XML Schema">
+          <artwork><![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema 
+    targetNamespace="urn:ietf:params:xml:ns:location-filter"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+    xmlns:gml="http://www.opengis.net/gml">
+
+    <!-- This element is an child element of the RFC 4661 
+            <filter> element. 
+       -->
+    <xs:element name="enterOrExit" type="gml:FeaturePropertyType"/>
+</xs:schema>
+            ]]></artwork>
+        </figure>
+      </t>
+
+    </section>
+
+    <!-- ******************************************************************************* -->
+
+    <section title="Security Considerations">
+      <t> Location information is typically very privacy sensitive. As such, notifications MUST be
+        encrypted and integrity protected. </t>
+      <t> Additional privacy and security considerations are discussed in detail in <xref
+          target="RFC5491"/>. </t>
+    </section>
+
+    <!-- ******************************************************************************* -->
+
+    <section title="IANA Considerations">
+
+
+      <section title="Content-type registration for 'application/location-delta-filter+xml'">
+
+        <t>This specification requests the registration of a new MIME type according to the
+          procedures of RFC 4288 <xref target="RFC4288"/> and guidelines in RFC 3023 <xref
+            target="RFC3023"/>.</t>
+
+        <t>
+          <list style="hanging">
+            <t hangText="MIME media type name:">application </t>
+
+            <t hangText="MIME subtype name:">location-delta-filter+xml </t>
+
+            <t hangText="Mandatory parameters:">none </t>
+
+            <t hangText="Optional parameters:">charset; Indicates the character encoding of enclosed
+              XML. </t>
+
+            <t hangText="Encoding considerations:"> Uses XML, which can employ 8-bit characters,
+              depending on the character encoding used. See RFC 3023 <xref target="RFC3023"/>,
+              Section 3.2.</t>
+
+            <t hangText="Security considerations:"> See the "Security Considerations" section in
+              this document.</t>
+
+            <t hangText="Interoperability considerations:">None</t>
+
+            <t hangText="Published specification:">RFCXXXX [NOTE TO IANA/RFC-EDITOR: Please replace
+              XXXX with the RFC number of this specification.] </t>
+
+            <t hangText="Applications which use this media type:"> This content type supports the
+              exchange of filters to throttle asynchronous notifications of location information. </t>
+
+            <t hangText="Additional information:">
+              <list style="hanging">
+                <t hangText="Magic Number:">N/A </t>
+
+                <t hangText="File Extension:">N/A </t>
+
+                <t hangText="Macintosh file type code:">N/A </t>
+              </list>
+            </t>
+
+            <t hangText="Personal and email address for further information:">Brian Rosen,
+              br@brianrosen.net </t>
+
+            <t hangText="Intended usage:">LIMITED USE </t>
+
+            <t hangText="Author:">
+              <vspace blankLines="1"/> This specification is a work item of the IETF GEOPRIV working
+              group, with mailing list address &lt;geopriv@ietf.org&gt;. </t>
+            <t hangText="Change controller:">
+              <vspace blankLines="1"/>The IESG &lt;iesg@ietf.org&gt; </t>
+          </list>
+        </t>
+      </section>
+
+      <section title="URN Sub-Namespace Registration for
+urn:ietf:params:xml:ns:location-filter">
+        <t> This section registers a new XML namespace, as per the guidelines in <xref
+            target="RFC3688"/>. </t>
+        <t>
+          <list style="hanging">
+
+            <t hangText="URI:"> The URI for this namespace is
+              urn:ietf:params:xml:ns:location-filter. </t>
+
+            <t hangText="Registrant Contact:"> IETF, GEOPRIV working group,
+              &lt;geopriv@ietf.org&gt;, as delegated by the IESG
+              &lt;iesg@ietf.org&gt;. </t>
+
+            <t hangText="XML:">
+              <figure>
+                <artwork>
+                  <![CDATA[
+BEGIN
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML Basic 1.0//EN"
+          "http://www.w3.org/TR/xhtml-basic/xhtml-basic10.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="content-type"
+     content="text/html;charset=iso-8859-1"/>
+  <title>Location Filter Namespace</title>
+</head>
+<body>
+  <h1>Namespace for PIDF-LO Location Filters</h1>
+  <h2>urn:ietf:params:xml:ns:location-filter</h2>
+  <p>See <a href="[[[URL of published RFC]]]">RFCXXXX</a>.</p>
+</body>
+</html>
+END
+]]>
+                </artwork>
+              </figure>
+            </t>
+          </list>
+        </t>
+
+      </section>
+
+
+      <section title="Schema Registration For location-filter">
+
+        <t>This specification registers a schema, as per the guidelines in <xref target="RFC3688"/>.</t>
+
+        <t>
+          <list style="hanging">
+
+            <t>URI: please assign.</t>
+
+            <t>Registrant Contact: IETF, GEOPRIV Working Group (geopriv@ietf.org), as delegated by
+              the IESG (iesg@ietf.org).</t>
+
+            <t>XML: The XML can be found as the sole content of <xref target="schema"/>.</t>
+          </list>
+        </t>
+      </section>
+
+    </section>
+
+    <!-- ******************************************************************************* -->
+
+    <section title="Acknowledgments">
+      <t> Thanks to Allan Thompson, James Winterbottom, and Martin Thomson for their comments. </t>
+    </section>
+
+    <!-- ******************************************************************************* -->
+
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.RFC.2119" ?>
+      <?rfc include="reference.RFC.4119" ?>
+      <?rfc include="reference.RFC.4661" ?>
+      <?rfc include="reference.RFC.5491" ?>
+      <?rfc include="reference.RFC.4288" ?>
+      <?rfc include="reference.RFC.3023" ?>
+      <?rfc include="reference.I-D.singh-geopriv-pidf-lo-dynamic" ?>
+      <?rfc include="reference.I-D.ietf-sipcore-event-rate-control" ?>
+      <reference anchor="GML" target="http://www.opengis.org/techno/implementation.htm">
+        <front>
+          <title>Open Geography Markup Language (GML) Implementation Specification</title>
+          <author>
+            <organization> OpenGIS </organization>
+          </author>
+          <date month="January" year="2003"/>
+        </front>
+        <seriesInfo name="OpenGIS" value="OGC 02-023r4"/>
+      </reference>
+    </references>
+    <references title="Informational References">
+      <?rfc include="reference.RFC.3688" ?>
+      <?rfc include="reference.I-D.ietf-sip-location-conveyance" ?>
+    </references>
+  </back>
+</rfc>

@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+
+<!ENTITY RFC2119 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+<!ENTITY RFC3261 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3261.xml">
+<!ENTITY RFC3323 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3323.xml">
+<!ENTITY RFC3325 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3325.xml">
+<!ENTITY RFC3515 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3515.xml">
+<!ENTITY RFC4474 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4474.xml">
+<!ENTITY RFC4566 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4566.xml">
+<!ENTITY I-D.ietf-sip-gruu SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-sip-gruu.xml">
+<!ENTITY I-D.ietf-behave-turn SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-behave-turn.xml">
+<!ENTITY I-D.ietf-sipping-config-framework SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-sipping-config-framework.xml">
+]>
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc strict="yes" ?>
+<?rfc toc="yes"?>
+<?rfc tocdepth="4"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+
+<rfc category="info" docName="draft-ietf-sip-ua-privacy-03" ipr="full3978">
+
+  <front>
+    <title>UA-Driven Privacy Mechanism for SIP</title>
+
+    <author fullname="Mayumi Munakata" initials="M.M."
+            surname="Munakata">
+      <organization abbrev="NTT">NTT Corporation</organization>
+      <address>
+        <email>munakata.mayumi@lab.ntt.co.jp</email>
+      </address>
+    </author>
+
+    <author fullname="Shida Schubert" initials="S.S."
+            surname="Schubert">
+      <organization abbrev="NTT">NTT Corporation</organization>
+      <address>
+        <email>shida@ntt-at.com</email>
+      </address>
+    </author>
+
+    <author fullname="Takumi Ohba" initials="T.O."
+            surname="Ohba">
+      <organization abbrev="NTT">NTT Corporation</organization>
+      <address>
+        <postal>
+          <street>9-11, Midori-cho 3-Chome</street>
+          <city>Musashino-shi</city>
+          <region>Tokyo</region>
+          <code>180-8585</code>
+          <country>Japan</country>
+        </postal>
+        <phone>+81 422 59 7748</phone>
+        <email>ohba.takumi@lab.ntt.co.jp</email>
+        <uri>http://www.ntt.co.jp</uri>
+      </address>
+    </author>
+
+    <date day="30" month="October" year="2008" />
+    <area>RAI</area>
+    <workgroup>SIP</workgroup>
+
+    <abstract>
+      <t>This document defines a best current practice for a user agent to generate an anonymous SIP message by utilizing mechanisms such as GRUU (Globally Routable User Agent URIs) and TURN (Traversal Using Relays around NAT) without the need for a privacy service defined in RFC 3323.</t>
+    </abstract>
+  </front>
+
+
+  <middle>
+    <section title="Introduction">
+      <t><xref target="RFC3323"></xref> defines a privacy mechanism for the SIP (Session Initiation Protocol)<xref target="RFC3261"></xref>, based on techniques available at the time of its publication. This mechanism relies on the use of a separate privacy service to remove privacy-sensitive information from SIP messages sent by a user agent before forwarding those messages to the final destination. Since then, numerous SIP extensions have been proposed and standardized. Some of those enable a user agent to withhold its user's identity and related information without the need for privacy services, which was not possible when RFC 3323 was defined.</t>
+
+      <t>The purpose of this document is not to obsolete RFC 3323, but to enhance overall privacy mechanism in SIP by allowing user agent to take control of its privacy, rather than being completely dependent on external privacy service.</t>
+
+      <t>The UA-driven privacy mechanism defined in this document will not eliminate the need for RFC 3323 usage defined in <xref target="RFC3325"></xref> which instructs privacy service to delete P-Asserted-Identity header. In order to delete a P-Asserted-Identity header, a user agent needs to set Privacy:id even when the user agent is utilizing this specification.</t>
+
+      <t>This document defines a best current practice in which a user agent controls all the privacy functions on its own utilizing SIP extensions such as GRUU (Globally Routable User Agent URIs) <xref target="I-D.ietf-sip-gruu"></xref> and TURN (Traversal Using Relays around NAT) <xref target="I-D.ietf-behave-turn"></xref>.</t>
+    </section>
+
+
+    <section title="Terminology">
+
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target="RFC2119"></xref>.
+
+      <list hangIndent="12" style="hanging">
+        <t hangText="privacy-sensitive information:"><vspace blankLines="0" />The information that identifies a user who sends the SIP message, as well as the supplementary information that can be used to guess the user's identity.</t>
+      </list></t>
+    </section>
+
+
+    <section title="Concept of Privacy">
+      <t>The concept of privacy in this document is the act of concealing identity of a user and supplementary information.  The protection of network privacy (e.g., topology hiding) is outside the scope of this document.</t>
+
+      <t>Privacy-sensitive information includes display-name and URI (Uniform Resource Identifier) in a From header field that can reveal the user's name and affiliation (e.g., company name), and IP addresses or host names in a Contact header field, a Via header field, a Call-ID header field, or an SDP (Session Description Protocol) <xref target="RFC4566"></xref> body that might reveal the location of a user agent.</t>
+    </section>
+
+
+    <section title="Treatment of Privacy-Sensitive Information">
+      <t>Some fields of SIP messages that potentially contain privacy-sensitive information do not interfere with establishing dialog and can be omitted without any side effects. Other fields are essential for establishing dialog and need to have its value replaced to anonymized values in order to obscure privacy-sensitive information. Of the privacy-sensitive information listed in section 3, URIs, host names, and IP addresses in Contact, Via, and SDP must be functional (i.e., suitable for purpose) even when they are anonymized.</t>
+
+      <t>With the use of GRUU <xref target="I-D.ietf-sip-gruu"></xref> and TURN <xref target="I-D.ietf-behave-turn"></xref>, a user agent can obtain URIs and IP addresses for media and signaling that are functional yet anonymous, and do not identify either the user agent or the user.  Instructions on how to obtain a functional anonymous URI and IP address are given in Section 4.1 and 4.2, respectively.</t>
+
+      <t>Host names should be concealed because the user's identity may be guessed from them, but they are not always regarded as critical privacy-sensitive information.</t>
+
+      <t>In addition, a user agent should be careful not to include any information that identifies the user in optional SIP header fields such as Subject and User-Agent.</t>
+
+
+      <section title="Obtaining a Functional Anonymous URI Using the GRUU Mechanism">
+        <t>A user agent wanting to obtain a functional anonymous URI MUST support and utilize the GRUU mechanism unless it is able to obtain a functional anonymous URI through other means outside the scope of this document. By sending a REGISTER request requesting GRUU, the user agent can obtain an anonymous URI, which can later be used for the Contact header field.</t>
+
+        <t>The detailed process on how a user agent obtains a GRUU is described in <xref target="I-D.ietf-sip-gruu"></xref>.</t>
+
+        <t>If the Registrar supports the GRUU and returns a REGISTER response, the user agent SHOULD search within the REGISTER response for a "temp-gruu" URI parameter, which provides the desired privacy property. If the "temp-gruu" URI parameter and value is present within the REGISTER response, the user agent SHOULD use the value of the "temp-gruu" as an anonymous URI representing the user agent. This URI SHOULD be used for the Contact header in subsequent requests and responses.</t>
+
+        <t>If there is no "temp-gruu" URI parameter in the 200 response to the REGISTER request, a user agent SHOULD NOT proceed with its anonymization process, unless something equivalent to "temp-gruu" is provided through some administrative means.</t>
+
+        <t>It is RECOMMENDED that user agent consult the user before sending a request without a functional anonymous URI when privacy is requested from the user.</t>
+
+        <t>Due to the nature of how GRUU works, the domain name is always revealed when GRUU is used.  If revealing the domain name in Contact header field is a concern, usage of a third-party GRUU server to obtain a temp-gruu that is irrelevant to users' domain SHOULD be considered.  Refer to the Security Considerations section for details.</t>
+      </section>
+
+
+      <section title="Obtaining a Functional Anonymous IP Address Using the TURN Mechanism">
+        <t>A user agent that is not provided with a functional anonymous IP address through some administrative means, MUST obtain a relayed address if anonymity is desired (IP address of the media relay) for use in SDP and in Via header.  Such IP address is to be derived from a STUN relay server through TURN mechanism, which allows a STUN server to act as a media relay.</t>
+
+        <t>Anonymous IP addresses are needed for two purposes. The first is for use in the Via header field of a SIP request. By obtaining an IP address from a STUN relay server, using that address in the Via header field of the SIP request, and sending the SIP request to the STUN relay server, the IP address of the user agent will not be revealed beyond the relay server.</t>
+
+        <t>The second is for use in SDP as an address for receiving media. By obtaining an IP address from a STUN relay server and using that address in SDP, media will be received via the relay server. Also media can be sent via the relay server. In this way, neither SDP nor media packets reveal the IP address of the user agent.</t>
+
+        <t>It is assumed that a user agent is either manually or automatically configured through means such as the configuration framework <xref target="I-D.ietf-sipping-config-framework"></xref> with the address of one or more STUN (Session Traversal Utilities for NAT) <xref target="I-D.ietf-behave-turn"></xref> relay servers to obtain anonymous IP address.</t>
+      </section>
+    </section>
+
+
+    <section title="User Agent Behavior">
+      <t>This section describes how to generate an anonymous SIP message at a user agent.</t>
+
+      <t>A user agent fully compliant with this document MUST obscure or conceal all the critical UA-inserted privacy-sensitive information in SIP requests and responses as shown in Section 5.1 when user privacy is requested. In addition, the user agent SHOULD conceal the non-critical privacy-sensitive information as shown in Section 5.2.</t>
+
+      <t>Furthermore, when a user agent uses relay server to conceal its identity, the user agent MUST send requests to the relay server to ensure request and response bypass the same signaling path.</t>
+
+
+      <section title="Critical Privacy-Sensitive Information">
+        <section title="Contact Header Field">
+          <t>Without privacy considerations, this field contains a URI used to reach the user agent for mid-dialog requests and possibly out-of-dialog requests, such as REFER <xref target="RFC3515"></xref>. The Contact header field can also contain a display-name.  Since the Contact header field is used for routing further requests to the user agent, it must include a functional URI even when it is anonymized.</t>
+
+          <t>A user agent generating an anonymous SIP message supporting this specification MUST anonymize a Contact header using an anonymous URI ("temp-gruu") obtained through the GRUU mechanism or an anonymous URI containing an IP address obtained through the TURN mechanism, unless an equivalent functional anonymous URI is provided by some other means.</t>
+
+          <t>Refer to Section 4.1 for details on how to obtain an anonymous URI through GRUU, and refer to Section 4.2 for details on how to obtain an IP address through TURN.</t>
+
+          <t>A display-name in a Contact header MUST be omitted or "Anonymous".</t>
+        </section>
+
+
+        <section title="From Header Field">
+          <t>Without privacy considerations, this field contains the identity of the user, such as display-name and URI.</t>
+
+          <t>RFCs 3261 and 3323 recommend to set "sip:anonymous@anonymous.invalid" as a SIP URI in a From header field when user privacy is requested. This raises an issue when the SIP-Identity mechanism <xref target="RFC4474"></xref> is applied to the message, because SIP-Identity requires an actual domain name in the From header field.</t>
+
+          <t>A user agent generating an anonymous SIP message supporting this specification MUST anonymize the From header field in one of the two ways described below.</t>
+
+          <t>Option 1:</t>
+
+          <t>A user agent anonymizes a From header field using an anonymous display-name and an anonymous URI following the procedure noted in section 4.1.1.3 of RFC 3323.</t>
+
+          <t>The example form of the From header of option 1 is as follows:</t>
+
+          <t><list style="hanging"><t>From: "Anonymous" &lt;sip:anonymous@anonymous.invalid>;tag=1928301774</t></list></t>
+
+          <t>Option 2:</t>
+
+          <t>A user agent anonymizes a From header field using an anonymous display-name and an anonymous URI with user's valid domain name instead of "anonymous.invalid".</t>
+
+          <t>The example form of the From header of option 2 is as follows:</t>
+
+          <t><list style="hanging"><t>From: "Anonymous" &lt;sip:anonymous@atlanta.com>;tag=1928301774</t></list></t>
+
+          <t>A user agent SHOULD go with option 1 to conceal its domain name in From header field.  However, the SIP-Identity will fail with the From header of option 1 because the SIP-Identity mechanism uses authentication based on the domain name.</t>
+
+          <t>If a user agent is aware that SIP-Identity mechanism will be applied to the request, it is RECOMMENDED to go with option 2.  However, the user's domain name will be revealed from the From header field of option 2.</t>
+
+          <t>If user wants both anonymity and strong identity, use a third party anonymization service which issues AoR for the use in From address which also provides SIP-Identity.</t>
+        </section>
+
+
+        <section title="Via Header Field">
+          <t>Without privacy considerations, the bottommost Via header field added by a user agent contains the IP address and port or hostname that are used to reach the user agent for responses.</t>
+
+          <t>A user agent generating an anonymous SIP request supporting this specification MUST anonymize the IP address in the Via header field using an anonymous IP address obtained through the TURN mechanism, unless an equivalent functional anonymous IP address is provided by some other means.</t>
+
+          <t>Refer to Section 4.2 for details on how to obtain an IP address through TURN.</t>
+
+          <t>Via header SHOULD NOT include a host name.</t>
+        </section>
+
+
+        <section title="IP Addresses in SDP">
+          <t>A user agent generating an anonymous SIP message supporting this specification MUST anonymize IP addresses in SDP, if present, using an anonymous IP address obtained through the TURN mechanism, unless an equivalent functional anonymous IP address is provided by some other means.</t>
+
+          <t>Refer to Section 4.2 for details on how to obtain an IP address through TURN.</t>
+        </section>
+      </section>
+
+
+    <section title="Non-Critical Privacy-Sensitive Information">
+        <section title="Host Names in Other SIP Header Fields">
+          <t>A user agent generating an anonymous SIP message supporting this specification SHOULD conceal host names in any SIP header fields, such as Call-ID and Warning header fields, if considered privacy-sensitive.</t>
+        </section>
+
+
+        <section title="Optional SIP Header Fields">
+          <t>Other optional SIP header fields (such as Call-Info, In-Reply-To, Organization, Referred-By, Reply-To, Server, Subject, User-Agent, and Warning) can contain privacy-sensitive information.</t>
+
+          <t>A user agent generating an anonymous SIP message supporting this specification SHOULD NOT include any information that identifies the user in such optional header fields.</t>
+        </section>
+      </section>
+    </section>
+
+
+    <section title="Security Considerations">
+      <t>This specification uses GRUU and TURN and inherits any security considerations described in these drafts.</t>
+
+      <t>Furthermore, if the provider of the caller intending to obscure its identity consists of a small number of people (e.g. small enterprise, SOHO), the domain name alone can reveal the identity of the caller when this specification is used.</t>
+
+      <t>Same can be true when the provider is large, but the receiver of the call only knows few people from the source of call.</t>
+
+      <t>There are mainly two places in the message, From header and Contact header, where domain name must be functional.</t>
+
+      <t>The domain name in From header can be obscured as described in section 5.1.2, on contrary the Contact header needs to contain a valid domain name at all time to function properly.</t>
+
+      <t>It is probably important to note that generally a device will not show the contact address to the receiver, but this does not mean that one can not find the domain name in a message.  In fact as long as this specification is used to obscure identity, the message will always contain a valid domain name as it inherits key characteristics of GRUU.</t>
+
+      <t>If one wants to assure anonymization, it is recommended for the user to seek and rely on third party anonymization service.</t>
+
+      <t>A third party anonymization service provides registrar and TURN service which has no affiliation with the caller's provider, allowing caller to completely withhold its identity.</t>
+    </section>
+
+
+    <section title="IANA Considerations">
+      <t>This document requires no action by IANA.</t>
+    </section>
+  </middle>
+
+
+  <back>
+    <references title="Normative References">
+      &RFC2119;
+
+      &RFC3261;
+
+      &RFC4566;
+
+      &I-D.ietf-sip-gruu;
+
+      &I-D.ietf-behave-turn;
+    </references>
+
+    <references title="Informative References">
+      &RFC3323;
+
+      &RFC3325;
+
+      &RFC3515;
+
+      &RFC4474;
+
+      &I-D.ietf-sipping-config-framework;
+    </references>
+  </back>
+</rfc>

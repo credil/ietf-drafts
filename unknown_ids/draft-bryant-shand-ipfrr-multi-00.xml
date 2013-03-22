@@ -1,0 +1,441 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc tocompact="yes"?>
+<?rfc tocdepth="3"?>
+<?rfc tocindent="yes"?>
+<?rfc symrefs="no"?>
+<?rfc sortrefs="yes"?>
+<?rfc comments="yes"?>
+<?rfc inline="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<rfc category="info" docName="draft-bryant-shand-ipfrr-multi-00"
+     ipr="full3978">
+  <front>
+    <title abbrev="Multi-failure IPFRR">IPFRR in the Presence of Multiple
+    Failures</title>
+
+    <author fullname="Stewart Bryant" initials="S." surname="Bryant">
+      <organization>Cisco Systems</organization>
+
+      <address>
+        <postal>
+          <street>250, Longwater Ave, Green Park,</street>
+
+          <city>Reading</city>
+
+          <code>RG2 6GB</code>
+
+          <country>UK</country>
+        </postal>
+
+        <email>stbryant@cisco.com</email>
+      </address>
+    </author>
+
+    <author fullname="Mike Shand" initials="M." surname="Shand">
+      <organization>Cisco Systems</organization>
+
+      <address>
+        <postal>
+          <street>250, Longwater Ave, Green Park,</street>
+
+          <city>Reading</city>
+
+          <code>RG2 6GB</code>
+
+          <country>UK</country>
+        </postal>
+
+        <email>mshand@cisco.com</email>
+      </address>
+    </author>
+
+    <date year="2008" />
+
+    <area>Routing Area</area>
+
+    <workgroup>Network Working Group</workgroup>
+
+    <keyword>Sample</keyword>
+
+    <keyword>Draft</keyword>
+
+    <abstract>
+      <t>IP Fast Reroute (IPFRR) work in the IETF has focused on the single
+      failure case, where the failure could be a link, a node or a shared risk
+      link group. This draft describes possible extensions to not-via IPFRR
+      that under some circumstances allow the repair of multiple simultaneous
+      failures.</t>
+    </abstract>
+
+    <note title="Requirements Language">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119">RFC2119</xref>.</t>
+    </note>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>Work on IP fast reroute (IPFRR) in the IETF<xref
+      target="I-D.ietf-rtgwg-ipfrr-framework"> Framework</xref>, <xref
+      target="I-D.ietf-rtgwg-ipfrr-spec-base">Basic</xref> and <xref
+      target="I-D.ietf-rtgwg-ipfrr-notvia-addresses">notvia</xref> has so far
+      been restricted to the case of repair of a single failure. The single
+      failure cases considere are a single link, a single node or a shared
+      risk link group (SRLG). IPFRR repair of multiple simultaneous failures
+      which are not members of a known SRLG have not been addressed because of
+      concerns that the use of multiple concurrent repairs may result in
+      looping repair paths. In order to prevent such loops, the current
+      definition of IPFRR using not-via requires that packets addressed to a
+      not-via address are not repaired but instead are dropped.</t>
+
+      <t>It is possible that a network may experience multiple simultaneous
+      failures. This may be due to simple statistical effects, but the more
+      likely cause is unanticipated SRLGs. When multiple failures which are
+      not part of an anticipated group are detected, repairs are abandoned and
+      the network reverts to normal convergence. Although safe, this approach
+      is somewhat draconian, since there are many circumstances were multiple
+      repairs do not induce loops.</t>
+
+      <t>This Internet draft explores the properties of multiple unrelated
+      failures and proposes some methods that may be used to address this
+      problem using not-via techniques.</t>
+    </section>
+
+    <section title="The Problem">
+      <t>Let us assume that the repair mechanism is based on not-via repairs.
+      LFA or downstream routes may be incorporated, and will be dealt with
+      later.</t>
+
+      <figure>
+        <preamble></preamble>
+
+        <artwork><![CDATA[           A------//------B------------D
+          /                \
+         /                  \
+        F                    G
+         \                  /                 
+          \                /
+           X------//------Y
+
+
+
+]]></artwork>
+
+        <postamble>Figure 1: The General Case of Multiple failures</postamble>
+      </figure>
+
+      <t>Note that depending on the repair case under consideration there may
+      be other paths present in Figure 1, for example between A and B, and/or
+      between X and Y. These paths are omitted for graphical clarity.</t>
+
+      <figure>
+        <preamble></preamble>
+
+        <artwork><![CDATA[A------//------B------------X------//------Y------D
+|              |            |              |
+|              |            |              |
+M--------------+            N--------------+
+
+]]></artwork>
+
+        <postamble>Figure 2: Concatenated Repairs</postamble>
+      </figure>
+
+      <t></t>
+
+      <t>There are three cases to consider:</t>
+
+      <t><list counter="">
+          <t>1) Consider the general case of a pair of protected links A-B and
+          X-Y as shown in the network fragment shown Figure 1. If the repair
+          path for A-B does not traverse X-Y and the repair path for X-Y does
+          not traverse A-B, this case is completely safe and will not cause
+          looping or packet loss.</t>
+
+          <t>A more common variation of this case is shown in Figure 2, which
+          shows two failures in different parts of the network in which a
+          packet from A to D traverses two concatenated repairs.</t>
+
+          <t>2) In Figure 1, the repair for A-B traverses X-Y, but the repair
+          for X-Y does not traverse A-B. This case occurs when the not-via
+          path from A to B traverses link X-Y, but the not-via path from X to
+          Y traverses some path not shown in Figure 1. In standard not-via the
+          repaired packet for A-B would be dropped when it reached X-Y, since
+          the repair of repaired packets is currently forbidden. However, if
+          this packet were allowed to be repaired, the path to D would be
+          complete and no harm would be done, although two levels of
+          encapsulation would be required.</t>
+
+          <t>3) The repair for A-B traverses X-Y AND the repair for X-Y
+          traverses A-B. In this case unrestricted repair would result in
+          looping packets and increasing levels of encapsulation.</t>
+        </list> The challenge in applying IPFRR to a network that is
+      undergoing multiple failures is, therefore, to identify which of these
+      cases exist in the network and react accordingly.</t>
+    </section>
+
+    <section title="Outline Solution">
+      <t>When A is computing the not-via repair path for A-B (i.e. the path
+      for packets addressed to Ba, read as "B not-via A") it is aware of the
+      list of nodes which this path traverses. This can be recorded by a
+      simple addition to the SPF process, and the not-via addresses associated
+      with each forward link can be determined. If the path were A, F, X, Y,
+      G, B, (Figure 1) the list of not-via addresses would be: Fa, Xf, Yx, Gy,
+      Bg. Under standard not-via operation, A would populate its FIB such that
+      all normal addresses normally reachable via A-B would be encapsulated to
+      Ba when A-B fails, but traffic addressed to any not-via address arriving
+      at A would be dropped. The new procedure modifies this such that any
+      traffic for a not-via address normally reachable over A-B is also
+      encapsulated to Ba unless the not-via address is one of those previously
+      identified as being on the path to Ba, for example Yx, in which case the
+      packet is dropped.</t>
+
+      <t>The above procedure allows cases 1 and 2 above to be repaired, while
+      preventing the loop which would result from case 3.</t>
+
+      <t>Note that this is accomplished by pre-computing the required FIB
+      entries, and does not require any detailed packet inspection. The same
+      result could be achieved by checking for multiple levels of
+      encapsulation and dropping any attempt to triple encapsulate. However,
+      this would require more detailed inspection of the packet, and causes
+      difficulties when more than 2 &ldquo;simultaneous&rdquo; failures are
+      contemplated.</t>
+
+      <t>So far we have permitted benign repairs to coexist, albeit sometimes
+      requiring multiple encapsulation. Note that in many cases there will be
+      no performance impact since unless both failures are on the same node,
+      the two encapsulations or two decapsulations will be performed at
+      different nodes. There is however the issue of the MTU impact of
+      multiple encapsulations.</t>
+
+      <t>In the following section we consider the various strategies that may
+      be applied to case 3 - mutual repairs that would loop.</t>
+    </section>
+
+    <section title="Looping Repairs">
+      <t>In case 3, the simplest approach is to simply not install repairs for
+      repair paths that might loop. In this case, although the potentially
+      looping traffic is dropped, the traffic is not repaired. If we assume
+      that a hold-down is applied before reconvergence in case the link
+      failure was just a short glitch, and if a loop free convergence
+      mechanism further delays convergence, then the traffic will be dropped
+      for an extended period. In these circumstances it would be better to
+      &ldquo;abandon all hope&rdquo; (AAH)
+      [&lt;draft-bryant-francois-shand-ipfrr-aah-00.txt&gt;] and immediately
+      invoke normal re-convergence.</t>
+
+      <t>Note that it is not sufficient to expedite the issuance of an LSP
+      reporting the failure, since this may be treated as a permitted
+      simultaneous failure by the oFIB algorithm. It is therefore necessary to
+      explicitly trigger an oFIB AAH.</t>
+
+      <section title="Dropping Looping Packets">
+        <t>One approach to case 3 is to allow the repair, and to
+        experimentally discover the incompatibility of the repairs if and when
+        they occur. With this method we permit the repair in case 3 and
+        trigger AAH when a packet drop count on the not-via address has been
+        incremented. Alternatively, it is possible to wait until the LSP
+        describing the change is issued normally (i.e. when X announces the
+        failure of X-Y). When the repairing node A, which has precomputed that
+        X-Y failures are mutually incompatible with its own repairs receives
+        this LSP it can then issue the AAH. This has the disadvantage that it
+        doesn&rsquo;t overcome the hold-down delay, but it requires no
+        &ldquo;data-driven&rdquo; operation, and it still has the required
+        effect of abandoning the oFIB which is probably the longer of the
+        delays (although with signalled oFIB this should be sub-second).</t>
+
+        <t>Whilst both of the experimental approaches described above are
+        feasible, they tend to induce AAH in the presence of otherwise
+        feasible repairs, and they are contrary to the philosophy of repair
+        pre-determination that has been applied to existing IPFRR
+        solutions.</t>
+      </section>
+
+      <section title="Computing non-looping Repairs of Repairs">
+        <t>An alternative approach to simply dropping the looping packets, or
+        to detecting the loop after it has occurred, is to use secondary
+        SRLGs. With a link state routing protocol it is possible to precompute
+        the incompatibility of the repairs in advance and to compute an
+        alternative SRLG repair path. Although this does considerably increase
+        the computational complexity it may be possible to compute repair
+        paths that avoid the need to simply drop the offending packets.</t>
+
+        <t>This approach requires us to identify the mutually incompatible
+        failures, and advertise them as &ldquo;secondary SRLGs&rdquo;. When
+        computing the repair paths for the affected not-via addresses these
+        links are simultaneously failed. Note that the assumed simultaneous
+        failure and resulting repair path only applies to the repair path
+        computed for the conflicting not-via addresses, and is not used for
+        normal addresses. Note that this implies that although there will be a
+        longer repair path when there is more than one failure, if there is a
+        single failure the repair path length will be "normal".</t>
+
+        <t>Ideally we would wish to only invoke secondary SRLG computation
+        when we are sure that the repair paths are mutually incompatible.
+        Consider the case of node A in figure 1. A first identifies that the
+        repair path for A-B is via F-X-Y-G-B. It then explores this path
+        determining the repair path for each link in the path. Thus, for
+        example, it performs a check at X by running an SPF rooted at X with
+        the X-Y link removed to determine whether A-B is indeed on X's repair
+        path for packets addressed to Yx.</t>
+
+        <t>Some optimizations are possible in this calculation, which appears
+        at first sight to be order hk (where h is the average hop length of
+        repair paths and k is the average number of neighbours of a router).
+        When A is computing its set of repair paths, it does so for all its k
+        neighbours. In each case it identifies a list of node pairs traversed
+        by each repair. These lists may often have one or more node pairs in
+        common, so the actual number of link failures which require
+        investigation is the union of these sets. It is then necessary to run
+        an SPF rooted at the first node of each pair (the first node because
+        the pairings are ordered representing the direction of the path), with
+        the link to the second node removed. This SPF, while not an
+        incremental, can be terminated as soon as the not-via address is
+        reached. For example, when running the SPF rooted at X, with the link
+        X-Y removed, the SPF can be terminated when Yx is reached. Once the
+        path has been found, the path is checked to determine if it traverses
+        any of A&rsquo;s links in the direction away from A. Note that,
+        because the node pair XY may exist in the list for more than one of
+        A&rsquo;s links (i.e. it lies on more than one repair path), it is
+        necessary to identify the correct list, and hence link which has a
+        mutually looping repair path. That link of A is then advertised by A
+        as a secondary SRLG paired with the link X-Y. Also note that X will be
+        running this algorithm as well, and will identify that XY is paired
+        with A-B and so advertise it. This could perhaps be used as a further
+        check.</t>
+
+        <t>The ordering of the pairs in the lists is important. i.e. X-Y and
+        Y-X are dealt with separately. If and only if the repairs are mutually
+        incompatible, we need to advertise the pair of links as a secondary
+        SRLG, and then ALL nodes compute repair paths around both failures
+        using an additional not-via address with the semantics not-via A-B AND
+        not-via X-Y.</t>
+
+        <t>A further possibility is that because we are going to the trouble
+        of advertising these SRLG sets, we could also advertise the new repair
+        path and only get the nodes on that path to perform the necessary
+        computation. Note also that once we have reached Q space <xref
+        target="I-D.bryant-ipfrr-tunnels">tunnels</xref> with respect to the
+        two failures we need no longer continue the computation, so we only
+        need to notify the nodes on the path that are not in Q-space.</t>
+
+        <t>One cause of mutually looping repair paths is the existence of
+        nodes with only two links, or sections of the network which are only
+        bi-connected. In these cases, repair is clearly impossible &ndash; the
+        failure of both links partitions the network. It would be advantageous
+        to be able to identify these cases, and inhibit the fruitless
+        advertisement of the secondary SRLG information. This could be
+        achieved by the node detecting the requirement for a secondary SRLG,
+        first running the not-via computation with both links removed. If this
+        does not result in a path, it is clear that the network would be
+        partitioned by such a failure, and so no advertisement is
+        required.</t>
+      </section>
+
+      <section title="N-level Mutual Loops">
+        <t>It is tempting to conclude that the mechanism described above can
+        be applied to the general case of N failures. If we use the approach
+        of assuming that repairs are not mutual, and catching the loops and
+        executing AAH when they occur, then we can attempt repairs in the case
+        of N failures.</t>
+
+        <t>If we use the approach of avoiding potentially mutual repairs and
+        creating secondary SRLG, then we have to explore N levels of repair,
+        where N is the number of simultaneous failures we wish to repair.</t>
+      </section>
+    </section>
+
+    <section title="Mixing LFAs and Not-via">
+      <t>So far in this draft we have assumed that all repairs use not-via
+      tunnels. However, in practise we may wish to use loop free alternates
+      (LFAs) or downstream routes where available. This complicates the issue,
+      because their use results in packets which are being repaired, but NOT
+      addressed to not-via addresses. If BOTH links are using downstream
+      routes there is no possibility of looping, since it is impossible to
+      have a pair of nodes which are both downstream of each other <xref
+      target="I-D.ietf-rtgwg-ipfrr-spec-base">Basic</xref>.</t>
+
+      <t>Loops can however occur when LFAs are used. An obvious example is the
+      well known node repair problem with LFAs <xref
+      target="I-D.ietf-rtgwg-ipfrr-spec-base">Basic</xref>. If one link is
+      using a downstream route, while the other is using a not-via tunnel, the
+      potential mechanism described above would work provided it were possible
+      to determine the nodes on the path of the downstream route. Some methods
+      of computing downstream routes do not provide this path information. If
+      the path information is however available, the link using a downstream
+      route will have a discard FIB entry for the not-via address of the other
+      link. The consequence is that potentially looping packets will be
+      discarded when they attempt to cross this link.</t>
+
+      <t>In the case where the mutual repairs are both using not-via repairs,
+      the loop will be broken when the packet arrives at the second failure.
+      However packets are unconditionally repaired at downstream routes, and
+      thus when the mutual pair consists of a downstream route and a not-via
+      repair, the looping packet will only be dropped when it gets back to the
+      first failure. i.e. it will execute a single turn of the loop before
+      being dropped.</t>
+
+      <t>There is a further complication with downstream routes, since
+      although the path may be computed to the far side of the failure, the
+      packet may &ldquo;peel off&rdquo; to its destination before reaching the
+      far side of the failure. In this case it may traverse some other link
+      which has failed and was not accounted for on the computed path. If the
+      A-B repair (Figure 1) is a downstream route and the X-Y repair is a
+      not-via repair, we can have the situation where the X-Y repair packets
+      encapsulated to Yx follow a path which attempts to traverse A-B. If the
+      A-B repair path for &ldquo;normal&rdquo; addresses is a downstream
+      route, it cannot be assumed that the repair path for packets addressed
+      to Yx can be sent to the same neighbour. This is because the validity of
+      a downstream route must be ascertained in the topology represented by
+      Yx, i.e. that with the link X-Y failed. This is not the same topology
+      that was used for the normal downstream calculation, and use of the
+      normal downstream route for the encapsulated packets may result in an
+      undetected loop. If it is computationally feasible to check the
+      downstream route in this topology (i.e. for any not-via address Qp which
+      traverses A-B we must perform the downstream calculation for that
+      not-via address in the topology with link Q-P failed.), then the
+      downstream repair for Yx can safely be used. These packets cannot
+      re-visit X-Y, since by definition they will avoid that link.
+      Alternatively, the packet could be always repaired in a not-via tunnel.
+      i.e. even though the normal repair for traffic traversing A-B would be
+      to use a downstream route, we could insist that such traffic addressed
+      to a not-via address MUST use a tunnel to Ba. Such a tunnel would only
+      be installed for an address Qp if it were established that it did not
+      traverse Q-P (using the rules described above).</t>
+    </section>
+
+    <section title="Security Considerations">
+      <t>Security considerations described in <xref
+      target="I-D.ietf-rtgwg-ipfrr-framework">Framework</xref>, <xref
+      target="I-D.ietf-rtgwg-ipfrr-spec-base">Basic</xref> and <xref
+      target="I-D.ietf-rtgwg-ipfrr-notvia-addresses">notvia</xref> apply to
+      this work. Any additional security considerations will be provided in a
+      future revision of this draft</t>
+    </section>
+
+    <section title="IANA Considerations ">
+      <t>There are no IANA actions required by this draft.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.RFC.2119"?>
+
+      <?rfc include='reference.I-D.ietf-rtgwg-ipfrr-notvia-addresses'?>
+    </references>
+
+    <references title="Informative References">
+      <?rfc include='reference.I-D.bryant-ipfrr-tunnels'?>
+
+      <?rfc include='reference.I-D.ietf-rtgwg-ipfrr-framework'?>
+
+      <?rfc include='reference.I-D.ietf-rtgwg-ipfrr-spec-base'?>
+    </references>
+  </back>
+</rfc>

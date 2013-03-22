@@ -1,0 +1,598 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfcXXXX.dtd">
+<?rfc compact="yes" ?> <!-- Conserve vertical whitespace -->
+<?rfc strict="no" ?>
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<rfc category="info" ipr="full3978" 
+    docName="draft-procter-bliss-call-park-extension-02">
+
+    <front>
+        <title abbrev="SIP Park/Retrieve">
+			Implementing Call Park and Retrieve using the
+			Session Initiation Protocol (SIP)
+        </title>
+        <author initials="M." surname="Procter"
+                fullname="Michael Procter">
+            <organization>VoIP.co.uk</organization>
+            <address>
+                <postal>
+                    <street>Commerce House</street>
+                    <street>Telford Road</street>
+                    <city>Bicester</city>
+                    <region>Oxfordshire</region>
+                    <code>OX26 4LD</code>
+                    <country>UK</country>
+                </postal>
+                <email>michael@voip.co.uk</email>
+                <uri>http://voip.co.uk</uri>
+            </address>
+        </author>
+
+        <date month="August" year="2008" day="15"/>
+
+        <workgroup>BLISS</workgroup>
+
+        <abstract><t>
+Call Park and Call Retrieve are useful telephony services that are
+familiar to many users.  Existing implementations using the Session
+Initiation Protocol (SIP) show that a variety of approaches can be
+taken, with varying degrees of interoperability.  This draft discusses a
+number of feature variations, and how they may be implemented.
+</t></abstract>
+    </front>
+
+<middle>
+<section title="Overview">
+<t>
+Call Park is a feature that enables UAs to make a call inactive
+but not terminated, in such a way as to allow the call to be resumed
+by the UA that parked the call, or by a different UA.
+</t>
+<t>
+This feature is typically used when User A wishes to transfer a call in
+progress to User B, but doesn't necessarily know how to reach User B's
+UA directly.  In this situation, User A parks the call, and then tells
+User B where the call is parked.  User B may then retrieve the call
+using a convenient UA.
+</t>
+<t>
+Other uses include allowing multiple calls to be parked at the same
+'location', and forming a queue.  In this way, a simple 'ACD' (Automatic
+Call Distribution) system can
+be implemented that permits calls to be initially sorted and placed in
+one of a number of queues, ready to be handled when an appropriate agent
+becomes available (and retrieves the next call from the queue).
+</t>
+<t>
+In all cases, the parked call is subsequently identifiable by a short
+(typically 3 or 4 digit) label known as an 'orbit'.  This orbit is often
+allocated by the user parking the call, but some environments favour
+allocation of the orbit by a Park Server.  Both approaches are described
+in this document.
+</t>
+<t>
+Having a Park Server for parked calls is a useful approach, which
+secures parked calls against User Agent rebooting and other losses of
+service.  However, being able to park and retrieve
+calls without a Park Server is also a useful model, both in terms of
+decentralised network design and also for smaller installations that
+don't necessarily merit a separate Park Server.  Therefore,
+parking with and without a Park Server are discussed in this document.
+</t>
+</section>
+
+<section title="Parking a call">
+<t>
+A basic call flow for Call Park is given in 
+<xref target="I-D.ietf-sipping-service-examples"/>
+(section
+2.15), and this forms the basis of the feature.  This approach uses the
+SIP dialog ID between the parked endpoint and the park server itself as
+the unique parked call identifier.  Using the dialog ID has a number of
+advantages since it is unique and allocated by both the parked user and
+the Park Server.  However, it is also long, which can lead to problems
+when trying to identify parked calls by verbal or human-written
+mechanisms.
+</t>
+<t>
+   Traditional PBX users have become accustomed to parking a call
+   against a short number (typically 3 or 4 digits), and then using this
+   identifier to communicate to the retrieving party which call to
+   retrieve.  This information may be passed verbally, or by means of
+   small paper notes.  Whilst collisions may occur, they are generally
+   avoided satisfactorily by administrative policies.
+</t>
+<t>
+This draft attempts to reconcile these two models by allowing a short
+label to be attached to a parked call (the 'orbit').  The retrieving
+party can then use the same tag to locate the relevant dialog ID in
+order to retrieve the parked call.
+</t>
+
+<section title="Parking a call without an orbit">
+<t>
+Certain environments do not require an 'orbit' to be used, either
+because calls are parked in a single queue, or the dialog identifiers
+are readily passed between concerned UAs.  In this scenario, the flow
+described in <xref target="I-D.ietf-sipping-service-examples"/> is followed without deviation.
+</t>
+</section>
+
+<section title="Parking a call with a specified orbit">
+<t>
+The message flow of parking a call in this scenario is identical to
+that illustrated in <xref target="I-D.ietf-sipping-service-examples"/>.  The difference that this 
+draft introduces is in the REFER message to the Park Server.  The 
+details of the REFER message changes are discussed below.
+</t>
+
+<figure><artwork><![CDATA[
+           Alice           Bob        Park Server       Carol
+             |              |              |              |
+             |   INVITE F1  |              |              |
+             |------------->|              |              |
+             |180 Ringing F2|              |              |
+             |<-------------|              |              |
+             |  200 OK F3   |              |              |
+             |<-------------|              |              |
+             |    ACK F4    |              |              |
+             |------------->|              |              |
+             |  RTP Media   |              |              |
+             |<============>|              |              |
+             |      Bob Parks Call         |              |
+             |              |   REFER Refer-To: A F5      |
+             |              |------------->|              |
+             |              |    202 F6    |              |
+             |              |<-------------|              |
+             |              |   NOTIFY F7  |              |
+             |              |<-------------|              |
+             |              |    200 F8    |              |
+             |              |------------->|              |
+             |  INVITE F9 Replaces: B      |              |
+             |<----------------------------|              |
+             |          200 OK F10         |              |
+             |---------------------------->|              |
+             |           ACK F11           |              |
+             |<----------------------------|              |
+             |(Music-on-Hold or other RTP?)|              |
+             |<===========================>|              |
+             |     BYE F12  |              |              |
+             |------------->|  NOTIFY F14  |              |
+             |  200 OK F13  |<-------------|              |
+             |<-------------|  200 OK F15  |              |
+             |              |------------->|              |
+]]></artwork></figure>
+
+<t>
+   The URI &lt;sips:park-server@example.com;orbit=1234&gt; is used instead of
+   directing the request to the URI &lt;sips:park@server.example.com&gt;.  The
+   addition of the orbit parameter effectively tags the parked call with
+   a short memorable code entered by the user.
+</t>
+
+<figure><artwork><![CDATA[
+   F5 REFER Bob -> Park Server
+
+   REFER sips:park-server@example.com;orbit=1234 SIP/2.0
+   Via: SIP/2.0/TLS client.biloxi.example.com:5061
+    ;branch=z9hG4bKnashds9
+   Max-Forwards: 70
+   From: Bob <sips:bob@biloxi.example.com>;tag=02134
+   To: Park Server <sips:park-server@example.com;orbit=1234>
+   Call-ID: 4802029847@biloxi.example.com
+   CSeq: 1 REFER
+ <allOneLine>
+   Refer-To: <sips:alice@client.atlanta.example.com?Replaces=
+   12345601%40atlanta.example.com%3Bfrom-tag%3D314159
+   %3Bto-tag%3D1234567>
+ </allOneLine>
+   Referred-By: <sips:bob@biloxi.example.com>
+   Contact: <sips:bob@client.biloxi.example.com>
+   Content-Length: 0
+]]></artwork></figure>
+</section>
+
+<section title="Parking a call with a Park-Server allocated orbit">
+<t>
+Sometimes an orbit number assignment policy needs to be implemented.
+This may be to ensure that all orbit numbers are a particular length,
+or have a form that means that they can be dialled directly (given
+suitable extensions to an Application Server).  It may also be
+implemented to eliminate the problem of trying to park more than one
+call on the same orbit.
+</t>
+<t>
+To enforce a policy, we ensure that the orbit number is not allocated
+by the UA (entered by the user, or by configuration etc.)  but is
+instead allocated by the Park Server, and relayed to the UA.  The
+approach taken here is analogous to the Conference Factory approach
+described in <xref target="RFC4579"/>.  Bob sends a REFER to
+the preconfigured Park Server URI, but without any 'orbit' parameter
+added.  The Park Server then responds by redirecting Bob to the correct
+orbit by using a '302 Moved Temporarily' response.  The orbit can then
+be found by inspecting this new target.  Note that an intermediate proxy
+may recurse on this 302 response and Bob may never see the redirect.  In
+this scenario, Bob can still extract the orbit from Contact of 2xx
+response to the original REFER.
+</t>
+
+<figure><artwork><![CDATA[
+           Alice           Bob        Park Server       Carol
+             |              |              |              |
+             |   INVITE F1  |              |              |
+             |------------->|              |              |
+             |180 Ringing F2|              |              |
+             |<-------------|              |              |
+             |  200 OK F3   |              |              |
+             |<-------------|              |              |
+             |    ACK F4    |              |              |
+             |------------->|              |              |
+             |  RTP Media   |              |              |
+             |<============>|              |              |
+             |      Bob Parks Call         |              |
+             |              |   REFER Refer-To: A F5      |
+             |              |------------->|              |
+             |              |302 Orbit allocated F6       |
+             |              |<-------------|              |
+             |              |   REFER Refer-To: A F7      |
+             |              |------------->|              |
+             |              |202 Accepted F8              |
+             |              |<-------------|              |
+             |              |   NOTIFY     |              |
+             |              |<-------------|              |
+             |              |    200 OK    |              |
+             |              |------------->|              |
+             |  INVITE  Replaces: Bob      |              |
+             |<----------------------------|              |
+             |          200 OK             |              |
+             |---------------------------->|              |
+             |           ACK               |              |
+             |<----------------------------|              |
+             |(Music-on-Hold or other RTP?)|              |
+             |<===========================>|              |
+             |     BYE      |              |              |
+             |------------->|  NOTIFY      |              |
+             |  200 OK      |<-------------|              |
+             |<-------------|  200 OK      |              |
+             |              |------------->|              |
+]]></artwork></figure>
+
+<figure><artwork><![CDATA[
+   F5 REFER Bob -> Park Server
+
+   REFER sips:park-server@example.com SIP/2.0
+   Via: SIP/2.0/TLS client.biloxi.example.com:5061
+    ;branch=z9hG4bKnashdsB
+   Max-Forwards: 70
+   From: Bob <sips:bob@biloxi.example.com>;tag=22134
+   To: Park Server <sips:park-server@example.com>
+   Call-ID: 4802029847@biloxi.example.com
+   CSeq: 1 REFER
+<allOneLine>
+   Refer-To: <sips:alice@client.atlanta.example.com?Replaces=
+   12345601%40atlanta.example.com%3Bfrom-tag%3D314159
+   %3Bto-tag%3D1234567>
+</allOneLine>
+   Referred-By: <sips:bob@biloxi.example.com>
+   Contact: <sips:bob@client.biloxi.example.com>
+   Content-Length: 0
+]]></artwork></figure>
+
+<figure><artwork><![CDATA[
+   F6 302 Orbit Allocated Park Server -> Bob
+
+   SIP/2.0 202 Orbit Allocated
+   Via: SIP/2.0/TLS client.biloxi.example.com:5061
+    ;branch=z9hG4bKnashdsB
+    ;received=192.0.2.105
+   From: Bob <sips:bob@biloxi.example.com>;tag=22134
+   To: Park Server <sips:park-server@example.com>;tag=56324
+   Call-ID: 4802029848@biloxi.example.com
+   CSeq: 1 REFER
+   Contact: <sips:park-server@example.com;orbit=1234>
+   Content-Length: 0
+]]></artwork></figure>
+
+<t>
+Once Bob's UA learns of the allocated orbit (either by finding it in 
+the 302 response, or by finding it in the Contact of the 202 response 
+to the REFER), it can be passed to the user (Bob) in an appropriate
+manner.
+</t>
+</section>
+
+<section title="A failed attempt to park a call">
+<t>
+A Park Server may choose to reject a park attempt for many reasons,
+including prohibiting multiple calls being parked against the same
+orbit, or prohibiting certain users from parking calls on certain
+orbits.  Whatever the reason, the response sent to Bob will enable Bob
+to take appropriate action.  The following example shows the Park Server
+rejecting a call due to the orbit already being in use.
+</t>
+
+<figure><artwork><![CDATA[
+           Alice           Bob        Park Server       Carol
+             |              |              |              |
+             |   INVITE F1  |              |              |
+             |------------->|              |              |
+             |180 Ringing F2|              |              |
+             |<-------------|              |              |
+             |  200 OK F3   |              |              |
+             |<-------------|              |              |
+             |    ACK F4    |              |              |
+             |------------->|              |              |
+             |  RTP Media   |              |              |
+             |<============>|              |              |
+             |      Bob Parks Call         |              |
+             |              |   REFER Refer-To: A F5      |
+             |              |------------->|              |
+             |              |486 Busy Here |              |
+             |              |<-------------|              |
+]]></artwork></figure>
+
+<t>
+When Bob's parking attempt is rejected, Bob may choose to attempt to park
+the call again, but using a different orbit number.  The ability for Bob
+to recover from failed parking attempts such as this without dropping the 
+call to Alice is an important consequence of Bob sending the REFER to the
+Park Server, rather than sending the REFER to Alice so that she can park
+herself.
+</t>
+</section>
+
+<section title="Parking a call without a Park Server">
+<t>
+Sometimes, it is useful to be able to park a call without using a Park
+Server.  The original dialog between Alice and Bob is maintained, even
+though Bob has notionally parked the call.  As a consequence, the only
+changes that occur may be within Bob's UA, and will not necessarily
+involve any SIP signalling.
+</t>
+</section>
+
+</section>	<!-- Parking a call -->
+
+
+<section title="Retrieving a Parked Call">
+<t>
+In order to retrieve a parked call, Carol needs to obtain the dialog 
+identifiers for the dialog between Alice and wherever Alice is parked.
+</t>
+<t>
+The dialog identifiers can be obtained by issuing a SUBSCRIBE for the
+dialog event package <xref target="RFC4235"/>.  The resulting NOTIFY
+will contain details of all pertinent calls, including the dialog
+identifiers.  Carol may (if presented with multiple dialogs) choose
+which call to retrieve.  Many implementations choose the first dialog
+listed, although some use the &lt;duration&gt; element to identify which
+call has been parked for the longest time.  Obtaining the dialog information in
+this way follows the flow described in 
+<xref target="I-D.ietf-sipping-service-examples" />.
+</t>
+
+<section title="Retrieving a call from a Park Server">
+<t>
+By subscribing to the dialog event package <xref target="RFC4235"/>
+at the same URI used for parking the call, i.e.
+&lt;sips:park-server@example.com;orbit=1234&gt;, all the information that
+is required for the call to be retrieved by C is delivered in the
+corresponding NOTIFY.
+</t>
+<t>
+Similarly, if the call was parked in an environment that does not
+require 'orbit' parameters, subscribing to the URI used for parking the
+call, i.e. &lt;sips:park-server@example.com&gt;, will still result in
+the necessary information being provided for the call to be retrieved.
+</t>
+
+<figure><artwork><![CDATA[
+           Alice           Bob        Park Server       Carol
+             |              |              |              |
+             |              |              | SUBSCRIBE F1 |
+             |              |              |<-------------|
+             |              |              |  200 OK F2   |
+             |              |              |------------->|
+             |              |              |  NOTIFY F3   |
+             |              |              |------------->|
+             |              |              |  200 OK F4   |
+             |              |              |<-------------|
+             |              |              |              |
+             |              |              |              |
+             |           INVITE Replaces: Park Server F5  |
+             |<-------------------------------------------|
+             |              |              |   200 F6     |
+             |------------------------------------------->|
+             |              |              |    ACK F7    |
+             |<-------------------------------------------|
+             |                  RTP Media                 |
+             |<==========================================>|
+             |           BYE F8            |              |
+             |---------------------------->|              |
+             |          200 OK F9          |              |
+             |<----------------------------|              |
+]]></artwork></figure>
+
+<figure><artwork><![CDATA[
+F1 SUBSCRIBE  Carol -> Park Server
+
+SUBSCRIBE sips:park-server@example.com;orbit=1234 SIP/2.0
+Via: SIP/2.0/TLS chicago.example.com:5061;branch=z9hG4bK92bz
+Max-Forwards: 70
+From: Carol <sips:carol@chicago.example.com>;tag=8672349
+To: <sips:park-server@example.com;orbit=1234>
+Call-ID: xt4653gs2ham@chicago.example.com
+CSeq: 1 SUBSCRIBE
+Contact: <sips:carol@client.chicago.example.com>
+Event: dialog
+Subscription-State: active;expires=0
+Accept: application/dialog-info+xml
+Content-Length: 0
+]]></artwork></figure>
+
+
+<figure><artwork><![CDATA[
+F2 200 OK  Park Server -> Carol
+
+SIP/2.0 200 OK
+Via: SIP/2.0/TLS chicago.example.com:5061;branch=z9hG4bK92bz
+ ;received=192.0.2.114
+Max-Forwards: 70
+From: Carol <sips:carol@chicago.example.com>;tag=8672349
+To: <sips:park-server@example.com;orbit=1234>;tag=1234567
+Call-ID: xt4653gs2ham@chicago.example.com
+CSeq: 1 SUBSCRIBE
+Content-Length: 0
+]]></artwork></figure>
+
+<figure><artwork><![CDATA[
+F3 NOTIFY  Park Server -> Carol
+
+NOTIFY sips:carol@client.chicago.example.com SIP/2.0
+Via: SIP/2.0/TLS chicago.example.com:5061;branch=z9hG4bK93ca
+Max-Forwards: 70
+To: Carol <sips:carol@chicago.example.com>;tag=8672349
+From: <sips:park-server@example.com;orbit=1234>;tag=1234567
+Call-ID: xt4653gs2ham@chicago.example.com
+CSeq: 2 NOTIFY
+Contact: <sips:park-server@example.com;orbit=1234>
+Event: dialog
+Subscription-State: terminated
+Content-Type: application/dialog-info+xml
+Content-Length: ...
+
+<?xml version="1.0"?>
+<dialog-info xmlns="urn:ietf:params:xml:ns:dialog-info"
+   version="0" state="full"
+   entity="sips:park@park.server.example.com;orbit=1234">
+   <dialog id="94992014524" call-id="12345600@atlanta.example.com"
+      local-tag="3145678" remote-tag="1234567" direction="recipient"
+      remote-uri="alice@atlanta.example.com"
+      remote-target="alice@client.atlanta.example.com">
+   <state>confirmed</state>
+   </dialog>
+</dialog-info>
+]]></artwork></figure>
+
+<figure><artwork><![CDATA[
+F4 200 OK  Carol -> Park Server
+
+SIP/2.0 200 OK
+Via: SIP/2.0/TLS chicago.example.com:5061;branch=z9hG4bK93ca
+To: Carol <sips:carol@chicago.example.com>;tag=8672349
+From: <sips:park@server.example.com;orbit=1234>;tag=1234567
+Call-ID: xt4653gs2ham@chicago.example.com
+CSeq: 2 NOTIFY
+Contact: <sips:carol@client.chicago.example.com>
+Content-Length: 0
+]]></artwork></figure>
+
+<t>
+   The remainder of the frames are the same as the corresponding frames
+   from <xref target="I-D.ietf-sipping-service-examples"/>, since the required dialog ID has been
+   obtained through the SUBSCRIBE / NOTIFY cycle from the Park Server.
+</t>
+</section>
+
+<section title="Retrieving a call from a User Agent">
+<t>
+Retrieving a parked call from a User Agent is very similar to retrieving
+a call from a Park Server.  The main difference is identifying which URI
+should be used for the initial subscription, in order to find the dialog
+identifiers for the parked call.
+</t>
+<t>
+The URI most likely to be known for a particular User Agent is the AoR.  
+But this may correspond to multiple UAs.  Therefore, if Carol subscribes
+to the AoR, she should be prepared for multiple NOTIFY responses, should
+her SUBSCRIBE fork.
+</t>
+<t>
+It is tempting to state that Carol should subscribe to the GRUU of the
+UA with the parked call.  This will work well if the GRUU is known in
+advance (possibly by Carol having a long-lived subscription to Bob's
+UA).  If the GRUU is not known in advance, then it may prove too onerous
+to expect it to be typed in on Carol's UA, just to retrieve a parked
+call.
+</t>
+<t>
+Open issue:  Is subscribing to the AoR the best we can offer?
+</t>
+<t>
+Using the 'orbit' parameter in conjunction with parking calls on User
+Agents can lead to difficulties in ensuring that the 'orbit' parameter
+is delivered to the User Agent.  Current thinking favours an approach based upon
+<xref target="RFC4244" />.
+</t>
+<t>
+Open issue: Once this has moved on a little, we can ensure it meets our needs.
+</t>
+<t>
+If the 'orbit' parameter is not used, then Carol will eventually find
+out about all the dialogs currently in progress at Bob's UA.
+Distinguishing the parked call from other dialogs may prove challenging
+(assuming that all calls marked as held is not acceptable).  There may
+be an opportunity to reuse some BLISS-MLA work here, which permits
+dialogs to be marked as 'exclusive', which indicates that other UAs
+should not attempt to pick them up.
+</t>
+
+<t>
+Open issue: How should a parked call be identified when parked on a UA
+with other (potentially non-parked) dialogs in progress?  Does this
+problem only exist when an orbit is not used?
+</t>
+</section>
+
+</section> <!-- Retrieving a parked call -->
+<!--
+        <section title="Requirements notation">
+            <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+            "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+            and "OPTIONAL" in this document are to be interpreted as
+            described in <xref target="RFC2119"/>.</t>
+        </section>
+-->
+
+<section title="User Agent Configuration">
+<t>
+For Bob and Carol to be able to park and retrieve calls using a Park
+Server, both need to be configured with the URI of the Park Server.  In
+addition, Bob and Carol should be configured to understand whether or
+not an orbit will be required for park and retrieve.  Finally, Bob also
+needs to be configured to determine whether Bob should provide the orbit
+or whether the orbit will be allocated by the Park Server.
+</t>
+</section>
+
+<section title="Acknowledgements">
+<t>
+The following individuals were part of the Call Park Design Team, and
+have helped to shape this document:
+</t>
+<t>Francois Audet, Jason Fischl, Derek Macdonald, Shida Schubert, Sanjay Sinha,
+Dale Worley and Theo Zourzouvillys.</t>
+</section>
+
+<section title="Security Considerations">
+<t>None.</t>
+</section>
+
+<section title="IANA Considerations">
+<t>Open issue: presumably need to define the new uri-parameter 'orbit'.</t>
+</section>
+
+</middle>
+<back>
+    <references title="Normative References">
+        <?rfc include='reference.I-D.ietf-sipping-service-examples'?>
+        <?rfc include='reference.RFC.4235'?>
+    </references>
+    <references title="Informative References">
+        <?rfc include='reference.RFC.4579'?>
+        <?rfc include='reference.RFC.4244'?>
+    </references>
+</back>
+</rfc>
+<!-- vim: set ts=4 et wm=8: -->

@@ -1,0 +1,523 @@
+<?xml version="1.0"?>
+<?rfc toc="yes"?><?rfc tocompact="yes"?><?rfc tocdepth="3"?><?rfc tocindent="yes"?><?rfc symrefs="yes"?><?rfc sortrefs="yes"?><?rfc comments="yes"?><?rfc inline="yes"?><?rfc compact="yes"?><?rfc subcompact="no"?><rfc category="info" docName="draft-morin-mboned-mcast-blackhole-mitigation-00" ipr="full3978">
+  <front>
+    <title abbrev="Multicast blackhole mitigation">Multicast blackhole
+    mitigation with PIM adjacency conditions on routing announcements</title>
+
+    <author fullname="Thomas Morin" initials="T." surname="Morin">
+      <organization>France Telecom - Orange Labs</organization>
+
+      <address>
+        <postal>
+          <street>2, avenue Pierre Marzin</street>
+
+          <city>Lannion</city>
+
+          <code>22307</code>
+
+          <country>France</country>
+        </postal>
+
+        <email>thomas.morin@orange-ftgroup.com</email>
+      </address>
+    </author>
+
+    <author fullname="Gregory Cauchie" initials="G." surname="Cauchie">
+      <organization>France Telecom - Orange Labs</organization>
+
+      <address>
+        <postal>
+          <street>38-40 rue du Gnral Leclerc</street>
+
+          <city>Issy Les Moulineaux</city>
+
+          <code>92794</code>
+
+          <country>France</country>
+        </postal>
+
+        <email>gregory.cauchie@orange-ftgroup.com</email>
+      </address>
+    </author>
+
+    <date day="12" month="November" year="2007"/>
+
+    <keyword>draft</keyword>
+
+    <abstract>
+      <t>In a network running PIM-SM, multicast traffic can fail to be
+      properly routed and forwarded during some period of time after a
+      topology change, when unicast routing converges to a new path using a
+      new next-hop before multicast routing adjacencies are fully setup with
+      this new next-hop. At this point, a blackhole appears in the multicast
+      topology and persists until the PIM adjacency become fully setup. This
+      document describes different procedures aiming at avoiding such
+      blackholes, focusing on the use of non-congruent unicast routing that
+      takes into account the status of PIM adjacencies.</t>
+    </abstract>
+
+    <note title="Requirements Language">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref target="RFC2119">RFC 2119</xref>.</t>
+    </note>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>In a network running <xref target="RFC4601">PIM-SM</xref>, multicast
+      traffic can fail to be routed during some period of time after a
+      topology change, when unicast routing protocols converge before the
+      PIM-SM multicast routing protocol adjacencies are fully setup, causing
+      blackholing of multicast traffic. This document describes different
+      procedures aiming at avoiding such blackholes.</t>
+
+      <t><xref target="pb"> </xref> describes the problem statement, and
+      following <xref target="sol"/> and <xref target="alt-sol"> </xref>
+      describe possible solutions to mitigate theses blackholes.</t>
+    </section>
+
+    <section title="Terminology">
+      <t>This document is essentially using terminology from unicast routing
+      protocols and from the <xref target="RFC4601">PIM-SM
+      specifications</xref>.</t>
+
+      <t>Moreover, throughout this document the "MT-IGP" term designates an
+      IGP able to carry information about multiple network topology. Example
+      of such IGP are: <xref target="I-D.ietf-isis-wg-multi-topology">MT-ISIS</xref>, <xref target="I-D.previdi-isis-mi">MI-ISIS</xref>, <xref target="RFC4915">MT-OSPFv2</xref>, <xref target="I-D.ietf-ospf-mt-ospfv3">MT-OSPFv3</xref>, <xref target="I-D.acee-ospf-multi-instance">MI-OSPF</xref>.</t>
+    </section>
+
+    <section anchor="pb" title="Problem statement">
+      <section title="Ineffective PIM Adjacency">
+        <t>In a number of situations a link status can be up without the PIM
+        adjacency to be fully setup. Possible causes for this kind of
+        situations are :<list style="symbols">
+            <t>PIM is unconfigured on one end of the link (not yet configured,
+            or misconfigured)</t>
+
+            <t>a bug or hardware failure is inducing unreliability or delay in
+            sending or receiving PIM Hello messages</t>
+
+            <t>no PIM Hello has been received yet by one of the routers, but
+            that router would require having received a PIM Hello before
+            sending PIM Join to a neighbor</t>
+          </list>On this last point, note that it seems that <xref target="RFC4601"> </xref> does not clearly tell if a router should or
+        should not delay sending PIM Joins on a link toward a router from
+        which it hasn't yet received any PIM Hello message. The procedures
+        described in <xref target="RFC4601"/> are so that it can take up
+        to &lt;Triggered_Hello_Delay&gt; seconds (up to 5s, by default) before
+        a neighbor will send a PIM Hello triggered by a Hello sent by a new
+        neighbor on the link.</t>
+
+        <t>Operational experience shows that all of these situations occur,
+        even frequently for some of them.</t>
+
+        <t>A similar problem affects the LDP protocol, for which a solution is
+        also being studied<xref target="I-D.ietf-mpls-igp-sync"> </xref>.</t>
+      </section>
+
+      <section title="Problem description">
+        <t>The generic problem targeted by this document is when the unicast
+        routing protocol starts to consider a link as available for unicast
+        routing (e.g.. a new link, or a flapping link coming up) but the PIM
+        adjacency on this link is ineffective (see section above), causing PIM
+        Joins to fail to be propagated further, and resulting in a blackhole
+        for the corresponding multicast traffic.</t>
+
+        <t>This problem can occur in a few distinct situations:<list style="symbols">
+            <t>IGP case : in an autonomous system, the IGP can disseminate
+            information relative to a new link before PIM-SM is fully setup on
+            this link</t>
+
+            <t>EGP case : when a link between two ASBRs comes up, the EGP
+            (typically BGP) can possibly advertise the new routes received
+            from the neighbor ASBR before PIM is fully effective on this
+            link</t>
+
+            <t>multicast BGP/MPLS VPN case : similar to the EGP case</t>
+          </list>Partial solutions to the issues presented above do exist
+        based on implementation or unicast routing tuning, but fail to cover
+        all plausible blackhole causes.</t>
+      </section>
+
+      <section title="Applicability to SSM and non-SSM multicast">
+        <t>The PIM-SM multicast routing protocol is using unicast routes (the
+        MRIB) to decide how PIM Join messages should be routed toward the
+        source (in the SPT case) or the RP (in the RPT case). In this document
+        we will only describe the SSM/SPT case, for the sake of clarity, but
+        all statements equally apply to the non-SSM/RPT case, using the RP
+        instead of the multicast source.</t>
+      </section>
+    </section>
+
+    <section anchor="sol" title="PIM-adjacency-based non-congruent MRIB">
+      <section title="Strategy description">
+        <t>Most unicast routing protocols have been extended, or are being
+        extended to support semantic extensions to advertise unicast routes
+        that will be used specifically for multicast routing : <xref target="I-D.ietf-isis-wg-multi-topology">MT-ISIS</xref>, <xref target="I-D.previdi-isis-mi">MI-ISIS</xref>, <xref target="RFC4915">MT-OSPF</xref>, <xref target="RFC4760">MP-BGP SAFI
+        2</xref>, <xref target="I-D.ietf-l3vpn-2547bis-mcast-bgp">MP-BGP SAFI
+        129 VPNv4 routes</xref>. When one or more of these extensions are in
+        use, PIM-SM will be configured to use the distinct RIB populated by
+        them as its MRIB (the RIB used for RPF lookups). In such a case, the
+        MRIB is said to be "non-congruent" to the unicast RIB.</t>
+
+        <t>The issues described in this document can be fully or partially
+        addressed by the use of a non-congruent MRIB that takes into account
+        the status of the PIM-SM adjcencies. A link or the associated next hop
+        won't populate the MRIB based only on the status of the link for the
+        unicast routing protocol, but only if conditions are verified on the
+        status of the PIM adjacency. To do this, a router would keep an
+        adjacent link out of the multicast-specific routing topology until the
+        PIM status on this link is ok:<list style="symbols">
+            <t>in the case of a link where a link-state protocol (typically an
+            IGP) is used, the link (and the routes directed routed through it)
+            will not be advertised in the multicast-specific topology if it is
+            known that the PIM adjacency is not ready.</t>
+
+            <t>in the case of a link where a distance vector protocol (e.g..
+            BGP) is used, the routes received from a neighbor on that link,
+            that pertain to the multicast-specific RIB (e.g.. SAFI 2 routes in
+            the case of BGP) will not be re-advertised.</t>
+          </list></t>
+
+        <t>Different facts can be taken into account by the local router to
+        decide whether the PIM adjacency is ready or not. Different routers in
+        a domain can have a different policy for this decision process : the
+        more specific is the information taken into account, the more
+        black-holes are expected to be avoided ; but in any case, there will
+        always be some improvements over just using non-congruent routing.</t>
+      </section>
+
+      <section title="Criterias">
+        <t>This sections details the different facts that can be taken into
+        account to decide that a PIM adjacency is effective or not.</t>
+
+        <section title="Prune links on which PIM is not enabled">
+          <t>This is the most basic criteria, which consist in including in
+          the multicast topology, only links on which PIM is administratively
+          enabled.</t>
+
+          <t>It typically allows to cover cases of PIM misconfiguration where
+          PIM is not enabled on both sides of a link.</t>
+        </section>
+
+        <section title="Prune links with no received PIM Hello">
+          <t>This consists in not including in the multicast topology, links
+          on which no PIM Hello was received yet.</t>
+
+          <t>This is particularly relevant if the local PIM-SM implementation
+          requires having received PIM Hellos from a neighbor before sending a
+          Join toward this neighbor.</t>
+
+          <section title="IGP on LAN specific case">
+            <t>In the case of an IGP on a LAN the "prune links with no
+            received PIM Hello" criteria need to be further specified.</t>
+
+            <t>Indeed, an IGP like OSPF or ISIS elects a node that will be
+            responsible of creating a pseudo nodes for the LAN and each node
+            on the LAN will then announce an adjacency with this pseudo-node.
+            There is not such notion as a pseudo-node in PIM-SM, PIM
+            adjacencies on a LAN being setup between all PIM routers on the
+            LAN.</t>
+
+            <t>[TBC]</t>
+          </section>
+        </section>
+
+        <section title="Prune links with no sent PIM Hello">
+          <t>This consists in not including in the multicast topology, the
+          links on which no PIM Hello was sent yet.</t>
+
+          <t>This is particularly relevant during the randomized period of
+          time between a Hello being received by a new neighbor and a
+          triggered Hello being sent.</t>
+        </section>
+
+        <section title="Other criteria">
+          <t>Other criteria may be considered, like not including links the
+          received PIM Hello would lack the indication of a required Hello
+          option, or an unknown PIM protocol version, etc.</t>
+        </section>
+      </section>
+    </section>
+
+    <section anchor="alt-sol" title="Alternative proposal">
+      <t>An alternative mechanism to the one described in previous section
+      would consist in using infinite metrics for a link until where PIM is
+      enabled until the PIM adjacency is fully setup. This alternative has the
+      advantage of not requiring the use of a multi-topology IGP (in the IGP
+      case) or of SAFI 2 routing (in the EGP case), but has the drawback of
+      impacting unicast traffic, causing perturbations of unicast routing
+      during the period of time where the PIM adjacency is not fully setup
+      yet. For this reason, this alternative is not favored and not described
+      further in this document.</t>
+    </section>
+
+    <section title="Interoperability considerations">
+      <t>Both mechanisms described in this memo do not cause any
+      interoperability issue.</t>
+
+      <t>The decision to use or not use non-congruent unicast routing for
+      multicast routing has to be made consistently across a routing domain,
+      but the decision to apply or not apply the specific procedures described
+      in this document, and the policy to decide whether or not a link will be
+      used for multicast routing, can be a purely local procedure. The worst
+      situation that could occur is not seeing any improvement over the
+      initial situation where no specific procedure is used, and where
+      blackholing of multicast traffic is more likely to occur.</t>
+
+      <t>For these reason, this document is only intended as a guideline for
+      implementors, and only target the informational status.</t>
+    </section>
+
+    <section title="Recommandations">
+      <t>[ To be completed based on discussion on the above.]</t>
+
+      <t>Logging is RECOMMENDED when a router choses to not include a link for
+      multicast routing.</t>
+
+      <t>Operator feedback through the router management interface is
+      RECOMMENDED, both in the management interface section related to unicast
+      protocols which are used to implement the non-congruency, and in the
+      section related to PIM-SM.</t>
+    </section>
+
+    <section anchor="IANA" title="IANA Considerations">
+      <t>This document makes no request of IANA.</t>
+
+      <t>Note to RFC Editor: this section may be removed on publication as an
+      RFC.</t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>The procedures in this document are believed to not introduce any
+      specific issue introduced compared to multicast routing done with <xref target="RFC4601">PIM-SM</xref>.</t>
+    </section>
+
+    <section anchor="Acknowledgements" title="Acknowledgements">
+      <t>The authors want to thank Bruno Decraene and Toerless Eckert for
+      discussions that helped to shape this proposal.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title=" References">
+      <!-- Begin inclusion reference.RFC.2119.xml. --><reference anchor="RFC2119">
+
+<front>
+<title abbrev="RFC Key Words">Key words for use in RFCs to Indicate Requirement Levels</title>
+<author initials="S." surname="Bradner" fullname="Scott Bradner">
+<organization>Harvard University</organization>
+<address>
+<postal>
+<street>1350 Mass. Ave.</street>
+<street>Cambridge</street>
+<street>MA 02138</street></postal>
+<phone>- +1 617 495 3864</phone>
+<email>sob@harvard.edu</email></address></author>
+<date year="1997" month="March"/>
+<area>General</area>
+<keyword>keyword</keyword>
+<abstract>
+<t>
+   In many standards track documents several words are used to signify
+   the requirements in the specification.  These words are often
+   capitalized.  This document defines these words as they should be
+   interpreted in IETF documents.  Authors who follow these guidelines
+   should incorporate this phrase near the beginning of their document:
+
+<list>
+<t>
+      The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+      NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and
+      "OPTIONAL" in this document are to be interpreted as described in
+      RFC 2119.
+</t></list></t>
+<t>
+   Note that the force of these words is modified by the requirement
+   level of the document in which they are used.
+</t></abstract></front>
+
+<seriesInfo name="BCP" value="14"/>
+<seriesInfo name="RFC" value="2119"/>
+<format type="TXT" octets="4723" target="ftp://ftp.isi.edu/in-notes/rfc2119.txt"/>
+<format type="HTML" octets="17491" target="http://xml.resource.org/public/rfc/html/rfc2119.html"/>
+<format type="XML" octets="5777" target="http://xml.resource.org/public/rfc/xml/rfc2119.xml"/>
+</reference><!-- End inclusion reference.RFC.2119.xml. -->
+
+      <!-- Begin inclusion reference.RFC.4601.xml. --><reference anchor="RFC4601">
+
+<front>
+<title>Protocol Independent Multicast - Sparse Mode (PIM-SM): Protocol Specification (Revised)</title>
+<author initials="B." surname="Fenner" fullname="B. Fenner">
+<organization/></author>
+<author initials="M." surname="Handley" fullname="M. Handley">
+<organization/></author>
+<author initials="H." surname="Holbrook" fullname="H. Holbrook">
+<organization/></author>
+<author initials="I." surname="Kouvelas" fullname="I. Kouvelas">
+<organization/></author>
+<date year="2006" month="August"/>
+<abstract>
+<t>This document specifies Protocol Independent Multicast - Sparse Mode (PIM-SM). PIM-SM is a multicast routing protocol that can use the underlying unicast routing information base or a separate multicast-capable routing information base. It builds unidirectional shared trees rooted at a Rendezvous Point (RP) per group, and optionally creates shortest-path trees per source.&lt;/t&gt;&lt;t&gt; This document obsoletes RFC 2362, an Experimental version of PIM-SM. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4601"/>
+<format type="TXT" octets="340632" target="ftp://ftp.isi.edu/in-notes/rfc4601.txt"/>
+</reference><!-- End inclusion reference.RFC.4601.xml. -->
+
+      <!-- Begin inclusion reference.RFC.4760.xml. --><reference anchor="RFC4760">
+
+<front>
+<title>Multiprotocol Extensions for BGP-4</title>
+<author initials="T." surname="Bates" fullname="T. Bates">
+<organization/></author>
+<author initials="R." surname="Chandra" fullname="R. Chandra">
+<organization/></author>
+<author initials="D." surname="Katz" fullname="D. Katz">
+<organization/></author>
+<author initials="Y." surname="Rekhter" fullname="Y. Rekhter">
+<organization/></author>
+<date year="2007" month="January"/>
+<abstract>
+<t>This document defines extensions to BGP-4 to enable it to carry routing information for multiple Network Layer protocols (e.g., IPv6, IPX, L3VPN, etc.).  The extensions are backward compatible - a router that supports the extensions can interoperate with a router that doesn't support the extensions. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4760"/>
+<format type="TXT" octets="24542" target="ftp://ftp.isi.edu/in-notes/rfc4760.txt"/>
+</reference><!-- End inclusion reference.RFC.4760.xml. -->
+
+      <!-- Begin inclusion reference.I-D.ietf-isis-wg-multi-topology.xml. --><reference anchor="I-D.ietf-isis-wg-multi-topology">
+<front>
+<title>M-ISIS: Multi Topology (MT) Routing in IS-IS</title>
+
+<author initials="T" surname="Przygienda" fullname="Tony Przygienda">
+    <organization/>
+</author>
+
+<date month="October" day="21" year="2005"/>
+
+<abstract><t>This draft describes an optional mechanism within ISIS used today by many ISPs for IGP routing within their clouds. This draft describes how to run within a single ISIS domain a set of independent IP topologies that we call Multi-Topologies (MTs). This MT extension can be used for variety of purposes such as an in-band management network ``on top'' of the original IGP topology, maintain separate IGP routing domains for isolated multicast or IPv6 islands within the backbone, or force a subset of an address space to follow a different topology.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-isis-wg-multi-topology-11"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-isis-wg-multi-topology-11.txt"/>
+</reference><!-- End inclusion reference.I-D.ietf-isis-wg-multi-topology.xml. -->
+
+      <!-- Begin inclusion reference.RFC.4915.xml. --><reference anchor="RFC4915">
+
+<front>
+<title>Multi-Topology (MT) Routing in OSPF</title>
+<author initials="P." surname="Psenak" fullname="P. Psenak">
+<organization/></author>
+<author initials="S." surname="Mirtorabi" fullname="S. Mirtorabi">
+<organization/></author>
+<author initials="A." surname="Roy" fullname="A. Roy">
+<organization/></author>
+<author initials="L." surname="Nguyen" fullname="L. Nguyen">
+<organization/></author>
+<author initials="P." surname="Pillay-Esnault" fullname="P. Pillay-Esnault">
+<organization/></author>
+<date year="2007" month="June"/>
+<abstract>
+<t>This document describes an extension to Open Shortest Path First (OSPF) in order to define independent IP topologies called Multi- Topologies (MTs). The Multi-Topologies extension can be used for computing different paths for unicast traffic, multicast traffic, different classes of service based on flexible criteria, or an in- band network management topology.&lt;/t&gt;&lt;t&gt; An optional extension to exclude selected links from the default topology is also described. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4915"/>
+<format type="TXT" octets="43115" target="ftp://ftp.isi.edu/in-notes/rfc4915.txt"/>
+</reference><!-- End inclusion reference.RFC.4915.xml. -->
+
+      <!-- Begin inclusion reference.I-D.ietf-ospf-mt-ospfv3.xml. --><reference anchor="I-D.ietf-ospf-mt-ospfv3">
+<front>
+<title>Multi-topology routing in OSPFv3 (MT-OSPFv3)</title>
+
+<author initials="S" surname="Mirtorabi" fullname="Sina Mirtorabi">
+    <organization/>
+</author>
+
+<author initials="A" surname="Roy" fullname="Abhay Roy">
+    <organization/>
+</author>
+
+<date month="July" day="6" year="2007"/>
+
+<abstract><t>This document describes an extensible mechanism to support multiple topologies (MT) in OSPFv3. These topologies can be used within the same address family in order to compute different paths for different classes of service, or belong to different address families allowing an integrated definition of address family with OSPFv3. The extension described in this document can further facilitate any future extensions of OSPFv3.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-ospf-mt-ospfv3-03"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-ospf-mt-ospfv3-03.txt"/>
+</reference><!-- End inclusion reference.I-D.ietf-ospf-mt-ospfv3.xml. -->
+
+      <!-- Begin inclusion reference.I-D.ietf-l3vpn-2547bis-mcast-bgp.xml. --><reference anchor="I-D.ietf-l3vpn-2547bis-mcast-bgp">
+<front>
+<title>BGP Encodings and Procedures for Multicast in MPLS/BGP IP VPNs</title>
+
+<author initials="R" surname="Aggarwal" fullname="Rahul  Aggarwal">
+    <organization/>
+</author>
+
+<date month="July" day="5" year="2007"/>
+
+<abstract><t>This document describes the BGP encodings and procedures for exchanging the information elements required by Multicast in MPLS/BGP IP VPNs, as specified in [MVPN].</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-l3vpn-2547bis-mcast-bgp-03"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-l3vpn-2547bis-mcast-bgp-03.txt"/>
+</reference><!-- End inclusion reference.I-D.ietf-l3vpn-2547bis-mcast-bgp.xml. -->
+
+      <!-- Begin inclusion reference.I-D.previdi-isis-mi.xml. --><reference anchor="I-D.previdi-isis-mi">
+<front>
+<title>IS-IS Multi-instance</title>
+
+<author initials="S" surname="Previdi" fullname="Stefano Previdi">
+    <organization/>
+</author>
+
+<date month="May" day="21" year="2007"/>
+
+<abstract><t>This draft describes a mechanism that allows a single router to share one or more links among multiple IS-IS routing protocol instances. Multiple instances allow the isolation of resources associated with each instance. Routers will form instance specific adjacencies, exchange instance specific routing updates and compute paths utilizing instance specific LSDB information. Each PDU will contain a new TLV identifying the instance to which the PDU belongs. This allows a network operator to deploy multiple IS-IS instances in parallel, using the same set of links when required and still have the capability of computing instance specific paths. This draft does not address the forwarding paradigm that needs to be used in order to ensure data PDUs are forwarded according to the paths computed by a specific instance.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-previdi-isis-mi-00"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-previdi-isis-mi-00.txt"/>
+</reference><!-- End inclusion reference.I-D.previdi-isis-mi.xml. -->
+
+      <!-- Begin inclusion reference.I-D.acee-ospf-multi-instance.xml. --><reference anchor="I-D.acee-ospf-multi-instance">
+<front>
+<title>OSPF Multi-Instance Extensions</title>
+
+<author initials="A" surname="Lindem" fullname="Acee Lindem">
+    <organization/>
+</author>
+
+<date month="September" day="10" year="2007"/>
+
+<abstract><t>OSPFv3 includes a mechanism for supporting multiple instances on the same link. OSPFv2 could benefit from such a mechanism in order to support multiple routing domains on the same subnet. The OSPFv2 instance ID is reserved for support of separate OSPFv2 protocol instances. This is different from OSPFv3 where it could be used for other purposes such as putting the same link in multiple areas. OSPFv2 supports this capability using a separate subnet or the OSPF multi-area adjacency capability.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-acee-ospf-multi-instance-00"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-acee-ospf-multi-instance-00.txt"/>
+</reference><!-- End inclusion reference.I-D.acee-ospf-multi-instance.xml. -->
+
+      <!-- Begin inclusion reference.I-D.ietf-mpls-igp-sync.xml. --><reference anchor="I-D.ietf-mpls-igp-sync">
+<front>
+<title>LDP IGP Synchronization</title>
+
+<author initials="M" surname="Jork" fullname="Markus Jork">
+    <organization/>
+</author>
+
+<date month="September" day="7" year="2007"/>
+
+<abstract><t>In networks depending on edge-to-edge establishment of MPLS forwarding paths via LDP, blackholing of traffic can occur in situations where the IGP is operational on a link and thus the link is used for IP forwarding but LDP is not operational on that link for whatever reason. This document describes a mechanism to avoid traffic loss due to this condition without introducing any protocol changes.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-mpls-igp-sync-00"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-mpls-igp-sync-00.txt"/>
+</reference><!-- End inclusion reference.I-D.ietf-mpls-igp-sync.xml. -->
+    </references>
+  </back>
+</rfc>

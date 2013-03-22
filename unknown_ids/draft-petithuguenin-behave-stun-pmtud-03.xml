@@ -1,0 +1,508 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?rfc compact="yes" ?><?rfc strict="no" ?><?rfc symrefs="yes" ?><?rfc toc="yes" ?><rfc ipr="trust200902" docName="draft-petithuguenin-behave-stun-pmtud-03" category="std">
+	<front>
+		<title abbrev="STUN PMTUD">Path MTU Discovery Using Session Traversal Utilities for NAT (STUN)</title>
+
+		<author initials="M.P.H" surname="Petit-Huguenin" fullname="Marc Petit-Huguenin">
+			<organization>(Unaffiliated)</organization>
+
+			<address>
+				<email>petithug@acm.org</email>
+			</address>
+		</author>
+
+		<date year="2009"/>
+
+		<abstract>
+			<t>
+				This document describes a Session Traversal Utilities for NAT (STUN) usage for discovering the path MTU between a client and a server.
+			</t>
+		</abstract>
+	</front>
+
+	<middle>
+		<section title="Introduction">
+			<t>
+				<xref target="RFC4821">The Packetization Layer Path MTU Discovery specification</xref> describes a method to discover the path MTU but does not describe a practical protocol to do so with UDP.
+			</t>
+
+			<t>
+				This document only describe how probing mechanisms are implemented with STUN.
+				The algorithm to find the path MTU is described in <xref target="RFC4821"/>.
+			</t>
+
+			<t>
+				Two probing mechanisms are described, a simple probing mechanism and a more complete mechanism that can converge quicker.
+			</t>
+
+			<t>
+				The simple probing mechanism is implemented by sending a Probe Request with a <xref target="I-D.ietf-behave-nat-behavior-discovery">PADDING</xref> attribute and the DF bit set over UDP.
+				A router on the path to the server can reject this request with an ICMP message or drop it.
+				The client SHOULD cease retransmissions after 3 missing responses.
+			</t>
+
+			<t>
+				The complete probing mechanism is implemented by sending one or more Probe Indication with a PADDING attribute and the DF bit set over UDP then a Report Request to the same server.
+				A router on the path to the server can reject this indication with an ICMP message or drop it.
+				The server keeps a time ordered list of identifiers of all packets received (including retransmitted packets) and sends this list back to the client in the Report Response.
+				The client analyzes this list to find which packets were not received.
+				Because UDP packets does not contain an identifier, the complete probing mechanism needs a way to identify each packet received.  As example, this document describes two different ways to identify a specific packet.
+			</t>
+
+			<t>
+				In the first packet identifier mechanism, the server computes a checksum over each packet received and sends back to the sender the ordered list of checksums.
+				The client compares this list to its own list of checksums.
+			</t>
+
+			<t>
+				In the second packet identifier mechanism, the client adds a sequential number in front of each UDP packet sent.
+				The server sends back the ordered list of sequential numbers received that the client compares to its own list
+			</t>
+		</section>
+
+		<section title="Terminology">
+			<t>
+				The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target="RFC2119"/>.
+			</t>
+		</section>
+
+		<section title="Probing Mechanisms">
+			<t>
+				A client MUST NOT send a probe if it does not have knowledge that the server supports this specification.
+				This is done by an external mechanism specific to each UDP protocol.
+				<xref target="mechanisms"/> describes some of this mechanisms.
+			</t>
+
+			<t>
+				The probe mechanism is used to discover the path MTU in one direction only, from the client to the server.
+			</t>
+		</section>
+
+		<section title="Simple Probing Mechanism">
+			<section title="Sending a Probe Request">
+				<t>
+					A client forms a Probe Request by following the rules in Section 7.1 of <xref target="RFC5389"/>.
+					No authentication method is used.
+					The client adds a <xref target="I-D.ietf-behave-nat-behavior-discovery">PADDING</xref> attribute with a length that, when added to the IP and UDP headers and the other STUN components, is equal to the Selected Probe Size, as defined in <xref target="RFC4821"/> section 7.3.
+					The client MUST add the FINGERPRINT attribute.
+				</t>
+
+				<t>
+					Then the client sends the Probe Request to the server over UDP with the DF bit set.
+					The client SHOULD stop retransmitting after 3 missing responses. 
+				</t>
+			</section>
+
+			<section title="Receiving a Probe Request">
+				<t>
+					A server receiving a Probe Request MUST process it as specified in <xref target="RFC5389"/>.
+					The server MUST NOT challenge the client.
+				</t>
+				<t>
+					The server then creates a Probe Response.
+					The server MUST add the FINGERPRINT attribute.
+					The server then sends the response to the client.
+				</t>
+			</section>
+
+			<section title="Receiving a Probe Response">
+				<t>
+					A client receiving a Probe Response MUST process it as specified in  <xref target="RFC5389"/>.
+					If a response is received this is interpreted as a Probe Success as defined in <xref target="RFC4821"/> section 7.6.1.
+					If an ICMP packet "Fragmentation needed" is received then this is interpreted as a Probe Failure as defined in <xref target="RFC4821"/> section 7.6.2.
+					If the Probe transactions fails in timeout, then this is interpreted as a Probe Inconclusive as defined in <xref target="RFC4821"/> section 7.6.4.
+				</t>
+			</section>
+		</section>
+
+		<section title="Complete Probing Mechanism">
+			<section title="Sending the Probe Indications and Report Request">
+				<t>
+					A client forms a Probe Indication by following the rules in <xref target="RFC5389"/> section 7.1.
+					The client adds to the Probe Indication a PADDING attribute with a size that, when added to the IP and UDP headers and the other STUN components, is equal to the Selected Probe Size, as defined in <xref target="RFC4821"/> section 7.3.
+					The client MUST add the FINGERPRINT attribute.
+				</t>
+
+				<t>
+					Then the client sends the Probe Indication to the server over UDP with the DF bit set.
+				</t>
+				<t>
+					Then the client forms a Report Request by following the rules in <xref target="RFC5389"/> section 7.1.  
+					No authentication method is used.
+					The client MUST add the FINGERPRINT attribute.
+				</t>
+				<t>
+					Then the client waits half the RTO if it is known or 50 milliseconds after sending the Probe Indication and sends the Report Request to the server over UDP.
+				</t>
+			</section>
+
+			<section title="Receiving an ICMP packet">
+				<t>
+					If an ICMP packet "Fragmentation needed" is received then this is interpreted as a Probe Failure as defined in <xref target="RFC4821"/> section 7.5.
+				</t>
+			</section>
+
+			<section title="Receiving a Probe Indication and Report Request">
+				<t>
+					A server supporting this specification and knowing that the client also supports it will keep the identifiers of all packets received in a list ordered by receiving time.
+					The same identifier can appear multiple times in the list because of retransmission.
+					The maximum size of this list is calculated so that when the list is added to the Report Response, the total size of the packet does not exceed the unknown path MTU as defined in <xref target="RFC5389"/> section 7.1.
+					Older identifiers are removed when new identifiers are added to a list already full.
+				</t>
+
+				<t>
+					A server receiving a Report Request MUST process it as specified in <xref target="RFC5389"/>.
+					The server MUST NOT challenge the client.
+				</t>
+				<t>
+					The server creates a Report Response and adds an IDENTIFIERS attribute that contains the list of all identifiers received so far.
+					The server MUST add the FINGERPRINT attribute.
+					The server then sends the response to the client.
+				</t>
+			</section>
+
+			<section title="Receiving a Report Response">
+				<t>
+					A client receiving a Report Response processes it as specified in  <xref target="RFC5389"/>.
+					If the response IDENTIFIERS attribute contains the identifier of the Probe Indication, then this is interpreted as a Probe Success for this probe as defined in <xref target="RFC4821"/> Section 7.5.
+					If the Probe Indication identifier cannot be found in the Report Response, this is interpreted as a Probe Failure as defined in <xref target="RFC4821"/> Section 7.5.
+					If the Probe Indication identifier cannot be found in the Report Response but other packets identifier sent before or after the Probe Indication cannot also be found, this is interpreted as a Probe Inconclusive as defined in <xref target="RFC4821"/> Section 7.5.
+					If the Report Transaction fails in timeout, this is interpreted as a Full-Stop Timeout as defined in <xref target="RFC4821"/> Section 3.
+				</t>
+			</section>
+
+			<section title="Using Checksum as Packet Identifiers">
+				<t>
+					When using checksum as packet identifiers, the client calculate the checksum for each packet sent over UDP and keep this checksum in an ordered list.
+					The server does the same thing and send back this list in the Report Response.
+				</t>
+
+				<t>
+					It could have been possible to use the checksum generated in the UDP checksum for this, but this value is generally not accessible to applications.
+					Also sometimes the checksum is not calculated or off-loaded to the network card.
+				</t>
+			</section>
+
+			<section title="Using Sequential Numbers as Packet Identifiers">
+				<t>
+					When using sequential numbers, a small header similar to the TURN ChannelData header is added in front of all non-STUN packets.
+					The sequential number is incremented for each packet sent.
+					The server collects the sequence number of the packets sent.
+				</t>
+
+				<figure>
+					<artwork>
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|         Channel Number        |            Length             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        Sequence number                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
+/                       Application Data                        /
+/                                                               /
+|                                                               |
+|                               +-------------------------------+
+|                               |
++-------------------------------+
+					</artwork>
+				</figure>
+
+				<t>The Channel Number is always 0xFFFF.</t>
+			</section>
+		</section>
+
+		<section anchor="mechanisms" title="Probe Support Discovery Mechanisms">
+			<section title="Implicit Mechanism">
+				<t>
+					An endpoint acting as a client for the STUN usage described in this specification MUST also act as a server for this STUN usage.
+					This means that a server receiving a probe can assumes that it can acts as a client to discover the path MTU to the IP address and port from which it received the probe.
+				</t>
+			</section>
+
+			<section title="Probe Support Discovery with TURN">
+				<t>
+					A TURN client supporting this STUN usage will add a PMTUD-SUPPORTED attribute to the Allocate Request sent to the TURN server.
+					The TURN server can immediately start to send probes to the TURN client on reception of an Allocation Request with a PMTUD-SUPPORTED attribute.
+					The TURN client will then use the Implicit Mechanism described above to send probes.
+				</t>
+			</section>
+
+			<section title="Probe Support Discovery with ICE">
+				<t>
+					An <xref target="I-D.ietf-mmusic-ice">ICE</xref> client supporting this STUN usage will add a PMTUD-SUPPORTED attribute to the Binding Request sent during a connectivity check.
+					The ICE server can immediately start to send probes to the ICE client on reception of a Binding Request with a PMTUD-SUPPORTED attributed.
+					Local candidates receiving Binding Request with the PMTUD-SUPPORTED flag must not start PMTUD with the remote candidate if already done so.
+					The ICE client will then use the Implicit Mechanism described above to send probes.
+				</t>
+			</section>
+		</section>
+
+		<section title="New STUN Method">
+			<t>
+				This specification defines the following new STUN methods:
+			</t>
+
+			<t>
+				<list>
+					<t>0x801 : Probe</t>
+					<t>0x802 : Report</t>
+				</list>
+			</t>
+		</section>
+
+		<section title="New STUN Attributes">
+			<t>
+				This specification defines the following new STUN attributes:
+			</t>
+			<t>
+				<list>
+					<t>0x4001 : IDENTIFIERS</t>
+					<t>0xC001 : PMTUD-SUPPORTED</t>
+				</list>
+			</t>
+
+			<section title="IDENTIFIERS">
+				<t>
+					The IDENTIFIERS attribute is used in Report Response.
+					It contains a list of UDP packet identifiers.
+				</t>
+			</section>
+
+			<section title="PMTUD-SUPPORTED">
+				<t>
+					The PMTUD-SUPPORTED attribute is used in STUN usages and extensions to signal the support of this specification.
+					This attribute has no content.
+				</t>
+			</section>
+		</section>
+
+		<section title="Security Considerations">
+			<t>
+				TBD
+			</t>
+		</section>
+
+		<section title="IANA Considerations">
+			<t>
+				TBD
+			</t>
+		</section>
+
+		<section title="Acknowledgements">
+			<t>Thanks to Dan Wing and Eilon Yardeni for their comments, suggestions and questions that helped to improve this document.</t>
+			<t>This document was written with the xml2rfc tool described in <xref target="RFC2629"/>.</t>
+		</section>
+	</middle>
+
+	<back>
+		<references xmlns:xi="http://www.w3.org/2001/XInclude" title="Normative References">
+			<reference anchor="RFC2119" xml:base="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+
+<front>
+<title abbrev="RFC Key Words">Key words for use in RFCs to Indicate Requirement Levels</title>
+<author initials="S." surname="Bradner" fullname="Scott Bradner">
+<organization>Harvard University</organization>
+<address>
+<postal>
+<street>1350 Mass. Ave.</street>
+<street>Cambridge</street>
+<street>MA 02138</street></postal>
+<phone>- +1 617 495 3864</phone>
+<email>sob@harvard.edu</email></address></author>
+<date year="1997" month="March"/>
+<area>General</area>
+<keyword>keyword</keyword>
+<abstract>
+<t>
+   In many standards track documents several words are used to signify
+   the requirements in the specification.  These words are often
+   capitalized.  This document defines these words as they should be
+   interpreted in IETF documents.  Authors who follow these guidelines
+   should incorporate this phrase near the beginning of their document:
+
+<list>
+<t>
+      The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+      NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and
+      "OPTIONAL" in this document are to be interpreted as described in
+      RFC 2119.
+</t></list></t>
+<t>
+   Note that the force of these words is modified by the requirement
+   level of the document in which they are used.
+</t></abstract></front>
+
+<seriesInfo name="BCP" value="14"/>
+<seriesInfo name="RFC" value="2119"/>
+<format type="TXT" octets="4723" target="ftp://ftp.isi.edu/in-notes/rfc2119.txt"/>
+<format type="HTML" octets="17491" target="http://xml.resource.org/public/rfc/html/rfc2119.html"/>
+<format type="XML" octets="5777" target="http://xml.resource.org/public/rfc/xml/rfc2119.xml"/>
+</reference>
+			<reference anchor="RFC4821" xml:base="http://xml.resource.org/public/rfc/bibxml/reference.RFC.4821.xml">
+
+<front>
+<title>Packetization Layer Path MTU Discovery</title>
+<author initials="M." surname="Mathis" fullname="M. Mathis">
+<organization/></author>
+<author initials="J." surname="Heffner" fullname="J. Heffner">
+<organization/></author>
+<date year="2007" month="March"/>
+<abstract>
+<t>This document describes a robust method for Path MTU Discovery (PMTUD) that relies on TCP or some other Packetization Layer to probe an Internet path with progressively larger packets.  This method is described as an extension to RFC 1191 and RFC 1981, which specify ICMP-based Path MTU Discovery for IP versions 4 and 6, respectively. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4821"/>
+<format type="TXT" octets="75665" target="ftp://ftp.isi.edu/in-notes/rfc4821.txt"/>
+</reference>
+			<reference anchor="RFC5389" xml:base="http://xml.resource.org/public/rfc/bibxml/reference.RFC.5389.xml">
+
+<front>
+<title>Session Traversal Utilities for NAT (STUN)</title>
+<author initials="J." surname="Rosenberg" fullname="J. Rosenberg">
+<organization/></author>
+<author initials="R." surname="Mahy" fullname="R. Mahy">
+<organization/></author>
+<author initials="P." surname="Matthews" fullname="P. Matthews">
+<organization/></author>
+<author initials="D." surname="Wing" fullname="D. Wing">
+<organization/></author>
+<date year="2008" month="October"/>
+<abstract>
+<t>Session Traversal Utilities for NAT (STUN) is a protocol that serves as a tool for other protocols in dealing with Network Address Translator (NAT) traversal. It can be used by an endpoint to determine the IP address and port allocated to it by a NAT. It can also be used to check connectivity between two endpoints, and as a keep-alive protocol to maintain NAT bindings. STUN works with many existing NATs, and does not require any special behavior from them.&lt;/t&gt;&lt;t&gt; STUN is not a NAT traversal solution by itself. Rather, it is a tool to be used in the context of a NAT traversal solution. This is an important change from the previous version of this specification (RFC 3489), which presented STUN as a complete solution.&lt;/t&gt;&lt;t&gt; This document obsoletes RFC 3489. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5389"/>
+<format type="TXT" octets="125650" target="ftp://ftp.isi.edu/in-notes/rfc5389.txt"/>
+</reference>
+			<reference anchor="I-D.ietf-mmusic-ice" xml:base="http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-mmusic-ice.xml">
+<front>
+<title>Interactive Connectivity Establishment (ICE): A Protocol for Network Address  Translator (NAT) Traversal for Offer/Answer Protocols</title>
+
+<author initials="J" surname="Rosenberg" fullname="Jonathan Rosenberg">
+    <organization/>
+</author>
+
+<date month="October" day="29" year="2007"/>
+
+<abstract><t>This document describes a protocol for Network Address Translator (NAT) traversal for UDP-based multimedia sessions established with the offer/answer model.  This protocol is called Interactive Connectivity Establishment (ICE).  ICE makes use of the Session Traversal Utilities for NAT (STUN) protocol and its extension, Traversal Using Relay NAT (TURN).  ICE can be used by any protocol utilizing the offer/answer model, such as the Session Initiation Protocol (SIP).</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-mmusic-ice-19"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-mmusic-ice-19.txt"/>
+</reference>
+		</references>
+
+		<references xmlns:xi="http://www.w3.org/2001/XInclude" title="Informative References">
+			<reference anchor="RFC2629" xml:base="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2629.xml">
+
+<front>
+<title>Writing I-Ds and RFCs using XML</title>
+<author initials="M.T." surname="Rose" fullname="Marshall T. Rose">
+<organization>Invisible Worlds, Inc.</organization>
+<address>
+<postal>
+<street>660 York Street</street>
+<city>San Francisco</city>
+<region>CA</region>
+<code>94110</code>
+<country>US</country></postal>
+<phone>+1 415 695 3975</phone>
+<email>mrose@not.invisible.net</email>
+<uri>http://invisible.net/</uri></address></author>
+<date year="1999" month="June"/>
+<area>General</area>
+<keyword>RFC</keyword>
+<keyword>Request for Comments</keyword>
+<keyword>I-D</keyword>
+<keyword>Internet-Draft</keyword>
+<keyword>XML</keyword>
+<keyword>Extensible Markup Language</keyword>
+<abstract>
+<t>This memo presents a technique for using XML
+(Extensible Markup Language)
+as a source format for documents in the Internet-Drafts (I-Ds) and
+Request for Comments (RFC) series.</t></abstract></front>
+
+<seriesInfo name="RFC" value="2629"/>
+<format type="TXT" octets="48677" target="ftp://ftp.isi.edu/in-notes/rfc2629.txt"/>
+<format type="HTML" octets="71741" target="http://xml.resource.org/public/rfc/html/rfc2629.html"/>
+<format type="XML" octets="53481" target="http://xml.resource.org/public/rfc/xml/rfc2629.xml"/>
+</reference>
+			<reference anchor="I-D.ietf-behave-nat-behavior-discovery" xml:base="http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-behave-nat-behavior-discovery.xml">
+<front>
+<title>NAT Behavior Discovery Using STUN</title>
+
+<author initials="D" surname="MacDonald" fullname="Derek MacDonald">
+    <organization/>
+</author>
+
+<author initials="B" surname="Lowekamp" fullname="Bruce Lowekamp">
+    <organization/>
+</author>
+
+<date month="March" day="9" year="2009"/>
+
+<abstract><t>This specification defines an experimental usage of the Simple Traversal Underneath Network Address Translators (NAT) (STUN) Protocol that discovers the presence and current behaviour of NATs and firewalls between the STUN client and the STUN server.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-behave-nat-behavior-discovery-06"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-behave-nat-behavior-discovery-06.txt"/>
+</reference>
+		</references>
+
+		<section title="Release notes">
+			<t>
+				This section must be removed before publication as an RFC.
+			</t>
+
+			<section title="Modifications between -03 and -02">
+				<t>
+					<list style="symbols">
+						<t>Changed author address.</t>
+						<t>Changed the IPR to trust200902.</t>
+					</list>
+				</t>
+			</section>
+
+			<section title="Modifications between -02 and -01">
+				<t>
+					<list style="symbols">
+						<t>Replaced the transactions identifiers by packet identifiers</t>
+						<t>Defined checksum and sequential numbers as possible packet identifiers.</t>
+						<t>Updated the reference to RFC 5389</t>
+						<t>The FINGERPRINT attribute is now mandatory.</t>
+						<t>Changed the delay between Probe indication and Report request to be RTO/2 or 50 milliseconds.</t>
+						<t>Added ICMP packet processing.</t>
+						<t>Added Full-Stop Timeout detection.</t>
+						<t>Stated that Binding request with PMTUD-SUPPORTED does not start the PMTUD process if already started.</t>
+					</list>
+				</t>
+			</section>
+
+			<section title="Modifications between -01 and -00">
+				<t>
+					<list style="symbols">
+						<t>
+							Removed the use of modified STUN transaction but shorten the retransmission for the simple probing mechanism.
+						</t>
+						<t>
+							Added a complete probing mechanism.
+						</t>
+						<t>
+							Removed the PADDING-RECEIVED attribute.
+						</t>
+						<t>
+							Added release notes.
+						</t>
+					</list>
+				</t>
+			</section>
+
+			
+
+			
+		</section>
+	</back>
+</rfc>

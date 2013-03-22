@@ -1,0 +1,885 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc='yes'?>
+<?rfc tocdepth='5'?>
+<?rfc symrefs='yes'?>
+
+<?rfc compact='yes'?>
+<?rfc subcompact='no'?>
+
+<rfc ipr="full3978" category="std">
+
+
+    <front>
+        <title abbrev="ICE for non-SIP Protocols">
+Guidelines for Usage of Interactive Connectivity Establishment (ICE)
+by non Session Initiation Protocol (SIP) Protocols</title>
+    
+        <author initials="J.R." surname="Rosenberg"
+                fullname="Jonathan Rosenberg">
+            <organization>Cisco</organization>
+    
+            <address>
+                <postal>
+                    <city>Edison</city> <region>NJ</region>
+                    <country>US</country>
+                </postal>
+    
+                <phone>+1 973 952-5000</phone>
+                <email>jdrosen@cisco.com</email>
+                <uri>http://www.jdrosen.net</uri>
+            </address>
+        </author>
+    
+        <date month="July" year="2008" />
+    
+        <keyword>NAT</keyword>
+        <keyword>SIP</keyword>
+        <keyword>ICE</keyword>
+        <keyword>STUN</keyword>
+        <abstract>
+            <t>Interative Connectivity Establishment (ICE) has been
+            specified as a NAT traversal mechanism for protocols based
+            on the offer/answer exchange model. In practice, only the
+            Session Initiation Protocol (SIP) has used
+            ICE. This document provides guidance on how other
+            protocols can make use of ICE. </t>
+        </abstract>
+    </front>
+
+<middle>
+
+
+<section title="Introduction">
+
+<t>
+Interactive Connectivity Establishment (ICE)
+<xref target="I-D.ietf-mmusic-ice"/> has been specified by the
+IETF as a mechanism for NAT traversal for protocols based on the
+offer/answer model <xref target="RFC3264"/>, which exchanges Session
+Description Protocol (SDP) <xref target="RFC4566"/> objects to
+negotiate media sessions. 
+</t>
+
+<t>
+ICE has many benefits. It is automated, relying on very little
+configuration. It works through an extremely broad range of network
+and NAT topologies. It is robust, establishing connections in many
+challenging environments. It is efficient, utilizing relays and
+intermediaries only when other options will not work. At the time of
+writing, ICE has seen widespread usage on the Internet for traversal
+of Voice over IP, primarily based on the Session Initiation Protocol
+(SIP) <xref target="RFC3261"/>
+</t>
+
+<t>
+However, SIP is not the only protocol that requires the establishment
+of host-to-host relationships for communications. Consequently, ICE
+has recently been considered as the NAT traversal technique for other
+protocols. These include Peer-to-Peer SIP (P2PSIP)
+<xref target="I-D.bryan-p2psip-reload"/>, Host Identity Protocol (HIP)
+<xref target="I-D.manyfolks-hip-sturn"/> and Mobile IP v6
+<xref target="I-D.tschofenig-mip6-ice"/>. In each case, the
+protocol in question provides a mechanism for two hosts to rendezvous
+through some intermediary, and then needs a host-to-host connection
+established. This fits the NAT traversal capability provided by ICE.
+</t>
+
+<t>
+Unfortunately, the ICE specification itself is intertwined with SDP
+and the offer/answer model, and is not immediately usable by protocols
+that do not utilize offer/answer. For this reason, each of these
+protocols need to define how to utilize ICE for their specific
+needs. This document provides guidelines for authors of such
+specifications. It includes guidance on when ICE can be used by a
+protocol, describes each of ICE's major functions and how they can be
+applied. 
+</t>
+
+<t>
+This document assumes the reader is familiar with ICE and its
+operation. 
+</t>
+
+</section>
+
+<section title="Can My Protocol Use ICE?">
+
+<t>
+Not all protocols can make use of ICE. ICE works only with protocols
+that fit the pattern of a session protocol. A session protocol is one
+in which there exists some kind of rendezvous service, typically
+through a server on the Internet, by which hosts can contact each
+other. Through the rendezvous service, hosts can exchange information
+for the purposes of negotiating a direct host to host connection. Each
+host is assumed to have an identifier by which it is known to the
+rendezvous service, and by which other hosts can identify it. There is
+typically some kind of registration operation, by which a host
+connects to the rendezvous service and identifies itself. This
+protocol design pattern is shown in <xref target="fig-session"/>.
+</t>
+
+<figure title="Session Protocols" anchor="fig-session"><artwork>
+<![CDATA[
+                      +--------------+                                    
+                      |              |                                    
+                      |              |                                    
+                   >  |  Rendezvous  | \                                  
+                  /   |    Service   |  \                                 
+                 /    |              |   \                                
+                /     |              |    \                               
+               /      |              |     \                              
+              /       +--------------+      \                             
+             /                               \                            
+            /  Connect                        \                           
+           /   To Y                            \                          
+          /                                     \                         
+                                                                          
+     +--------+                            +--------+                     
+     |        |                            |        |                     
+     |        |                            |        |                     
+     |  Host  |  ......................... |  Host  |                     
+     | ID:X   |                            | ID:Y   |                     
+     |        |                            |        |                     
+     +--------+                            +--------+                     
+]]></artwork></figure>
+
+
+<t>
+If hosts can reach each other through the rendezvous service, why
+create direct connections? Typically, the rendezvous service provides
+an indirect connection, and may be very suboptimal in terms of latency
+and other path metrics. The rendezvous service may also have limited
+bandwidth, and not be capable of supporting the volume of data
+required to flow between the hosts.
+</t>
+
+<t>
+As an example, in SIP, the rendezvous service is the SIP server. The
+identifier is the SIP URI. The registration process is supported using
+the SIP REGISTER method. Connections are established using the INVITE
+method. 
+</t>
+
+<t>
+For a protocol to use ICE, it must exhibit the properties of
+a session protocol as described above. Furthermore, it must provide a
+mechanism for exchanging information between the hosts for purposes
+of establishing the connection. It must provide for, at least, one
+message from the initiator to the other host, and one message back. If
+all of these criteria are met, ICE can be used. 
+</t>
+
+</section>
+
+<section title="Target Architecture">
+
+<t>
+The goal of the recommendations in this document is to enable an
+architecture for firewall and NAT traversal across many protocols that
+has two properties:
+</t>
+
+<list style="numbers">
+<t>STUN and TURN servers can be used to support multiple applications</t>
+<t>Gateways can easily be built between ICE-using protocols that are
+compatible </t>
+</list>
+
+<t>
+The second of these requires further discussion. In some cases, two
+different protocols are ones that provide similar functions, so that
+it is reasonable to build gateways between them. For example, gateways
+between SIP and H.323, or between SIP and RTSP, are reasonable things
+to do. A gateway function between two session protocols needs to
+concern itself with converting the signaling and converting the media
+protocol - whether it be RTP or something else. It is highly desirable
+to avoid actual conversion operations along the direct media
+path. These greatly increase the cost and complexity of gateway
+functions. Consequently, the ideal architecture looks like this:
+</t>
+
+<figure title="Ideal Multi Protocol ICE Architecture"
+	anchor="fig-icen-arch"><artwork> 
+<![CDATA[
+                                                                          
+                             +---------+                                  
+                             |  STUN/  |                                  
+         STUN/TURN           |  TURN   |         STUN/TURN                
+   **************************| Servers |****************************      
+   *                         |         |                           *      
+   *                         +---------+                           *      
+   *                                                               *      
+   *                                                               *      
+   *                                                               *      
+   *                                                               *      
+   *                                                               *      
+   *   +------------+                            +------------+    *      
+   *   |  Signaling |         +-------+          |  Signaling |    *      
+   *   |   Server   |    A    |       |     B    |   Server   |    *      
+   *   |            |<------->|  GW   |<-------->|            |    *      
+   *   | Protocol A |         |       |          | Protocol B |    *      
+   *   |            |         +-------+          |            |    *      
+   *   +------------+                            +------------+    *      
+   *          |                                         |          *      
+   *          |                                         |          *      
+   *          |                                         |          *      
+   *          |                                         |          *      
+   *          |                                         |          *      
+   *          |                                         |          *      
+   *          |                                         |          *      
+   *          |                media +                  |          *      
+   *                           checks                              *      
+   *      ///----\\\                                ///----\\\     *      
+   **** || Client 1 || .......................... || Client 1 ||****      
+          \\\----///                                \\\----///            
+
+]]></artwork></figure>
+
+<t>
+In this architecture, clients of two different protocols (A and B)
+make use of signaling servers for their respective protocols. There is
+a gateway function between them, but this function ONLY concerns
+itself with the signaling. The content of the established sessions -
+which includes the media and the path-based connectivity checks that
+ICE uses - do not require any protocol conversion. 
+</t>
+
+<t>
+Of course, implementations can choose to gateway the media and checks
+if they want, but it is a strong objective of the recommendations here
+that they don't HAVE TO. 
+</t>
+
+<t>
+The architecture also shows that the goal is to have a common set of
+TURN and STUN functions that serve all applications using ICE.
+</t>
+
+</section>
+
+
+<section title="General Considerations">
+
+<t>
+There are some general considerations for the using protocol.
+</t>
+
+<section title="Lite Implementation">
+
+<t>
+The lite mode of operation for ICE allows for usage by agents which
+are always reachable by any other agent, both now and in the
+future. The using protocol needs to decide whether this mode of
+operation is supported or not. If not, all agents will be full
+implementations. If the mode is supported, agents can either be lite
+or full. 
+</t>
+
+<t>
+The principal consideration is the likelihood of agents being always
+publicly reachable, vs. the cost of an ICE implementation. ICE itself
+provides strong caution against the lite mode of implementation. It is
+very easy for protocol designers to envision specific scenarios for
+deployment of their protocol, and then for the reality to be
+different. Furthermore, the full mode provides important security
+benefits. It ensures that an ICE implementation cannot be used to
+launch DoS attacks. Consequently, that same guidance is given here: using
+protocols should only use ICE's lite mode if there is a belief that
+implementors absolutely will not implement the full mode, and that
+those implementations will always be publicly reachable by every other
+agent for the lifetime of deployment of that implementation, and that
+the security benefits of full mode are not worth the implementation
+complexity. 
+</t>
+
+</section>
+
+<section title="Multiple Components">
+
+<t>
+ICE introduces the concept of multiple components for a single media
+stream. ICE attempts to provide atomic processing across components,
+such that a set of candidates (one for each component) are only used
+if all of them succeeded. This grouping is useful when it is desirable
+for path characteristics to be identical across multiple IP addresses
+and ports that make up a connection of some sort.
+</t>
+
+<t>
+Using protocols should indicate whether this functionality is needed
+or not. If not, the procedures defined for ICE are used as is, but the
+implementation for the using protocol just assumes there is always a
+single component per stream.
+</t>
+
+</section>
+
+<section title="Multiple Media Streams">
+
+<t>
+ICE allows for multiple media streams. ICE largely runs independently
+for each stream, with a few important exceptions. First, ICE will
+perform pacing across all of the streams, thus providing aggregate
+congestion control. Secondly, ICE will utilize results from one stream
+to speed up the results of candidate gathering for another stream. 
+</t>
+
+<t>
+Using protocols should decide whether the concept of multiple streams
+applies or not. If it does, the using protocol can elect to run ICE on
+each stream completely independently (in which case its effectively a
+separate offer/answer exchange and ICE state machine for each stream),
+or together. The primary consideration, as noted above, is whether
+aggregate congestion control and rapid convergence are
+desired. This document recommends that, if a using protocol has
+multiple streams, it runs ICE jointly across them, as defined by the
+ICE specification (in other words, there is one instance of the ICE
+state machine, not one for each media stream).
+</t>
+
+</section>
+
+</section>
+
+<section title="ICE Functions">
+
+<t>
+ICE processing can be broken six distinct steps:
+</t>
+
+<t><list style="numbers">
+<t> Gathering of candidates </t>
+<t> Initial exchange of candidates </t>
+<t> Connectivity checks </t>
+<t> Conclusion of ICE </t>
+<t> Subsequent signaling </t>
+<t> Media and Keepalives </t>
+</list></t>
+
+<t>
+Each of these steps requires consideration by the designer of the
+protocol that intends to use ICE (called the using protocol).
+</t>
+
+<section title="Gathering of Candidates">
+
+<t>
+This phase of operation involves the gathering of candidates by the
+agent. Any using protocol will need to perform this step. The
+specification for the using protocol should point to Section 4.1 of
+ICE, and dictate that the procedures there be followed. However,
+there are several aspects of the gathering operation which are subject
+to considerations by the using protocol, and the using protocol should
+provide additional guidance on whether any of these behaviors change
+or not. 
+</t>
+
+
+<section title="Candidate types">
+
+<t>
+ICE allows an agent, as a matter of policy, to gather candidates of a
+particular type - host, server reflexive, and relayed. Consequently, a
+using protocol needs to define whether its agents will support all
+three, or just a subset. ICE recommends strongly that all three types
+be gathered and supported. This is because reliability of connection
+establishment cannot be provided unless all three mechanisms are
+implemented. Using protocols should only utilize a subset if their
+deployment topologies are limited to cases where one of the agents
+will always be behind NATs with endpoint independent mapping
+properties. 
+</t>
+
+</section>
+
+<section title="Pacing">
+
+<t>
+ICE defines a pacing algorithm for rate limiting the traffic it
+generates during the gathering phase. When used in conjunction with
+the parameter computations in Section 16.2, those algorithms are
+applicable to any protocol. However, they may be overly conservative
+for certain applications. Consequently, using protocols can define
+alternative mechanisms for pacing ICE. 
+</t>
+
+<t>
+However, using protocols should be aware that there are two issues
+that drove the design of the pacing. One of them is network congestion
+control. The using protocol has to ensure that its pacing remains TCP
+friendly whenever possible. The second issue is NAT overload. Testing
+of NAT devices at the time of writing showed that some of them went
+into an 'overload' mode when too many mappings were created within a
+short interval of time. Keeping the creation of new mappings to a rate
+less than one every 50ms seemed to address this problem. Using
+protocols should follow a similar design goal.
+</t>
+
+</section>
+
+<section title="Number and Discovery of Servers">
+
+<t>
+ICE only defines operations for a single STUN server
+<xref target="I-D.ietf-behave-rfc3489bis"/>, or for a single TURN
+server <xref target="I-D.ietf-behave-turn"/>. It does not consider
+cases where there are multiple STUN and/or multiple TURN servers used
+by the agent. However, this is an omission for the sake of
+simplicity. If a using protocol has a need to highly optimize the
+connection paths in multi-layer natting environments, multiple STUN
+servers - ideally one behind each NAT - can provide an optimal path. A
+using protocol can elect to specify that multiple STUN servers be used
+in these cases.
+</t>
+
+<t>
+Of course, the using protocol will need to specify how a client
+discovers or is configured with those additional STUN servers. The
+usage of multiple STUN servers affects pacing; the overall rate of
+candidate gathering across all servers needs to be congestion
+controlled and stay below the rate of a new allocation every 50ms.
+</t>
+
+</section>
+
+<section title="Other Protocols">
+
+<t>
+It is possible that the using protocol can define or utilize other
+mechanisms for gathering candidates. For example, a mechanism may be
+built into the rendezvous protocol itself. Indeed, this is the primary
+reason for using something besides STUN and TURN. If a using protocol
+is not building such functionality into the rendezvous server itself,
+it is highly recommended that it reuse the STUN and TURN protocols.
+</t>
+
+<t>
+The primary reason for this is that it allows a domain to deploy STUN
+and TURN servers just once, and then reuse them for multiple protocols
+that require NAT traversal functionality. This reuse is highly
+desirable, and would likely outweigh any minor protocol improvements
+that could come from 'rolling your own' mechanism for gathering
+candidates. This is why an exception is called out for building the
+gathering protocol into the rendezvous server itself; that server
+needs to be deployed anyway.
+</t>
+
+<t>
+However, there are pitfalls to building a candidate gathering
+mechanism into the rendezvous protocol and server. In particular,
+obtaining relayed candidates from a rendezvous protocol can be
+problematic. TURN servers are ideally deployed throughout the network,
+in points that are topologically close to clients. Since the whole
+purpose of ICE is to allow two clients to connect directly to each
+other without sending data through the rendezvous server, building
+TURN-like functionality into the rendezvous server defeats much of the
+purpose of ICE itself. Such a move only makes sense if it is believed
+that, for the using protocol, the likelihood of usage of relayed
+candidates is particularly low.
+</t>
+
+</section>
+
+<section title="Prioritization">
+
+<t>
+ICE allows the prioritization of candidates to be a matter of local
+policy. Using protocols may define their own policy for how candidates
+are prioritized. However, protocols absolutely must utilize the same
+range of priority values (0 to 2^32 - 1), and must use the concepts of
+foundations and bases, along with the procedures for eliminating
+redundant candidates. Utilizing those ensures that ICE can be
+interoperated easily between different using protocols with only a
+gateway function on the signaling, not the media.
+</t>
+
+</section>
+
+<section title="Default Candidates">
+
+<t>
+The concept of default candidates is primarily to support backwards
+compatibility, and may not be required for a using protocol. Firstly,
+if a using protocol is being defined for the first time, and ICE is
+being used as a mandatory-to-implement part of the protocol, then
+clearly there are no backwards compatibility issues, and the default
+candidate mechanism is not needed.
+</t>
+
+<t>
+Even in cases where there are older, non-ICE implementations, there
+are several basic mechanisms that can be used to deal with it:
+</t>
+
+<t><list style="hanging">
+<t hangText="Capability Query:"> An ICE-compliant agent can query the
+  target agent, prior to an ICE exchange, to determine if they support
+  ICE. If they do, the agent proceeds with the ICE exchange,
+  otherwise, they do not. If a using protocol utilizes this basic
+  technique, the default candidate mechanism is not needed. </t>
+
+<t hangText="Fail-and-Retry:"> An ICE-compliant agent sends an initial
+  message with ICE parameters, along with some kind of flag which
+  tells the recipient to reject the message if it doesn't support
+  ICE. If such a rejection is received, the agent retries without
+  ICE. If a using protocol utilizes this technique, the default
+  candidate mechanism is not needed. </t>
+
+<t hangText="Fallback:"> An ICE-compliant agent sends an initial
+  message with ICE parameters, but they are encoded in such a way that
+  they will be ignored by a non-ICE implementation. If a non-ICE
+  implementation receives them, it sends back an answer without ICE,
+  and the offerer notices this and proceeds without ICE. This
+  technique requires the default candidate mechanism defined by ICE.
+</t>
+
+</list></t>
+
+<t>
+Of these three approaches, the first two require potentially two round
+trips to setup a session, whereas the third can do it in a single
+round trip regardless of the capabilities of the other agent. 
+When latency for establishment is an important concern, the fallback
+approach is preferable.
+</t>
+
+</section>
+
+<!-- end gathering -->
+</section>
+
+<section title="Initial Exchange of Candidates">
+
+<t>
+ICE specifies the usage of the offer/answer protocol and the Session
+Description Protocol for exchanging ICE parameters. This mechanism is
+clearly ICE specific, and the using protocol should define something
+appropriate. However, in all cases, the protocol exchange has to allow
+for a two-phase exchange where one side offers ICE information to the
+other, and the other offers ICE information back in response. Though
+it is possible for protocols to utilize mechanism other than a
+two-phase exchange, this is not recommended, since it significantly
+complicates the construction of gateways between protocols that
+utilize ICE.
+</t>
+
+<section title="ICE Mismatch">
+
+<t>
+The ICE mismatch feature is very specific to SIP. It is a consequence
+of the existence of intermediaries which routinely modify the media
+destination in the SDP, but are not ICE aware and will just ignore
+(and pass on) any ICE attributes that are present. The ICE mismatch
+mechanism detects these cases and falls back to non-ICE operation.
+</t>
+
+<t>
+A using protocol should only utilize this mechanism if it happens to
+have similar deployment constraints.
+</t>
+
+</section>
+
+<section title="Parameter Encoding">
+
+<t>
+The syntax for the messages is entirely a matter of convenience for
+the using protocol. However, the following parameters and their data
+types needs to be conveyed in the initial exchange:
+</t>
+
+<t><list style="hanging">
+
+<t hangText="Candidate attribute"> There will be one or more of these
+  for each "media stream". Each candidate is composed of:
+<list style="hanging">
+   <t hangText="Foundation:"> A sequence of up to 32 characters.</t>
+   <t hangText="Component-ID:"> This would be present only if the using
+   protocol were utilizing the concept of components. If it is, it
+   would be a positive integer that indicates the component ID for
+   which this is a candidate. </t>
+   <t hangText="Transport:"> An indicator of the transport protocol
+   for this candidate. This need not be present if the using protocol
+   will only ever run over a single transport protocol. If it runs
+   over more than one, or if others are anticipated to be used in the
+   future, this should be present. </t>
+   <t hangText="Priority:"> An encoding of the 32 bit priority
+   value. </t>
+   <t hangText="Candidate Type:"> The candidate type, as defined in
+   ICE. </t>
+   <t hangText="Related Address and Port:"> The related IP address and
+   port for this candidate, as defined by ICE. </t>
+   <t hangText="Extensibility Parameters:"> The using protocol should
+   define some means for adding new per-candidate ICE parameters in
+   the future. </t>
+</list></t>
+
+<t hangText="Lite Flag:"> If ICE lite is used by the using protocol,
+  it needs to convey a boolean parameter which indicates whether the
+  implementation is lite or not. </t>
+
+<t hangText="Ufrag and Password:"> The using protocol has to convey a
+  username fragment and password. It must allow up to 256 characters
+  for the ufrag and 256 for the password. </t>
+
+<t hangText="ICE extensions:"> In addition to the per-candidate
+  extensions above, the using protocol should allow for new
+  media-stream or session-level attributes. 
+</t>
+
+</list></t>
+
+<t>
+If the using protocol is using the ICE mismatch feature, a way is
+needed to convey this parameter in answers. If is a boolean flag.
+</t>
+
+<t>
+The exchange of parameters is symmetric; both agents need to send the
+same set of attributes as defined above.
+</t>
+
+<t>
+The using protocol may (or may not) need to deal with backwards
+compatibility with older implementations that do not support
+ICE. If the fallback mechanism is being used, then presumably the
+using protocol already provides a way of conveying the default
+candidate (its IP address and port) in addition to the ICE
+parameters. 
+</t>
+
+</section>
+
+<section title="Role Determination">
+
+<t>
+The role determination mechanism must be used by the using
+protocol. However, the conflict resolution algorithm in Section 5.2 of
+ICE is almost entirely an artifact of the fact that SIP separates its
+signaling exchange from the offer/answer exchange. In using protocols that
+lack this separation, the conflict resolution algorithm itself will
+never get used. 
+</t>
+
+</section>
+
+<!-- end signaling exchange -->
+</section>
+
+<section title="Connectivity Checks">
+
+<t>
+The core of the ICE algorithm is the connectivity checks. After both
+sides have gathered candidates and have exchanged them with each
+other, the check process begins. Here, it is very important that the
+using protocol simply follow the mechanisms already defined by
+ICE. Implementations should directly utilize the functionality defined
+in Section 5.7 to compute pairs and priorities, prune, form the check
+lists, and compute states. If a using protocol has elected not to use
+the concepts of multiple components or multiple streams, these
+algorithms simplify. However, the using protocol must not specify a
+different algorithm; it can only reuse what is there and constrain its
+behavior by mandating constrained inputs (only one component, or only
+one media stream).
+</t>
+
+<t>
+The actual connectivity checks themselves must also be performed
+exactly as defined in Section 7 of ICE. The using protocol should just
+reference that section directly. Note that, even if a using protocol
+does not need to use the role conflict detection mechanism, it must
+include the ICE-CONTOLLED and ICE-CONTROLLING attributes in its
+connectivity checks as described in Section 7 of ICE. This ensures
+that it is possible to easily build gateways between different
+protocols using ICE.
+</t>
+
+
+<section title="Scheduling Checks">
+
+<t>
+The primary area where using protocols can alter the behavior defined
+in ICE is in the area of pacing. The using protocol can define
+different mechanisms for computing Ta and RTO, and may even define a
+different mechanism entirely for interleaving scheduled and triggered
+checks.
+</t>
+
+<t>
+As with the pacing of candidate gathering, the pacing of connectivity
+checks needs to take congestion control and NAT overload into
+consideration. 
+</t>
+
+</section>
+
+<!-- end connectivity checks -->
+</section>
+
+
+<section title="Conclusion of ICE">
+
+<t>
+The procedures for concluding ICE as defined in Section 8 should be
+used as defined for the using protocol, with only a few areas of
+flexibility. 
+</t>
+
+<section title="Regular vs. Aggressive Nomination">
+
+<t>
+The primary area of
+flexibility is around regular vs. aggressive nomination. A using
+protocol can mandate that all implementations use one or the other or
+allow for both. The considerations for this choice are identical for
+the using protocol as they are for ICE in general. Aggressive
+nomination is faster but can introduce glitches; regular nomination is
+slower but is more stable. Regular nomination is recommended if at all
+possible. 
+</t>
+
+</section>
+
+<section title="Updated Signaling and Remote Candidates">
+
+<t>
+ICE defines conditions on which an updated offer is required to be
+sent after ICE concludes - namely, if the candidates selected by ICE
+are not a match for the default candidates, an updated exchange is
+sent. 
+</t>
+
+<t>
+This function of ICE is primarily an artifact of the realities of SIP
+deployments. It is not at all needed for correctness of ICE
+operation. In the case of SIP, signaling intermediaries that are
+inspecting the offer/answer exchanges, but are not ICE aware, will be
+confused unless there is an updated exchange. This same consideration
+applies to using protocols. If the using protocol has deployments with
+intermediaries that inspect messages, and will be confused if the
+actual connections/media are established to something different than
+any defaults that were signaled, the updated exchange should be
+used. If not, it can be avoided.
+</t>
+
+<t>
+If it is used, the remote-candidates attribute has to be conveyed in
+the updated offer, and the agents need to implement the algorithms
+described in Section 9 of ICE for setting the answer based on this
+attribute. Furthermore, the signaling protocols require a way to
+encode it.
+</t>
+
+</section>
+
+<!-- concluding ICE -->
+</section>
+
+<section title="Subsequent Signaling">
+
+<t>
+ICE defines procedures for performing subequent offer/answer exchanges
+that have an affect of updating the state of ICE. Support for
+subsequent exchanges is needed if the using protocol requires any of
+the following capabilities:
+</t>
+
+<t><list style="symbols">
+<t>The ability to add a new candidate to a set while ICE is already in
+  progress, without abandoning the progress so far. </t>
+
+<t>The ability to add a new media stream, or remove a new media
+  stream, without redoing ICE processing for all of the media
+  streams. </t>
+
+<t>The ability to change the IP address or port for a media stream,
+  but to do so with a "make before break" property - so that the new
+  destination begins to be used only once checks for the new
+  destination have completed. 
+</t>
+</list></t>
+
+<t>
+If any of these properties are important, ICE's capabilites for
+subsequent signaling should be utilized. 
+</t>
+
+<t>
+One use case where these functions are not needed is when the using
+protocol fundamentally doesn't allow any kind of updating of
+connection addresses. If it requires the previous connection to be
+closed, and a new one to be opened starting from scratch, ICE's
+subsequent signaling feature is not needed.
+</t>
+
+<t>
+If subsequent signaling is used, ICE restarts must be supported. 
+</t>
+
+<!-- subsequent signaling -->
+</section>
+
+<section title="Media and Keepalives">
+
+<t>
+The keepalive procedures in Section 10 must be used as defined. The
+media handling rules in Section 11 apply as well, with the exception
+of the RTP-specific guidelines.
+</t>
+
+<!-- end media and keepalives -->
+</section>
+
+<!-- end Functions -->
+</section>
+
+<section title="Security Considerations">
+
+<t>
+Several ICE features exist to provide security, including the message
+integrity mechanism. Using protocols must use these in the same way
+ICE does.
+</t>
+
+<t>
+The guidelines defined here do allow a using protocol to support the
+ICE lite mode of operation. The lite mode is less secure than full
+mode, as it allows an implementation to be used as a source of DoS
+traffic. For this reason, using protocols must address, in their
+security considerations, why they have elected to allow the lite
+implementation in cases where it is being supported.
+</t>
+
+</section>
+
+<section title="IANA Considerations">
+
+<t>
+There are no IANA considerations associated with this specification.
+</t>
+
+</section>
+
+</middle>
+
+<back>
+
+<references title="Informative References">
+<?rfc include="reference.I-D.ietf-mmusic-ice"?>
+<?rfc include="reference.RFC.3264"?>
+<?rfc include="reference.RFC.4566"?>
+<?rfc include="reference.RFC.3261"?>
+<?rfc include="reference.I-D.bryan-p2psip-reload"?>
+<?rfc include="reference.I-D.manyfolks-hip-sturn"?>
+<?rfc include="reference.I-D.tschofenig-mip6-ice"?>
+<?rfc include="reference.I-D.ietf-behave-rfc3489bis"?>
+<?rfc include="reference.I-D.ietf-behave-turn"?>
+</references>
+
+</back>
+</rfc>
+
+
+

@@ -1,0 +1,478 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<!-- $Id: draft-ietf-p2psip-base.xml 3227 2008-10-27 20:19:20Z lowekamp $ -->
+<?xml-stylesheet type="text/xsl" href="rfc2629.xslt" ?>
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="no" ?>
+<?rfc compact="yes" ?>
+<?rfc sortrefs="no" ?>
+<?rfc colonspace="yes" ?>
+<?rfc rfcedstyle="no" ?>
+<!-- Don't change this. It breaks stuff -->
+<?rfc tocdepth="4"?>
+<rfc category="std" docName="draft-lowekamp-p2psip-nodefetch-00"
+     ipr="full3978">
+  <front>
+    <title abbrev="RELOAD NodeFetch">RELOAD Node Operations Proposal</title>
+
+    <author fullname="Bruce B. Lowekamp" initials="B. B." surname="Lowekamp">
+      <organization>SIPeerior Technologies</organization>
+
+      <address>
+        <postal>
+          <street>5251-18 John Tyler Highway #330</street>
+
+          <city>Williamsburg</city>
+
+          <region>VA</region>
+
+          <code>23185</code>
+
+          <country>USA</country>
+        </postal>
+
+        <email>bbl@lowekamp.net</email>
+      </address>
+    </author>
+
+    <date day="27" month="October" year="2008" />
+
+    <area>RAI</area>
+
+    <workgroup>P2PSIP</workgroup>
+
+    <abstract>
+      <t>This document defines a set of methods for Node-specific
+        operations as part of the REsource LOcation And Discovery
+        (RELOAD) protocol.  This document defines NodeFetch,
+        NodeStore, and NodeRemove methods that allows manipuation of
+        Node specific usage data. These methods will be useful for
+        multiple diagnostic, administrative, and discovery usages.
+        Because of their usefulness for a variety of expected usages,
+        these methods are advanced for inclusion in the base RELOAD
+        protocol.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>
+        The base RELOAD protocol <xref target="I-D.ietf-p2psip-base"/>
+        defines Fetch, Store, and Remove operations that operate on
+        resources identified by Resource-ID.  However, there are a
+        number of other operations, including diagnostic usages
+        proposed in the base RELOAD draft and
+        <xref target="I-D.zheng-p2psip-diagnose"/> that require the
+        ability to query for information particular to a specific
+        peer, rather than for information stored indexed by
+        Resource-ID.  Such queries may be sent to either a
+        previously-known Node-ID or to the peer responsible for a
+        particular Resource-ID.  The NodeFetch, NodeStore, and
+        NodeRemove operations described here are intended to support
+        these operations.
+      </t>
+    </section>
+
+    <section anchor="sec-term" title="Terminology">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119">RFC 2119</xref>.</t>
+    </section>
+    
+    <section title="Motivation">
+      <t>
+        A variety of scenarios motivate the need for node-specific
+        operations:
+        <list style="hanging">
+          <t hangText="Diagnostics">
+            Diagnostics have been proposed in
+            <xref target="I-D.ietf-p2psip-base"/> and
+            <xref target="I-D.zheng-p2psip-diagnose"/>.  The breadth of
+            diagnostics proposed, and the needs of the wide variety of
+            deployment scenarios envisioned for P2PSIP
+            <xref target="I-D.ietf-p2psip-concepts"/> seems to imply
+            that there will be multiple diagnostic usages described in
+            different drafts.  Therefore, it seems desireable to propose
+            a common set of methods in the base draft that all
+            diagnostic usages can reference.
+          </t>
+          
+          <t hangText="Administration"> 
+            There is a spectrum of operations that range from
+            diagnostic to administrative control over nodes.  While
+            some application scenarios imply little central control,
+            others assume the existence of an authorized administrator
+            to control nodes in the overlay
+            <xref target="I-D.ietf-p2psip-concepts"/>.  Providing
+            these methods will allow future usages to rely on the same
+            fundamental methods already required for diagnostic
+            purposes.
+          </t>
+
+          <t hangText="Discovery & Placement">
+            P2P applications frequently require some form of service
+            discovery.  Equally important as service discovery is
+            service placement.  While some algorithms for performing
+            such operations store location data indexed by Resource-ID
+            <xref target="opendht-sigcomm05"/>, others rely on the
+            ability to send Fetch or Store operations to a peer
+            responsible for a particular Resource-ID (an operation not
+            supported by the current Store and Fetch)
+            <xref target="placement-iptps05"/>.
+          </t>
+        </list>
+      </t>
+    </section>
+
+    <section title="Need for New Methods">
+      <t>One possibility is to extend the existing Fetch/Store/Remove
+      operations to support per-node behavior.  A variety of
+      possibilities exist: allowing usages to specify whether each
+      kind refers to node-specific or Resource-ID indexed objects,
+      adding a flag to the request structures indicating that the
+      request is node-specific, or reserving a portion of the
+      kind-space to identify node-specific operations.
+      Unfortunately, each of these proposals adds complexity to the
+      existing protocol encoding or assumes a particular architecture
+      where the storage component does not make decisions without
+      interaction with a usage module.</t>
+
+      <t>A particular challenge in providing node-specific operations
+        is routing a node-specific request to the peer responsible for
+        a particular Resource-ID.  While some node-specific requests
+        are routed to a known Node-ID, others will be routed simply to
+        a Resource-ID and will therefore have no encoding of the
+        Node-ID of the node being queried in the message.  Therefore,
+        a node cannot examind the FetchReq, for example, to see if the
+        queried resource matches its Node-ID, and thus deduce the
+        request is for node-specific information.</t>
+
+      <t>One possibility for providing operations that refer to
+      node-specific data on a peer responsible for a given Resource-ID
+      is to perform two separate operations, a Probe followed by a
+      node-specific Fetch to a particular Node-ID.  However, this
+      two-phase approach may fail in diagnostic situations where the
+      overlay is unstable---if these methods are being used to
+      determine the reasons for the instability, it is likely to be
+      far more useful to have an atomic NodeFetch that returns the
+      diagnostic information on the node that is reached by the first
+      query rather than assuming that consecutive queries will reach
+      the same node.
+      </t>
+        
+      <t>Therefore, to reduce the complexity of supporting
+      node-specific operations, a new set of methods are proposed that
+      are exclusively for node-specific operations.  A node receiving
+      such a method will always know to process it in the appropriate
+      manner, regardless of its particular implementation.
+      Furthermore, although the methods are different, most of the
+      message structure is shared with the base Fetch/Store/Remove
+        operations, thus minimizing additional implementation
+      complexity.</t>
+    </section>
+
+    <section title="New Methods">
+
+      <t>NodeFetch is required for all proposed usage scenarios.
+        NodeStore and NodeRemove are required for the administrative and
+        discovery/placement usage scenarios.</t>
+
+        <t>The bodies of each of the messages are essentially
+          identical to their Resource-ID counterparts, except for the
+          lack of encoded ResourceId's in the objects.</t>
+
+      <section title="NodeFetch">
+        <section title="Request Definition">
+          <figure>
+            <!--begin-pdu-->
+            <artwork><![CDATA[
+      struct {
+        StoredDataSpecifier     specifiers<0..2^16-1>;
+      } NodeFetchReq;
+       ]]>
+	    </artwork>
+	  </figure>
+        </section>
+        <section title="Response Definition">
+          <figure>
+            <!--begin-pdu-->
+            <artwork><![CDATA[
+       struct {
+         FetchKindResponse      kind_responses<0..2^32-1>;
+       } NodeFetchAns;
+       ]]>
+	    </artwork>
+	  </figure>
+        </section>
+      </section>
+
+      <section title="NodeStore">
+        <section title="Request Definition">
+          <figure>
+            <!--begin-pdu-->
+            <artwork><![CDATA[
+     struct {
+         StoreKindData          kind_data<0..2^32-1>;
+     } NodeStoreReq;
+       ]]>
+
+	    </artwork>
+	  </figure>
+        </section>
+        <section title="Response Definition">
+          <figure>
+            <!--begin-pdu-->
+            <artwork><![CDATA[
+      struct {
+        KindId                  kind;
+        uint64                  generation_counter;
+      } NoteStoreKindResponse;
+
+
+      struct {
+        NodeStoreKindResponse   kind_responses<0..2^16-1>;
+      } StoreAns;
+      ]]>
+	    </artwork>      
+	  </figure>
+        </section>
+
+      </section>
+      <section title="NodeRemove">
+        <section title="Request Definition">
+          <figure>
+            <!--begin-pdu-->
+            <artwork><![CDATA[
+      struct {
+        StoredDataSpecifier     specifiers<0..2^16-1>;
+      } NodeRemoveReq;
+       ]]>
+
+	    </artwork>
+	  </figure>
+        </section>
+        <section title="Response Definition">
+          <figure>
+            <!--begin-pdu-->
+            <artwork><![CDATA[
+      struct {
+        NoteStoreKindResponse   kind_responses<0..2^16-1>;
+      } RemoveAns;
+      ]]>
+	    </artwork>
+	  </figure>
+        </section>
+      </section>
+    </section>
+
+    <section title="Security">
+      <t>There are inherent security risks in disclosing operational
+      data through a Diagnostic fetch, and additional risks in
+      allowing remote administration of a node.  Usages relying on
+      these methods will need to identify the risks involve and
+      specify appropriate authorization mechanisms (presumably based
+      on the certificate model used for identification and
+      authorization in RELOAD) for ensuring that such operations are
+      performed only by authorized entities.</t>
+    </section>
+
+    <section title="IANA Considerations">
+      <t>This section contains the new code points registered by this
+      document. [NOTE TO IANA/RFC-EDITOR: Please replace RFC-AAAA with the RFC
+      number for this specification in the following list.]</t>
+
+      <section title="Message Codes">
+        <t>IANA SHALL add the follwoing to the a"RELOAD Message Code"
+        Registry:</t>
+
+        <t></t>
+
+        <texttable>
+          <ttcol align="left">Message Code Name</ttcol>
+
+          <ttcol align="right">Code Value</ttcol>
+
+          <ttcol align="right">RFC</ttcol>
+
+          <c>node_store_req</c>
+
+          <c>29</c>
+
+          <c>RFC-AAAA</c>
+
+          <c>node_store_ans</c>
+
+          <c>30</c>
+
+          <c>RFC-AAAA</c>
+
+          <c>node_fetch_req</c>
+
+          <c>31</c>
+
+          <c>RFC-AAAA</c>
+
+          <c>node_fetch_ans</c>
+
+          <c>32</c>
+
+          <c>RFC-AAAA</c>
+
+          <c>node_remove_req</c>
+
+          <c>33</c>
+
+          <c>RFC-AAAA</c>
+
+          <c>node_remove_ans</c>
+
+          <c>34</c>
+
+          <c>RFC-AAAA</c>
+        </texttable>
+      </section>
+    </section>
+
+    <section title="Acknowledgments">
+      <t>This proposal has evolved from discussions with Cullen
+      Jennings, Eric Rescorla, Song Haibin, Jiang Xingfeng, and David
+      Bryan.  Eric Rescorla wrote the message PDUs. </t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.RFC.2119"?>
+
+      <reference anchor="I-D.ietf-p2psip-base">
+        <front>
+          <title abbrev="RELOAD Base">REsource LOcation And Discovery (RELOAD) Base
+    Protocol</title>
+
+          <author fullname="Cullen Jennings" initials="C" surname="Jennings">
+            <organization></organization>
+          </author>
+
+          <author fullname="Bruce Lowekamp" initials="B" surname="Lowekamp">
+            <organization></organization>
+          </author>
+
+          <author fullname="Eric Rescorla" initials="E" surname="Rescorla">
+            <organization></organization>
+          </author>
+
+          <author fullname="Salman Baset" initials="S" surname="Baset">
+            <organization></organization>
+          </author>
+
+          <author fullname="Henning Schulzrinne" initials="H"
+                  surname="Schulzrinne">
+            <organization></organization>
+          </author>
+
+          <date day="27" month="October" year="2008" />
+
+          <abstract>
+            <t>This document defines REsource LOcation And Discovery (RELOAD),
+            a peer-to-peer (P2P) signaling protocol for use on the Internet. A
+            P2P signaling protocol provides its clients with an abstract
+            storage and messaging service between a set of cooperating peers
+            that form the overlay network. RELOAD is designed to support a P2P
+            Session Initiation Protocol (P2PSIP) network, but can be utilized
+            by other applications with similar requirements by defining new
+            usages that specify the kinds of data that must be stored for a
+            particular application. RELOAD defines a security model based on a
+            certificate enrollment service that provides unique identities.
+            NAT traversal is a fundamental service of the protocol. RELOAD
+            also allows access from "client" nodes which do not need to route
+            traffic or store data for others.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="Internet-Draft" value="draft-ietf-p2psip-base-00" />
+
+        <format target="http://www.ietf.org/internet-drafts/draft-ietf-p2psip-base-00.txt"
+                type="TXT" />
+      </reference>
+
+    </references>
+
+    <references title="Informative References">
+      <?rfc include="reference.I-D.ietf-p2psip-concepts"?>
+
+      <?rfc include="reference.I-D.zheng-p2psip-diagnose"?>
+
+      <reference anchor="opendht-sigcomm05">
+        <front>
+          <title>OpenDHT: A Public DHT and its Uses</title>
+
+          <author initials="S." surname="Rhea">
+            <organization />
+          </author>
+
+          <author initials="B." surname="Godfrey">
+            <organization />
+          </author>
+
+          <author initials="B." surname="Karp">
+            <organization />
+          </author>
+
+          <author initials="J." surname="Kubiatowicz">
+            <organization />
+          </author>
+
+          <author initials="S." surname="Ratnasamy">
+            <organization />
+          </author>
+
+          <author initials="S." surname="Shenker">
+            <organization />
+          </author>
+
+          <author initials="I." surname="Stoica">
+            <organization />
+          </author>
+
+          <author initials="H." surname="Yu">
+            <organization />
+          </author>
+        </front>
+
+        <seriesInfo name="" value="SIGCOMM'05" />
+      </reference>
+
+      <reference anchor="placement-iptps05">
+        <front>
+          <title>Evaluating DHT-Based Service Placement for
+          Stream-Based Overlays</title>
+
+          <author initials="P" surname="Pietzuch">
+            <organization />
+          </author>
+          <author initials="J" surname="Shneidman">
+            <organization />
+          </author>
+          <author initials="J" surname="Ledlie">
+            <organization />
+          </author>
+          <author initials="M" surname="Welsh">
+            <organization />
+          </author>
+          <author initials="M" surname="Seltzer">
+            <organization />
+          </author>
+          <author initials="M" surname="Roussopoulos">
+            <organization />
+          </author>
+        </front>
+
+        <seriesInfo name="" value="IPTPS'05" />
+      </reference>
+
+    </references>
+  </back>
+</rfc>

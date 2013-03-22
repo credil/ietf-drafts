@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc='yes'?>
+<?rfc tocdepth='5'?>
+<?rfc symrefs='yes'?>
+
+<?rfc compact='yes'?>
+<?rfc subcompact='no'?>
+
+<rfc ipr="full3978" category="std">
+
+
+    <front>
+        <title abbrev="ICE Error Code">
+A Session Initiation Protocol (SIP) Response Code for Interactive
+Connectivity Establishment (ICE) Failures</title> 
+    
+        <author initials="J.R." surname="Rosenberg"
+                fullname="Jonathan Rosenberg">
+            <organization>Cisco</organization>
+    
+            <address>
+                <postal>
+                    <city>Edison</city> <region>NJ</region>
+                    <country>US</country>
+                </postal>
+    
+                <phone>+1 973 952-5000</phone>
+                <email>jdrosen@cisco.com</email>
+                <uri>http://www.jdrosen.net</uri>
+            </address>
+        </author>
+    
+        <date month="February" year="2008" />
+    
+        <area>RAI</area>
+        <workgroup>SIP</workgroup>
+        <keyword>SIP</keyword>
+        <keyword>NAT</keyword>
+        <keyword>ICE</keyword>
+        <abstract>
+            <t>Interactive Connectivity Establishment (ICE) defines
+            an extension to the offer/answer model used by the
+            Session Initiation Protocol (SIP). This extension allows
+            endpoints to traverse firewalls and NATs. However, in
+            cases where highly restrictive firewalls exist, or where
+            network failures have occurred, ICE may not be able to
+            successfully find a media path. This document provides an
+            error response code that can be used with SIP in these
+            cases. </t>
+        </abstract>
+    </front>
+
+<middle>
+
+
+<section title="Introduction">
+
+<t>Interactive Connectivity Establishment (ICE)
+<xref target="I-D.ietf-mmusic-ice"/> defines an extension to the
+offer/answer model <xref target="RFC3264"/> used by the 
+Session Initiation Protocol (SIP) <xref target="RFC3261"/>. This
+extension allows endpoints to traverse firewalls and NATs. ICE
+functions by having each endpoint include a set of candidate IP
+addresses and ports in their Session Description Protocol (SDP)
+<xref target="RFC4566"/> messages. Once the candidates have been
+exchanged in the offer/answer procedures, each endpoint begins a set
+of connectivity checks. These connectivity checks are end-to-end
+"pings" utilizing the Session Traversal Utilities for NAT (STUN)
+Protocol <xref target="I-D.ietf-behave-rfc3489bis"/>. 
+</t>
+
+<t>
+Once connectivity checks succeed, the associated candidates can be
+used for the exchange of media. Very frequently, a particular
+connectivity check will fail (usually through timeout). This happens
+when the candidate is not reachable by the peer (as is the case with
+private addresses), or a NAT or firewall prevents the peer from
+reaching the candidate. In such cases, lower priority connectivity
+checks, typically through a relay server, will succeed, allowing media
+to flow.
+</t>
+
+<t>
+However, in even more severe environments, none of the connectivity
+checks will succeed. Some of the cases where this can happen include:
+<list style="symbols">
+<t>One of the users is behind a firewall that blocks all UDP traffic,
+  and the users are not utilizing the ICE extensions for TCP
+  <xref target="I-D.ietf-mmusic-ice-tcp"/> which would allow the RTP
+  traffic to flow over TCP.
+</t>
+<t>
+  There is a firewall that is allowing UDP, but only to specific IP
+  addresses or ports (such as DNS), and the media ports are not
+  open. In addition, ICE-tcp is not being utilized.
+</t>
+<t>
+  There has been a network failure, such that each party can reach the
+  SIP server, but there is no IP path directly between the endpoints.
+</t>
+<t>
+  There is severe network congestion, resulting in high packet loss
+  through the duration of the connectivity checks. Consequently, all
+  of the STUN requests or responses were dropped, and all checks timed
+  out. 
+</t>
+</list>
+In such cases, ICE recommends that the controlling agent terminates
+the session. This can be done by sending a BYE, CANCELing the session,
+or rejecting it with any error response code. 
+</t>
+
+<t>
+However, it is extremely useful for diagnostic purposes to be able to
+know that the reason for the termination of the session was that ICE
+failed. SIP providers could use this information to track overall ICE
+effectiveness, and to perform off-line diagnostics for those cases to
+determine why ICE did not succeed. Endpoints could use this information
+to inform the user that the call failed due to network error
+conditions, which would allow the user to retry later, open a customer
+support case, or other appropriate action.
+</t>
+
+<t>
+To meet this need, this specification defines a new SIP error
+response code, 562 (Connectivity Checks Failed). This can be used in
+SIP responses or within the Reason header field
+<xref target="RFC3326"/> of CANCEL or BYE
+requests, depending on when in the dialog the ICE checks fail. 
+</t>
+
+</section>
+
+<section title="Terminology">
+
+<t> The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in
+this document are to be interpreted as described in <xref
+target="RFC2119">RFC 2119</xref>.  </t>
+
+</section>
+
+
+<section title="UAC Behavior">
+
+<t>
+If the User Agent Client (UAC) is acting as the controlling agent in
+an ICE session, and according to the rules in Section 8.1.2 of
+<xref target="I-D.ietf-mmusic-ice"/>, the state of all check lists is
+Failed, the agent is supposed to terminate the session. If the state
+of the SIP dialog is early, the agent SHOULD send a CANCEL request,
+and it SHOULD include a Reason header field with the protocol of "SIP"
+and a cause of 562. If the state of the SIP dialog is confirmed, the
+UAC SHOULD send a BYE request, and it SHOULD include a Reason header
+field with the protocol of "SIP" and a cause of 562.
+</t>
+
+<t>
+If the UAC receives a response to its initial INVITE with a response
+code of 562 (Connectivity Checks Failed), it MAY inform the user that
+the session has failed due to IP network connectivity problems. Beyond
+that, the 562 response code is treated like a 500 response. The UAC
+can retry its request at a later time. 
+</t>
+
+</section>
+
+<section title="UAS Behavior">
+
+<t>
+If the User Agent Server (UAS) is acting as the controlling agent in
+an ICE session, and according to the rules in Section 8.1.2 of
+<xref target="I-D.ietf-mmusic-ice"/>, the state of all check lists is
+Failed, the agent is supposed to terminate the session. If the state
+of the SIP dialog is early, the agent SHOULD send a 562 (Connectivity
+Checks Failed) response to the outstanding INVITE request that
+initiated the session. It SHOULD NOT include a Retry-After header
+field in the response. There is not normally any way for a UAS to know
+when a future attempt might succeed.
+</t>
+
+</section>
+
+<section title="Proxy Behavior">
+
+<t>
+A proxy receiving a 562 (Connectivity Checks Failed) response code to
+an initial INVITE request MAY retry the request on an alternate
+destination. However, it is RECOMMENDED that it do this only if it has
+knowledge or reason to believe that the alternate destination is more
+likely to successfully complete a connectivity check with the
+UAC. Deployers should also keep in mind that the 562 will only be sent
+after all of the checks have failed, and thus will arrive some time
+after the original INVITE. There will seldom be time to try several or
+even one additional alternate destinations before the originating
+caller gives up.
+</t>
+
+<t>
+It is RECOMMENDED that proxies which support logging and diagnostic
+facilities make note of the 562 code in responses and in the Reason
+header field of CANCEL and BYE requests, and log them for purposes of
+debugging and tracking the results of ICE deployments.
+</t>
+
+</section>
+
+<section title="562 (Connectivity Checks Failed) Response Code">
+
+<t>
+This response indicates that the INVITE request could not be completed
+because connectivity checks utilizing ICE failed for the session. Its
+default reason phrase is (Connectivity Checks Failed).
+</t>
+
+</section>
+
+<section title="Security Considerations">
+
+<section title="Outside Attacks">
+
+<t>
+A Man-in-the-middle could send this
+response code to prematurely terminate a session before checks
+complete. However, a new response code is not required for that; an
+attacker could use an existing response code. Since, functionally,
+this response code results in the same behavior in a UAC, UAS and
+proxy as any other 5xx response code, the 562 response code does not
+introduce any new considerations for outsider attacks.
+</t>
+
+</section>
+
+<section title="Insider Attacks">
+
+<t>
+A malicious user controlling a UA could send 562 error responses
+prematurely, before ICE actually completes. This would cause the
+session to fail, but that would affect only the attacker. However, if
+the SIP provider is utilizing the 562 error code to track
+deployments of ICE, an attacker could skew the results of the log
+analysis. In a large scale deployment, the attacker would need to
+compromise a large number of endpoints in order to be able to skew
+statistics. However, if the provider initiates diagnostic procedures
+(such as investigation by IT personnel) when logs show a 562, the
+attacker would cause the provider to expend human resources tracking
+down non-existent problems. This is similar to a human sending emails
+to tech support reporting non-existing bugs.
+</t>
+
+<t>
+These attacks cannot be prevented by any cryptographic means. Rather,
+providers should track the relative frequency of 562 codes from
+specific users of the system, and consider them as part of the fraud
+systems typically in place within provider networks. Unusually high
+occurrence of 562 codes, especially when investigations indicated no
+reason for the ICE failures, should be considered suspect. However,
+frequency of 562 responses alone is not sufficient cause for fraud; a
+user may be behind a highly restrictive NAT and therefore all or most
+of their calls may actually be failing.
+</t>
+
+</section>
+
+</section>
+
+<section title="IANA Considerations">
+
+<t>
+This section registers a new SIP response code according to the
+procedures of RFC 3261.
+</t>
+
+<list style="hanging">
+
+<t hangText="RFC Number:"> RFC XXXX [[NOTE TO IANA: Please replace
+XXXX with the RFC number of this specification]]</t>
+
+<t hangText="Response Code Number:">562</t>
+
+<t hangText="Default Reason Phrase:">Connectivity Checks Failed</t>
+
+</list>
+
+</section>
+
+</middle>
+
+<back>
+<references title="Normative References">
+<?rfc include="reference.RFC.3261"?>
+<?rfc include="reference.RFC.2119"?>
+<?rfc include="reference.I-D.ietf-mmusic-ice"?>
+<?rfc include="reference.RFC.3264"?>
+<?rfc include="reference.RFC.4566"?>
+<?rfc include="reference.I-D.ietf-behave-rfc3489bis"?>
+<?rfc include="reference.RFC.3326"?>
+</references>
+
+<references title="Informative References">
+<?rfc include="reference.I-D.ietf-mmusic-ice-tcp"?>
+</references>
+
+</back>
+</rfc>
+
+

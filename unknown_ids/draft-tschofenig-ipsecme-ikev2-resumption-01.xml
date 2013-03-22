@@ -1,0 +1,809 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+    <!ENTITY rfc4086 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4086.xml'>
+    <!ENTITY rfc4301 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4301.xml'>
+    <!ENTITY rfc4306 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4306.xml'>
+    <!ENTITY rfc4718 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4718.xml'>
+    <!ENTITY rfc4478 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4478.xml'>
+    <!ENTITY rfc4507 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4507.xml'>
+    <!ENTITY rfc4555 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4555.xml'>
+      <!ENTITY I-D.rescorla-stateless-tokens PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.rescorla-stateless-tokens.xml'>
+    <!ENTITY draft-vidya-ipsec-failover-ps PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.vidya-ipsec-failover-ps.xml'>
+    <!ENTITY I-D.friedman-ike-short-term-certs PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.friedman-ike-short-term-certs.xml'>
+    <!ENTITY I-D.xu-ike-sa-sync PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.xu-ike-sa-sync.xml'>
+]>
+
+<rfc category="std" ipr="full3978" docName="draft-tschofenig-ipsecme-ikev2-resumption-01.txt">
+
+ <?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+ <?rfc toc="yes" ?>
+ <?rfc symrefs="yes" ?>
+ <?rfc sortrefs="yes"?>
+ <?rfc iprnotified="no" ?>
+ <?rfc strict="yes" ?>
+ <?rfc compact="yes" ?>
+
+ <front>
+  <title abbrev="IKEv2 Session Resumption">IKEv2 Session Resumption</title>
+  <author initials="Y." surname="Sheffer" fullname="Yaron Sheffer">
+   <organization abbrev="Check Point"> Check Point Software Technologies Ltd. </organization>
+   <address>
+        <postal>
+          <street>5 Hasolelim St.</street>
+          <city>Tel Aviv</city>
+          <code>67897</code>
+          <country>Israel</country>
+        </postal>
+        <email>yaronf@checkpoint.com</email>
+      </address>
+  </author>
+  <author initials="H." surname="Tschofenig" fullname="Hannes Tschofenig">
+   <organization>Nokia Siemens Networks</organization>
+   <address>
+    <postal>
+     <street>Linnoitustie 6</street>
+     <city>Espoo</city>
+     <code>02600</code>
+     <country>Finland</country>
+    </postal>
+    <phone>+358 (50) 4871445</phone>
+    <email>Hannes.Tschofenig@gmx.net</email>
+    <uri>http://www.tschofenig.priv.at</uri>
+   </address>
+  </author>
+  <author fullname="Lakshminath Dondeti" initials="L" surname="Dondeti">
+   <organization>QUALCOMM, Inc.</organization>
+   <address> <postal>
+                <street>5775 Morehouse Dr</street>
+                <city>San Diego</city>
+                <region>CA</region>
+                <country>USA</country>
+            </postal>
+                <phone>+1 858-845-1267</phone>
+                <email>ldondeti@qualcomm.com</email>
+            </address>
+  </author>
+  <author fullname="Vidya Narayanan" initials="V" surname="Narayanan">
+   <organization>QUALCOMM, Inc.</organization>
+   <address> <postal>
+                <street>5775 Morehouse Dr</street>
+                <city>San Diego</city>
+                <region>CA</region>
+                <country>USA</country>
+            </postal>
+                <phone>+1 858-845-2483</phone>
+                <email>vidyan@qualcomm.com</email>
+            </address>
+  </author>
+  <date year="2008"/>
+  <abstract>
+   <t> The Internet Key Exchange version 2 (IKEv2) protocol has a certain computational and
+    communication overhead with respect to the number of round-trips required and the cryptographic
+    operations involved. In remote access situations, the Extensible Authentication Protocol (EAP)
+    is used for authentication, which adds several more round trips and consequently latency. </t>
+
+   <t> To re-establish security associations (SA) upon a failure recovery condition is time
+    consuming, especially when an IPsec peer, such as a VPN gateway, needs to re-establish a large
+    number of SAs with various end points. A high number of concurrent sessions might cause
+    additional problems for an IPsec peer during SA re-establishment. </t>
+
+   <t>In order to avoid the need to re-run the key exchange protocol from scratch it would be useful
+    to provide an efficient way to resume an IKE/IPsec session. This document proposes an extension
+    to IKEv2 that allows a client to re-establish an IKE SA with a gateway in a highly efficient
+    manner, utilizing a previously established IKE SA. </t>
+
+   <t> A client can reconnect to a gateway from which it was disconnected. The proposed approach
+    uses a IKEv2 state (or a reference into a state store).
+    to store state information that is later made available to the IKEv2 responder for
+    re-authentication. Restoring state information by utilizing a ticket is one possible way. 
+    This document does not specify the format of the ticket but recommendations are provided.
+   </t>
+  </abstract>
+ </front>
+
+ <middle>
+
+  <!-- ************************************************************************************ -->
+
+  <section title="Introduction">
+
+   <t> The Internet Key Exchange version 2 (IKEv2) protocol has a certain computational and
+    communication overhead with respect to the number of round-trips required and the cryptographic
+    operations involved. In particular the Extensible Authentication Protocol (EAP) is used for
+    authentication in remote access cases, which increases latency. </t>
+
+   <t> To re-establish security associations (SA) upon a failure recovery condition is
+    time-consuming, especially when an IPsec peer, such as a VPN gateway, needs to re-establish a
+    large number of SAs with various end points. A high number of concurrent sessions might cause
+    additional problems for an IPsec responder. </t>
+
+   <t> In many failure cases it would be useful to provide an efficient way to resume an interrupted
+    IKE/IPsec session. This document proposes an extension to IKEv2 that allows a client to
+    re-establish an IKE SA with a gateway in a highly efficient manner, utilizing a previously
+    established IKE SA. </t>
+
+   <t> A client can reconnect to a gateway from which it was disconnected. One way to ensure that
+    the IKEv2 responder is able to recreate the state information is by maintaining IKEv2 state (or a reference into a state store)    
+    in a
+    "ticket", an opaque data structure. This ticket is created by the server and forwarded to the
+    client. The IKEv2 protocol is extended to allow a client to request and
+    present a ticket. </t>
+   <t> This approach is similar to the one taken by TLS session resumption <xref target="RFC4507"/>
+    with the required adaptations for IKEv2, e.g., to accommodate the two-phase protocol structure.
+    We have borrowed heavily from that specification. </t>
+
+   <t> The proposed solution should additionally meet the following goals: </t>
+   <t>
+    <list style="symbols">
+     <t>Using only symmetric cryptography to minimize CPU consumption.</t>
+     <t>Allowing a gateway to push state to clients.</t>
+     <t>Providing cryptographic agility.</t>
+     <t>Having no negative impact on IKEv2 security features. </t>
+    </list>
+   </t>
+   <t> The following are non-goals of this solution: <list style="symbols">
+     <t>Providing load balancing among gateways.</t>
+     <t>Specifying how a client detects the need for a failover.</t>
+    </list>
+   </t>
+
+  </section>
+
+
+  <!-- ************************************************************************************ -->
+
+  <section title="Terminology">
+   <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+    "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in
+     <xref target="RFC2119"/>.</t>
+   <t> This document uses terminology defined in <xref target="RFC4301"/>, <xref target="RFC4306"/>,
+    and <xref target="RFC4555"/>. In addition, this document uses the following terms: </t>
+   <t>
+    <list style="hanging">
+     <t hangText="Ticket:">An IKEv2 ticket is a data structure that contains all the necessary
+      information that allows an IKEv2 responder to 
+      re-establish an IKEv2 security association.<vspace blankLines="1"/></t>
+    </list>
+   </t>
+   <t>
+    In this document we use the term ticket and thereby refer to an opaque data structure that may either contain IKEv2 state as described above or a reference pointing to such state.
+</t>
+  </section>
+
+  <!-- ************************************************************************************ -->
+
+  <section title="Usage Scenario" anchor="usage">
+   <t> This specification envisions two usage scenarios for efficient IKEv2 and IPsec SA session
+    re-establishment. </t>
+   <t>The first is similar to the use case specified in Section 1.1.3 of the IKEv2 specification
+     <xref target="RFC4306"/>, where the IPsec tunnel mode is used to establish a secure channel
+    between a remote access client and a gateway; the traffic flow may be between the client and
+    entities beyond the gateway.</t>
+   <t>The second use case focuses on the usage of transport (or tunnel) mode to secure the
+    communicate between two end points (e.g., two servers). The two endpoints have a client-server
+    relationship with respect to a protocol that runs using the protections afforded by the IPsec
+    SA. </t>
+   <t>
+    <figure title="Resuming a Session with a Remote Access Gateway" anchor="Case1GWfig">
+     <artwork><![CDATA[
+ (a)
+
+ +-+-+-+-+-+                          +-+-+-+-+-+
+ !         !      IKEv2/IKEv2-EAP     !         !     Protected
+ ! Remote  !<------------------------>!         !     Subnet
+ ! Access  !                          ! Access  !<--- and/or
+ ! Client  !<------------------------>! Gateway !     Internet
+ !         !      IPsec tunnel        !         !
+ +-+-+-+-+-+                          +-+-+-+-+-+
+
+
+ (b)
+
+ +-+-+-+-+-+                          +-+-+-+-+-+
+ !         !    IKE_SESSION_RESUME    !         !
+ ! Remote  !<------------------------>!         !
+ ! Access  !                          ! Access  !
+ ! Client  !<------------------------>! Gateway !
+ !         !      IPsec tunnel        !         !
+ +-+-+-+-+-+                          +-+-+-+-+-+
+
+                                 ]]>
+     </artwork>
+    </figure>
+   </t>
+   <t> In this scenario, an end-host (an entity with a host implementation of IPsec <xref
+     target="RFC4301"/> ) establishes a tunnel mode IPsec SA with a gateway in a remote network
+    using IKEv2. The end-host in this scenario is sometimes referred to as a remote access client.
+    At a later stage when a client needs to re-establish the IKEv2 session it may choose to
+    establish IPsec SAs using a full IKEv2 exchange or the IKE_SESSION_RESUME exchange (shown in
+     <xref target="Case1GWfig"/>). </t>
+   <t> In this scenario, the client needs to get an IP address from the remote network so that
+    traffic can be encapsulated by the remote access gateway before reaching the client. In the
+    initial exchange, the gateway may acquire IP addresses from the address pool of a local DHCP
+    server. The session resumption exchange may need to support the assignment of a new IP address. </t>
+   <t> The protocol defined in this document supports the re-allocation of an IP address to the
+    client, if this capability is provided by the network. This capability is implicit in the use of
+    the IKE configuration mechanism, which allows the client to present its existing IP address and
+    receive the same address back, if allowed by the gateway. </t>
+  </section>
+
+  <!-- ************************************************************************************ -->
+
+  <section title="Protocol Details">
+   <t>This section provides protocol details and contains the normative parts. This document defines
+    two protocol exchanges, namely requesting a ticket, see <xref target="request-ticket"/>, and
+    presenting a ticket, see <xref target="present-ticket"/>. </t>
+
+   <section anchor="request-ticket" title="Requesting a Ticket">
+
+    <t> A client MAY request a ticket in the following exchanges: </t>
+    <t>
+     <list style="symbols">
+      <t>In an IKE_AUTH exchange, as shown in the example message exchange in <xref
+        target="request-ticket-example"/> below.</t>
+      <t>In a CREATE_CHILD_SA exchange, when an IKE SA is rekeyed.</t>
+      <t>In an Informational exchange, if the gateway previously replied with an N(TICKET_ACK)
+       instead of providing a ticket.</t>
+      <t>In an Informational exchange, when the ticket lifetime is about to expire.</t>
+      <t>In an IKE_SESSION_RESUME exchange, see <xref target="request-resume"/>.</t>
+     </list>
+    </t>
+
+    <t> Normally, a client requests a ticket in the third message of an IKEv2 exchange (the first of
+     IKE_AUTH). <xref target="request-ticket-example"/> shows the message exchange for this typical
+     case. </t>
+    <t>
+     <figure anchor="request-ticket-example"
+      title="Example Message Exchange for Requesting a Ticket">
+      <artwork>
+       <![CDATA[
+  Initiator                Responder
+  -----------              -----------
+ HDR, SAi1, KEi, Ni  -->
+
+                     <--    HDR, SAr1, KEr, Nr, [CERTREQ]
+
+ HDR, SK {IDi, [CERT,] [CERTREQ,] [IDr,]
+ AUTH, SAi2, TSi, TSr, N(TICKET_REQUEST)}     -->
+]]></artwork>
+     </figure>
+    </t>
+    <t> The notification payloads are described in <xref target="notifications"/>. The above is an
+     example, and IKEv2 allows a number of variants on these messages. A complete description of
+     IKEv2 can be found in <xref target="RFC4718"/>. </t>
+
+    <t>When an IKEv2 responder receives a request for a ticket using the N(TICKET_REQUEST) payload
+     it MUST perform one of the following operations if it supports the extension defined in this
+     document: <list style="symbols">
+
+      <t>it creates a ticket and returns it with the N(TICKET_OPAQUE) payload in a subsequent
+       message towards the IKEv2 initiator. This is shown in <xref target="request-ticket-example2"
+       />.</t>
+      <t>it returns an N(TICKET_NACK) payload, if it refuses to grant a ticket for some reason.</t>
+      <t>it returns an N(TICKET_ACK), if it cannot grant a ticket immediately, e.g., due to packet
+       size limitations. In this case the client MAY request a ticket later using an Informational
+       exchange, at any time during the lifetime of the IKE SA.</t>
+     </list>
+    </t>
+    <t> Provided the IKEv2 exchange was successful, the IKEv2 initiator can accept the requested
+     ticket. The ticket may be used later with an IKEv2 responder that supports this extension.
+      <xref target="request-ticket-example2"/> shows how the initiator receives the ticket. </t>
+    <t>
+     <figure anchor="request-ticket-example2" title="Receiving a Ticket">
+      <artwork>
+       <![CDATA[
+  Initiator                Responder
+  -----------              -----------
+         <--    HDR, SK {IDr, [CERT,] AUTH, SAr2, TSi,
+                     TSr, N(TICKET_OPAQUE) [,N(TICKET_GATEWAY_LIST)]}
+]]>
+      </artwork>
+     </figure>
+    </t>
+   </section>
+
+
+   <section anchor="present-ticket" title="Presenting a Ticket">
+    <t>A client MAY initiate a regular (non-ticket-based) IKEv2 exchange even if it is in possession
+     of a valid ticket. A client MUST NOT present a ticket when it knows that the ticket's lifetime
+     has expired. </t>
+    <t>It is up to the client's local policy to decide when the communication with the IKEv2
+     responder is seen as interrupted and a new exchange needs to be initiated and the session
+     resumption procedure to be initiated.</t>
+    <t>Tickets are intended for one-time use: a client MUST NOT reuse a ticket, either with the same
+     or with a different gateway. A gateway SHOULD reject a reused ticket.</t>
+    <t>This document specifies a new IKEv2 exchange type called IKE_SESSION_RESUME whose value is
+     TBA by IANA. This exchange is somewhat similar to the IKE_AUTH exchange, and results in the
+     creation of a Child SA. The client SHOULD NOT use this exchange type unless it knows that the
+     gateway supports it. </t>
+
+    <t>
+     <figure>
+      <artwork>
+       <![CDATA[
+ Initiator                Responder
+ -----------              -----------
+ HDR, Ni, N(TICKET_OPAQUE), [N+,]
+      SK {IDi, [IDr,] SAi2, TSi, TSr [, CP(CFG_REQUEST)]} -->
+]]></artwork>
+     </figure>
+    </t>
+
+
+    <t>The exchange type in HDR is set to 'IKE_SESSION_RESUME'.</t>
+    <t>See <xref target="protect-resume"/> for details on computing the protected (SK) payload.</t>
+    <t>When the IKEv2 responder receives a ticket using the N(TICKET_OPAQUE) payload it MUST perform
+     one of the following steps if it supports the extension defined in this document: <list
+      style="symbols">
+      <t>If it is willing to accept the ticket, it responds as shown in <xref
+        target="ticket-present-success"/>.</t>
+      <t>It responds with an unprotected N(TICKET_NACK) notification, if it rejects the ticket for
+       any reason. In that case, the initiator should re-initiate a regular IKE exchange. One such
+       case is when the responder receives a ticket for an IKE SA that has previously been
+       terminated on the responder itself, which may indicate inconsistent state between the IKEv2
+       initiator and the responder. However, a responder is not required to maintain the state for
+       terminated sessions.</t>
+      <t>When the responder receives a ticket for an IKE SA that is still active and if the
+       responder accepts it, then the old SAs SHOULD be silently deleted without sending a DELETE
+      informational exchange. </t>
+
+     </list>
+    </t>
+
+    <t>
+     <figure anchor="ticket-present-success" title="IKEv2 Responder accepts the ticket">
+      <artwork>
+       <![CDATA[
+ Initiator                Responder
+ -----------              -----------
+                 <--  HDR, SK {IDr, Nr, SAr2, [TSi, TSr],
+                      [CP(CFG_REPLY)]}
+]]></artwork>
+     </figure>
+    </t>
+
+    <t>Again, the exchange type in HDR is set to 'IKE_SESSION_RESUME'.</t>
+
+    <t>The SK payload is protected using the cryptographic parameters derived from the ticket, see
+      <xref target="protect-resume"/> below.</t>
+
+    <t> At this point a new IKE SA is created by both parties, see <xref target="ike-sa"/>. This is
+     followed by normal derivation of a child SA, per Section 2.17 of <xref target="RFC4306"/>. </t>
+
+    <section title="Protection of the IKE_SESSION_RESUME Exchange" anchor="protect-resume">
+     <t>The two messages of this exchange are protected by a "subset" IKE SA. The key material is
+      derived from the ticket, as follows:</t>
+     <figure>
+      <artwork>
+       <![CDATA[
+     {SK_d2 | SK_ai | SK_ar | SK_ei | SK_er} = prf+(SK_d_old, Ni)
+]]></artwork>
+     </figure>
+     <t> where SK_d_old is the SK_d value of the original IKE SA, as retrieved from the ticket. Ni
+      guarantees freshness of the key material. SK_d2 is used later to derive the new IKE SA, see
+       <xref target="ike-sa"/>. </t>
+     <t> See <xref target="RFC4306"/> for the notation. "prf" is determined from the SA value in the
+      ticket. </t>
+    </section>
+
+    <section title="Presenting a Ticket: The DoS Case" anchor="ticket-cookie">
+     <t> When receiving the first message of the IKE_SESSION_RESUME exchange, the gateway may decide
+      that it is under a denial-of-service attack. In such a case, the gateway SHOULD defer the
+      establishment of session state until it has verified the identity of the client. We use a
+      variation of the IKEv2 Cookie mechanism, whereby the cookie is protected. </t>
+     <t> In the two messages that follow, the gateway responds that it is unwilling to resume the
+      session until the client is verified, and the client resubmits its first message, this time
+      with the cookie: </t>
+
+     <t>
+      <figure>
+       <artwork>
+        <![CDATA[
+ Initiator                Responder
+ -----------              -----------
+                 <-- HDR, SK{N(COOKIE)}
+       
+HDR, Ni, N(TICKET_OPAQUE), [N+,]
+     SK {N(COOKIE), IDi, [IDr,] SAi2, TSi, TSr [, CP(CFG_REQUEST)]} -->
+]]></artwork>
+      </figure>
+     </t>
+     <t> Assuming the cookie is correct, the gateway now replies normally. </t>
+     <t> This now becomes a 4-message exchange. The entire exchange is protected as defined in <xref
+       target="protect-resume"/>. </t>
+     <t> See Section 2.6 and Section 3.10.1 of <xref target="RFC4306"/> for more guidance regarding
+      the usage and syntax of the cookie. Note that the cookie is completely independent of the
+      IKEv2 ticket. </t>
+
+    </section>
+    <section title="Requesting a ticket during resumption" anchor="request-resume">
+     <t>When resuming a session, a client will typically request a new ticket immediately, so it is
+      able to resume the session again in the case of a second failure. Therefore, the
+      N(TICKET_REQUEST) and N(TICKET_OPAQUE) notifications may be piggybacked as protected payloads
+      to the IKE_SESSION_RESUME exchange.</t>
+     <t>The returned ticket (if any) will correspond to the IKE SA created per the rules described
+      in <xref target="ike-sa"/>.</t>
+    </section>
+   </section>
+
+   <section title="IKE Notifications" anchor="notifications">
+    <t> This document defines a number of notifications. The notification numbers are TBA by IANA.</t>
+    <texttable>
+     <ttcol>Notification Name</ttcol>
+     <ttcol>Number</ttcol>
+     <ttcol>Data</ttcol>
+     <c>TICKET_OPAQUE</c>
+     <c>TBA1</c>
+     <c>See <xref target="ticket-encoding"/></c>
+     <c>TICKET_REQUEST</c>
+     <c>TBA2</c>
+     <c>None</c>
+     <c>TICKET_ACK</c>
+     <c>TBA3</c>
+     <c>None</c>
+     <c>TICKET_NACK</c>
+     <c>TBA4</c>
+     <c>None</c>
+    </texttable>
+   </section>
+   <section title="TICKET_OPAQUE Notify Payload" anchor="ticket-encoding">
+    <t> The data for the TICKET_OPAQUE Notify payload consists of the Notify message header, a
+     lifetime field and the ticket itself. The four octet lifetime field contains the number of
+     seconds until the ticket expires (encoded as an unsigned integer).</t>
+
+    <t>
+     <figure title="TICKET_OPAQUE Notify Payload" anchor="ticket">
+      <artwork><![CDATA[
+       0                     1                   2                   3
+       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      ! Next Payload  !C!  Reserved   !      Payload Length           !
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      ! Protocol ID   ! SPI Size = 0  !    Notify Message Type        !
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      !                       Lifetime                                !
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      !                                                               !
+      ~                        Ticket                                 ~
+      !                                                               !
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+]]>
+      </artwork>
+     </figure>
+    </t>
+
+   </section>
+   <section title="Processing Guidelines for IKE SA Establishment" anchor="ike-sa">
+    <t> When a ticket is presented, the gateway parses the ticket to retrieve the state of the old
+     IKE SA, and the client retrieves this state from its local store. Both peers now create state
+     for the new IKE SA as follows: </t>
+    <t>
+     <list style="symbols">
+      <t>The SA value (transforms etc.) is taken directly from the ticket.</t>
+      <t>The sequence numbers are reset to 0.</t>
+      <t>The IDi value is obtained from the ticket.</t>
+      <t>The IDr value is obtained from the new exchange. The gateway MAY make policy decisions
+       based on the IDr value encoded in the ticket.</t>
+      <t>The SPI values are created anew, similarly to a regular IKE exchange. SPI values from the
+       ticket SHOULD NOT be reused. This restriction is to avoid problems caused by collisions with
+       other SPI values used already by the initiator/responder. The SPI value should only be reused
+       if collision avoidance can be ensured through other means.</t>
+     </list>
+    </t>
+    <t> The cryptographic material is refreshed based on the ticket and the nonce values, Ni, and
+     Nr, from the current exchange. A new SKEYSEED value is derived as follows: </t>
+    <figure>
+     <artwork>
+      <![CDATA[
+     SKEYSEED = prf(SK_d2, Ni | Nr)
+]]></artwork>
+    </figure>
+    <t> where SK_d2 was computed earlier (<xref target="protect-resume"/>). </t>
+    <t> The keys are derived as follows, unchanged from IKEv2: </t>
+    <figure>
+     <artwork>
+      <![CDATA[
+     {SK_d | SK_ai | SK_ar | SK_ei | SK_er | SK_pi | SK_pr} =
+                                 prf+(SKEYSEED, Ni | Nr | SPIi | SPIr)
+]]></artwork>
+    </figure>
+    <t> where SPIi, SPIr are the SPI values created in the new IKE exchange. </t>
+    <t> See <xref target="RFC4306"/> for the notation. "prf" is determined from the SA value in the
+     ticket. </t>
+   </section>
+
+   <!--   <section title="Session Resumption and MOBIKE">
+    <t> TBD. </t>
+   </section>
+-->
+
+  </section>
+  <section title="Ticket Recommendations">
+
+   <section anchor="content" title="Ticket Content">
+
+    <t>
+     
+     As noted above, the ticket represents a partial IKEv2 state, either by reference or by value. When passing the state by value, the ticket MUST contain an integrity-protected reference to partial IKEv2 state, containing the state items described further in this section. We note that such a ticket is analogous to the concept of 'stub', as defined in <xref target="I-D.xu-ike-sa-sync"/>, or the concept of a Session ID from TLS.</t>
+     
+<t>     When the state is passed by value, the ticket MUST encode at least the following state from an IKE SA.  These values MUST be encrypted and authenticated.
+   </t>  
+     <t>
+     <list style="symbols">
+      <t>IDi, IDr.</t>
+      <t>SPIi, SPIr.</t>
+      <t>SAr (the accepted proposal).</t>
+      <t>SK_d.</t>
+     </list>
+    </t>
+    <t>In addition, the ticket MUST encode a protected ticket expiration value.</t>
+    <t>The ticket MUST include a key identity field, so that encryption and authentication can be
+     changed, and when necessary, algorithms can be replaced.</t>
+   </section>
+
+   <section title="Ticket Identity and Lifecycle" anchor="lifecycle">
+    <t> Each ticket is associated with a single IKE SA. In particular, when an IKE SA is deleted,
+     the client MUST delete its stored ticket. A ticket is therefore associated with the tuple (IDi,
+     IDr).</t>
+    <t> The lifetime of the ticket carried in the N(TICKET_OPAQUE) notification SHOULD be the
+     minimum of the IKE SA lifetime (per the gateway's local policy) and its re-authentication time,
+     according to <xref target="RFC4478"/>. Even if neither of these are enforced by the gateway, a
+     finite lifetime MUST be specified for the ticket. </t>
+   </section>
+
+  </section>
+
+
+
+  <!-- ************************************************************************************ -->
+
+
+  <section title="IANA Considerations">
+   <t>This document requires a number of IKEv2 notification status types in <xref
+     target="notifications"/>, to be registered by IANA. The corresponding registry was established
+    by IANA.</t>
+   <t> The document defines a new IKEv2 exchange in <xref target="present-ticket"/>. The
+    corresponding registry was established by IANA. </t>
+  </section>
+
+
+  <!-- ************************************************************************************ -->
+
+  <section title="Security Considerations" anchor="security">
+   <t> This section addresses security issues related to the usage of a ticket. 
+    The text below assumes that the IKE state is contained explicitly in the ticket ("passed by value"). 
+    In most cases, there are similar risks when the state is passed by reference.
+   </t>
+
+   <section title="Stolen Tickets">
+    <t>An eavesdropper or man-in-the-middle may try to obtain a ticket and use it to establish a
+     session with the IKEv2 responder. This can happen in different ways: by eavesdropping on the
+     initial communication and copying the ticket when it is granted and before it is used, or by
+     listening in on a client's use of the ticket to resume a session. However, since the ticket's
+     contents is encrypted and the attacker does not know the corresponding secret key, a stolen
+     ticket cannot be used by an attacker to succesfully resume a session. An IKEv2 responder MUST
+     use strong encryption and integrity protection of the ticket to prevent an attacker from
+     obtaining the ticket's contents, e.g., by using a brute force attack. </t>
+
+   
+   </section>
+
+   <section title="Forged Tickets">
+
+    <t> A malicious user could forge or alter a ticket in order to resume a session, to extend its
+     lifetime, to impersonate as another user, or to gain additional privileges. This attack is not
+     possible if the ticket is protected using a strong integrity protection algorithm. </t>
+   </section>
+
+   <section title="Denial of Service Attacks">
+    <t>An adversary could generate and send a large number of tickets to a gateway for verification.
+     To minimize the possibility of such denial of service, ticket verification should be
+     lightweight (e.g., using efficient symmetric key cryptographic algorithms).</t>
+
+   </section>
+
+
+   <section title="Ticket Protection Key Management">
+
+    <t> A full description of the management of the keys used to protect the ticket is beyond the
+     scope of this document. A list of RECOMMENDED practices is given below. <list style="symbols">
+      <t>The keys should be generated securely following the randomness recommendations in <xref
+        target="RFC4086"/>.</t>
+      <t>The keys and cryptographic protection algorithms should be at least 128 bits in strength.</t>
+      <t>The keys should not be used for any other purpose than generating and verifying tickets.</t>
+      <t>The keys should be changed regularly.</t>
+      <t>The keys should be changed if the ticket format or cryptographic protection algorithms
+       change.</t>
+     </list>
+    </t>
+   </section>
+
+   <section title="Ticket Lifetime">
+    <t> An IKEv2 responder controls the lifetime of a ticket, based on the operational and security
+     requirements of the environment in which it is deployed. The responder provides information
+     about the ticket lifetime to the IKEv2 initiator, allowing it to manage its tickets. </t>
+   </section>
+
+
+   <section title="Ticket Format">
+    <t> Great care must be taken when defining a ticket format such that the requirements outlined
+     in <xref target="content"/> are met. In particular, if confidential information, such as a
+     secret key, is transferred to the client, it MUST be done using secure communication to prevent
+     attackers from obtaining or modifying the key. Also, the ticket MUST have its integrity and
+     confidentiality protected with strong cryptographic techniques to prevent a breach in the
+     security of the system. </t>
+   </section>
+
+   <section title="Identity Privacy, Anonymity, and Unlinkability">
+    <t>Since opaque state information is passed around between the IKEv2 initiator and the IKEv2 responder it is important that 
+     leakage of information, such as the identities of an IKEv2 initiator and a responder, MUST be avoided (e.g., with the help of encryption. Thus, it
+     prevents the disclosure of potentially sensitive information. </t>
+    <t> When an IKEv2 initiator presents a ticket as part of the IKE_SESSION_RESUME exchange,
+     confidentiality is not provided for the exchange. There
+     is thereby the possibility for an on-path adversary to observe multiple exchange handshakes
+     where the same state information is used and therefore to conclude that they belong to the same
+     communication end points.</t>
+    <t>This document therefore envisions that the ticket is presented to the IKEv2 responder only once; multiple usage of the ticket is not provided. </t>
+   </section>
+
+
+   <!-- <t>DOS resistance.</t>
+<t>Authentication of identities.</t>
+<t>Reuse of ticket from a terminated session.</t>
+<t>Strength of the ticket protection stronger than the protected data.</t>
+<t>Time synchronization between gateways.</t>
+
+
+    -->
+
+   <section title="Replay Protection in the IKE_SESSION_RESUME Exchange">
+    <t>A major design goal of this protocol extension has been the two-message exchange for session
+     resumption. There is a tradeoff between this abbreviated exchange and replay protection. It is
+     RECOMMENDED that an IKEv2 responder should cache tickets, and reject replayed ones. However, some
+     gateways may not do that in order to reduce state size. An adversary may attempt to replay a
+     ticket. To mitigate these risks a client may be required by the gateway to show that it knows
+     the ticket's secret, before any state is committed on the gateway side. Note that this is a
+     stronger guarantee than the regular IKE cookie mechanism, which only shows IP return
+     routability of the client. This is enabled by including the cookie in the protected portion of
+     the message. </t>
+    <t> For performance reasons, the cookie mechanism is optional, and invoked by the gateway only
+     when it suspects that it is the subject of a denial-of-service attack. </t>
+    <t> In any case, a ticket replayed by an adversary only causes partial IKE state to be created
+     on the gateway. The IKE exchange cannot be completed and an IKE SA cannot be created unless the
+     client knows the ticket's secret values. </t>
+   </section>
+  </section>
+
+
+  <!-- ************************************************************************************ -->
+
+
+  <section title="Acknowledgements">
+   <t> We would like to thank Paul Hoffman, Pasi Eronen, Florian Tegeler, Xiaoming Fu, Stjepan Gros,
+    Yoav Nir and Tero Kivinen for their many helpful comments. We would to particularly thank
+    Florian Tegeler and Stjepan Gros for their help with their implementation efforts and Florian
+    Tegeler for his formal verification using the CASPER tool set. </t>
+   
+   <t>We would furthermore like to thank the authors of <xref target="I-D.xu-ike-sa-sync"/> for their input on using a reference to a ticket.</t>
+  </section>
+ </middle>
+
+ <back>
+  <references title="Normative References"> &rfc2119; &rfc4306; </references>
+  <references title="Informative References"> &rfc4301; &rfc4478; &rfc4086;
+   &rfc4507; &rfc4555; &rfc4718; &I-D.xu-ike-sa-sync; &I-D.rescorla-stateless-tokens; </references>
+
+  <section title="Ticket Format" anchor="format">
+   <t> This document does not specify a mandatory-to-implement or a mandatory-to-use ticket format.
+    The following format is RECOMMENDED.</t>
+   <figure>
+    <artwork>
+     <![CDATA[
+struct {
+    [authenticated] struct {
+        octet format_version;    // 1 for this version of the protocol
+        octet reserved[3];       // sent as 0, ignored by receiver.
+        octet key_id[8];         // arbitrary byte string
+        opaque IV[0..255];       // actual length (possibly 0) depends
+                                 // on the encryption algorithm
+
+        [encrypted] struct {
+            opaque IDi, IDr;     // the full payloads
+            octet SPIi[8], SPIr[8];
+            opaque SA;           // the full SAr payload
+            octet SK_d[0..255];  // actual length depends on SA value
+            int32 expiration;    // an absolute time value, seconds
+                                 // since Jan. 1, 1970
+        } ikev2_state;
+    } protected_part;
+    opaque MAC[0..255];          // the length (possibly 0) depends
+                                 // on the integrity algorithm
+} ticket;
+]]></artwork>
+   </figure>
+   <t> Note that the key defined by "key_id" determines the encryption and authentication
+    algorithms used for this ticket. Those algorithms are unrelated to the transforms defined by
+    the SA payload. </t>
+   <t> The reader is referred to a recent draft <xref target="I-D.rescorla-stateless-tokens"/> that
+    recommends a similar (but not identical) ticket format, and discusses related security
+    considerations in depth. </t>
+   <t>
+   For implementations that prefer to pass a reference to IKE state in the ticket, rather than the state itself, we RECOMMEND the following format:
+   </t>
+   <t>
+   <figure>
+    <artwork>
+     <![CDATA[   
+struct {
+      [authenticated] struct {
+          octet format_version;  // 1 for this version of the protocol
+          octet reserved[3];     // sent as 0, ignored by receiver.
+          octet key_id[8];       // arbitrary byte string
+
+          struct {
+              opaque state_ref;  // reference to IKE state
+              int32 expiration;  // an absolute time value, seconds
+                                 // since Jan. 1, 1970
+          } ikev2_state_ref;
+      } protected_part;
+      opaque MAC[0..255];        // the length depends
+                                 // on the integrity algorithm
+} ticket;
+]]></artwork>
+   </figure>
+   </t>
+  </section>
+  
+  <section title="Change Log">
+   <section title="-01">
+    <t>Added reference to <xref target="I-D.xu-ike-sa-sync"/></t>
+    <t>Included recommended ticket format into the appendix</t>
+    <t>Various editorial improvements within the document</t>
+   </section>
+   <section title="-00">
+    <t>Issued a -00 version for the IPSECME working group. Reflected discussions at IETF#72
+     regarding the strict focus on session resumption. Consequently, text about failover was
+     removed. </t>
+   </section>
+   <section title="-04">
+    <t>Editorial fixes; references cleaned up; updated author's contact address </t>
+   </section>
+   <section title="-03">
+    <t> Removed counter mechanism. Added an optional anti-DoS mechanism, based on IKEv2 cookies
+     (removed previous discussion of cookies). Clarified that gateways may support reallocation of
+     same IP address, if provided by network. Proposed a solution outline to the problem of key
+     exchange for the keys that protect tickets. Added fields to the ticket to enable
+     interoperability. Removed incorrect MOBIKE notification. </t>
+   </section>
+   <section title="-02">
+    <t> Clarifications on generation of SPI values, on the ticket's lifetime and on the integrity
+     protection of the anti-replay counter. Eliminated redundant SPIs from the notification
+     payloads. </t>
+   </section>
+   <section title="-01">
+    <t> Editorial review. Removed 24-hour limitation on ticket lifetime, lifetime is up to local
+     policy.</t>
+   </section>
+   <section title="-00">
+    <t> Initial version. This draft is a selective merge of draft-sheffer-ike-session-resumption-00
+     and draft-dondeti-ipsec-failover-sol-00.</t>
+   </section>
+  </section>
+
+ </back>
+</rfc>

@@ -1,0 +1,495 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?rfc compact="yes" ?><?rfc strict="no" ?><?rfc symrefs="yes" ?><?rfc toc="yes" ?><rfc ipr="trust200902" docName="draft-petithuguenin-turn-tcp-variant-01" category="std">
+	<front>
+		<title abbrev="TURN TCP">Alternative Proposal for Traversal Using Relays around NAT (TURN) Extensions for TCP Allocations</title>
+
+		<author initials="M.P.H" surname="Petit-Huguenin" fullname="Marc Petit-Huguenin">
+			<organization>(Unaffiliated)</organization>
+
+			<address>
+				<email>petithug@acm.org</email>
+			</address>
+		</author>
+
+		<date year="2009"/>
+
+		<abstract>
+			<t>This document proposes to use a shared TCP connection between a Traversal Using Relays around NAT (TURN) client and a TURN server instead of the multiple TCP connections proposed by <xref target="I-D.ietf-behave-turn-tcp"/></t>
+		</abstract>
+	</front>
+
+	<middle>
+		<section title="Introduction">
+			<t>
+				<xref target="I-D.ietf-behave-turn-tcp"/> proposes to create a separate TCP connection between the TURN client and the TURN server for each TCP connection between the TURN server and a peer.
+				This document proposes to reuse the multiplexing mechanism defined in <xref target="I-D.ietf-behave-turn"/>.
+			</t>
+
+			<t>
+				With this proposal, the data received and sent between the TURN server and the peer are multiplexed on the TCP connection between the TURN client and the TURN server by using either the Send/Data indications or by using channels.
+				A window mechanism similar to the one described in <xref target="RFC4254">SSH</xref> is used to manage the flow of data over the shared TCP connection.
+			</t>
+		</section>
+
+		<section title="Shared Connection vs Multiple Connections Comparison">
+			<section title="Unified Mechanism">
+				<t>
+					The main question behind this proposal is why not reusing the existing multiplexing design in <xref target="I-D.ietf-behave-turn"/>, but one can ask the opposite question:
+					Why not apply the same multiple connections mechanism proposed in <xref target="I-D.ietf-behave-turn-tcp"/> to <xref target="I-D.ietf-behave-turn"/>?
+				</t>
+
+				<t>
+					This would greatly simplify the TURN specification because the TURN client IP address and port of a data connection would uniquely identify the peer so channels, Send and Data indications would become unnecessary.
+					Data connections simply forward data in both direction after the end of the ConnectionBind transaction so when is used UDP both between the TURN client and the TURN server and between the TURN server and the peer the packets can be sent and received without overhead.
+					When TCP is used between the TURN client and the TURN server and UDP between the TURN server and the peer, the <xref target="RFC4571"/> framing can be used.
+				</t>
+
+				<t>
+					In any case, having only one mechanism for carrying data between the TURN client and TURN server is better than having two mechanisms.
+					Note that it is unlikely that TURN will be modified this late to support the TURN TCP mechanism.
+				</t>
+			</section>
+
+			<section title="TCP Connection Overhead">
+				<t>
+					<xref target="I-D.iab-ip-model-evolution">NATs create per-stream state and so can cause other streams to fail once they run out of space</xref>, thus preventing additional peer connections from the same allocation.
+					A shared TCP connection does not create additional per-stream state in the NAT when additional peer connections are created.
+				</t>
+
+				<t>
+					TCP connection establishment is relatively slow.
+					This is the reason why <xref target="RFC2616">HTTP 1.1</xref> has a persistent connections feature and <xref target="RFC4254">SSH</xref> has a multiplexing mechanism.
+				</t>
+
+				<t>
+					The impact of TCP connection establishment can be significant when TURN TCP is used with <xref target="I-D.ietf-mmusic-ice-tcp">ICE TCP</xref>.
+					ICE TCP will open a number of TCP connections for connectivity check and then close all of them excepted one.
+					This behavior fits well with the multiplexing mechanism, where no additional TCP connections will be created for the connectivity checks.
+				</t>
+
+				<t>
+					<eref target="http://www.icir.org/floyd/tcp_mux.html">Multiple TCP connections between the same endpoints do not share congestion state</eref>.
+					(Is it still true?)
+					Using a multiplexed TCP connection can eliminate the slow start delay for subsequent connections and improve congestion control.
+				</t>
+			</section>
+
+			<section title="Multiple Connections Advantages">
+				<t>
+					A shared TCP connection can suffer from Head-Of-Line blocking, preventing a stream to forward data because a segment carrying data for another stream was lost.
+					This cannot happen with multiple TCP connections.
+					Note that the same problem exists in TURN when TCP is used between the TURN client and the TURN server and UDP between the TURN server and the peers.
+				</t>
+
+				<t>
+					The multiple TCP connections mechanism permits some optimizations, either in userspace, kernel or hardware, that are difficult to use with the shared connection mechanism.
+					Shared connections can also prevent using ECN or new congestion algorithms and make the implementation of an eventual "preserving behavior" difficult.
+				</t>
+
+				<t>
+					The shared connection mechanism reuses the multiplexing mechanism from TURN, so there is no additional complexity added by this in an implementation that already supports TURN.
+					The only complexity added is the management of the window.
+					The mechanism is directly inspired by the SSH mechanism and so can reuse the <eref target="http://www.psc.edu/networking/projects/hpn-ssh/papers/a14-rapier.pdf">experience</eref> acquired from the OpenSSH implementation.
+				</t>
+			</section>
+		</section>
+
+		<section title="Terminology">
+			<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target="RFC2119"/>.</t>
+		</section>
+
+		<section title="Client and Server Processing">
+			<section title="Sending a Connect Request">
+				<t>
+					To initiate a TCP connection to a peer, a TURN client MUST send a Connect request to the TURN server that include a WINDOW-SIZE attribute containing how many bytes of data can be sent to the TURN client without adjusting the window, and a MAX-SIZE attribute containing the maximum size of the buffer allocated.
+				</t>
+			</section>
+
+			<section title="Receiving a Connect Request">
+				<t>
+					If the connection is successful, the TURN server sends back to the TURN client a Connect response containing a WINDOW-SIZE attribute containing how many bytes of data can be sent to the TURN server without adjusting the window, and a MAX-SIZE attribute containing the maximum size of the buffer allocated.
+					The TURN server associates the current window size in the WINDOW-SIZE attribute to the TCP connection to the peer.
+				</t>
+			</section>
+
+			<section title="Receiving a Connect Response">
+				<t>
+					The TURN client associates the current window size in the WINDOW-SIZE attribute to the IP address and port of the peer TCP connection.
+				</t>
+			</section>
+
+			<section title="Receiving a TCP Connection on an Allocation">
+				<t>
+					After accepting the connection, the TURN server sends a ConnectionAttempt request to the client that include a WINDOW-SIZE attribute containing how many bytes of data can be sent to the TURN server without adjusting the window, and a MAX-SIZE attribute containing the maximum size of the buffer allocated.
+					The TURN server associates the current window size in the WINDOW-SIZE attribute to the TCP connection to the peer.
+				</t>
+			</section>
+
+			<section title="Receiving a ConnectAttempt Request">
+				<t>
+					The TURN client associates the current window size in the WINDOW-SIZE attribute to the IP address and port of the peer TCP connection and sends back to the TURN server a ConnectAttempt response containing a WINDOW-SIZE attribute containing how many bytes of data can be sent to the TURN client without adjusting the window, and a MAX-SIZE attribute containing the maximum size of the buffer allocated.
+				</t>
+			</section>
+
+			<section title="Receiving a ConnectAttempt Response">
+				<t>
+					The TURN server associates the current window size in the WINDOW-SIZE attribute to the IP address and port of the peer TCP connection.
+				</t>
+			</section>
+
+			<section title="Sending Data">
+				<t>
+					When sending data in a ChannelData, Send or Data message the TURN server or client decreases the current window size by the number of bytes sent.
+					The TURN server or client MUST stop sending when the current window size is smaller than the size of the data to send.
+				</t>
+			</section>
+
+			<section title="Sending an AdjustWindow Indication">
+				<t>
+					When ready to receive more data, the TURN server or client sends an AdjustWindow indication to the other side.
+					The AdjustWindow indication MUST contain either a XOR-PEER-ADDRESS or a CHANNEL-NUMBER attribute identifying the TCP connection to the peer.
+					The AdjustWindow indication MUST contain a ADD-SIZE attribute containing the value to add to the current window size.
+				</t>
+			</section>
+
+			<section title="Receiving an AdjustWindow Indication">
+				<t>
+					When receiving an AdjustWindow indication, a TURN client or server uses the XOR-PEER-ADDRESS or CHANNEL-NUMBER to find the current window size associated to the TCP connection to the peer.
+					The TURN client or server then increases the window size by the value in the ADD-SIZE attribute and can eventually restart sending data.
+				</t>
+			</section>
+		</section>
+
+		<section anchor="security" title="Security Considerations">
+			<t>TBD</t>
+		</section>
+
+		<section title="IANA Considerations">
+			<t>TBD</t>
+		</section>
+
+		<section title="Running Code Considerations">
+			<t>TBD</t>
+		</section>
+
+		<section title="Acknowledgements">
+			<t>Adam Roach proposed to use the SSH algorithm at the microphone in the BEHAVE session in Minneapolis.</t>
+			<t>Thanks to Rémi Denis-Courmont and Simon Perreault for their comments, suggestions and questions that helped to improve this document.</t>
+			<t>This document was written with the xml2rfc tool described in <xref target="RFC2629"/>.</t>
+		</section>
+	</middle>
+
+	<back>
+		<references xmlns:xi="http://www.w3.org/2001/XInclude" title="Normative References">
+			<reference anchor="RFC2119" xml:base="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+
+<front>
+<title abbrev="RFC Key Words">Key words for use in RFCs to Indicate Requirement Levels</title>
+<author initials="S." surname="Bradner" fullname="Scott Bradner">
+<organization>Harvard University</organization>
+<address>
+<postal>
+<street>1350 Mass. Ave.</street>
+<street>Cambridge</street>
+<street>MA 02138</street></postal>
+<phone>- +1 617 495 3864</phone>
+<email>sob@harvard.edu</email></address></author>
+<date year="1997" month="March"/>
+<area>General</area>
+<keyword>keyword</keyword>
+<abstract>
+<t>
+   In many standards track documents several words are used to signify
+   the requirements in the specification.  These words are often
+   capitalized.  This document defines these words as they should be
+   interpreted in IETF documents.  Authors who follow these guidelines
+   should incorporate this phrase near the beginning of their document:
+
+<list>
+<t>
+      The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+      NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and
+      "OPTIONAL" in this document are to be interpreted as described in
+      RFC 2119.
+</t></list></t>
+<t>
+   Note that the force of these words is modified by the requirement
+   level of the document in which they are used.
+</t></abstract></front>
+
+<seriesInfo name="BCP" value="14"/>
+<seriesInfo name="RFC" value="2119"/>
+<format type="TXT" octets="4723" target="ftp://ftp.isi.edu/in-notes/rfc2119.txt"/>
+<format type="HTML" octets="17491" target="http://xml.resource.org/public/rfc/html/rfc2119.html"/>
+<format type="XML" octets="5777" target="http://xml.resource.org/public/rfc/xml/rfc2119.xml"/>
+</reference>
+			<reference anchor="RFC4254" xml:base="http://xml.resource.org/public/rfc/bibxml/reference.RFC.4254.xml">
+
+<front>
+<title>The Secure Shell (SSH) Connection Protocol</title>
+<author initials="T." surname="Ylonen" fullname="T. Ylonen">
+<organization/></author>
+<author initials="C." surname="Lonvick" fullname="C. Lonvick">
+<organization/></author>
+<date year="2006" month="January"/>
+<abstract>
+<t>Secure Shell (SSH) is a protocol for secure remote login and other secure network services over an insecure network.&lt;/t&gt;&lt;t&gt; This document describes the SSH Connection Protocol. It provides interactive login sessions, remote execution of commands, forwarded TCP/IP connections, and forwarded X11 connections. All of these channels are multiplexed into a single encrypted tunnel.&lt;/t&gt;&lt;t&gt; The SSH Connection Protocol has been designed to run on top of the SSH transport layer and user authentication protocols. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4254"/>
+<format type="TXT" octets="50338" target="ftp://ftp.isi.edu/in-notes/rfc4254.txt"/>
+</reference>
+			<reference anchor="I-D.ietf-behave-turn-tcp" xml:base="http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-behave-turn-tcp.xml">
+<front>
+<title>Traversal Using Relays around NAT (TURN) Extensions for TCP Allocations</title>
+
+<author initials="S" surname="Perreault" fullname="Simon Perreault">
+    <organization/>
+</author>
+
+<author initials="J" surname="Rosenberg" fullname="Jonathan Rosenberg">
+    <organization/>
+</author>
+
+<date month="March" day="4" year="2009"/>
+
+<abstract><t>This specification defines an extension of Traversal Using Relays around NAT (TURN), a relay protocol for NAT traversal, to allows a TURN client to request TCP allocations, and defines new requests and indications for the TURN server to open and accept TCP connections with the client's peers.  TURN and this extension both purposefully restrict the ways in which the relayed address can be used.  In particular, it prevents users from running general purpose servers from ports obtained from the STUN server.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-behave-turn-tcp-02"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-behave-turn-tcp-02.txt"/>
+</reference>
+		</references>
+
+		<references xmlns:xi="http://www.w3.org/2001/XInclude" title="Informative References">
+			<reference anchor="RFC2616" xml:base="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2616.xml">
+
+<front>
+<title abbrev="HTTP/1.1">Hypertext Transfer Protocol -- HTTP/1.1</title>
+<author initials="R." surname="Fielding" fullname="Roy T. Fielding">
+<organization abbrev="UC Irvine">Department of Information and Computer Science</organization>
+<address>
+<postal>
+<street>University of California, Irvine</street>
+<city>Irvine</city>
+<region>CA</region>
+<code>92697-3425</code></postal>
+<facsimile>+1(949)824-1715</facsimile>
+<email>fielding@ics.uci.edu</email></address></author>
+<author initials="J." surname="Gettys" fullname="James Gettys">
+<organization abbrev="Compaq/W3C">World Wide Web Consortium</organization>
+<address>
+<postal>
+<street>MIT Laboratory for Computer Science, NE43-356</street>
+<street>545 Technology Square</street>
+<city>Cambridge</city>
+<region>MA</region>
+<code>02139</code></postal>
+<facsimile>+1(617)258-8682</facsimile>
+<email>jg@w3.org</email></address></author>
+<author initials="J." surname="Mogul" fullname="Jeffrey C. Mogul">
+<organization abbrev="Compaq">Compaq Computer Corporation</organization>
+<address>
+<postal>
+<street>Western Research Laboratory</street>
+<street>250 University Avenue</street>
+<city>Palo Alto</city>
+<region>CA</region>
+<code>94305</code></postal>
+<email>mogul@wrl.dec.com</email></address></author>
+<author initials="H." surname="Frystyk" fullname="Henrik Frystyk Nielsen">
+<organization abbrev="W3C/MIT">World Wide Web Consortium</organization>
+<address>
+<postal>
+<street>MIT Laboratory for Computer Science, NE43-356</street>
+<street>545 Technology Square</street>
+<city>Cambridge</city>
+<region>MA</region>
+<code>02139</code></postal>
+<facsimile>+1(617)258-8682</facsimile>
+<email>frystyk@w3.org</email></address></author>
+<author initials="L." surname="Masinter" fullname="Larry Masinter">
+<organization abbrev="Xerox">Xerox Corporation</organization>
+<address>
+<postal>
+<street>MIT Laboratory for Computer Science, NE43-356</street>
+<street>3333 Coyote Hill Road</street>
+<city>Palo Alto</city>
+<region>CA</region>
+<code>94034</code></postal>
+<email>masinter@parc.xerox.com</email></address></author>
+<author initials="P." surname="Leach" fullname="Paul J. Leach">
+<organization abbrev="Microsoft">Microsoft Corporation</organization>
+<address>
+<postal>
+<street>1 Microsoft Way</street>
+<city>Redmond</city>
+<region>WA</region>
+<code>98052</code></postal>
+<email>paulle@microsoft.com</email></address></author>
+<author initials="T." surname="Berners-Lee" fullname="Tim Berners-Lee">
+<organization abbrev="W3C/MIT">World Wide Web Consortium</organization>
+<address>
+<postal>
+<street>MIT Laboratory for Computer Science, NE43-356</street>
+<street>545 Technology Square</street>
+<city>Cambridge</city>
+<region>MA</region>
+<code>02139</code></postal>
+<facsimile>+1(617)258-8682</facsimile>
+<email>timbl@w3.org</email></address></author>
+<date year="1999" month="June"/>
+<abstract>
+<t>
+   The Hypertext Transfer Protocol (HTTP) is an application-level
+   protocol for distributed, collaborative, hypermedia information
+   systems. It is a generic, stateless, protocol which can be used for
+   many tasks beyond its use for hypertext, such as name servers and
+   distributed object management systems, through extension of its
+   request methods, error codes and headers . A feature of HTTP is
+   the typing and negotiation of data representation, allowing systems
+   to be built independently of the data being transferred.
+</t>
+<t>
+   HTTP has been in use by the World-Wide Web global information
+   initiative since 1990. This specification defines the protocol
+   referred to as "HTTP/1.1", and is an update to RFC 2068 .
+</t></abstract></front>
+
+<seriesInfo name="RFC" value="2616"/>
+<format type="TXT" octets="422317" target="ftp://ftp.isi.edu/in-notes/rfc2616.txt"/>
+<format type="PS" octets="5529857" target="ftp://ftp.isi.edu/in-notes/rfc2616.ps"/>
+<format type="PDF" octets="550558" target="ftp://ftp.isi.edu/in-notes/rfc2616.pdf"/>
+<format type="HTML" octets="636125" target="http://xml.resource.org/public/rfc/html/rfc2616.html"/>
+<format type="XML" octets="493420" target="http://xml.resource.org/public/rfc/xml/rfc2616.xml"/>
+</reference>
+			<reference anchor="RFC2629" xml:base="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2629.xml">
+
+<front>
+<title>Writing I-Ds and RFCs using XML</title>
+<author initials="M.T." surname="Rose" fullname="Marshall T. Rose">
+<organization>Invisible Worlds, Inc.</organization>
+<address>
+<postal>
+<street>660 York Street</street>
+<city>San Francisco</city>
+<region>CA</region>
+<code>94110</code>
+<country>US</country></postal>
+<phone>+1 415 695 3975</phone>
+<email>mrose@not.invisible.net</email>
+<uri>http://invisible.net/</uri></address></author>
+<date year="1999" month="June"/>
+<area>General</area>
+<keyword>RFC</keyword>
+<keyword>Request for Comments</keyword>
+<keyword>I-D</keyword>
+<keyword>Internet-Draft</keyword>
+<keyword>XML</keyword>
+<keyword>Extensible Markup Language</keyword>
+<abstract>
+<t>This memo presents a technique for using XML
+(Extensible Markup Language)
+as a source format for documents in the Internet-Drafts (I-Ds) and
+Request for Comments (RFC) series.</t></abstract></front>
+
+<seriesInfo name="RFC" value="2629"/>
+<format type="TXT" octets="48677" target="ftp://ftp.isi.edu/in-notes/rfc2629.txt"/>
+<format type="HTML" octets="71741" target="http://xml.resource.org/public/rfc/html/rfc2629.html"/>
+<format type="XML" octets="53481" target="http://xml.resource.org/public/rfc/xml/rfc2629.xml"/>
+</reference>
+			<reference anchor="RFC4571" xml:base="http://xml.resource.org/public/rfc/bibxml/reference.RFC.4571.xml">
+
+<front>
+<title>Framing Real-time Transport Protocol (RTP) and RTP Control Protocol (RTCP) Packets over Connection-Oriented Transport</title>
+<author initials="J." surname="Lazzaro" fullname="J. Lazzaro">
+<organization/></author>
+<date year="2006" month="July"/>
+<abstract>
+<t>This memo defines a method for framing Real-time Transport Protocol (RTP) and RTP Control Protocol (RTCP) packets onto connection-oriented transport (such as TCP).  The memo also defines how session descriptions may specify RTP streams that use the framing method. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4571"/>
+<format type="TXT" octets="18751" target="ftp://ftp.isi.edu/in-notes/rfc4571.txt"/>
+</reference>
+			<reference anchor="I-D.iab-ip-model-evolution" xml:base="http://xml.resource.org/public/rfc/bibxml3/reference.I-D.iab-ip-model-evolution.xml">
+<front>
+<title>Evolution of the IP Model</title>
+
+<author initials="D" surname="Thaler" fullname="Dave Thaler">
+    <organization/>
+</author>
+
+<date month="November" day="3" year="2008"/>
+
+<abstract><t>This draft attempts to document various aspects of the IP service model and how it has evolved over time.  In particular, it attempts to document the properties of the IP layer as they are seen by upper- layer protocols and applications, and especially properties which were (and at times still are) incorrectly perceived to exist, as well as properties that would cause problems if changed.  Finally, it provides some guidance to protocol designers and implementers.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-iab-ip-model-evolution-01"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-iab-ip-model-evolution-01.txt"/>
+</reference>
+			<reference anchor="I-D.ietf-behave-turn" xml:base="http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-behave-turn.xml">
+<front>
+<title>Traversal Using Relays around NAT (TURN): Relay Extensions to Session  Traversal Utilities for NAT (STUN)</title>
+
+<author initials="J" surname="Rosenberg" fullname="Jonathan Rosenberg">
+    <organization/>
+</author>
+
+<author initials="R" surname="Mahy" fullname="Rohan Mahy">
+    <organization/>
+</author>
+
+<author initials="P" surname="Matthews" fullname="Philip Matthews">
+    <organization/>
+</author>
+
+<date month="February" day="24" year="2009"/>
+
+<abstract><t>If a host is located behind a NAT, then in certain situations it can be impossible for that host to communicate directly with other hosts (peers).  In these situations, it is necessary for the host to use the services of an intermediate node that acts as a communication relay.  This specification defines a protocol, called TURN (Traversal Using Relays around NAT), that allows the host to control the operation of the relay and to exchange packets with its peers using the relay.  TURN differs from some other relay control protocols in that it allows a client to communicate with multiple peers using a single relay address.  The TURN protocol was designed to be used as part of the ICE (Interactive Connectivity Establishment) approach to NAT traversal, though it can be also used without ICE.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-behave-turn-13"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-behave-turn-13.txt"/>
+</reference>
+			<reference anchor="I-D.ietf-mmusic-ice-tcp" xml:base="http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-mmusic-ice-tcp.xml">
+<front>
+<title>TCP Candidates with Interactive Connectivity Establishment (ICE)</title>
+
+<author initials="J" surname="Rosenberg" fullname="Jonathan  Rosenberg">
+    <organization/>
+</author>
+
+<date month="July" day="14" year="2008"/>
+
+<abstract><t>Interactive Connectivity Establishment (ICE) defines a mechanism for NAT traversal for multimedia communication protocols based on the offer/answer model of session negotiation.  ICE works by providing a set of candidate transport addresses for each media stream, which are then validated with peer-to-peer connectivity checks based on Session Traversal Utilities for NAT (STUN).  ICE provides a general framework for describing candidates, but only defines UDP-based transport protocols.  This specification extends ICE to TCP-based media, including the ability to offer a mix of TCP and UDP-based candidates for a single stream.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-mmusic-ice-tcp-07"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-mmusic-ice-tcp-07.txt"/>
+</reference>
+		</references>
+
+		<section title="Release notes">
+			<t>This section must be removed before publication as an RFC.</t>
+
+			<section title="Modifications between -01 and -00">
+				<t>
+					<list style="symbols">
+						<t>Changed author address.</t>
+						<t>Changed the IPR to trust200902.</t>
+						<t>Rewrote abstract.</t>
+						<t>Rewrote introduction with comparisons between the two mechanisms.</t>
+						<t>MAX-SIZE is the size of the allocated buffer.</t>
+						<t>Added support for ConnectAttempt.</t>
+					</list>
+				</t>
+			</section>
+
+			
+			
+		</section>
+	</back>
+</rfc>

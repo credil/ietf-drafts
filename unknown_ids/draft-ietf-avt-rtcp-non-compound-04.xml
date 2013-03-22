@@ -1,0 +1,658 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY rfc3550 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3550.xml">
+<!ENTITY rfc4585 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4585.xml">
+<!ENTITY rfc3095 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3095.xml">
+<!ENTITY rfc4588 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4588.xml">
+<!ENTITY rfc5104 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.5104.xml">
+]>
+<?rfc toc="yes"?>
+<?rfc tocompact="yes"?>
+<?rfc tocdepth="3"?>
+<?rfc tocindent="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc comments="yes"?>
+<?rfc inline="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<rfc category="std" docName="draft-ietf-avt-rtcp-non-compound-04"
+     ipr="full3978">
+  <front>
+    <title abbrev="Non-compound RTCP in RTP profile">Support for non-compound
+    RTCP, opportunities and consequences</title>
+
+    <author fullname="Ingemar Johansson" initials="I." surname="Johansson">
+      <organization>Ericsson AB</organization>
+
+      <address>
+        <postal>
+          <street>Laboratoriegrand 11</street>
+
+          <city>SE-971 28 Lulea</city>
+
+          <country>SWEDEN</country>
+        </postal>
+
+        <phone>+46 73 0783289</phone>
+
+        <email>ingemar.s.johansson@ericsson.com</email>
+      </address>
+    </author>
+
+    <author fullname="Magnus Westerlund" initials="M." surname="Westerlund">
+      <organization>Ericsson AB</organization>
+
+      <address>
+        <postal>
+          <street>Torshamnsgatan 21-23</street>
+
+          <city>SE-164 83 Stockholm</city>
+
+          <country>SWEDEN</country>
+        </postal>
+
+        <phone>+46 8 7190000</phone>
+
+        <email>magnus.westerlund (AT) ericsson.com</email>
+      </address>
+    </author>
+
+    <date day="24" month="Apr" year="2008" />
+
+    <abstract>
+      <t>This memo discusses benefits and issues that arise when allowing RTCP
+      packets to be transmitted as non-compound packets, i.e not follow the
+      rules of RFC 3550. Based on that analysis this memo proposes changes to
+      the rules to allow feedback messages to be sent as non-compound RTCP
+      packets when using the RTP AVPF profile (RFC 4585) under certain
+      conditions.</t>
+    </abstract>
+
+    <note title="Requirements Language">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in</t>
+    </note>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>In <xref target="RFC3550">RTP</xref> it is currently mandatory to
+      always use RTCP compound packets containing at least Sender Reports or
+      Receiver reports, and a SDES packet containing at least the CNAME item.
+      There are good reasons for this as discussed below (see <xref
+      target="sec-compound-packets"></xref>). However this do result in that
+      the minimal RTCP packets are quite large. The <xref target="RFC4585">RTP
+      profile AVPF</xref> specifies new RTCP packet types for feedback
+      messages. Some of these feedback messages would benefit from being
+      transmitted with minimal delay and AVPF do provide some mechanism to
+      enable this. However for environments with low-bitrate links this still
+      consumes quite large amount of resources and introduce extra delay in
+      the time it takes to completely send the compound packet in the network.
+      There are also other benefits as discussed in <xref
+      target="sec-benefitts"></xref>.</t>
+
+      <t>The use of non-compound packets is not without issues. This is
+      discussed in <xref target="sec-issues"></xref>. These issues needs to be
+      considered and are part of the motivation for this document.</t>
+
+      <t>In addition this document proposes how AVPF could be updated to allow
+      the transmission of non-compound packets in a way that would not
+      substantially affect the mechanisms that compound packets provide. The
+      connection to AVPF is motivated by the fact that non-compound RTCP is
+      mainly intended for event driven feedback purposes and that the AVPF
+      early and immediate modes make this possible.</t>
+    </section>
+
+    <section anchor="sec-compound-packets" title="RTCP Compound Packets">
+      <t>Section 6.1 in <xref target="RFC3550"></xref> specifies that an RTCP
+      packet must be sent in a compound packet consisting of at least two
+      individual packets, first an Sender Report (SR) or Receiver Report (RR),
+      followed by additional packets including a mandatory SDES packet
+      containing a CNAME Item for the transmitting source identifier (SSRC).
+      Lets examine what these RTCP packet types are used for.</t>
+
+      <t><list style="numbers">
+          <t>The sender and receiver reports (see Section 6.4 of <xref
+          target="RFC3550"></xref>) provides the RTP session participant with
+          the Sender Source Identifier (SSRC) of all RTCP senders. Having all
+          participants send these packets periodically allows everyone to
+          determine the current number of participants. This information is
+          used in the transmission scheduling algorithm. Thus this is
+          particularly important for new participants so that they quickly can
+          establish a good estimate of the group size. Failure to do this
+          would result in RTCP senders consuming to much bandwidth.</t>
+
+          <t>The sender and receiver reports contain some basic statistics
+          usable for monitoring of the transport and thus enable adaptation.
+          These reports become more useful if sent regularly as the receiver
+          of a report can perform analysis to find trends between the
+          individual reports. When used for media transmission adaptation the
+          information become more useful the more frequently it is received,
+          at least until one report per round-trip time (RTT) is achieved.
+          Therefore there are most cases no reason to not include the sender
+          or receiver report in all RTCP packets.</t>
+
+          <t>The CNAME SDES item (See Section 6.5.1 of <xref
+          target="RFC3550"></xref>) exists to allow receivers to determine
+          which media flows that should be synchronized with each other
+          between different RTP sessions carrying different media types. Thus
+          it is important to quickly receive this for each media sender in the
+          session when joining an RTP session.</t>
+
+          <t>Sender Reports (SR) is used in combination with the above SDES
+          CNAME mechanism to synchronize multiple RTP streams, such as audio
+          and video. After having determined which media streams should be
+          synchronized using the CNAME field, the receiver uses the Sender
+          Report's NTP and RTP timestamp fields to establish
+          synchronization.</t>
+        </list>Reviewing the above it is obvious that both SR/RR and the CNAME
+      are very important for new session participants to be able to utilize
+      any received media and to avoid flooding the network with RTCP reports.
+      In addition, if not sent regularly the dynamic nature of the information
+      provided would make it less and less useful.</t>
+    </section>
+
+    <section anchor="sec-benefitts" title="Benefits with non-compound packets">
+      <t>As mentioned in the introduction, most advantages of using
+      non-compound packets exists in cases when the available RTCP bitrate is
+      limited. This because non-compound packets will be substantially smaller
+      than compound packets. A compound packet is forced to contain both an RR
+      or an SR and the CNAME SDES item. The RR containing a report block for a
+      single source is 32 bytes, an SR is 52 bytes. Both may be larger if they
+      contain report blocks for multiple sources. The SDES packet containing a
+      CNAME item will be 10 bytes plus the CNAME string length. Here it is
+      reasonable that the CNAME string is at least 10 bytes to get a decent
+      collision resistance. And if the recommended form of user@host is used,
+      then most strings will be longer than 20 characters. Thus a non-compound
+      packet can become at least 70-80 bytes smaller than the compound
+      packet.</t>
+
+      <t>The following benefits exist for the non-compound packets,</t>
+
+      <section anchor="sec-low-bitrate-links" title="Low birate links">
+        <t>For low birate links the benefits are as follows.<list
+            style="symbols">
+            <t>For links where the packet loss rate grows with the packet
+            size, smaller packets are be less likely to be dropped. An example
+            of such links are radio links. In the cellular world there exist
+            links that are optimized to handle RTP packets sized for carrying
+            compressed speec. This increases the capacity and coverage for
+            voice services in a given wireless network. Minimum sized compound
+            RTCP packets are commonly 2-3 times the size of a RTP packet
+            carrying compressed speech. If the speech packet over such a
+            bearer has a packet loss probability of p, then the RTCP packet
+            will experience a loss probability of 1-(1-p)^x where x is the
+            number of fragments the compound packet will be split on the link
+            layer, i.e. commonly into 2 or 3 fragments.</t>
+
+            <t>Shorter serialization time, i.e the time it takes the link to
+            transmit the packet. For slower links this time can be
+            substantial. For example transmitting 120 bytes over an link
+            interface capable of 30 kbps takes 32 milliseconds (ms) assuming
+            uniform transmission rate.</t>
+          </list></t>
+
+        <t>In cases when non-compound packets carry important and time
+        sensitive feedback, both shorter serialization time and the lower loss
+        probability are important to enable the best possible functionality.
+        Having a packet loss rate that is much higher for the feedback packets
+        compared to media packets hurts when trying to perform media
+        adaptation, to for example handle the changed performance present at
+        the cell border in cellular system.</t>
+      </section>
+
+      <section title="Higher bitrates">
+        <t>For high bitrate applications there is usually no problem of
+        supplying RTCP with sufficient bitrates. When using AVPF one can use
+        the "trr-int" parameter to restrict the regular reporting interval to
+        approximately once per RTT or less often. As in most cases there is
+        little reason to provide with regular reports of higher density than
+        this. Any additional bandwidth can then be used for feedback messages.
+        The benefit of non-compound packets in this case is limited, but
+        exists. One typical example is video using generic NACK in cases where
+        the RTT is low. Using non-compound packets would reduce the total
+        amount of bits used for RTCP. This is primarily applicable if the
+        number of non-compound packets is large. This would also result in
+        lower processing delay and less complexity for the feedback packets as
+        they do not need to query the RTCP database to construct the right
+        messages.</t>
+
+        <t>As message size generally is a smaller issue for higher birates, it
+        is also possible to transmit multiple RTCP in each lower layer
+        datagram in these cases. The motivation behind non-compound RTCP is in
+        this case is not size, rather it is to avoid the extra overhead caused
+        by inclusion of the SR/RR and SDES CNAME items in each transmitted
+        RTCP.</t>
+      </section>
+
+      <section title="Both high and low bitrate links">
+        <t>Independently of the link type there are additional benefits with
+        sending feedback in small non-compound RTCP. <list style="symbols">
+            <t>Applications that use RTCP AVPF in early or immediate mode to
+            send frequent event driven feedback. Under these circumstances
+            non-compound RTCP reduces the risk that the RTCP bandwidth becomes
+            too high during periods of heavy adaptation feedback
+            signaling.</t>
+
+            <t>In cases when regular feedback is needed, such as the profile
+            under development for TCP friendly rate control (TFRC) for RTP
+            <xref target="I-D.ietf-avt-tfrc-profile"></xref>, the size of
+            compound RTCP can result in very high bandwidth requirements if
+            the round trip time is short. For this particular application
+            non-compound RTCP gives a very substantial improvement.</t>
+          </list></t>
+      </section>
+    </section>
+
+    <section anchor="sec-use-cases" title="Use cases for non-compound RTCP">
+      <t>Below are listed a few use cases for non-compound RTCP. The current
+      use of non-compound RTCP is very application specific. A general
+      definition of the use of non-compound RTCP for e.g control plane or
+      codec control signaling would probably need to be specified within the
+      IETF.</t>
+
+      <section title="Control plane signaling">
+        <t>Open Mobile Alliance (OMA) Push-to-talk over Cellular (PoC) <xref
+        target="OMA-PoC"> </xref> makes use of non-compound packets when
+        transmitting certain events. The OMA POC service is primarily used
+        over cellular links capable of IP transport, such as the GSM GPRS.</t>
+      </section>
+
+      <section title="Codec control signaling">
+        <t>Examples of codec control usage for non-compound RTCP are found in
+        <xref target="3GPP-MTSI"></xref>.</t>
+
+        <t>Another example that can be used with non-compound RTCP is e.g
+        TMMBR messages as specified in <xref target="RFC5104"></xref> which
+        signal a request for a change in codec bitrate. The benefit of
+        non-compound RTCP for these messages is that in bad channel
+        conditions, a non-compound RTCP can be considerably more likely to be
+        received than larger compound RTCP messages. This is critical as these
+        messages are likely to occur when channel conditions are poor.</t>
+
+        <t></t>
+      </section>
+
+      <section title="Feedback">
+        <t>An example of a feedback scenario that would benefit from
+        non-compound RTCP is Video streams with generic NACK. In cases where
+        the RTT is shorter than the receiver buffer depth, generic NACK can be
+        used to request retransmission of missing packets, thus improving
+        playout quality considerably. If the generic NACK packets are
+        transmitted as non-compound packets, the bandwidth requirement for
+        RTCP will be minimal, enabling more frequent feedback. Like in the
+        Codec control case it is important that these packets can be
+        transmitted with as little delay as possible.</t>
+
+        <t>Another interesting use for non-compound RTCP is in cases when
+        regular feedback is needed, such as the profile under development for
+        TCP friendly rate control (TFRC) for RTP <xref
+        target="I-D.ietf-avt-tfrc-profile"></xref>. The size of compound RTCP
+        can result in very high bandwidth requirements for the feedback when
+        the round trip time is short. For this particular application
+        non-compound RTCP may give a very substantial improvement.</t>
+      </section>
+
+      <section anchor="sec-status-reports" title="Status reports">
+        <t>One proposed idea is to transmit small measurement or status
+        reports in non-compound RTCP, and to be able to split the sub-packets
+        of a minimum compound RTCP and transmit them separately. The status
+        reports can be used either by the endpoints or by other network
+        monitoring boxes in the network.</t>
+
+        <t>The benefit is that with some radio access technologies small
+        packets are more robust to poor radio conditions than large packets.
+        Additionally, with small (report) packets there is a smaller risk that
+        the report packets will affect the channel that they report upon.</t>
+
+        <t>Another benefit is that it is, with non-compound RTCP, possible to
+        allow e.g anonymous status reportorting to be transmitted unencrypted.
+        Something that may be beneficial for e.g network monitoring
+        purposes.</t>
+      </section>
+    </section>
+
+    <section anchor="sec-issues" title="Issues with non-compound RTCP packets">
+      <t>This section describes the known issues with non-compound RTCP
+      packets and also a brief analysis.</t>
+
+      <section anchor="sec-middleboxes" title="Middle boxes">
+        <t>Middle boxes in the network may discard RTCP packets that do not
+        follow the rules outlined in section 6.1 of RFC3550. Newer report
+        types may be interptered as unknown by the middle box. For instance if
+        the payload type number is 207 instead of 200 or 201 it may be treated
+        as unknown. The effect of this might for instance be that compound
+        RTCP packets would get through while the non-compound feedback packets
+        would be lost.</t>
+
+        <t>Verification of the delivery of non-compound RTCP is discussed in
+        <xref target="sec-verification"></xref>.</t>
+      </section>
+
+      <section anchor="sec-packet-validation" title="Packet Validation">
+        <t>A non-compound packet will be discarded by the packet validation
+        code in Appendix A of <xref target="RFC3550"></xref>. This has several
+        impacts as described in the following sub sections.</t>
+
+        <section title="Old RTCP Receivers">
+          <t>Any RTCP receiver without updated packet validation code will
+          discard the non-compound packets. Thus these receivers will not see
+          the feedback contained in the these non-compound packets. The effect
+          of this depends on the type of feedback message and the role of the
+          receiver. For example this may cause complete function loss in the
+          case of attempting to use a non-compound NACK message (see Section
+          6.2.1 of <xref target="RFC4585"></xref>) to non updated media sender
+          in a session using the retransmission scheme defined by <xref
+          target="RFC4588"></xref>.</t>
+
+          <t>This type of discarding would also effect the feedback
+          suppression defined in AVPF. The result would be a partitioning of
+          the receivers within the session between old ones only seeing the
+          compound RTCP feedback messages and the newer ones seeing both.
+          Where the old ones may send feedback messages for events already
+          reported on in non-compound packets.</t>
+        </section>
+
+        <section title="Weakened Packet Validation">
+          <t>The packet validation code needs to be rewritten to accept
+          non-compound packets. This in particular affects section 9.1 in
+          <xref target="RFC3550"></xref> in the sense that the header
+          verification must take into account that the payload type numbers
+          for the (first) RTCP packet may differ from 200 or 201 (SR or
+          RR).</t>
+
+          <t>One potential effect of this change is much weaker validation
+          that received packets actually are RTCP packets, and not packets of
+          some other type being wrongly delivered. Thus some consideration
+          should be done to ensure the best possible validation is available.
+          For example restricting non-compound packets to contain only some
+          specific RTCP packet types, that is preferably signalled on a
+          session basis.</t>
+        </section>
+
+        <section title="Bandwidth considerations">
+          <t>The discarding of non-compound RTCP packets would effect the RTCP
+          transmission calculation in the following way: the avg_rtcp_size
+          value would become larger than for RTP receivers that exclude the
+          non-compound in this calculation (assuming that non-compound packets
+          are smaller than compound ones). Therefore these senders would
+          under-utilize the available bitrate and send with a longer interval
+          than updated receivers. For most sessions this should not be an
+          issue. However for sessions with a large portion of non-compound
+          packets may result in that the updated receivers time out
+          non-updated senders prematurely. A solution to this is presented in
+          <xref target="sec-algorithm"></xref>.</t>
+        </section>
+
+        <section title="Computation of avg_rtcp_size">
+          <t>Long intervals between compound RTCP packets and many
+          non-compound RTCP packets in between may lead to a computation of a
+          value for avg_rtcp_size that varies greatly over time. This is
+          discussed more in <xref target="sec-algorithm"></xref>.</t>
+        </section>
+      </section>
+
+      <section title="Encryption/authentication">
+        <t>SRTP presents a problem for non-compound RTCP. Section 3.4 in <xref
+        target="RFC3711"></xref> states "SRTCP MUST be given packets according
+        to that requirement in the sense that the first part MUST be a sender
+        report or a receiver report".</t>
+
+        <t>However the same text also states that the encryption prefix that
+        is present in the receiver and sender reports should not be used by
+        SRTP. The conclusion is therefore that it is possible to use
+        non-compound RTCP with SRTP.</t>
+      </section>
+
+      <section anchor="sec-issue-mux"
+               title="RTP and RTCP multiplex on the same port">
+        <t>In applications which multiplex RTP and RTCP on the same port, as
+        defined in <xref target="I-D.ietf-avt-rtp-and-rtcp-mux"></xref>, care
+        must be taken to ensure that the de-multiplexing is done properly even
+        though RTCP packets are non-compound.</t>
+      </section>
+
+      <section title="Header compression">
+        <t>Two issues are related to header compression:<list style="symbols">
+            <t>Payload type number identification: The RoHC header compression
+            algorithm algorithm <xref target="RFC3095"></xref> needs to create
+            different compression contexts for RTP and RTCP for optimum
+            performance. If RTP and RTCP are multiplexed on the same port the
+            classification is based on payload type numbers. The
+            classification algorithm must here acklowledge the fact that the
+            payload type number for (the first) RTCP may differ from 200 or
+            201.</t>
+
+            <t>Compression of RTCP packets: No IETF defined header compression
+            method compress RTCP packets, however if such methods are
+            developed in the future, these methods must take non-compound RTCP
+            in account.</t>
+          </list></t>
+      </section>
+    </section>
+
+    <section anchor="sec-rules"
+             title="Rules and guidelines for non-compound packets in AVPF">
+      <t>Based on the above analysis it seems feasible to allow transmission
+      of non-compound RTCP under some restrictions.</t>
+
+      <t>First of all it is important that compound packets are transmitted at
+      regular intervals to ensure that the feedback reporting works. The
+      tracking of session size and number of participants is also important as
+      this ensures that the RTCP bandwidth remain bounded independent of the
+      number of session participants.</t>
+
+      <t>As the compound packets are also used to establish the
+      synchronization, any newly joining participant in a session would need
+      to receive a compound packet from the media sender.</t>
+
+      <t>In summary the regular usage of compound packets must be maintained
+      throughout the complete session. Thus non-compound packets should be
+      restricted to be used as extra RTCP (e.g feedback) sent in cases when a
+      regular compound packet would not have been sent.</t>
+
+      <t>The usage of non-compound RTCP packet SHALL only be done in RTP
+      sessions operating in <xref target="RFC4585">AVPF</xref> Early RTCP or
+      Immediate feedback mode. Non-compound packets SHALL NOT be sent until at
+      least one compound packet has been sent. In Immediate feedback mode all
+      feedback messages MAY be sent as non-compound packets. In early RTCP
+      mode a feedback message scheduled for transmission as an Early RTCP
+      packet, i.e not a Regular RTCP packet, MAY be sent as a non-compound
+      packet. All packets that are scheduled for transmission as Regular RTCP
+      packets SHALL be sent as (full) compound RTCP packets as indicated by
+      <xref target="RFC4585">AVPF</xref>.</t>
+
+      <section anchor="sec-definition" title="Definition of non-compound RTCP">
+        <t>A non-compound RTCP is a packet that deviates from the rules
+        regarding (minimal) compound RTCP given in RFC3550/4585 in the aspect
+        that they don't contain both the mandatory elements SR/RR and
+        SDES-CNAME. The definition does not make any distinction based on
+        size. This means that it is possible to transmit multiple RTCP in one
+        lower layer datagram.</t>
+      </section>
+
+      <section anchor="sec-algorithm" title="Algorithm considerations">
+        <section anchor="sec-verification" title="Verification of delivery">
+          <t>If an application is to use non-compound packets it is important
+          to verify that they actually reach the session participants. As
+          outlined above in <xref target="sec-middleboxes"></xref> and <xref
+          target="sec-packet-validation"></xref> packets may be discarded
+          along the path or in the end-point.</t>
+
+          <t>The end-points can be resolved by introducing signaling that
+          informs if all session participants are capable of non-compound
+          packets or not.</t>
+
+          <t>The middle box issue is more difficult and here one will be
+          required to use heuristics to determine if the non-compound packets
+          are delivered or not. However in many cases the feedback messages
+          sent using non-compound packets will result in either explicit or
+          implicit indications that they have been received. Example of such
+          are the <xref target="RFC4588">RTP retransmission</xref> that result
+          from a <xref target="RFC4585">NACK message</xref>, the <xref
+          target="RFC5104">Temporary Maximum Media Bitrate Notification
+          message resulting from a Temporary Maximum Media Bitrate
+          Request</xref>, or the presence of a <xref target="RFC5104">Decoder
+          Refresh Point</xref> in the video media stream resulting from the
+          Full Intra Request sent.</t>
+
+          <t>An algorithm to detect consistent failure of delivery of
+          non-compound packets must be used by any application using
+          non-compound. The details of this algorithm is application dependent
+          and therefore outside the scope of this document.</t>
+
+          <t>A method to detect if non-compound RTCP are discarded is to send
+          a non-compound SR packet, then check that the timestamp is echoed
+          back in the corresponding RR packet. This verification method is not
+          compelety safe however as it SR is still one of the expected packet
+          types.</t>
+
+          <t>If the verification fails it is strongly RECOMMENDED that only
+          compound RTCP according to the rules outlined in RFC3550 is
+          transmitted.</t>
+        </section>
+
+        <section title="Single vs multiple RTCP in a non-compound RTCP">
+          <t>The result of the definition in <xref
+          target="sec-definition"></xref> may be that the resulting size of
+          non-compound RTCP can become larger than a normal compound RTCP. For
+          applications that use access types that are sensitive to packet size
+          (see <xref target="sec-low-bitrate-links"></xref>) it is strongly
+          RECOMMENDED that the use of non-compound RTCP is limited to the
+          transmission of single RTCP packets in each lower layer
+          datagram.</t>
+
+          <t>The methods to detemine the need for this is outside the scope of
+          this draft.</t>
+        </section>
+
+        <section title="Enforcing compound RTCP">
+          <t>As discussed earlier it is important that the transmission of
+          compound RTCP packets occurs at regular intervals. However, this
+          will occur as long as the RTCP senders follow the AVPF scheduling
+          algorithm defined in Section 3.5 in <xref target="RFC4585"></xref>.
+          This as all regular RTCP packets must be full compound RTCP packets.
+          Note that also in immediate mode is there a requirement on sending
+          regular RTCP packets.</t>
+        </section>
+
+        <section title="Immediate mode">
+          <t>Section 3.3 in RFC4585 gives the option to use AVPF Immediate
+          mode as long as the groupsize is below a certain limit. As feedback
+          using non-compound RTCP may become smaller it opens up for a more
+          liberal use of immediate mode.</t>
+        </section>
+      </section>
+
+      <section anchor="sec-sdp-attribute" title="SDP Signalling Attribute">
+        <t>We request to define the a "a=rtcp-nc" <xref
+        target="RFC4566"></xref> attribute to indicate if the session
+        participant is capable of supporting non-compound packets. It is a
+        required that a participant that proposes the use of non-compound RTCP
+        itself supports the reception of non-compound RTCP.</t>
+
+        <t>An offering client that wish to use non-compound RTCP MUST include
+        the attribute "a=rtcp-nc" in the SDP offer. If "a=rtcp-nc" is present
+        in the offer SDP, the answerer that supports non-compound RTCP and
+        wishes to use it SHALL include the "a=rtcp-nc" attribute in the
+        answer.</t>
+      </section>
+    </section>
+
+    <section anchor="IANA" title="IANA Considerations">
+      <t>Following the guidelines in <xref target="RFC4566"></xref>, the IANA
+      is requested to register one new SDP attribute:<list style="symbols">
+          <t>Contact name, email address and telephone number: Authors of
+          RFCXXXX</t>
+
+          <t>Attribute-name: rtcp-nc</t>
+
+          <t>Long-form attribute name: Non-compound RTCP</t>
+
+          <t>Type of attribute: media-level</t>
+
+          <t>Subject to charset: no</t>
+        </list></t>
+
+      <t>This attribute defines the support for non-compound RTCP, i.e the
+      possibility to transmit RTCP that does not comform to the rules for
+      compund RTCP defined in RFC3550. It is a property attribute, which does
+      not take a value.</t>
+
+      <t>Note to RFC Editor: please replace "RFC XXXX" above with the RFC
+      number of this memo, and remove this note.</t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>The security considerations of <xref target="RFC3550">RTP</xref> and
+      <xref target="RFC4585">AVPF</xref> will apply also to non-compound
+      packets. The reduction in validation strength for received packets on
+      the RTCP port may result in a higher degree of acceptance of spurious
+      data as real RTCP packets. This vulnerability can mostly be addressed by
+      usage of any security mechanism that provide authentication, one example
+      such mechanism is SRTP <xref target="RFC3711"></xref>.</t>
+    </section>
+
+    <section anchor="Acknowledgements" title="Acknowledgements">
+      <t>The authors would like to thank all the people who gave feedback on
+      this document.</t>
+
+      <t>This document also contain some text copied from <xref
+      target="RFC3550"></xref><xref target="RFC4585">,</xref><xref
+      target="RFC3711"> and</xref>. We take the opportunity to thank the
+      authors of said documents.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      &rfc3550;
+
+      &rfc4585;
+    </references>
+
+    <references title="Informative References">
+      &rfc3095;
+
+      &rfc4588;
+
+      &rfc5104;
+
+      <reference anchor="OMA-PoC">
+        <front>
+          <title>Specification : Push to talk Over Cellular User Plane,
+          http://www.openmobilealliance.org/release_program/docs/PoC/V1_0_1-20061128-A/OMA-TS-PoC-UserPlane-V1_0_1-20061128-A.pdf</title>
+
+          <author fullname="">
+            <organization>Open Mobile Alliance</organization>
+          </author>
+
+          <date day="28" month="November" year="2006" />
+        </front>
+      </reference>
+
+      <reference anchor="3GPP-MTSI">
+        <front>
+          <title>Specification : 3GPP TS 26.114 (v7.4.0),
+          http://www.3gpp.org/ftp/Specs/archive/26_series/26.114/26114-740.zip</title>
+
+          <author fullname="3gpp.org">
+            <organization>3GPP</organization>
+          </author>
+
+          <date day="29" month="March" year="2007" />
+        </front>
+      </reference>
+
+      <?rfc include='reference.I-D.ietf-avt-tfrc-profile'?>
+
+      <?rfc include='reference.RFC.4566'?>
+
+      <?rfc include='reference.RFC.3711'?>
+
+      <?rfc include='reference.I-D.ietf-avt-rtp-and-rtcp-mux'?>
+    </references>
+  </back>
+</rfc>

@@ -1,0 +1,550 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type='text/xsl' href='http://greenbytes.de/tech/webdav/rfc2629.xslt' ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc comments="yes"?>
+<?rfc inline="yes"?>
+<?rfc strict="yes"?>
+<?rfc sortrefs="yes"?>
+<rfc ipr="full3978" category="std" docName="&lt;draft-reid-dnsext-aleatoric-00.txt&gt;">
+
+
+<front>
+<title abbrev="Extra Entropy">A DNS Resource Record for Additional Entropy</title>
+
+<!-- $Id: draft-reid-dnsext-aleatoric-00.xml,v 1.2 2008/08/06 14:39:02 jim Exp $ -->
+<!-- ************** Jim Reid ***************-->
+<author initials="J." surname="Reid" fullname="Jim Reid">
+<organization abbrev="RTFM Ltd">RTFM Ltd</organization>
+<address>
+    <postal>
+        <street>RTFM Ltd.</street>
+        <street>6 Langside Court</street>
+        <city>Bothwell</city>
+        <country>Scotland</country>
+    </postal>
+    <phone>+44 1698 852881</phone>
+    <email>jim@rfc1035.org</email>
+</address>
+</author>
+
+<date month="August" year="2008" />
+<area>Internet</area>
+<workgroup>DNSEXT</workgroup>
+<keyword>DNS</keyword>
+<keyword>Internet-Draft</keyword>
+
+<abstract>
+<t>
+A scheme to defend against cache poisoning attacks against the
+Domain Name System (DNS) by predicting the ID and source port number
+of outgoing queries is described in this draft.
+It proposes a new resource record to provide a mechanism to introduce
+additional entropy into DNS queries.
+</t>
+
+</abstract>
+
+</front>
+
+
+<middle>
+
+<section anchor="Terminology" title="Terminology">
+
+<t>
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+document are to be interpreted as described in BCP
+14, <xref target="RFC2119">RFC2119</xref>.
+</t> 
+
+</section>
+
+<section anchor="intro" title="Introduction">
+
+<t>
+The core DNS protocol is defined in
+RFC1034<xref target="RFC1034"></xref>,
+RFC1035<xref target="RFC1035"></xref> and clarified in
+RFC2181<xref target="RFC2181"></xref>. 
+It is a replicated
+hierarchical distributed database system that provides information
+fundamental to Internet operations, such as name to address
+mapping.
+</t>
+
+<t>
+One difficulty which affects most DNS implementations is a susceptibility
+to cache poisoning attacks as a result of forging DNS responses.
+There are only 16 bits of random data for expressing a query ID, making
+it a frequent target for forgery.
+[In fairness the query ID was never intended to provide resilience to forgery
+attacks.
+It was designed to allow a resolving name server to differentiate
+between responses to the outstanding queries it had sent to some other,
+presumably authoritative, name server.]
+Until recently most DNS server implementations used a small set of fixed port
+numbers for outgoing queries.
+This made the task of forging a response to a DNS query somewhat
+straightforward.
+Stub resolvers can be vulnerable to forgery attacks because they
+generally rely on the underlying operating system to select a port number
+for their DNS queries and may also use predictable query IDs.
+If these are insufficiently random, forging responses to queries from
+stub resolvers may not pose much of a challenge to attackers.
+</t>
+
+<t>
+Current defences against forgery of DNS responses include transaction
+authentication schemes such as TSIG
+RFC2845<xref target="RFC2845"></xref>
+and Secure DNS (DNSSEC)
+RFC4033<xref target="RFC4033"></xref>
+RFC4034<xref target="RFC4034"></xref>
+RFC4037<xref target="RFC4035"></xref>.
+These can be difficult to deploy and operate, particularly for
+non-experts.
+TSIG is usually impractical outside environments where clients and servers
+are under the same administrative control.
+While DNSSEC provides integrity protection of DNS responses, it is not yet
+widely deployed.
+Considerable time and effort will be required before adoption of DNSSEC is 
+ubiquitous.
+</t>
+
+<t>
+This document proposes an interim solution that could be used until
+widespread deployment of DNSSEC.
+It advocates the introduction of a new
+resource record type, AL, to add extra entropy to DNS queries,
+minimising ther potential exposure to DNS forgery attacks.
+</t>
+
+</section>
+
+<section anchor="AL RR Format" title="AL RR Format">
+
+<t>
+A new RR type whose mnemonic is AL (aleatoric) and type code FOO is
+proposed.
+All RDATA in the proposed AL record are sent in network byte order
+(see Section 2.3.2 of RFC1034).
+The AL record's RDATA consists of a fixed field of two octets containing a
+count of the number of octets in the following variable length field.
+This variable length field SHOULD contain random data.
+</t>
+<figure>
+<preamble>
+ZS RDATA format
+</preamble>
+<artwork>
+	    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+            |                    COUNT                      |
+	    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+	    /                   ENTROPY                     /
+	    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+</artwork>
+
+<postamble>
+where:
+    COUNT          Number of octets in the ENTROPY field
+    ENTROPY        Random data
+</postamble>
+</figure>
+
+</section>
+
+<section anchor="Protocol Operation" title="Protocol Operation">
+
+<t>
+Use of this resource record for defending against forgery attacks is
+broadly comparable to the scheme used in RFC2845.
+AL resource records will generally be related to one DNS query/response
+transaction.
+Therefore there is no value in storing or retransmitting them.
+This means that AL resource records should be treated as meta-RRs and
+MUST NOT be cached.
+</t>
+
+<section anchor="Query generation" title="Query Generation">
+<t>
+A client generates an AL record on the fly by populating it with
+suitably random data and a count of the number of octets of that data.
+This is then inserted into the Additional Section of the query and the
+ARCOUNT incremented accordingly.
+If the AL record cannot be added to the query without causing it to be
+truncated, the client MUST either adjust the message to allow the AL
+record to be added or use TCP to make the query.
+Clients MUST NOT include more than one AL record in the Additional Section
+of each query.
+The client MUST retain a copy of the random data for each query until a
+response is received or the query times out.
+To maximise the opportunity for label compression, the name of the AL
+record SHOULD be identical to the QNAME in the query's Question Section.
+</t>
+</section>
+
+<section anchor="Server processing" title="Server Processing">
+<t>
+Servers MUST NOT include more than one AL record in the Additional
+Section of a response.
+If a server receives a query with more than one AL record in the
+Additional Section, the query MUST be discarded and a
+FORMERR (RCODE = 1) returned to the client.
+When a server receives a query containing an AL record in the Additional
+Section, it MUST ensure this is copied to the Additional Section of
+the corresponding reply that it constructs.
+If the AL record cannot be added to the response without causing it to be
+truncated, the server MAY adjust the message by discarding other data
+from the Additional Section.
+A server MUST NOT discard any transaction signature from the Additional
+Section to make room for an AL record.
+In some circumstances, the amount of data in the reply
+may make it impossible to include an AL record in the Additional
+Section without causing truncation.
+In these cases the server MUST send a response consisting of empty
+Answer and Authority Sections, the original Question Section
+and the client's AL record in the Additional Section.
+This reply MUST set the TC bit to signal truncation and set
+the RCODE to 0 (NOERROR).
+The client SHOULD at this point retry the request using TCP in the
+manner described in Section 4.2.2 of RFC1035.
+</t>
+</section>
+
+<section anchor="Client processing" title="Client Processing of Responses">
+<t>
+On receipt of a response containing an AL record in the Additional
+Section, the client SHOULD compare this to the random data it had
+generated for the original query.
+If these are not identical, the client MUST discard the reply and the
+corresponding state information for that query.
+When the original random data and the contents of the returned AL
+record's data are identical, the response is returned to the resolver
+that initiated the query in the conventional manner.
+A response containing more than one AL record in the Additional Section
+MUST be discarded.
+</t>
+</section>
+
+<section anchor="Other Use" title="Other applications of the AR Record Type">
+<t>
+The motivation of this document is the addition of extra randomness to DNS
+queries to make it harder to forge responses to them.
+However it is also envisaged that clients could make explicit lookups for this
+record type as a way of obtaining random data from a name server: for
+example if the server has access to a strong source of such data.
+</t>
+</section>
+
+</section>
+
+<section anchor="OpCons" title="Operational Considerations">
+
+<t>
+The generation and volume of random data for AR records need careful
+consideration.
+The random data SHOULD originate from a good entropy source.
+Large amounts of random data in an AR record is undesirable and may well
+be an unnecessary overhead because it increases the likelihood of
+truncated responses and an increased use of TCP based queries.
+</t>
+
+</section>
+
+<section anchor="Sec-Cons" title="Security Considerations">
+
+<t>
+It MUST be recognised that this document only provides a limited defence
+from DNS forgery attacks.
+Although it introduces additional entropy to DNS queries that makes it harder
+to predict their contents, this scheme provides no protection whatsoever if
+an attacker has visibility of the outgoing query or its response and can
+intercept them.
+The only way to prevent these vulnerabilities is the use of transaction
+authentication and/or DNSSEC to detect spoofed or tampered responses.
+</t>
+
+<t>
+The suggested use of AL records is an ugly kludge to essentially
+increase the number of bits for a query ID without modifying the core
+protocol or breaking the installed base.
+It is not and MUST NOT be viewed as a mechanism to either provide DNS
+transaction security or authentication.
+The scheme proposed in this document is intended to minmise the exposure
+of routine UDP-based query/response transactions to forgery attacks
+that attempt to predict the query ID and port number.
+In particular, the introduction of this scheme and AR records MUST NOT
+be used to authenticate or validate any forms of zone transfer or
+dynamic update.
+These should be protected by some combination of transaction signature
+and secure data transport mechanisms such as a VPN or IPsec.
+</t>
+</section>
+
+<section anchor="IANACons" title="IANA Considerations">
+
+<t>
+IANA is requested to issue a new type code and mnemonic for the
+proposed resource record.
+No other IANA services are required by this document.
+</t>
+
+</section>
+
+<section anchor="Acknowledgements" title="Acknowledgements">
+
+<t>
+The author would like to thank the authors of RFC 2845, Paul Vixie, Olafur
+Gudmundsson, Donald Eastlake and Brian Wellington for unintentionally
+inspiring this draft.
+</t>
+
+</section>
+
+</middle>
+
+<back>
+
+<references title='Normative References'>
+
+<reference anchor="RFC1034">
+<front>
+<title> DOMAIN NAMES - CONCEPTS AND FACILITIES </title>
+<author initials="P." surname="Mockapetris" fullname="">
+<organization/>
+<address>
+<postal><street /><city /><region /><code /><country /></postal>
+<phone /><facsimile /><email /><uri />
+</address>
+</author>
+<date year="1987" month="November"/>
+</front>
+<seriesInfo name="RFC" value="1034" />
+<format type='TXT' target='http://www.ietf.org/rfc/rfc1034.txt' />
+</reference>
+
+<reference anchor='RFC1035'>
+<front>
+<title abbrev='Domain Implementation and Specification'>Domain names - implementation and specification</title>
+<author initials='P.' surname='Mockapetris' fullname='P. Mockapetris'>
+<organization>USC/ISI</organization>
+<address>
+<postal>
+<street>4676 Admiralty Way</street>
+<city>Marina del Rey</city>
+<region>CA</region>
+<code>90291</code>
+<country>US</country></postal>
+<phone>+1 213 822 1511</phone></address></author>
+<date year='1987' day='1' month='November' /></front>
+<seriesInfo name='STD' value='13' />
+<seriesInfo name='RFC' value='1035' />
+<format type='TXT' target='http://www.ietf.org/rfc/rfc1035.txt' />
+</reference>
+
+<reference anchor='RFC2181'>
+<front>
+<title abbrev='DNS Clarifications'>Clarifications to the DNS Specification</title>
+<author initials='R.' surname='Elz' fullname='Robert Elz'>
+<organization />
+<address><postal><street /><city /><region /><code /><country /></postal>
+<phone /><facsimile /><email /><uri />
+</address>
+</author>
+<author initials='R.' surname='Bush' fullname='Randy Bush'>
+<organization />
+<address>
+<postal><street /><city /><region /><code /><country /></postal>
+<phone /><facsimile /><email /><uri />
+</address>
+</author>
+<date year='1997' month='July' /></front>
+<seriesInfo name='RFC' value='2181' />
+<format type='TXT' target='http://www.ietf.org/rfc/rfc2181.txt' />
+</reference>
+
+<reference anchor='RFC2845'>
+
+<front>
+<title>Secret Key Transaction Authentication for DNS (TSIG)</title>
+<author initials='P.' surname='Vixie' fullname='P. Vixie'>
+<organization /></author>
+<author initials='O.' surname='Gudmundsson' fullname='O. Gudmundsson'>
+<organization /></author>
+<author initials='D.' surname='Eastlake' fullname='D. Eastlake'>
+<organization /></author>
+<author initials='B.' surname='Wellington' fullname='B. Wellington'>
+<organization /></author>
+<date year='2000' month='May' />
+<abstract>
+<t>This protocol allows for transaction level authentication using shared secrets and one way hashing.  It can be used to authenticate dynamic updates as coming from an approved client, or to authenticate responses as coming from an approved recursive name server. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name='RFC' value='2845' />
+<format type='TXT' octets='32272' target='ftp://ftp.isi.edu/in-notes/rfc2845.txt' />
+</reference>
+<?xml version='1.0' encoding='UTF-8'?>
+
+<reference anchor='RFC4033'>
+
+<front>
+<title>DNS Security Introduction and Requirements</title>
+<author initials='R.' surname='Arends' fullname='R. Arends'>
+<organization /></author>
+<author initials='R.' surname='Austein' fullname='R. Austein'>
+<organization /></author>
+<author initials='M.' surname='Larson' fullname='M. Larson'>
+<organization /></author>
+<author initials='D.' surname='Massey' fullname='D. Massey'>
+<organization /></author>
+<author initials='S.' surname='Rose' fullname='S. Rose'>
+<organization /></author>
+<date year='2005' month='March' />
+<abstract>
+<t>The Domain Name System Security Extensions (DNSSEC) add data origin authentication and data integrity to the Domain Name System.  This document introduces these extensions and describes their capabilities and limitations.  This document also discusses the services that the DNS security extensions do and do not provide.  Last, this document describes the interrelationships between the documents that collectively describe DNSSEC. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name='RFC' value='4033' />
+<format type='TXT' octets='52445' target='ftp://ftp.isi.edu/in-notes/rfc4033.txt' />
+</reference>
+<?xml version='1.0' encoding='UTF-8'?>
+
+<reference anchor='RFC4034'>
+
+<front>
+<title>Resource Records for the DNS Security Extensions</title>
+<author initials='R.' surname='Arends' fullname='R. Arends'>
+<organization /></author>
+<author initials='R.' surname='Austein' fullname='R. Austein'>
+<organization /></author>
+<author initials='M.' surname='Larson' fullname='M. Larson'>
+<organization /></author>
+<author initials='D.' surname='Massey' fullname='D. Massey'>
+<organization /></author>
+<author initials='S.' surname='Rose' fullname='S. Rose'>
+<organization /></author>
+<date year='2005' month='March' />
+<abstract>
+<t>This document is part of a family of documents that describe the DNS Security Extensions (DNSSEC). The DNS Security Extensions are a collection of resource records and protocol modifications that provide source authentication for the DNS. This document defines the public key (DNSKEY), delegation signer (DS), resource record digital signature (RRSIG), and authenticated denial of existence (NSEC) resource records. The purpose and format of each resource record is described in detail, and an example of each resource record is given.&lt;/t>&lt;t> This document obsoletes RFC 2535 and incorporates changes from all updates to RFC 2535. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name='RFC' value='4034' />
+<format type='TXT' octets='63879' target='ftp://ftp.isi.edu/in-notes/rfc4034.txt' />
+</reference>
+<?xml version='1.0' encoding='UTF-8'?>
+
+<reference anchor='RFC4035'>
+
+<front>
+<title>Protocol Modifications for the DNS Security Extensions</title>
+<author initials='R.' surname='Arends' fullname='R. Arends'>
+<organization /></author>
+<author initials='R.' surname='Austein' fullname='R. Austein'>
+<organization /></author>
+<author initials='M.' surname='Larson' fullname='M. Larson'>
+<organization /></author>
+<author initials='D.' surname='Massey' fullname='D. Massey'>
+<organization /></author>
+<author initials='S.' surname='Rose' fullname='S. Rose'>
+<organization /></author>
+<date year='2005' month='March' />
+<abstract>
+<t>This document is part of a family of documents that describe the DNS Security Extensions (DNSSEC). The DNS Security Extensions are a collection of new resource records and protocol modifications that add data origin authentication and data integrity to the DNS. This document describes the DNSSEC protocol modifications. This document defines the concept of a signed zone, along with the requirements for serving and resolving by using DNSSEC. These techniques allow a security-aware resolver to authenticate both DNS resource records and authoritative DNS error indications.&lt;/t>&lt;t> This document obsoletes RFC 2535 and incorporates changes from all updates to RFC 2535. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name='RFC' value='4035' />
+<format type='TXT' octets='130589' target='ftp://ftp.isi.edu/in-notes/rfc4035.txt' />
+</reference>
+
+</references>
+
+<references title='Informative References'>
+
+
+<reference anchor="RFC3833">
+<front>
+<title> Threat Analysis of the Domain Name System (DNS)</title>
+<author initials="D." surname="Atkins" fullname="Derek Atkins">
+<organization/>
+<address>
+<postal><street /><city /><region /><code /><country /></postal>
+<phone /><facsimile /><email /><uri />
+</address>
+</author>
+<author initials="R." surname="Austein" fullname="Rob Austein">
+<organization/>
+<address>
+<postal><street /><city /><region /><code /><country /></postal>
+<phone /><facsimile /><email /><uri />
+</address>
+</author>
+<date month="August" year="2004" />
+</front>
+<seriesInfo name="RFC" value="3833" />
+</reference>
+
+<reference anchor="RFC2026">
+<front>
+<title>The Internet Standards Process -- Revision 3</title>
+<author initials="S.O." surname="Bradner" fullname="Scott O. Bradner">
+<organization>Harvard University</organization>
+<address>
+<postal>
+<street>Holyoke Center, Room 813</street>
+<street>1350 Massachusettes Avenue</street>
+<city>Cambridge</city> <region>MA</region> <code>02138</code>
+<country>US</country>
+</postal>
+<phone>+1 617 495 3864</phone>
+<email>sob@harvard.edu</email>
+</address>
+</author>
+<date month="October" year="1996" />
+</front>
+<seriesInfo name="RFC" value="2026" />
+<seriesInfo name="BCP" value="9" />
+</reference>
+
+<reference anchor="RFC2119">
+<front>
+<title> Key words for use in RFCs to Indicate Requirement Levels </title>
+<author initials="S.O." surname="Bradner" fullname="Scott O. Bradner">
+<organization>Harvard University</organization>
+<address>
+<postal>
+<street>Holyoke Center, Room 813</street>
+<street>1350 Massachusettes Avenue</street>
+<city>Cambridge</city> <region>MA</region> <code>02138</code>
+<country>US</country>
+</postal>
+<phone>+1 617 495 3864</phone>
+<email>sob@harvard.edu</email>
+</address>
+</author>
+<date month="March" year="1997" />
+</front>
+<seriesInfo name="RFC" value="2119" />
+<seriesInfo name="BCP" value="14" />
+</reference>
+
+<reference anchor='RFC3978'>
+<front>
+<title>IETF Rights in Contributions</title>
+<author initials='S.O.' surname='Bradner' fullname='Scott O. Bradner'>
+<organization /></author>
+<date year='2005' month='March' /></front>
+<seriesInfo name='BCP' value='78' />
+<seriesInfo name='RFC' value='3978' />
+</reference>
+
+<reference anchor='RFC3979'>
+<front>
+<title>Intellectual Property Rights in IETF Technology</title>
+<author initials='S.O.' surname='Bradner' fullname='Scott O. Bradner'>
+<organization /></author>
+<date year='2005' month='March' /></front>
+<seriesInfo name='BCP' value='79' />
+<seriesInfo name='RFC' value='3979' />
+</reference>
+
+</references>
+</back>
+</rfc>

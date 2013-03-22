@@ -1,0 +1,619 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc tocompact="no"?>
+<?rfc tocdepth="6"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<rfc category="std" docName="draft-matthews-p2psip-id-loc-01" ipr="full3978">
+  <front>
+    <title abbrev="ID/Loc">An ID/Locator Architecture for P2PSIP</title>
+
+    <author fullname="Eric Cooper" initials="E." surname="Cooper">
+      <organization>Avaya</organization>
+
+      <address>
+        <postal>
+          <street>1135 Innovation Drive</street>
+
+          <city>Ottawa</city>
+
+          <region>Ontario</region>
+
+          <code>K2K 3G7</code>
+
+          <country>Canada</country>
+        </postal>
+
+        <phone>+1 613 592 4343 x228</phone>
+
+        <email>ecooper@avaya.com</email>
+      </address>
+    </author>
+
+    <author fullname="Alan Johnston" initials="A." surname="Johnston">
+      <organization>Avaya</organization>
+
+      <address>
+        <postal>
+          <street></street>
+
+          <city>St. Louis</city>
+
+          <region>MO</region>
+
+          <code>63124</code>
+
+          <country>USA</country>
+        </postal>
+
+        <email>alan@sipstation.com</email>
+      </address>
+    </author>
+
+    <author fullname="Philip Matthews" initials="P." surname="Matthews">
+      <organization>Avaya</organization>
+
+      <address>
+        <postal>
+          <street>100 Innovation Drive</street>
+
+          <city>Ottawa</city>
+
+          <region>Ontario</region>
+
+          <code>K2K 3G7</code>
+
+          <country>Canada</country>
+        </postal>
+
+        <phone>+1 613 592 4343 x224</phone>
+
+        <email>philip_matthews@magma.ca</email>
+      </address>
+    </author>
+
+    <date year="2008" />
+
+    <area>Real-Time Applications Infrastructure Area</area>
+
+    <workgroup>P2PSIP Working Group</workgroup>
+
+    <abstract>
+      <t>This document describes an architecture where peers in an
+      peer-to-peer overlay use special IP addresses to identify other peers.
+      Two of the advantages of this approach are that (a) most existing
+      applications can run in an overlay without needing any changes and (b)
+      peer mobility and NAT traversal are handled in a way that is transparent
+      to most applications.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>This document describes a scheme whereby the applications running on
+      a peer can use a special IP addresses, called "LSIs" (Locally
+      Significant Identifiers), to identify other peers in the peer-to-peer
+      overlay, rather than using real IP addresses or peer IDs. Using these
+      LSIs brings the following advantages:<list style="symbols">
+          <t>An LSI is unique, unlike the real IP address of most peers (which
+          is often a private IP address);</t>
+
+          <t>An LSI can be used in the Socket API without change, unlike
+          160-bit peer IDs;</t>
+
+          <t>Applications using LSIs do not have to worry about NAT traversal,
+          mobility, or multi-homing, since these are handled by a helper
+          application.</t>
+        </list>The scheme effectively turns the overlay into a VPN. Like other
+      VPNs, it can be implemented so that most applications are unaware that
+      they are using the VPN. Only applications that want to take advantage of
+      the special properties of the overlay need to be aware.</t>
+
+      <t>Though not discussed further in the document, this scheme can be
+      trivially extended to handle clients as well.</t>
+
+      <t>This scheme is not a Peer Protocol in itself. Rather, it is an
+      enhancement to a Peer Protocol.</t>
+
+      <t>This approach can be compared with the approach taken by many of the
+      other proposals in P2PSIP (e.g., RELOAD, ASP, P2PP, and XPP/PCAN). In
+      these proposals, peers are identified with bitstrings that do not look
+      like addresses, forcing applications that want to run in an overlay to
+      use a new (as yet unspecified) API, rather than the existing Socket API.
+      Furthermore, though these proposals handle NAT traversal for the Peer
+      protocol, they do not handle NAT traversal for applications, forcing
+      each application to invent its own ICE variation. None of these
+      proposals currently consider mobility at all. All of this means that any
+      application that wants to run in an overlay requires significant
+      modification.</t>
+
+      <t>This scheme grew out of the authors' previous efforts to adapt HIP to
+      peer-to-peer overlays. More details on the relationship of this work to
+      HIP is given in <xref target="Relationship-to-HIP"></xref>.</t>
+    </section>
+
+    <section title="Overview/Example">
+      <t>This section gives an overview of how the scheme works. It is
+      non-normative.</t>
+
+      <t>This overview is in the form of an extended example and assume a
+      particular implementation approach. While not fully general, experience
+      has shown that this is a good way to explain the concepts.</t>
+
+      <t>Consider a peer-to-peer overlay. This overlay is assigned a domain
+      name by the peer that created it; say it is "example.com". This overlay
+      has a number of peers, of which there are three of interest, called
+      "venus", "earth", and "mars". Each peer in the overlay is assigned a
+      domain name underneith the "example.com" domain; for example
+      "mars.example.com". The domain names of peers are NOT stored in DNS.
+      Instead, each peer stores a mapping between its domain name and its peer
+      ID in the overlay's Distributed Database.</t>
+
+      <t>The machines Venus and Mars are using popular commercial operating
+      systems. To allow them to join the overlay, a user named Wilma has
+      installed some peer-to-peer software. This software has two parts. One
+      part an implementation of the Peer Protocol with some ID-LOC extensions,
+      the other part is a TAP device driver <eref
+      target="http://en.wikipedia.org/wiki/TUN/TAP"></eref>. This is shown in
+      the following figure.</t>
+
+      <figure anchor="fig-implementation">
+        <artwork align="center"><![CDATA[ _______________                 _________________
+|               |               |  Peer Protocol  |
+| Application   |               |  with ID-LOC    |
+|_______________|               |_________________|    Userspace
+ _______+_________________________+________+_______   -------------
+|                              +                   |     Kernel
+|          TCP/IP stack    +                       |
+|______________________+___________________________|
+ _______+___________+            __________+______
+|                   |           |  Ethernet       |
+| TAP Device Driver |           |  Device Driver  |
+|___________________|           |_________________|
+                                           +
+                                           +
+
+]]></artwork>
+      </figure>
+
+      <t>The "+" signs show the typical path of an application data packet
+      traveling to/from a remote peer. Packets sent by the application pass
+      down through the kernel's TCP/IP stack. Packets satisfying certain
+      criteria are intercepted by the TAP driver and passed to the Peer
+      Protocol, which modifies them before sending them back down through the
+      kernel's TCP/IP stack and out through the Ethernet device driver. In the
+      reverse direction, incoming packets arrive at the Ethernet device driver
+      and pass up through the TCP/IP stack and are delivered to the Peer
+      Protocol. There they are modified and then passed to the TAP driver
+      which reinjects them into the bottom of the TCP/IP stack. They then pass
+      up through the TCP/IP stack and are delivered to the application.</t>
+
+      <t>Wilma wishes to view a website on the machine Mars. To do this, she
+      opens a popular web brower and enters "http://mars.example.com" into the
+      address bar. This causes the web browser to do gethostbyname() on
+      "mars.example.com", which in turn causes a DNS query packet to be formed
+      and sent down the TCP/IP stack. It is important to note that this web
+      browser has not been modified in any way, and thus has no knowledge that
+      it is operating in a peer-to-peer overlay.</t>
+
+      <t>The DNS query packet is intercepted by the TAP driver, which passes
+      it to the Peer Protocol process. The Peer Protocol notices that the
+      domain name is in the "example.com" overlay which Venus is currently a
+      member of. So the Peer Protocol does a Distributed Database query for
+      "mars.example.com" and gets back the 160-bit peer ID of Mars.</t>
+
+      <t>The Peer Protocol process stores the peer ID of Mars and assigns it
+      an LSI (call it Y). The Peer Protocol process then creates a DNS
+      response packet indicating that "mars.example.com" maps to Y. This
+      packet is passed to the TAP driver, which injects it into the bottom of
+      the TCP/IP stack. </t>
+
+      <t>The result is that the Wilma's web browser gets back the LSI "Y" as
+      the address of Mars. </t>
+
+      <t>Wilma's web browser then issues a connect() call to create a TCP
+      connection to "Y". This causes the TCP/IP stack to send a SYN packet
+      with destination "Y". This packet is intercepted by the TAP driver and
+      passed to the Peer Protocol process. </t>
+
+      <t>The Peer Protocol stores the TCP SYN while it sets up a UDP
+      connection between Venus and Mars. This UDP connection is established
+      using the connection establishment procedures of the peer protocol and
+      uses ICE to traverse any NATs between Venus and Mars. This UDP
+      connection is then uses as a "pipe" to carry all traffic between Venus
+      and Mars encapsulated inside it.</t>
+
+      <t><list>
+          <t>This approach is known as the "Outer UDP encapsulation". An
+          alternative approach, known as the "Null encapsulation" is described
+          in the normative text below.</t>
+        </list></t>
+
+      <figure>
+        <artwork align="center"><![CDATA[
+ ___________                                      ___________
+|           |                                    |           |
+|           | -------- outer UDP pipe ---------- |           |
+|           |                                    |           |
+|  Venus    | === web browser TCP connection ==  |   Mars    |
+|           | ===== other TCP connection ======  |           |
+|           | -------- outer UDP pipe ---------- |           |
+|___________|                                    |___________|
+
+
+]]></artwork>
+      </figure>
+
+      <t>Once this UDP pipe is established, the Peer Protocol process on Venus
+      then modifies the TCP SYN so that it will travel inside the "UDP pipe"
+      to the machine Mars. By doing this, the web browser and the web server
+      do not need to run ICE or deal with peer IDs. </t>
+
+      <t>At Mars, the UDP header is removed and the TCP SYN is then passed to
+      the TAP driver on Mars, which passes it up through the TCP/IP stack.</t>
+
+      <t>Subsequent TCP packets between Venus and Mars are also encapsulated
+      inside UDP and sent along the pipe. </t>
+    </section>
+
+    <section title="Terminology">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119">RFC 2119</xref>.</t>
+
+      <t>Readers are expected to be familar with <xref
+      target="I-D.ietf-p2psip-concepts"></xref> and the terms defined
+      there.</t>
+
+      <t>This document defines the following terms:<list style="hanging">
+          <t hangText="LSI:">An IP address uses to identify a peer in the
+          overlay.</t>
+
+          <t hangText="Outer UDP Encapsulation">An encapsulation scheme for
+          packets travelling between two peers in the overlay that insert a
+          UDP header and a demux header between the IP header and the existing
+          transport header.</t>
+
+          <t hangText="Null Encapsulation">An excapsulation scheme for packets
+          travelling between two peers in the overlay that does not insert any
+          extra headers, but instead modifies fields in the existing IP and
+          transport headers.</t>
+        </list></t>
+    </section>
+
+    <section title="Details">
+      <t>Figure X shows the conceptual relationship between the parts
+      discussed in this section. </t>
+
+      <figure>
+        <artwork align="center"><![CDATA[ _______________ _______________
+|               |               |
+| Peer Protocol |      SIP      |  Other Apps ...
+|_______________|_______________|_________________
+|                                                 |
+|                 TCP, UDP, etc                   |
+|_________________________________________________|
+|                                                 |
+|                   Shim layer                    |
+|_________________________________________________|
+|                                                 |
+|                  IP (v4 or v6)                  |
+|_________________________________________________|
+]]></artwork>
+      </figure>
+
+      <t>In this architecture, the Peer Protocol is responsible for creating
+      the mapping between LSIs and real addresses, while the Shim layer is
+      responsible for doing the translation on a packet-by-packet basis as
+      well as adding any necessary encapsulation. More details on these roles
+      can be found below.</t>
+
+      <section title="LSI">
+        <t>An LSI is either:<list style="symbols">
+            <t>An IPv4 address selected from a range to be allocated by IANA
+            (likely a /16), or</t>
+
+            <t>An IPv6 address selected from a range to be determined (perhaps
+            the ORCHID range <xref target="RFC4843"></xref>).</t>
+          </list>An LSI has local significance only.</t>
+
+        <t>Applications can freely intermix LSIs with ordinary
+        (&ldquo;real&rdquo;) addresses. For example, an application can use
+        LSIs to identify nodes in the overlay, and real addresses to identify
+        nodes off the overlay.</t>
+      </section>
+
+      <section title="Peer Protocol">
+        <t>The job of the Peer Protocol in this scheme (in addition to its
+        other duties of managing the overlay and implementing the Distributed
+        Database <xref target="I-D.ietf-p2psip-concepts"></xref>) is to
+        establish connections between peers and to manage the mappings between
+        LSIs and real addresses. To do this, the Peer Protocol does an ICE
+        exchange with the destination peer to negotiate a set of addresses and
+        ports to use for the data traffic.</t>
+
+        <t>The stimulus for doing this ICE exchange is an indication from the
+        Shim layer saying that is has no set of real addresses to use for a
+        given destination LSI (cf. an ARP cache miss). The Peer Protocol then
+        does an ICE exchange with the destination peer, routing the
+        Offer/Answer though other peers in the overlay. Once the exchange has
+        completed, the Peer Protocol installs the appropriate mapping entry
+        into the Shim layer.</t>
+      </section>
+
+      <section title="Shim Layer">
+        <t>The shim layer is a new layer introduced between the IP layer and
+        the transport layer. It has two functions: translating LSIs to/from
+        real addresses, and adding any necessary encapsulation.</t>
+
+        <t>There are two forms of encapsulation: null encapsulation and
+        outer-UDP encapsulation.</t>
+
+        <figure>
+          <artwork align="center"><![CDATA[ _____________________________         ___________________________
+|                             |       |                           |
+|      Application data       |       |     Application data      |
+|_____________________________|       |___________________________|
+|                             |       |                           |
+| Transport (TCP or UDP only) |       |     Transport header      |
+|_____________________________|       |___________________________|
+|                             |       |                           |
+|        Demux header         |       |    IP header (v4 or v6)   |
+|_____________________________|       |___________________________|
+|                             |
+|         UDP header          |             Null Encapsulation
+|_____________________________|
+|                             |
+|     IP header (v4 or v6)    |
+|_____________________________|
+      
+    Outer-UDP Encapsulation
+]]></artwork>
+        </figure>
+
+        <figure>
+          <preamble>The Demux header looks like:</preamble>
+
+          <artwork><![CDATA[    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |  Protocol     |                Reserved                       |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+]]></artwork>
+        </figure>
+
+        <t>Here the protocol field indicates which transport (or other)
+        protocol follows, and uses the same codepoints as used for the
+        &lsquo;protocol&rsquo; field in the IPv4/IPv6 header.</t>
+
+        <t>The null encapsulation adds no extra bytes but simply translates
+        LSIs to real addresses and modifies port numbers as necessary to
+        traverse NATs. The null encapsulation is very similar to existing
+        protocol stacks, but requires more work to set up and maintain because
+        each connection requires its own set of ICE connectivity checks.</t>
+
+        <t>By contrast, the Outer-UDP encapsulation adds a UDP header plus a
+        4-byte demux header between the IP header and the transport header.
+        The Outer-UDP encapsulation multiplexes all connections between two
+        given nodes inside a single UDP "pipe". Because intervening NATs see
+        only the outer UDP header, this encapsulation requires only one ICE
+        exchange (to set up the outer pipe), regardless of how many
+        connections there are inside the pipe.</t>
+
+        <t>The Outer-UDP encapsulation can be used with all transport
+        protocols, while the null encapsulation can only be used with UDP and
+        TCP.</t>
+
+        <t>To explain the mapping and encapsulations in more detail, consider
+        a transport layer PDU is sent from X:x to Y:y, where X is the LSI of
+        the local host, Y is the LSI of the remote host, and x and y are the
+        port numbers allocated off of these identifiers. For both
+        encapsulations, the Peer Protocol will have used ICE to determine a
+        corresponding set of real addresses and ports.</t>
+
+        <t>For the null encapsulation, each transport layer 5-tuple (transport
+        protocol,X,x,Y,y) will have a corresponding set of real addresses and
+        ports (X&rsquo;,x&rsquo;,Y&rsquo;,y&rsquo;). When sending, the port
+        numbers x and y in the transport header are replaced with x&rsquo; and
+        y&rsquo;, and an IP header is added containing addresses X&rsquo; and
+        Y&rsquo; is added. (TBD: Are the addresses in the transport layer
+        pseudo-header also replaced?). The reverse replacement is done when
+        receiving a PDU.</t>
+
+        <t>If either X or Y change their real address, then an ICE exchange is
+        required to determine a new 5-tuple for each connection. For UDP, this
+        new 5-tuple is simply used in place of the old.</t>
+
+        <t><list>
+            <t>OPEN ISSUE: For TCP, this doesn&rsquo;t work, since generating
+            the new 5-tuple requires a new TCP handshake. This seems to imply
+            that the TCP layer has to be aware of the change in address. So
+            what do we do? Do we just say &ldquo;don&rsquo;t use null
+            encapsulation for TCP if you want mobility to work&rdquo;? Or do
+            we figure out how to make this work?</t>
+          </list></t>
+
+        <t>For the outer-UDP encapsulation, there is a single 5-tuple
+        (UDP,X&rsquo;,x&rsquo;,Y&rsquo;,y&rsquo;) for each (X,Y) pair. When
+        sending, the transport header is not modified, instead a demux header
+        and a outer UDP header is added. Ports x&rsquo; and y&rsquo; are
+        inserted in the outer UDP header, and an IP header containing
+        addresses X&rsquo; and Y&rsquo; is added.</t>
+
+        <t>Mobility is simpler with the Outer-UDP encapsulation. In this case,
+        only a single ICE exchange is required, and the new 5-tuple is simply
+        used in place of the old. There are no TCP concerns in this case,
+        since the TCP header is never modified.</t>
+      </section>
+    </section>
+
+    <section title="Domain Names">
+      <t>Each overlay is assigned a domain name by the peer that creates the
+      overlay. This can be any domain name that the peer has authority
+      over.</t>
+
+      <t>Each peer is assigned a unique domain name underneith the overlay's
+      domain name. This document does not specify how this assignment is done,
+      but one option might be to use the peer's machine name as the label in
+      front of the overlay domain name, and then use some scheme to break
+      ties. </t>
+
+      <t>Each peer MUST store a mapping between its domain name and its peer
+      ID in the Distributed Database. The peer's domain name MAY be stored in
+      DNS as well.</t>
+    </section>
+
+    <section title="Example">
+      <t>In this section, we show a SIP call between two UAs in an
+      overlay.</t>
+
+      <t>This example illustrates how this scheme allows applications to work
+      in an overlay without being aware of that fact. The two SIP UAs in this
+      example use standard client-server SIP to communicate, without needing
+      any SIP extensions.</t>
+
+      <t>IMPORTANT NOTE: Without extensions to SIP, there is no way to do an
+      AOR to contact URI lookup using the Distributed Database. So in this
+      example, Wilma calls Fred by specifying Fred&rsquo;s machine name, using
+      the domain name scheme described in the previous section. With this
+      caveat, everything works with SIP as it is today.</t>
+
+      <t>The figure below shows the call flow for this example.</t>
+
+      <figure>
+        <artwork><![CDATA[Wilma                                                              Fred
+Venus                                  Earth                       Mars
+ |                                       |                           |
+ |-- DD query for mars.example.com  ---->|                           |
+ |<--------------- DD response ----------|                           |
+ |                                       |                           |
+ |----------- Msg w/ICE Offer ---------->|                           |
+ |                                       |----- Msg w/ICE Offer ---->|
+ |                                       |<---- Msg w/ICE Ans -------|
+ |<---------- Msg w/ ICE Ans ------------|                           |
+ |                                                                   |
+ |<=================== ICE Connectivity Checks =====================>|
+ |                                                                   |
+ |<-------------------- TCP and TLS handshake ---------------------->|
+ |                                                                   |
+ |<------------- SIP transaction over TLS connection --------------->|
+ |                                                                   |
+
+]]></artwork>
+      </figure>
+
+      <t>This example shows three machines, named &ldquo;Venus&rdquo;,
+      &ldquo;Earth&rdquo;, and &ldquo;Mars&rdquo; which are part of a larger
+      overlay named &ldquo;example.com&rdquo;. Wilma is on Venus, and Fred is
+      on Mars.</t>
+
+      <t>Wilma initiates the call by typing in "sips:fred@mars.example.com"
+      into her UA. Wilma&rsquo;s UA does a gethostbyname() call to resolve
+      &ldquo;mars.example.com&rdquo; and this is resolved by doing a
+      Distributed Database lookup. In this example, it turns out that the
+      corresponding resource record is stored on the machine "Earth". As a
+      result, an LSI for the peer Mars is returned from the gethostbyname()
+      call to Wilma&rsquo;s UA.</t>
+
+      <t><list>
+          <t>NOTE: The Peer Protocol allocates an LSI and remembers that it
+          maps to the machine named "mars.solar-system.p2p" which has the peer
+          id learned from the response.</t>
+        </list></t>
+
+      <t>Wilma&rsquo;s UA then issues a connect() to this LSI. This causes TCP
+      to send a SYN to this LSI. Since there is currently no direct connection
+      between Venus and Mars, the Shim layer finds no mapping for this LSI and
+      thus generates an indication to the Peer Protocol.</t>
+
+      <t>The Peer Protocol layer on Venus now does an ICE offer/answer
+      exchange with the Peer Protocol layer on Mars. The Offer is sent on the
+      existing connection to Earth, which forwards it to Mars, and the Answer
+      is returned in the same way. ICE connectivity checks are then done, and
+      the result is a tuple of real addresses and ports for the
+      connection.</t>
+
+      <t>If null encapsulation is used, then the TCP connection was
+      established as part of the ICE connectivity checks. This new connection
+      is used only for SIP signaling, and subsequent connections require a new
+      offer/answer exchange.</t>
+
+      <t>But if Outer-UDP encapsulation is used, then all the ICE connectivity
+      checks do is establish a UDP "pipe" between the two peers, and the TCP
+      and TLS handshakes must still be done inside that pipe (as shown above).
+      However, this UDP pipe can be used for all traffic between Venus and
+      Mars, including subsequent RTP packets) without the need of subsequent
+      offer/answer exchanges.</t>
+    </section>
+
+    <section title="IANA Considerations">
+      <t>TBD.</t>
+    </section>
+
+    <!-- "IANA Considerations" -->
+
+    <section title="Security Considerations">
+      <t>TBD.</t>
+    </section>
+
+    <section title="Appendix: Discussion of Design Choices">
+      <t>This appendix discusses the thinking around some of the design
+      choices made.</t>
+
+      <section title="LSIs have Local Significance">
+        <t>In the design presented here, the LSIs presented to applications
+        have local significance only. For IPv4, this seems to be the only
+        reasonable choice, as it would be difficult to get an IPv4 block of
+        addresses large enough to be of wider significance. However, for IPv6,
+        a wider scope would be possible, and that option was considered. In
+        particular, it would have been possible to use a globally scoped
+        identifier, like the HIT of HIP. At first blush, it seems that using a
+        globally scoped identifier would allow an applications to send the
+        identifier (embedded in protocol messages) to an application on other
+        nodes and have that identifier make sense.</t>
+
+        <t>However, an examination of the details shows that there are
+        problems with this approach. Say a node X has an indentifier for node
+        Z (e.g., a HIT) and sends its to node Y. For Y to be able to use this
+        identifier, it must know how to establish a connection with node Z. If
+        node Y is in multiple overlays, then Y has no idea which overlay to
+        search to find node Z. It is this difficulty that led us to the
+        decision to make LSI have local significance only.</t>
+      </section>
+    </section>
+
+    <section anchor="Relationship-to-HIP" title="Relationship to HIP">
+      <t>The fundamental concept in this document, that of an identifier for a
+      node which is distinct from the node&rsquo;s real addresses, has been
+      adopted from HIP. In HIP, this identifier (known as a HIT <xref
+      target="I-D.ietf-hip-base"></xref>) is always an IPv6 identifier, and
+      has global scope and cryptographic properties, making it computationally
+      hard for an second node to steal a node&rsquo;s identity. (Current HIP
+      implementations also implement an IPv4 identifier as a local identifier,
+      but the properties of this IPv4 identifier are not currently specified
+      anywhere).</t>
+    </section>
+
+    <!-- "Security Considerations" -->
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <?rfc include='reference.RFC.2119'?>
+
+      <?rfc include='reference.I-D.ietf-mmusic-ice'?>
+    </references>
+
+    <references title="Informative References">
+      <?rfc include='reference.I-D.ietf-p2psip-concepts'?>
+
+      <?rfc include='reference.I-D.ietf-hip-base'?>
+
+      <?rfc include='reference.RFC.4843'?>
+    </references>
+  </back>
+</rfc>

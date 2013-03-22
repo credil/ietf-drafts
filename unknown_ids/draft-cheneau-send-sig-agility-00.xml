@@ -1,0 +1,944 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM 'rfc2629.dtd'[
+		       <!ENTITY RFC3972 SYSTEM
+		       "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3972.xml">
+		       <!ENTITY RFC4982 SYSTEM
+		       "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4982.xml">
+		       <!ENTITY RFC3971 SYSTEM
+		       "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3971.xml">
+		       <!ENTITY RFC4581 SYSTEM
+		       "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4581.xml">
+	
+]>
+
+<?rfc toc="yes"?>
+<rfc ipr='trust200811' docName='draft-cheneau-send-sig-agility-00' updates="RFC3971">
+	<front>
+		<title abbrev="Signature Algorithm Agility in SEND">
+			Signature Algorithm Agility in the Secure Neighbor Discovery (SEND) Protocol
+		</title>
+		<author initials="T.C" surname="Cheneau" fullname="Tony Cheneau">
+			<organization abbrev="TMSP">
+				Institut TELECOM, TELECOM SudParis, CNRS SAMOVAR UMR 5157 
+			</organization>
+			<address>
+				<postal>
+					<street>9 rue Charles Fourier </street>
+					<city>Evry</city>
+					<code>91011</code>
+					<country>France</country>
+				</postal>
+				<email>tony.cheneau@it-sudparis.eu</email>
+			</address>
+		</author>
+		<author initials="M.M" surname="Maknavicius" fullname="Maryline Laurent-Maknavicius">
+			<organization abbrev="TMSP">
+				Institut TELECOM, TELECOM SudParis, CNRS SAMOVAR UMR 5157 
+			</organization>
+			<address>
+				<postal>
+					<street>9 rue Charles Fourier </street>
+					<city>Evry</city>
+					<code>91011</code>
+					<country>France</country>
+				</postal>
+				<email>maryline.maknavicius@it-sudparis.eu</email>
+			</address>
+		</author>
+		<author initials="S.S" surname="Shen" fullname="Sean Shen">
+			<organization abbrev="Huawei">Huawei</organization>
+			<address>
+				<postal>
+					<street>No. 9  Xinxi Road </street>
+					<city> Beijing </city>
+					<code>100085</code>
+					<country>China</country>
+				</postal>
+				<email>sshen@huawei.com</email>
+			</address>
+		</author>
+		<author initials="M.C.V"  surname="Vanderveen" fullname="Michaela Vanderveen">
+			<organization abbrev="Qualcomm">
+				Qualcomm
+			</organization>
+			<address>
+				<email>mvandervn@gmail.com</email>
+			</address>
+		</author>
+		<date month="February" year="2009"/>
+		<area>Internet</area>
+		<workgroup>CGA &amp; SEND maintenance</workgroup>
+		<keyword>CGA</keyword>
+		<keyword>RSA</keyword>
+		<keyword>ECDSA</keyword>
+		<abstract>                                     
+			<t>This draft describes a mechanism to enable the Secure Neighbor Discovery (SEND) protocol to select
+				between different signature algorithms to use with Cryptographically Generated Addresses (CGA). 
+				It also provides optional support for interoperability between nodes that do not share any 
+				common signature algorithms.</t> 
+		</abstract>
+
+	</front>
+	<middle>
+		<section anchor="sec-intro" title="Introduction">
+			<t>Cryptographically Generated Addresses (CGA) <xref target="RFC3972"/> have been designed primarily 
+				for securing Neighbor Discovery <xref target="RFC3971"/>. At the time when they were specified,
+				 CGAs allowed only one signing algorithm, namely RSA. While
+				mandating a single public key signing algorithm does help with interoperability, it does not address the issue of 
+				computational efficiency. It is well known that the RSA signature generation and verification is computationally
+				expensive. </t>
+			<t> The usage scenarios associated with neighbor discovery have recently been
+				extended to include environments with mobile or nomadic nodes. 
+				Many of these nodes have limited battery power and computing resources. Therefore, heavy public key signing
+				algorithms like RSA are not feasible to support on such constrained nodes.  Fortunately, more lightweight
+				yet secure signing algorithms do exist and have been standardized, e.g. Elliptic Curve based algorithms.</t>
+			<t>It is then a worthwhile goal to extend secure neighbor discovery to support signing algorithm agility. Besides 
+				accommodating power-constrained nodes, signing algorithm agility is also desired as a safety measure
+				over time, to offer alternatives when cryptanalysis of one type of algorithm makes significant progress.
+			  
+			</t>
+			<t>The aim of this memo is to outline options for allowing public key signing algorithm agility for nodes 
+				configured to perform secure neighbor discovery operations when attaching to a new link.
+				The extent to which these options impact existing specifications <xref target="RFC3971"/> and
+				<xref target="RFC3972"/> is also addressed.</t>
+                </section>
+		<section anchor="sec-problem-overview" title="Overview">
+
+			<section title="Compatibility with existing specifications">
+			
+
+			<t>	The current SEND protocol specification, <xref target="RFC3971"/>, mandates the use of the RSA signature algorithm. 
+				Since the time of its writing, different signature algorithms have been shown to be secure and have been 
+				adopted by other protocols in an effort to reduce key length, signature generation and verification time, and increase security level.
+				This shift in signature algorithm adoption particularly benefits  lightweight devices, which are 
+				power and memory-limited but in need of secure signing algorithms support. For these reasons, we feel that 
+				the restriction on the signature algorithm for SEND is no longer warranted.
+				
+				 			</t>
+			<section title="Classification of SEND nodes">
+				<t>At the time of this writing, there are no known large-scale or even small-scale deployments of <xref target="RFC3971"/>-compatible devices.
+				However, in the interest of caution, we assume that there exist nodes that support only the RSA algorithm and that are configured
+				to perform secure neighbor discovery when attaching to a new link. Such nodes may not be updated in the near term or for the foreseeable future.
+				On the other hand, it appears that there will be deployments of nodes that support only Elliptic Curve Cryptography as their
+					public key algorithm, i.e. ECDSA as a signature algorithm, rather than traditional RSA. </t>
+
+				<t> To ensure that all possible network/link configurations are considered when designing a signature agility solution, 
+					we categorize nodes (hosts and routers) according to their support for different signature algorithms, as follows: 
+				<list style="hanging">
+				
+					<t hangText="Type H1 host:"> <vspace blankLines="1"/> A host that only supports one type of  signature algorithm and has a CGA generated 
+										with the public key of this algorithm.  </t>
+										 <t>Examples of this type of hosts: an old host that does not support signature agility, 
+											 i.e. only supports RSA signature algorithm; or, a host that only supports ECDSA signature.</t>
+									
+					<t hangText="Type H2 host:"> <vspace blankLines="1"/> A host that supports multiple signature algorithms and has a CGA generated with 
+						only one key selected from among its supported algorithms.</t>
+										<t>Examples of this type of hosts: (1) a host that supports RSA and ECDSA signature algorithms, 
+										but only has a CGA derived with an RSA public key; (2) a host that supports RSA and ECDSA signature algorithms, 
+										but only has a CGA derived with an ECC public key. </t>
+										
+					<t hangText="Type H3 host:"> <vspace blankLines="1"/>A host that supports multiple signature algorithms and has a CGA generated with 
+										multiple keys of different supported algorithms.</t>
+										<t>Such CGA generation is made possible by the introduction of a new  CGA extension (see companion
+											draft <xref target="cheneau-cga-pk-agility"/>). Such hosts can be compatible with hosts of other types  for
+										secure neighbor discovery.</t>
+					<t hangText="Type H4 host:"> <vspace blankLines="1"/> A host that supports multiple signature algorithms and has multiple CGAs, each of which is  
+										 associated with a single key of one supported algorithm.  For simplicity,
+										we do not consider hosts that have multiple CGAs, one or more of which are generated from multiple public
+										keys. </t>
+										<t> A node MUST select and settle on one CGA when building a trust relationship with another device via SeND (more 
+											below). In such cases, a destination node may be reached at a CGA associated with a signature algorithm 
+											that the originating node cannot verify.  The destination node will need to securely redirect the originating node 
+											to one of its other CGA(s) (presumably with a common signature algorithm). The need for and method to secure 
+											the binding between the two CGAs of the destination node  is still an open problem.</t> 
+										 <t>Based on this reasoning, consideration of H4 type nodes is left for future work. <!-- MCV 2/27: this way
+										 	we don't appear lazy :-) --></t> 
+				</list></t>
+			
+
+			<!-- MCV removed it 2/20: completely out of place and incorrect :
+			<t>	We choose to distinguish between 
+				signing and verifying abilities of a node. If a device supports a public key algorithm, then most likely it is able to both sign and verify, 
+				though it remains a configuration/local-policy choice to perform both or signing only. </t> -->
+
+				<t>Routers are more likely to possess 
+					the resources necessary to support multiple signature algorithms. It is also more feasible
+					that routers employ certificates. However, for a basic signature agility solution, we do not mandate that 
+					routers support multiple signature algorithms. </t>  
+				<t>Possible router devices with different signature algorithm support ability are: 
+				<list style="hanging">
+					<t hangText="Type R1 router:"> <vspace blankLines="1"/> A router that only supports one type of signature algorithm and has a CGA and Certificate with 
+						a public key of this algorithm.  </t>
+					
+					<t>Such routers are expected to be commonplace, as compliance with <xref target="RFC3971"/> suffices for them. </t>
+					<t hangText="Type R2 router:"> <vspace blankLines="1"/> A router that supports multiple types of signature algorithms and has one CGA and Certificate with 
+										a public key of one of the algorithm types.  </t>
+										<t>This type of router can sign and verify signatures of the type of certificate it owns, and additionally, 
+										 it can verify signatures of other algorithm types. </t>
+					<t hangText="Type R3 router:"> <vspace blankLines="1"/>  A router that supports multiple types of signature algorithms and has multiple CGAs 
+										and Certificates with public key of several different algorithm types.  </t>
+										<t>This type of router can sign and verify signatures of multiple types. Such routers may not be attractive to 
+											build and deploy due to increased requirements on its resources. Moreover using multiple CGAs (with no bindings) 
+											may make that router appear as having multiple identities.</t>
+					<t hangText="Type R4 router:"><vspace blankLines="1"/> A router that supports multiple types of signature algorithms
+						and has one CGA composed of multiple Publics Keys and multiple certificates containing each a Public Key.</t>
+				
+				</list>
+				</t>
+
+			</section>
+
+			<section title="Principal Scenarios">
+			<t>Based on the discussion above, a SEND agility solution should at least properly deal with the communication between devices of type H1, H2, H3, R1 and R2. </t>
+			<t> <list style="empty">
+				<t>An H1 or R1 node interacting with an H2 or R2 node: i.e., a node supporting only RSA (for example, 
+					an old non-agility node which only supports RFC3971) and a node supporting 
+					both RSA and ECDSA (or other new algorithms). These two nodes must be able to perform secure neighbor discovery.</t>
+				<t>An H1 or R1 node interacting with another H1 or R1 node, but their algorithms differ: e.g., a node supporting only 
+					RSA (for example, an old non-agility node which only supports RFC3971) and a node supporting only 
+					ECDSA (or other new algorithms). In this case, implementations supporting SEND signature agility solution 
+					may likely realize the incompatibility, while older implementations may not. </t>
+				<t>A node of any type (H1, H2, H3, R1, R2, R3 or R4) interacting with another node, their algorithms differ but there is a 3rd party willing/able to help: 
+					this is an optional solution applicable to the previous scenario, where two nodes that support SEND but do not have any 
+					signature algorithms in common can talk through a third party (router). In this case they should be able to 
+					perform facilitated secure neighbor discovery.</t>
+				<t>An H2, H3 or R2 node interacting with another H2, H3, or R2 node: e.g., two nodes that support at least two signature algorithms 
+					in common (one of which is likely preferred over the other), will be able to perform secure neighbor discovery with any of the two algorithms.</t>
+			</list></t>
+			</section>				
+		</section>
+
+		<!-- 2/13/2009 TC: is this section required at all ? It looks like a roadmap for all of us. I think the content should be spread among the document. Can I ?
+			MCV 2/20 >> I like this section. It outlines the goal of this entire doc. You can move it around but please don't split it.
+			If anything it should go at the beginning, in case readers wondering why we're doing this.
+			TC 2/20: I won't touch this for the -00 version then :) -->
+		<section title="Agility Requirements">
+			<t>We hold the following to be requirements on a signing algorithm agility solution for SEND: </t>
+			<t> <list style="symbols">
+				<t>A Signature-Algorithm-Agility-Node should be able to communicate with a Non-Signature-Algorithm-Agility-Node, 
+					but not necessarily employ SEND. Traditional ND should suffice, to accommodate nodes that only support 
+					one type of Signature Algorithm, which may not be RSA. Local policy MAY disable this behavior, namely
+					the use of unsecured ND messages when communicating with a node that does not share any common signature
+					algorithm.</t>
+				<t>Two Signature-Algorithm-Agility nodes that support a common Signature Algorithm should be able to communicate 
+					using  SEND and sign messages using the common Signature Algorithm.</t>
+				<t>The current SEND/CGA specifications should incur as few changes as possible.</t>
+			</list> </t>
+		</section>
+
+		<section title="Mechanism for Agility Support of CGA and SeND">
+<!--			<t>Therefore, we analyze the SEND protocol and its core component, the CGAs. Looking more closely at the 
+				CGA definition, we see that CGAs in <xref target="RFC3972"/> are designed to be Signature Algorithm agnostic.</t>
+-->
+			<!-- [Sean] I haven't understand the meaning of this paragraph: 
+				CGA (3972 version) does not need to know which algorithm is used, since there is only one. 
+				CGA (after we put more algorithms in the extension field of pulblic key filed) should know which algorithmes are carried, 
+				do not know which algorithm is chosen. Actually, CGA should not do the "choosing" job at all. 
+			        TC: True, this is the work of SEND to select which Public Key is used -->
+			<t>To achieve signature agility for SeND, it must be possible for a CGA to be generated from and to be securely associated with 
+				multiple public keys corresponding to different signature algorithms. This capability is described in the companion 
+				draft <xref target="cheneau-cga-pk-agility"/>. </t>
+
+<!--			<t>This document proposes an update of <xref target="RFC3971"/> and offers the following features:
+			<list style="symbols">
+				<t>SEND-enabled nodes may support Signature Algorithm different from RSA;</t>
+				<t>SEND-enabled nodes may support multiple Signature Algorithm at once;</t>
+				<t>SEND-enabled nodes must securely communicate when they share a common Signature Algorithm;</t>
+				<t>In scenario involving nodes handling multiple Signature Algorithm (including RSA) and RFC3971 legacy 
+					nodes, RSA can be used as a fall-back mechanism;</t>
+				[Sean] I don't think we need rsa as fall-back mechanism. The agility machanism should automatically choose a proper algorithms.
+				TC: I think that, without many restriction, we can say that "if a RSA key is used, it should be place in the Public Key field of the CGA PDS, this would make our revision of the protocol backward compatible
+
+				<t>An optional support for secure communication thought router when nodes don't share any common Signature Algorithm.</t>
+			</list>
+			</t>
+-->
+			<t>This document  proposes an update to  <xref target="RFC3971"/>  to allow two SEND nodes to chose an appropriate signature algorithm. 
+			This solution encompasses the following:
+			<list style="symbols">
+				<t>A "Supported Signature Algorithm" NDP option which contains a list of
+   					signing algorithms that the sender node supports for SEND purposes; </t> 
+				<t>A modification of the "RSA Signature" option defined in the SEND specification;</t>
+			
+				<t>An optional solution to support secure communication through a router acting as a third party when nodes 
+					don't share any common Signature Algorithm.</t>
+			</list></t> 
+			<t> We define the aforementioned options format and provide processing rules for both senders 
+				and receivers of SEND messages employing the new options, as well as example negotiation message flows.</t>
+
+			
+		</section>
+	</section>
+
+
+
+		<section anchor="sec-pki_opt" title="Supported Signature Algorithm Option">
+			<t> The Supported Signature Algorithm NDP option contains a list of  signing algorithms 
+				that the sender nodes supports.  The format of this option is described in
+				<xref target="fig-supp_PKI"/>:</t>
+			
+			<figure anchor="fig-supp_PKI" title="Supported Signature Algorithm option">
+		<artwork align="left"><![CDATA[
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|     Type      |    Length     |R|         Reserved            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| Sig. Alg. 1   | Sig. Alg. 2   |  Sig. Alg 3.  | Sig. Alg 4.   |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+~                                                               ~
+|                          ...                                  |
+~                                                               ~
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|     ...      | Sig. Alg. N  |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ ]]></artwork>
+
+			</figure>
+			
+			<t>
+				<list style="hanging">
+					<t hangText="Type"> <vspace blankLines="1"/> NDP option type, TBA. See <xref target="sec-iana"/>.</t>
+					<t hangText="Length"><vspace blankLines="1"/> The length of the option 
+						(including the Type, Length fields), in octets.  8-bit unsigned integer,  the value 0 is invalid.</t>
+					<!-- TC: I invert R and "Number of Supported Signing Algorithms" fields, so that both of them can 
+						be accessed in a faster way (we should save one shift op) -->
+					<t hangText="R"><vspace blankLines="1"/>  "Resend" flag. If this bit is set, it indicates that the sender of this
+						packet was not able to validate the packet that this packet was sent in response to. Spontaneous
+						packets (i.e. those not sent in response to a [request] packet) 
+						MUST leave this bit cleared. </t> <!-- TC: initially, it was a MAY, but I don't see the special case it could address -->
+					<t hangText="Reserved"><vspace blankLines="1"/> Reserved for future use. This 15-bit field  MUST be set 
+						to zero by the sender, and MUST be ignored by the receiver.</t>
+
+					<t hangText="Signature Algorithm"><vspace blankLines="1"/>
+						A one-octet long field indicating a signature algorithm that is
+						supported by the node, this support implies at least ability to
+						verify signatures of this PK algorithm.
+						
+						<vspace blankLines="1"/>
+						<!-- Old, removed by MCV 2/17: 
+						If the first leftmost bit is set to 1, it  indicates that the emitter is able to verify this signature algorithm. 
+						If the second leftmost bit is set to 1, it indicates that the emitter is able to generate a signature using this signature algorithm.
+						At least one of the first two bits MUST be set. 
+						The sixth rightmost bits of the field, named Signature Type subfield, indicates which signature algorithm is supported.  -->
+						The first leftmost bit, bit 0, if set to 0, indicates that the emitter is able to perform signature checks only (i.e. no signature generation with this type on signature algorithm).
+						If this bit is set to 1, it indicates that the emitter has a public key of this type and can generate signatures.
+						Bit 1 and 2 are reserved.
+						Bit 3 to 7 are named  Signature Type Identifier subfield and encode the signature algorithm identifier. This signature algorithm identifier binds a Public Key algorithm with an hash algorithm.
+						Default values for the Signature Type Identifier subfield defined in this document are:
+						<list style="symbols">
+							<t>Value 1 is RSA/SHA-256</t>
+							<t>Value 2 is ECDSA/SHA-256</t>
+							<!-- 2/18/2009 TC  so we can extend the option later in the future, what do you think ? 
+							MCV 2/20: Sounds good to me-->
+							<t>Value 0 is reserved for future use.</t>
+						</list>
+						The Signature Algorithms SHOULD be included in order of preference.
+						</t>
+				</list>
+			</t>
+			<section title="Processing Rules for Senders">
+				<t>If a node has been configured to use SEND, then all Neighbor Solicitation,
+					Neighbor Advertisement, Router Solicitation, Router Advertisement, and Redirect messages
+					it sends MUST contain the Supported Signature Algorithm option.  
+					
+					This option MUST contain in the Signing Algorithm field all 
+					signature algorithms it is willing to use in signature verification. 
+				</t>
+                        </section>
+                        <section title="Processing Rules for Receivers">
+				<t>Upon receiving a SEND packet with a Supported Signature Algorithm Option, a receiver checks the 'R' flag: 
+					<list style="symbols">
+						<t>
+							when the 'R' flag is not set and the message is a Neighbor Advertisement or Router Advertisement, 
+							a host need not parse this option any further.  A router MAY choose not to parse this option.
+						</t>
+						<t>
+							when the 'R' flag is not set and the message is a  Neighbor Solicitation, the receiving node  
+							computes the intersection between the set of Supported Signature Algorithms indicated 
+							by the option and its own. If the set is empty, this means the node will not be able to use a 
+							Signature Algorithm that the initiating node can check. Given the local policy, 
+							a receiver node will still respond to the received message using its "preferred" Signature 
+							Algorithm (even if the node knows the receiver will not be able to verify the Signature Algorithm). 
+							If the set is not empty, the receiving node will choose among the set one of the algorithms 
+							in order to generate a Universal Signature Option. 
+						</t>
+						
+						<t>when the 'R' flag is set, the receiver checks if it supports any of sender's 
+					supported signature algorithms. If more than one signature algorithms is found to be mutually supported, 
+					the receiver MAY decide	 to use the sender's most preferred one according to the order of appearance in 
+					the aforementioned NDP option. In any case, if at least one  mutually supported signature algorithm exists, the receiver 
+					uses one of these algorithms to generate a Universal Signature Option for protection of the resent packet. 
+					This resent packet  contains the same information that the other node couldn't verify (except for the signature).
+					If the 'R' flag is set, and if  no matching signature algorithm is found, the receiver processes the 
+					packet as if the 'R' flag was not set.</t>
+					</list>
+				</t>
+							
+					<!-- <t> -->
+					<!-- TC, 2/18/2009: the "'R' flag is set" bugs me a lot, I mean, the router can by itself inspect the content on the SSA option,
+					we should just specify that without the  'r' flag, router can analyze the SSA option, with the 'r' flag, the router MUST, do you agree ?
+					OR
+					we should make the use of the 'r' flag mandatory for joining nodes
+
+					Problematic to solve: get a correct RA upon joining a network
+					Why I want such a behavior: some mobility protocols are relying on a correct RA to behave correctly, having to negotiate a RA could degrade the protocol (example of protocol: PMIP) -->
+					<!-- When a router receives a Router Solicitation message containing a Supported Signature Algorithm option -->
+					<!-- TC 2/20/2009 I told you it was bugging me "and the 'R' flag is set," 
+					MCV 2/20: I don't understand this and your above comment at all: we have to specify whether the 
+					R flag is set or not. SO, the behavior when R is not set has to be specified. Is this the paragraph for it?
+					If so, then please add words to that effect. For the above, just pick the least restrictive option for now.--> 
+					<!-- if the router supports at least one of the signature algorithm available to that host,
+					then that router sends Router Advertisement packets containing an acceptable Universal 
+					Signature Option (<xref target="Univ-Sig-Option"/>). The RAs can be either  separate messages or 
+					a single message with multiple Universal Signature Options.
+					The router MAY 	store a binding between the CGA address of the node and  at least one type of 
+					Signature Algorithm the node  supports. This binding is useful for cases when the router needs to send
+					Redirect messages to specific hosts, so they can understand the Signature Option included therein. 
+					This binding SHOULD be stored at least as long as 
+					there is a MAC address [ TC 2/20/2009 : this is a strong assumption on the L2 protocol, will be rephrased! ] associated with the corresponding host in the Neighbor Cache. 
+				</t>-->
+			</section>
+				
+		</section>
+		<section anchor="Univ-Sig-Option" title="SEND Universal Signature Option">
+			<t>We propose replacing the RSA Signature Option by a new algorithm-independent signature option. 
+				The "Universal Signature Option" is an updated version of the RSA Signature Option, that allows a node to 
+				specify which of its potential multiple keys it is using. 
+				To achieve this, we use the 16-bits reserved field of the RSA Signature Option, and define a new 8-bit
+				 field that contains the position of the Public Key associated with the signature and a new 5-bit Signature 
+				Type Identifier field that details the type of algorithms used to generate the Digital Signature.
+			</t>
+		<figure title="Signature Option format" anchor="sig-opt-format">
+		<artwork align="left"><![CDATA[
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |     Type      |    Length     | Key Position  | Res.|  Sig ID |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                                                               |
+   |                          Key Hash                             |
+   |                                                               |
+   |                                                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                                                               |
+   .                                                               .
+   .                       Digital Signature                       .
+   .                                                               .
+   |                                                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                                                               |
+   .                                                               .
+   .                           Padding                             .
+   .                                                               .
+   |                                                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+]]></artwork>
+   		</figure>
+
+
+		<t>
+			<list style="hanging">
+				<t hangText="Type"><vspace blankLines="1"/>
+					Same value as in <xref target="RFC3971"/>: 12.
+				</t>
+				<t hangText="Length"><vspace blankLines="1"/>
+					The length of the option (including the Type, Length, Reserved,
+					Key Hash, Digital Signature, and Padding fields) in units of 8
+					octets.
+				</t>
+				<t hangText="Key Position"><vspace blankLines="1"/>
+					An 8-bit field indicating which Public Key in the CGA parameter structure (carried in the 
+					CGA option) has been used to compute the Digital Signature. The index starts at 0, meaning
+					the key is the one in the	Public Key field. Values over 1 refer to Public Key found in the CGA Extension field 
+					(as defined in the companion document <xref target="cheneau-cga-pk-agility"/>]).
+					
+				</t>
+				<t hangText="Reserved"><vspace blankLines="1"/>
+					A 3-bit field reserved for future use.  The value MUST be
+					set to zero by the sender and MUST be ignored by the
+					receiver.
+				</t>
+
+				<t hangText="Signature Type Identifier"><vspace blankLines="1"/>
+					Signature Type Identifier is a 5-bit field. It corresponds to the Signature Algorithm field 
+					in the Supported Signature Algorithm option. It indicates the type of Signature contained in the Digital Signature field.
+				</t>
+				<t hangText="Key Hash"><vspace blankLines="1"/>
+					<!-- 2/13/2009 TC: We may be more flexible/open here given the work of the multi-hash CGA people, what do you think ?
+					MCV 2/20: ok to leave it as such for now.-->
+					The Key Hash field is a 128-bit field containing the most significant (leftmost) 128
+					bits of a hash function of the public key used.
+					If the Signature Type Identifier value is 0 then this field is a
+					is computed using SHA-1 value of the public key used for constructing
+					the signature. This Key Hash is computed the same way as the Key Hash
+					in RSA Signature Option described <xref target="RFC3971"/>.
+					
+					If the Signature Type Identifier value is different than 0 then this field is computed using SHA-256 <xref target="FIPS.180-2"/> value 
+					of the public key used for constructing the signature. The SHA-256 hash is computed over the
+					presentation used in the Public Key field of the CGA Parameters
+					data structure carried in the CGA option. Its purpose is to
+					associate the signature with a particular key known by the
+					receiver.  Such a key can either be stored in the certificate
+					cache of the receiver or be received in the CGA option in the same
+					message.
+ 
+
+
+				</t>
+				<t hangText="Digital Signature"><vspace blankLines="1"/>
+					A variable-length field containing a signature constructed by using the sender's private key associated to the public key pointed by the Key Position field. The signature type is determined from the value of the Signature Type Identifier field.
+
+					If the value of the Signature Type Identifier field is 0, then the Key Position field must be set to 0 and this Digital Signature field is computed the same way as
+					the Digital Signature field of the RSA Signature Option described in <xref target="RFC3971"/>.
+
+					If the value of the Signature Type Identifier field is 1, then this Digital Signature field is computed the same way as the Digital Signature field of the RSA Signature Option described in <xref target="RFC3971"/> except that the signature is computed with the RSASSA-PKCS1-v1_5 algorithm and the SHA-256 hash, as defined in <xref target="PKCS1"/>. <!-- TC not completly true, as the RSA Signature option would be missing in the pakcket, there won't be any "but not including RSA signature option", must be changed before -01 version -->
+
+					If the value of the Signature Type Identifier field is 2, then this Digital Signature field is computed using the ECDSA signature algorithm (as defined on <xref target="SEC1"/>) and SHA-256 on the following datas:
+					<list style="numbers">
+						<t>The 128-bit CGA Message Type tag <xref target="RFC3972"/> value for SEND, 0x086F
+						CA5E 10B2 00C9 9C8C E001 6427 7C08.  (The tag value has been
+						generated randomly by the editor of the <xref target="RFC3971"/> specification.).</t>
+
+						<t>The 128-bit Source Address field from the IP header.</t>
+
+						<t>The 128-bit Destination Address field from the IP header.</t>
+
+						<t>The 8-bit Type, 8-bit Code, and 16-bit Checksum fields from the
+						ICMP header.</t>
+
+						<t>The NDP message header, starting from the octet after the ICMP
+						Checksum field and continuing up to but not including NDP
+						options.</t>
+
+						<t>All NDP options preceding, but not including, any of the Universal Signature options.</t>
+
+					</list>
+					This field starts after the Key Hash field.  The length of the
+					Digital Signature field is determined by the length of the Universal
+					Signature option minus the length of the other fields (including
+					the variable length Pad field).
+
+					
+				</t>
+				<t hangText="Padding">
+					This variable-length field contains padding, as many bytes long as
+					remain after the end of the signature.
+				</t>
+
+			</list>
+		</t>
+		<t>
+			A Neighbor Solicitation/Advertisement, 	Router Solicitation/Advertisement and Redirect message 
+			MAY contain more than one Universal Signature Option, as long as it does not  exceed the MTU.
+			This is particularly useful for routers operating in  heterogeneous networks,
+			where hosts have a disjoint set of supported signature algorithms.
+		</t>
+		<section title="Processing Rules for Senders">
+			<t>When sending a SEND message spontaneously or in  response to message with the 'R' flag cleared
+				in the Supported Signature Algorithm Option, an emitter node CAN <!-- MCV 2/17: can't force
+				it to choose the preferred one, since "preferred" is such a vague concept. Let's use "will" or "CAN"?-->
+				choose a signature algorithm of its 
+				preference (defined by local policy) among the corresponding Public Keys carried in the CGA option. Using this signature 
+				algorithm, the node  computes the Digital Signature and fills the Key Position field with the position
+				 of the key in the CGA parameter data structure.</t>
+
+			<t>   If the node has been configured to use SEND, then all Neighbor Solicitation,
+				Neighbor Advertisement, Router Advertisement, and Redirect messages
+				MUST contain at least one Universal Signature option.  Router Solicitation messages
+				not sent with the unspecified source address MUST contain the Universal
+				Signature option.</t>
+
+			<t>   A node sending a message with one or more Universal Signature option MUST construct
+				the message as follows:
+
+				<list style="symbols">
+					<t>
+						If the node 
+						as previously received hints (e.g. an NDP message with a Supported Signature Algorithm 
+						option and the 'R' flag on) on the type of Signature Algorithm it should use, it MUST restrain
+						 its choice on those Signature Algorithm.  its choice on those Signature Algorithm. 
+					</t>
+					<t>The message is constructed in its entirety, without any of the Universal
+						Signature options.</t>
+
+					<t>The Universal Signature option(s) is (are) added as the last option in the
+						message.</t>
+
+					<t>The data to be signed is constructed as explained in <xref target="sig-opt-format"/>,
+						under the description of the Digital Signature field.</t>
+
+					<t>The message, in the form defined above, is signed by using the
+						configured private key associated to the selected Signature Algorithm, and the resulting
+						 <!-- PKCS#1 v1.5 --> signature is
+						put in the Digital Signature field.
+						<!-- TC 2/20/2009: I'm too short on time, but it should be rephrased for the -01 version -->
+						When using RSA, this signature is a PKCS#1 v1.5 signature. When using ECDSA, the 
+						signature value is as defined in <xref target="FIPS-186-3"/>.  The length
+						of the Digital Signature field is determined by the length of the Universal Signature option 
+						minus the length of the other fields (including the variable length Padding field).
+
+					</t>
+				</list>
+			</t>
+		</section>
+		<section title="Processing Rules for Receivers">
+			<t>Neighbor Solicitation, Neighbor Advertisement, Router Advertisement,
+				and Redirect messages without any Universal Signature option MUST be
+				treated as unsecured (i.e., processed in the same way as NDP messages
+				sent by a non-SEND node).  See Section 8 of <xref target="RFC3971"/>.</t>
+
+			<t>Router Solicitation messages without any Universal Signature option MUST
+				also be treated as unsecured, unless the source address of the
+				message is the unspecified address.</t>
+
+			<t> Redirect, Neighbor Solicitation, Neighbor Advertisement, Router
+				Solicitation, and Router Advertisement messages containing one or more Universal
+				Signature option MUST be checked as follows:
+				<list style="symbols">
+					<t>The receiver MUST ignore any options that come after the first Universal
+						Signature option.  (The options are ignored for both signature
+						verification and NDP processing purposes.)</t>
+					<t>The Key Hash field MUST correspond to a known public key,
+						either one learned from the CGA option in the same message by the position indicated in the Key Position field
+						message, or one known by other means.</t>
+					<t>The Digital Signature field MUST have correct encoding and MUST
+						not exceed the length of the Universal Signature option minus the
+						Padding.</t>
+					<t>The Digital Signature verification MUST show that the signature
+						has been calculated as specified in the previous section <!-- TC: not yet written :) -->.</t>
+					<t>If the use of a trust anchor has been configured, a valid
+						certification path (see Section 6.3 of <xref target="RFC3971"/>) between the receiver's trust
+						anchor and the sender's public key MUST be known.</t>
+				</list>
+				<!-- TC: 2/20/2009: removing this part until I remember what it means:
+				Note that the receiver may verify just the CGA property (?) [ MCV: what's this property? ] of a
+					packet, even if, in addition to CGA, the sender has used a trust
+					anchor.-->
+			</t>
+
+			<t>When checks fail due to an unsupported signature algorithm type, and if the Supported Signature Algorithm 
+				Option of the message shows that a common Signature Algorithm is available, the node MUST send back 
+				a packet to indicate to the emitter that the packet needs to be resent. 
+				Depending on the received packet, the node will have to send:
+				<list style="symbols">
+					<t>A Router Solicitation if the message was a Router Advertisement or Redirect message; or</t>
+					<t>A Neighbor Solicitation is the message was a Neighbor Advertisement or a Neighbor Solicitation
+						 (e.g. during the DAD procedure)</t>
+				</list>
+				</t>
+				
+				<t>Messages that do not pass all the above tests MUST be silently
+				discarded if the host has been configured to accept only secured ND
+				messages.  The messages MAY be accepted if the host has been
+				configured to accept both secured and unsecured messages but MUST be
+				treated as unsecured messages.  The receiver MAY also otherwise
+				silently discard packets (e.g., as a response to an apparent CPU
+				exhausting DoS attack).</t>
+
+		</section>
+	</section>
+                <section title="Basic negotiation">
+                		<section anchor="sec-nego-overview" title="Overview">
+					<t>
+						Two nodes sharing a common Signing Algorithm must be able to securely communicate.
+						Below is an example of such a message flow.
+					</t>
+                			<figure title="Basic Negotiation- Case 1">
+						<!-- TC: The Signature option should be after the Supported-Signature-Algo option, I will move it in the next versions -->
+                			<artwork align="left"><![CDATA[
+Node A                                      Node B
+
+NS
+{CGA option,
+RSA Signature option. 
+Supported-Signature-Algo option
+       (RSA, ECC, R=0)} -------->
+                                   NA
+                                   {CGA option,
+                                   ECC Signature option
+                                   Supported-Signature-Algo option
+                       <--------       (ECC, R=1)}
+NA
+{CGA option,
+ECC Signature option. 
+Supported-Signature-Algo option
+(RSA, ECC, R=0)}        -------->   
+
+IPv6 traffic            <------->  IPv6 traffic ]]></artwork>
+			</figure>
+                			
+                	<t>When both nodes support the same two algorithms, then we have the following case:</t>
+                			<figure title="Basic Negotiation- Case 2">
+                				<artwork align="left"><![CDATA[
+Node A                                    Node B
+
+NS
+{CGA option,
+RSA Signature option. 
+Supported-Signature-Algo option
+   (RSA, ECC, R=0)}  -------->
+                                NA
+                                {CGA option,
+                                ECC Signature option
+                                Supported-Signature-Algo option
+                     <--------       (ECC, RSA, R=0)}
+
+IPv6 traffic         <------->  IPv6 traffic ]]></artwork>
+                			</figure>  
+                		</section>
+                	<!--MCV 2/20: removed for now;  will resurrect when we have some material.
+				<section title="Routers' behaviour">
+					<t>TBD. Here, we TRY to explain everything on how to handle multicast. 
+                				How is multicast an issue all of a sudden? This is a SEND draft...</t>
+				</section>
+                	-->
+		</section>
+
+		<section title="Router-as-a-notary function">
+			<t>This optional functionality enhances backward compatibility by introducing a new entity. Here, the entity named "notary" 
+				serves to certify the authenticity of a node's message. This improves communication when two nodes have
+			a disjoint set of supported Signature Algorithm types and still require secure neighbor discovery.</t>	
+		<t>In this specification, the notary function is offered by routers, although other nodes may offer this capability
+			in the future. Authorization for the router to act as a notary is provided through router's certificate
+			(could be store in a KeyPurposeID as defined in <xref target="krishnan-cgaext-send-cert-eku"/>) provided by the trust anchor.</t>
+		<t> The notary function requires the two specific messages: Signature check request and signature status.  </t>
+		<!-- TC 2/20/2009 redundant <t>Note that the message (including the encapsulated message to verify) MUST not exceed the MTU of the link (as no fragmentation support is available).</t>-->
+			<section title="Signature check request message">
+			<figure title="Signature check request message format">
+			<artwork align="left"><![CDATA[
+0                   1                   2                   3
+0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|     Type      |     Code      |      Packet Length            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|       Checksum                |        Reserved               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Request ID.                             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
++                    SEND secured packet                        +
+|    (NDP packets should fit completely)                        |    
+				]]></artwork>
+			</figure>
+			<t>
+				<list style="hanging">
+					<t hangText="Type"><vspace blankLines="1"/>TBA.</t>
+					<t hangText="Code"><vspace blankLines="1"/>TBA.</t>
+					<t hangText="Packet Length"><vspace blankLines="1"/>
+						Packet length is the size of the SEND secured packet
+					</t>
+					<t hangText="Checksum"><vspace blankLines="1"/>
+						Checksum is a CRC-16 of the whole packet. During the CRC-16 computation, this field is set to 0. The purpose of this field is to quickly invalidate transmission errors.	
+					</t>
+					<t hangText="Reserved"><vspace blankLines="1"/>
+						This 16-bit field is reserved. MUST be set to 0 by senders and ignored by receivers.
+					</t>
+					<t hangText="Request Identifier"><vspace blankLines="1"/>
+						Request Identifier helps matching a signature check request and the signature status (response) messages.
+						Request Identifier field is randomly generated.
+					</t>
+					<t hangText="SEND secured packet"><vspace blankLines="1"/>
+						SEND secured packet is the packet that the node was not able to verify on his own, subject of the verification. Note that the encapsulated packet MUST not make the whole Signature Check Request message exceed the MTU (as no fragmentation support is available).
+					</t>
+				</list>
+			</t>
+			<t>This message is protected by usual SEND NDP options (TS, Nonce, Signature). It contains the whole 
+				packet that the node wants to be checked on the router (so packet may not be tampered with).</t>
+
+			<t>
+				A router acting as notary processes the packet this way:
+				<list style="symbols">
+
+					<t>Verifies the CGA of the emitter</t>
+					<t>Verifies the signature of the message (linked to CGA of the source address)</t>
+					<t>Verifies the CGA and signature of the inner packet</t>
+					<t>Responds with a Signature status message (defined in the following section)</t>
+				</list>
+
+			</t>
+		</section>
+			<section title="Signature status message">
+			<figure title="Signature status message format">
+				
+			<artwork align="left"><![CDATA[
+0                   1                   2                   3
+0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|     Type      |     Code      |          Status               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Request ID.                             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				]]></artwork>
+			</figure>
+			<t>
+				<list style="hanging">
+					<t hangText="Type"><vspace blankLines="1"/>TBA.</t>
+					<t hangText="Code"><vspace blankLines="1"/>TBA.</t>
+					<t hangText="Status"><vspace blankLines="1"/>
+						The 16-bit status field can be set to any of the following values: 
+						<list>
+							<t>0: all validation checks passed</t>
+							<t>1: inner packet CGA verification check failed</t>
+							<t>2: inner packet signature verification check failed</t>
+							<t>3: unsupported hash algorithm (to compute Hash1/Hash2)</t>
+							<t>4: unsupported Public Key algorithm</t>
+							<t>5: ask later (router is busy)</t>
+						</list>
+					</t>
+					<t hangText="Request Identifier"><vspace blankLines="1"/>
+						The Request Identifier helps match a signature check request and the signature status (response) message.
+						The Request Identifier is copied from the Signature Check Request message.
+					</t>
+				</list>
+				
+			</t>
+
+			<t>
+				This message is a response to a Notary signature check request message and is protected
+				by SEND options generated using the public key contained in the certificate of the router 
+				authorized to act as notary.
+
+				On reception of this message, a node performs CGA check and Universal Signature option check <!-- TC: need to be more detailed here for the 01 version -->. Then, 
+				if the status message is 0, that node can now trust the original packet that created the need for a Notary 
+				signature check request message. This amounts to  resuming the SEND protocol using secure packets.
+				On a status value different from 0, the packet will be considered as unsecure and be treated as such.
+			</t>
+
+		</section>
+	</section>
+
+	<section title="Security Considerations">
+		<t>
+			<xref target="Univ-Sig-Option"/> presents a new Universal Signature Option. A recommended use of this option is to allow signatures of equivalent security level (i.e. Public Keys with equivalent key lengths, see section 4 of the companion draft <xref target="cheneau-cga-pk-agility"/>). </t>
+			
+		<t>
+			The Universal Signature Option is vulnerable to downgrade attacks. That is, given that a node can employ multiple signature types, an attacker may choose to use a flawed one. To mitigate this issue, nodes are allowed, on a local policy, to refuse to check certain types of signature (i.e. those which are know to be flawed) and will treat the associated messages as unsecured. 
+		</t>
+		<t>
+			To be completed.
+		</t>
+	</section>
+	<section anchor="sec-iana" title="IANA Considerations">
+			<t>This document requests IANA to allocate types for the two new notary ICMP messages.</t>
+
+	</section>
+	<section title="Acknowledgments" anchor="ack">
+		<t> The authors gratefully acknowledge the contributions of Marcello Bagnulo-Braun,
+			and other participants of the SEND working group.</t>
+	</section>
+	</middle>
+	<back>
+		<references title="Normative References">
+			&RFC3972;
+			&RFC3971;
+			&RFC4982;
+			<reference anchor='cheneau-cga-pk-agility'>
+				<front>
+					<title>Support for Multiple Signature Algorithms in Cryptographically Generated 
+						Addresses (CGAs)</title>
+					
+					<author initials='T.C' surname='Cheneau' fullname='Tony Cheneau'>
+						<organization />
+					</author>
+					<author initials='M.M' surname='Laurent-Maknavicius' fullname='Maryline Laurent-Maknavicius'>
+						<organization />
+					</author>
+					<author initials='S.S' surname='Shen' fullname='Sean Shen'>
+						<organization />
+					</author>
+					<author initials='M.C.V.' surname='Vanderveen' fullname='Michaela Vanderveen'>
+						<organization />
+					</author>
+					
+					<date month='Feb'  year='2009' />
+					
+					<abstract><t>This document defines an extension field for the CGA Parameter data structure
+				specified in RFC 3972.  This extension field carries a Public Key 
+				that is used in Cryptographically Generated Address (CGA) generation. This extension
+				enables protocols using CGAs, such as SEND, to use multiple Public Key signing algorithms
+				and/or multiple Public Keys.</t></abstract>
+					
+				</front>
+				
+				<seriesInfo name='Internet-Draft' value='draft-cheneau-cga-pk-agility-00' />
+				<format type='TXT'
+					target='http://www.ietf.org/internet-drafts/draft-cheneau-cga-pk-agility-00.txt' />
+			</reference>
+		</references>
+		<references title="Informative References">
+			&RFC4581;
+
+			<reference anchor='krishnan-cgaext-send-cert-eku'> <front>
+					<title>Certificate profile and certificate management for
+						SEND</title>
+
+					<author initials='S' surname='Krishnan' fullname='Suresh Krishnan'>
+						<organization /> </author>
+
+					<author initials='A' surname='Kukec' fullname='Ana Kukec'> <organization />
+					</author>
+
+					<author initials='K' surname='Ahmed' fullname='Khaja Ahmed'> <organization />
+					</author>
+
+					<date month='November' day='3' year='2008' />
+
+					<abstract><t>Secure Neighbor Discovery (SEND) Utilizes X.509v3 certificates for
+							performing router authorization.  This document specifies a
+							certificate profile for SEND including extended key usage
+							values, revocation details and supported
+							extensions.</t></abstract>
+
+				</front>
+
+				<seriesInfo name='Internet-Draft'
+					value='draft-krishnan-cgaext-send-cert-eku-02' /> <format type='TXT'
+					target='http://www.ietf.org/internet-drafts/draft-krishnan-cgaext-send-cert-eku-02.txt'
+					/> </reference>
+			<reference anchor="FIPS-186-3">
+				<front>
+					<title>Draft Digital Signature Standard</title>
+					<author>
+						<organization>National Institute of Standards and Technology</organization>
+					</author>
+					<date month="March" year="2006"/>
+				</front>
+				<seriesInfo name="FIPS" value="PUB 186-3"/>
+			</reference>
+			<reference anchor="PKCS1">
+				<front>
+					<title>RSA Encryption Standard, Version 2.1</title>
+					<author>
+						<organization>RSA Laboratories</organization>
+					</author>
+					<date month="November" year="2002"/>
+				</front>
+				<seriesInfo name="PKCS" value="1"/>
+			</reference>
+			<reference anchor="FIPS.180-2" target="http://csrc.nist.gov/publications/fips/fips180-2/fips180-2.pdf">
+				<front>
+					<title>Secure Hash Standard</title>
+					<author>
+						<organization>National Institute of Standards and Technology</organization>
+					</author>
+					<date month="August" year="2002"/>
+				</front>
+				<seriesInfo name="FIPS" value="PUB 180-2"/>
+			</reference>
+			<reference anchor="SEC1" target="http://secg.org">
+				<front>
+					<title>
+						SEC 1: Elliptic Curve Cryptography
+					</title>
+					<author>
+						<organization>
+							Standards for Efficient Cryptography Group
+						</organization>
+					</author>
+					<date month="September" year="2000"/>
+
+				</front>
+			</reference>
+
+			
+		</references>
+	</back>
+</rfc>	

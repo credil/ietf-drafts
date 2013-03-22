@@ -1,0 +1,4386 @@
+<?xml version="1.0"?>
+
+<?rfc toc="yes"?>
+<?rfc symrefs="no" ?>
+<?rfc sortrefs="yes"?>
+
+<rfc ipr="trust200811" category="std"
+     docName="draft-ietf-netmod-dsdl-map-01">
+
+<front>
+  <title abbrev="Mapping YANG to DSDL">Mapping YANG to Document Schema
+  Definition Languages and Validating NETCONF Content</title>
+  <author initials="L." surname="Lhotka" fullname="Ladislav Lhotka">
+    <organization>CESNET</organization>
+    <address>
+      <email>lhotka@cesnet.cz</email>
+    </address>
+  </author>
+  <author initials="R." surname="Mahy" fullname="Rohan Mahy">
+    <organization>Plantronics</organization>
+    <address>
+      <email>rohan@ekabal.com</email>
+    </address>
+  </author>
+  <author initials="S." surname="Chisholm" fullname="Sharon Chisholm">
+    <organization>Nortel</organization>
+    <address>
+      <email>schishol@nortel.com</email>
+    </address>
+  </author>
+  <date day="8" month="March" year="2009"/>
+  <area>Operations and Management</area>
+  <workgroup>NETMOD</workgroup>
+  <abstract>
+    <t>This draft describes the mapping rules for translating YANG
+    data models into XML schemas using Document Schema Definition
+    Languages (DSDL) and outlines the procedure for validating various
+    types of NETCONF protocol data units using these schemas.</t>
+  </abstract>
+</front>
+<middle>
+
+  <section anchor="intro" title="Introduction">
+    <t>The NETCONF Working Group has completed a base protocol used
+    for configuration management <xref target="RFC4741"/>. This base
+    specification defines protocol bindings and an XML container
+    syntax for configuration and management operations, but does not
+    include a modeling language or accompanying rules for how to model
+    configuration and status information (in XML syntax) carried by
+    NETCONF. The IETF Operations Area has a long tradition of defining
+    data for SNMP Management Information Bases (MIBs) <xref
+    target="RFC1157"/> using the SMI language <xref target="RFC2578"/>
+    to model its data. While this specific modeling approach has a
+    number of well-understood problems, most of the data modeling
+    features provided by SMI are still considered extremely important.
+    Simply modeling the valid syntax rather than additional semantic
+    relationships has caused significant interoperability problems in
+    the past.</t>
+
+    <t>The NETCONF community concluded that a data modeling framework
+    is needed to support ongoing development of IETF and
+    vendor-defined management information modules. The NETMOD Working
+    Group was chartered to address this problem, by defining a new
+    human-friendly modeling language based on SMIng <xref
+    target="RFC3216"/> and called YANG <xref target="YANG"/>. </t>
+
+    <t>Since NETCONF uses XML for encoding its protocol data units
+    (PDU), it is natural to express the constraints on NETCONF content
+    using standard XML schema languages. For this purpose, the NETMOD
+    WG selected the Document Schema Definition Languages (DSDL) that
+    is being standardized as ISO/IEC 19757 <xref target="DSDL"/>. The
+    DSDL framework comprises a set of XML schema languages that
+    address grammar rules, semantic constraints and other data
+    modeling aspects but also, and more importantly, do it in a
+    coordinated and consistent way. While it is true that some DSDL
+    parts have not been standardized yet and are still work in
+    progress, the three parts that the YANG-to-DSDL mapping relies
+    upon - RELAX NG, Schematron and DSRL - already have the status of
+    an ISO/IEC International Standard and are supported in a number of
+    software tools.</t>
+
+    <t>This document contains the specification of a mapping that
+    translates YANG data models to XML schemas utilizing a subset of
+    the DSDL schema languages. The mapping procedure is divided into
+    two steps: In the first step, the structure of the data tree, RPC
+    signatures and notifications is expressed as a single RELAX NG
+    grammar with simple annotations representing additional data model
+    information (metadata, documentation, semantic constraints,
+    default values etc.). The second step then generates a coordinated
+    set of DSDL schemas that can validate specific XML documents such
+    as client requests, server responses or notifications, perhaps
+    also taking into account additional context such as active
+    capabilities.</t>
+
+    <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+    NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL"
+    in this document are to be interpreted as described in <xref
+    target="RFC2119"/>.</t>
+
+    <t>In the text, we also use the following typographic conventions:
+    <list style="symbols">
+      <t>YANG statement keywords are delimited by single quotes.</t>
+      <t>Literal values are delimited by double quotes.</t>
+      <t>XML element names are delimited by "&lt;" and "&gt;" characters.</t>
+      <t>Names of XML attributes are prefixed by the "@" character.</t>
+    </list>
+    </t>
+
+    <t>XML elements names are always written with explicit namespace
+    prefixes corresponding to the following XML vocabularies:
+    <list style="hanging">
+      <t hangText="&quot;a&quot;">DTD compatibility annotations <xref
+      target="RNG-DTD"/></t>
+      <t hangText="&quot;dc&quot;">Dublin Core metadata elements <xref
+      target="RFC5013"/></t>
+      <t hangText="&quot;nc&quot;">NETCONF protocol <xref target="RFC4741"/></t>
+      <t hangText="&quot;en&quot;">NETCONF event notifications <xref
+      target="RFC5277"/></t>
+      <t hangText="&quot;nma&quot;">NETMOD-specific schema annotations
+      (see <xref target="netmodAnnotations"/>)</t>
+      <t hangText="&quot;nmt&quot;">Conceptual tree (see <xref
+      target="conceptualTree"/>)</t>
+      <t hangText="&quot;dsrl&quot;">Document Semantics Renaming
+      Language <xref
+      target="DSRL"/></t>
+      <t hangText="&quot;rng&quot;">RELAX NG <xref target="RNG"/></t>
+      <t hangText="&quot;sch&quot;">ISO Schematron <xref
+      target="Schematron"/></t>
+      <t hangText="&quot;xsd&quot;">W3C XML Schema <xref target="XSD"/></t>
+    </list>
+    The following table shows the mapping of these prefixes to
+    namespace URIs.</t>
+
+    <texttable anchor="table-namespaces"
+               title="Used namespace prefixes and corresponding URIs">
+      <ttcol>Prefix</ttcol>
+      <ttcol>Namespace URI</ttcol>
+      <c>a</c><c>http://relaxng.org/ns/compatibility/annotations/1.0</c>
+      <c>dc</c> <c>http://purl.org/dc/terms</c>
+      <c>nc</c><c>urn:ietf:params:xml:ns:netconf:base:1.0</c>
+      <c>en</c><c>urn:ietf:params:xml:ns:netconf:notification:1.0</c>
+      <c>nma</c> <c>urn:ietf:params:xml:ns:netmod:dsdl-annotations:1</c>
+      <c>nmt</c><c>urn:ietf:params:xml:ns:netmod:conceptual-tree:1</c>
+      <c>dsrl</c><c>http://purl.oclc.org/dsdl/dsrl</c>
+      <c>rng</c><c>http://relaxng.org/ns/structure/1.0</c>
+      <c>sch</c> <c>http://purl.oclc.org/dsdl/schematron</c>
+      <c>xsd</c><c>http://www.w3.org/2001/XMLSchema</c>
+    </texttable>
+  </section>
+
+  <section anchor="objectivesMotivation" title="Objectives and Motivation">
+    <t>The main objective of this work is to complement YANG as a data
+    modeling language by validation capabilities of DSDL schema
+    languages, primarily RELAX NG and Schematron. This document
+    describes the correspondence between grammatical, semantic and data
+    type constraints expressed in YANG and equivalent DSDL
+    constructs. The ultimate goal is to be able to capture all
+    substantial information contained in YANG modules and express it
+    in DSDL schemas. While the mapping from YANG to DSDL described in
+    this document is in principle invertible, the inverse mapping from
+    DSDL to YANG is not in its scope.</t>
+    <t>XML-encoded data appear in several different forms in various
+    phases of the NETCONF workflow - configuration datastore contents,
+    RPC requests and replies, and notifications. Moreover, RPC methods
+    are characterized by an inherent diversity resulting from
+    selective availability of capabilities and features. YANG modules
+    can also define new RPC methods. The mapping should be able to
+    accommodate this variability and generate schemas that are
+    specifically tailored to a particular situation and thus
+    considerably more efficient than generic all-encompassing
+    schemas.</t>
+
+    <t>In order to cope with this variability, we assume that the
+    schemas can be generated on demand from the available collection
+    of YANG modules and their lifetime will be relatively short. In
+    other words, we don't envision that any collection of DSDL schemas
+    will be created and maintained over extended periods of time in
+    parallel to YANG modules.</t>
+    <t>The generated schemas are primarily intended as input to the
+    existing XML schema validators and other off-the-shelf
+    tools. However, the schemas may also be perused by developers and
+    users as a formal representation of constraints on a particular
+    XML-encoded data object. Consequently, our secondary goal is to
+    keep the schemas as readable as possible. To this end, the complexity
+    of the mapping is distributed into two steps:
+    <list style="numbers">
+      <t anchor="m-step1">The first step maps one or more YANG modules
+      to a single RELAX NG schema of the so-called "conceptual tree",
+      which contains grammatical constraints for the main data tree as
+      well as RPCs and notifications. In order to record additional
+      constraints that appear in the YANG modules but cannot be
+      expressed in RELAX NG, the schema is augmented by simple
+      annotations. The resulting schema should thus be considered a
+      reasonably readable equivalent of the input YANG modules.</t>
+      <t>In the second step, the annotated RELAX NG schema from step
+      <xref format="counter" target="m-step1"/> is transformed further
+      to a coordinated set of DSDL schemas containing constraints for
+      a particular data object and a specific situation. The DSDL
+      schemas are intended mainly for machine validation using
+      off-the-shelf tools.</t>
+    </list>
+    </t>
+  </section>
+
+  <section anchor="schema-lang" title="DSDL Schema Languages">
+
+    <t>The mapping described in this document uses three of the DSDL
+    schema languages, namely RELAX NG, Schematron and DSRL.</t>
+
+    <section anchor="relaxng" title="RELAX NG">
+      <t>RELAX NG (pronounced "relaxing") is an XML schema language
+      for grammar-based validation and Part 2 of the ISO/IEC DSDL
+      family of standards <xref target="RNG"/>. Like the W3C XML
+      Schema language <xref target="XSD"/>, it is able to describe
+      constraints on the structure and contents of XML
+      documents. However, unlike the DTD <xref target="XML"/> and XSD
+      schema languages, RELAX NG intentionally avoids any infoset
+      augmentation such as defining default values. In the DSDL
+      architecture, the particular task of defining and applying
+      default values is delegated to another schema language, DSRL
+      (see <xref target="dsrl"/>).</t>
+
+      <t>As its base datatype library, RELAX NG uses the W3C XML
+      Schema Datatype Library <xref target="XSD-D"/>, but unlike XSD,
+      other datatype libraries may be used along with it or even
+      replace it if necessary. </t>
+
+      <t>RELAX NG is very liberal in accepting annotations from other
+      namespaces. With few exceptions, such annotations may be placed
+      anywhere in the schema and need no encapsulating element such
+      as &lt;xsd:annotation&gt; in XSD.</t>
+
+      <t>RELAX NG schema can be represented using two equivalent
+      syntaxes: XML and compact. The compact syntax is described in
+      Annex C of the RELAX NG specification <xref target="RNG-CS"/>,
+      which was added to the standard in 2006 (Amendment 1). Automatic
+      bidirectional conversions between the two syntaxes can be
+      accomplished using for example <eref
+      target="http://www.thaiopensource.com/relaxng/trang.html">Trang</eref>.
+      </t>
+
+      <t>For its terseness and readability, the compact syntax is
+      often the preferred form for publishing RELAX NG schemas whereas
+      validators and other software tools generally require the XML
+      syntax. However, the compact syntax has two drawbacks:
+      <list style="symbols">
+        <t>External annotations make the compact syntax schema
+        considerably less readable. While in the XML syntax the
+        annotating elements and attributes are represented in a simple
+        and uniform way (XML elements and attributes from foreign
+        namespaces), the compact syntax uses four different syntactic
+        constructs: documentation, grammar, initial and following
+        annotations. Therefore, the impact on readability that results
+        from adding annotations is often much stronger for the compact
+        syntax than for the XML syntax.</t>
+        <t>In a program, it is more difficult to generate compact
+        syntax than XML syntax. While a number of software libraries
+        exist that make it easy to create an XML tree in memory and
+        serialize it, no such aid is available for compact syntax.</t>
+      </list>
+      For these reasons, the mapping specification in this document
+      use exclusively the XML syntax. Where appropriate, though, the
+      schemas resulting from the translation may be presented in the
+      equivalent compact syntax.</t>
+      <t>RELAX NG elements are qualified with the namespace URI
+      "http://relaxng.org/ns/structure/1.0". The namespace of the W3C
+      Schema Datatype Library is
+      "http://www.w3.org/2001/XMLSchema-datatypes".</t>
+  </section>
+
+    <section anchor="schematron" title="Schematron">
+      <t>Schematron is Part 3 of DSDL that reached the status of a
+      full ISO/IEC standard in 2006 <xref target="Schematron"/>. In
+      contrast to the traditional schema languages such as DTD, XSD or
+      RELAX NG, which are based on the concept of a formal grammar,
+      Schematron utilizes a rule-based approach. Its rules may
+      specify arbitrary conditions involving data from different parts
+      of an XML document. Each rule consists of three essential parts:
+      <list style="symbols">
+        <t>Context - an XPath expression that defines the set of
+        locations where the rule is to be applied,</t>
+        <t>Assert or report condition - another XPath expression that
+        is evaluated relative to the location matched by the context
+        expression.</t>
+        <t>Human-readable message that is displayed when the assert
+        condition is false or report condition is true.</t>
+      </list>
+      The difference between the assert and report condition is that
+      the former is positive in that it states a condition that a
+      valid document has to satisfy, whereas the latter specifies an
+      error condition.</t>
+      <t>Schematron draws most of its expressive power from XPath
+      <xref target="XPath"/> and XSLT <xref target="XSLT"/>. ISO
+      Schematron allows for dynamic query language binding so that the
+      following XML query languages can be used: STX, XSLT 1.0, XSLT
+      1.1, EXSLT, XSLT 2.0, XPath 1.0, XPath 2.0 and XQuery 1.0 (this
+      list may be extended in future).</t>
+      <t>The human-readable error messages are another feature that
+      distinguishes Schematron from other schema languages such as
+      RELAX NG or XSD. The messages may even contain XPath expressions
+      that are evaluated in the actual context and thus refer to
+      existing XML document nodes and their content.</t>
+      <t>ISO Schematron introduced the concept of <spanx
+      style="emph">abstract patterns</spanx> whose purpose is similar
+      to functions in programming languages. The mapping described in
+      this document uses a library of abstract patterns for specifying
+      generic constraints such as uniqueness of certain leaf values in
+      list items.</t>
+      <t>The rules defined by a Schematron schema may be divided into
+      several subsets known as <spanx
+      style="emph">phases</spanx>. Validations may then be set up to
+      include only selected phases. In the context of NETCONF data
+      validation, this is useful for relaxing constraints that may not
+      always apply. For example, the reference integrity may not be
+      enforced for a candidate configuration.</t>
+      <t>Schematron elements are qualified with namespace URI
+      "http://purl.oclc.org/dsdl/schematron".</t>
+    </section>
+
+    <section anchor="dsrl"
+             title="Document Semantics Renaming Language (DSRL)">
+      <t>DSRL (pronounced "disrule") is Part 8 of DSDL that reached
+      the status of a full ISO/IEC standard in 2008 <xref
+      target="DSRL"/>. Unlike RELAX NG and Schematron, it is
+      specifically designed to modify XML information set of the
+      validated document. The primary application for DSRL is renaming
+      XML elements and attributes. DSRL can also define default values
+      for XML attributes and elements so that elements or attributes
+      with these default values are inserted if they are missing in
+      the validated documents. The latter feature is used by the
+      YANG-to-DSDL mapping for representing YANG defaults for leaf
+      nodes.</t>
+      <t>DSRL elements are qualified with namespace URI
+      "http://purl.oclc.org/dsdl/dsrl".</t>
+    </section>
+  </section>
+
+  <section anchor="annotations" title="Additional Annotations">
+
+    <t>In addition to the DSDL schema languages, the mapping uses
+    three sets of annotations that are added as foreign-namespace
+    elements and attributes to RELAX NG schemas. Two of the annotation
+    sets - Dublin Core elements and DTD compatibility annotations -
+    are standard vocabularies for representing metadata and
+    documentation, respectively. While these data model items may not
+    be used for formal validation, they quite often carry important
+    information. Therefore, they SHOULD be included in the conceptual tree
+    schema and MAY also appear in the final validation schemas.</t>
+    <t>The third set are NETMOD-specific annotations conveying
+    semantic constraints and other information that cannot be
+    expressed natively in RELAX NG. These annotations are only used in
+    the first step of the mapping, i.e., in the conceptual tree
+    schema. In the second mapping step, these annotations are
+    converted to Schematron and DSRL rules.</t>
+
+    <section anchor="dcElements" title="Dublin Core Metadata Elements">
+      <t><eref target="http://dublincore.org/">Dublin Core</eref> is a
+      system of metadata elements that was originally created for
+      describing metadata of World Wide Web resources in order to
+      facilitate their automated lookup. Later it was accepted as a
+      standard for describing metadata of arbitrary resources. This
+      specification uses the definition found in <xref
+      target="RFC5013"/>.</t>
+      <t> Dublin Core elements are qualified with namespace URI
+      "http://purl.org/dc/terms".</t>
+    </section>
+
+    <section anchor="dtdCompatibility"
+             title="RELAX NG DTD Compatibility Annotations">
+      <t>DTD compatibility annotations are part of the RELAX NG DTD
+      Compatibility specification <xref target="RNG-DTD"/>. The
+      YANG-to-DSDL mapping uses only the &lt;a:documentation&gt;
+      annotation for representing YANG 'description' and 'reference'
+      texts.</t>
+      <t>Note that there is no intention to make the resulting schemas
+      DTD-compatible, the main reason for using these annotations is
+      technical: they are well supported and adequately interpreted by
+      several RELAX NG tools.</t>
+      <t>DTD compatibility annotations are qualified with namespace
+      URI "http://relaxng.org/ns/compatibility/annotations/1.0".</t>
+    </section>
+
+    <section anchor="netmodAnnotations" title="NETMOD-specific Annotations">
+
+      <t>NETMOD-specific annotations are XML elements and attributes
+      qualified with the namespace URI
+      "urn:ietf:params:xml:ns:netmod:dsdl-annotations:1" that appear
+      in various locations in the conceptual tree schema. YANG
+      statements are mapped to these annotations in a very
+      straightforward way. In particular, the annotation attributes
+      and elements always have the same name as the corresponding YANG
+      statement.</t>
+
+      <t><xref target="nma-table"/> lists alphabetically the names of
+      NETMOD-specific annotation elements (in angle brackets) and
+      attributes (prefixed with "@") along with a reference to the
+      section where their use is described. <xref
+      target="nma-schema"/> then contains the RELAX NG schema of this
+      annotation vocabulary.</t>
+
+      <texttable anchor="nma-table"
+                 title="NETMOD-specific annotations">
+        <ttcol align="left">annotation</ttcol>
+        <ttcol align="left">section</ttcol>
+        <ttcol align="left">note</ttcol>
+        <c>@nma:config</c>
+        <c><xref format="counter" target="config-stmt"/></c>
+        <c></c>
+        <c>@nma:default</c>
+        <c><xref format="counter" target="default-stmt"/></c>
+        <c></c>
+        <c>@nma:default-case</c>
+        <c><xref format="counter" target="case-stmt"/></c>
+        <c></c>
+        <c>&lt;nma:error-app-tag&gt;</c>
+        <c><xref format="counter" target="error-app-tag-stmt"/></c>
+        <c><xref format="counter" target="item-error"/></c>
+        <c>&lt;nma:error-message&gt;</c>
+        <c><xref format="counter" target="error-message-stmt"/></c>
+        <c><xref format="counter" target="item-error"/></c>
+        <c>&lt;nma:instance-identifier&gt;</c>
+        <c><xref format="counter" target="instance-identifier-type"/></c>
+        <c><xref format="counter" target="item-reqinst"/></c>
+        <c>@nma:key</c>
+        <c><xref format="counter" target="key-stmt"/></c>
+        <c></c>
+        <c>&lt;nma:leafref&gt;</c>
+        <c><xref format="counter" target="leafref-type"/></c>
+        <c><xref format="counter" target="item-reqinst"/></c>
+        <c>@nma:min-elements</c>
+        <c><xref format="counter" target="leaf-list-stmt"/></c>
+        <c></c>
+        <c>@nma:max-elements</c>
+        <c><xref format="counter" target="leaf-list-stmt"/></c>
+        <c></c>
+        <c>&lt;nma:must&gt;</c>
+        <c><xref format="counter" target="must-stmt"/></c>
+        <c><xref format="counter" target="item-must"/></c>
+        <c>@nma:ordered-by</c>
+        <c><xref format="counter" target="ordered-by-stmt"/></c>
+        <c></c>
+        <c>@nma:status</c>
+        <c><xref format="counter" target="status-stmt"/></c>
+        <c></c>
+        <c>@nma:unique</c>
+        <c><xref format="counter" target="unique-stmt"/></c>
+        <c></c>
+        <c>@nma:units</c>
+        <c><xref format="counter" target="units-stmt"/></c>
+        <c></c>
+        <c>@nma:when</c>
+        <c><xref format="counter" target="when-stmt"/></c>
+        <c></c>
+      </texttable>
+
+      <t>Notes:
+      <list style="numbers">
+        <t anchor="item-error">Appears only as subelement of
+        &lt;nma:must&gt;.</t>
+        <t anchor="item-reqinst">Has an optional attribute
+        @require-instance.</t>
+        <t anchor="item-must">Has a mandatory attribute @assert and
+        two optional subelements &lt;nma:error-app-tag&gt; and
+        &lt;nma:error-message&gt;.</t>
+      </list></t>
+
+    </section>
+  </section>
+
+  <section anchor="mappingOverview" title="Overview of the Mapping">
+    <t>This section gives an overview of the YANG-to-DSDL mapping, its
+    inputs and outputs. <xref target="fig-mapschema"/> presents an overall
+    structure of the mapping:</t>
+    <figure anchor="fig-mapschema"
+            title="Structure of the mapping">
+      <artwork>
+                 +----------------+
+                 | YANG module(s) |
+                 +----------------+
+                         |
+                         |T
+                         |
+         +---------------------------------+
+         | DSDL schema for conceptual tree |
+         +---------------------------------+
+            /       |           |       \      +-------+
+           /        |           |        \     |library|
+        Tg/       Tr|           |Tn       \    +-------+
+         /          |           |          \
+   +---------+   +-----+    +-------+    +------+
+   |get reply|   | rpc |    | notif |    | .... |
+   +---------+   +-----+    +-------+    +------+
+      </artwork>
+    </figure>
+
+    <t> The mapping procedure is divided into two steps:
+    <list style="numbers">
+      <t>Transformation T in the first step maps one or more YANG
+      modules to a single RELAX NG schema for the conceptual tree (see
+      <xref target="conceptualTree"/>). Constraints that cannot be
+      expressed directly in RELAX NG (list key definitions, 'must'
+      statements etc.) and various documentation texts are recorded in
+      the schema as simple annotations belonging to special
+      namespaces.</t>
+
+      <t>In the second step, the conceptual tree schema is transformed
+      in multiple ways to a coordinated set of DSDL schemas that can
+      be used for validating a particular data object in a specific
+      context. <xref target="fig-mapschema"/> shows just three
+      simplest possibilities as examples. In the process, appropriate
+      parts of the conceptual tree schema are extracted and specific
+      annotations transformed to equivalent, but usually more complex,
+      Schematron patterns, &lt;dsrl:default-content&gt; elements
+      etc.</t>
+
+      <t>As indicated in <xref target="fig-mapschema"/>, the second
+      step of the mapping also uses a schema-independent library that
+      contains common schema objects such as RELAX NG named pattern
+      definitions.</t>
+    </list></t>
+
+    <t>An implementation of the mapping algorithm accepts one or more
+    valid YANG modules as its input. It is important to be able to
+    process multiple YANG modules together since multiple modules may
+    be negotiated for a NETCONF session and the contents of the
+    configuration datastore is then obtained as the union of data
+    trees specified by the individual modules, which may also lead to
+    multiple roots. In addition, the input modules may be further
+    coupled by the 'augment' statement in which one module augments
+    the data tree of another module.</t>
+
+    <t>It is also assumed that the algorithm has access, perhaps on
+    demand, to all YANG modules that the module(s) imports
+    (transitively).</t>
+
+    <t>The output of the first mapping step is an annotated RELAX NG
+    schema for the conceptual tree, which represents a virtual XML
+    document containing, in its different subtrees, the entire
+    datastore, all RPC requests and replies, and notifications defined
+    by the input YANG modules. By "virtual" we mean that such an XML
+    document need not correspond to the actual layout of the
+    configuration database in a NETCONF agent, and will certainly
+    never appear on the wire as the content of a NETCONF PDU. Hence,
+    the RELAX NG schema for the conceptual tree is not intended for
+    any direct validations but rather as a representation of a
+    particular data model expressed in RELAX NG and the common
+    starting point for subsequent transformations that will typically
+    produce validation schemas. The conceptual tree is further
+    described in <xref target="conceptualTree"/>.</t>
+
+    <t>Other information contained in input YANG modules, such as
+    semantic constraints or default values, are recorded as
+    annotations - XML elements or attributes qualified with namespace
+    URI "urn:ietf:params:xml:ns:netmod:dsdl-annotations:1". Metadata
+    describing the YANG modules are mapped to annotations utilizing
+    Dublin Core elements (<xref target="dcElements"/>). Finally,
+    documentation strings are mapped to the &lt;a:documentation&gt;
+    elements belonging to the DTD compatibility vocabulary (<xref
+    target="dtdCompatibility"/>).</t>
+
+    <t>The output from the second step is is a coordinated set of
+    three DSDL schemas corresponding to a specific data object and
+    context:
+    <list style="symbols">
+      <t>RELAX NG schema describing the grammatical and datatype
+      constraints;</t>
+      <t>Schematron schema expressing other constraints such as
+      uniqueness of list keys or user-specified semantic rules;</t>
+      <t>DSRL schema containing a specification of default values.</t>
+    </list></t>
+
+  </section>
+
+  <section anchor="design" title="Design Considerations">
+    <t>YANG modules could be mapped to DSDL schemas in a number of
+    ways. The mapping procedure described in this document uses
+    several specific design decisions that are discussed in the
+    following subsections.</t>
+
+    <section anchor="conceptualTree" title="Conceptual Data Tree">
+      <t>DSDL schemas generated from YANG modules using the procedure
+      described in this document are intended to be used for
+      validating XML-encoded NETCONF data in various forms (full
+      datastore and several types of PDUs): every YANG-based model
+      represents the contents of a full datastore but also implies an
+      array of schemas for all types of NETCONF PDUs. For a reasonably
+      strict validation of a given data object, the schemas have to be
+      quite specific. To begin with, effective validation of NETCONF
+      PDU content requires separation of client and server
+      schemas. While the decision about proper structuring of all
+      PDU-validating schemas is beyond the scope of this document, the
+      mapping procedure is designed to accommodate any foreseeable
+      validation needs.</t>
+      <t>An essential part of the YANG-to-DSDL mapping procedure is
+      nonetheless common to all validation approaches: the grammar and
+      datatype specifications for the datastore, RPCs and
+      notifications expressed by one or more YANG modules have to be
+      translated to RELAX NG. In order to be able to separate this
+      common step, we introduce the notion of <spanx
+      style="emph">conceptual data tree</spanx>: it is a virtual XML
+      tree that contains full datastore, RPC requests with
+      corresponding replies and notifications. The schema for the
+      conceptual tree - a single RELAX NG schema with annotations -
+      therefore has a quite similar logic as the input YANG module(s),
+      the only major difference being the RELAX NG schema
+      language.</t>
+      <t>The conceptual data tree may be schematically represented as
+      follows:</t>
+
+      <figure>
+        <artwork>
+<![CDATA[<nmt:netmod-tree
+    xmlns:nmt="urn:ietf:params:xml:ns:netmod:conceptual-tree:1">
+  <nmt:top>
+    ... configuration and status data ...
+  </nmt:top>
+  <nmt:rpc-methods>
+    <nmt:rpc-method>
+      <nmt:input>
+        <myrpc ...>
+          ...
+        </myrpc>
+      </nmt:input>
+      <nmt:output>
+        ...
+      </nmt:output>
+    </nmt:rpc-method>
+    ...
+  </nmt:rpcs>
+  <nmt:notifications>
+    <nmt:notification>
+      <mynotif>
+        ...
+      </mynotif>
+    </nmt:notification>
+    ...
+  </nmt:notifications>
+</nmt:netmod>]]></artwork>
+      </figure>
+
+      <t>The namespace URI
+      "urn:ietf:params:xml:ns:netmod:conceptual-tree:1" identifies a
+      simple vocabulary consisting of a few elements that encapsulate
+      and separate the various parts of the conceptual data tree.</t>
+
+      <t>The conceptual tree schema is not intended for direct
+      validation but rather serves as a well-defined starting point
+      for subsequent transformations that generate various validation
+      schemas. Such transformations should be relatively simple, they
+      will typically extract one or several subtrees from the
+      conceptual tree schema, modify them as necessary and add
+      encapsulating elements such as those from the NETCONF RPC
+      layer.</t>
+
+      <t>Additional information contained in the source YANG
+      module(s), such as semantic constraints and default values, is
+      represented in the form of interim NETMOD-specific annotations
+      that are included as foreign-namespace elements or attributes in
+      the RELAX NG schema for the conceptual tree. In the second phase
+      of the mapping, these annotations are translated to equivalent
+      Schematron and DSRL rules.</t>
+
+      <t>As a useful side effect, by introducing the conceptual data
+      tree we are also able to resolve the difficulties arising from
+      the fact that a single configuration repository may consist of
+      multiple parallel data hierarchies defined in one or more YANG
+      modules, which cannot be mapped to a valid XML document. In the
+      conceptual data tree, such multiple hierarchies appear under the
+      single &lt;nmt:top&gt; element.</t>
+
+    </section>
+
+    <section anchor="modularity" title="Modularity">
+      <t>Both YANG and RELAX NG offer means for modularity, i.e., for
+      splitting the contents into separate modules (schemas) and
+      combining or reusing them in various ways. However, the
+      approaches taken by YANG and RELAX NG differ. Modularity in
+      RELAX NG is suitable for ad hoc combinations of a small number
+      of schemas whereas YANG assumes a large set of modules similar
+      to SNMP MIBs. The following differences are important:
+      <list style="symbols">
+        <t>In YANG, whenever module A imports module B, it gets access
+        to the definitions (groupings and typedefs) appearing at the
+        top level of module B. However, no part of module B's data
+        tree is imported along with it. In contrast, the
+        &lt;rng:include&gt; pattern in RELAX NG imports both
+        definitions of named patterns and the entire schema tree from
+        the included schema.</t>
+        <t>The names of imported YANG groupings and typedefs are
+        qualified with the namespace of the imported module. On the
+        other hand, the data nodes contained inside the imported
+        groupings, when used within the importing module, become part
+        of the importing namespace. In RELAX NG, the names of patterns
+        are unqualified and so named patterns defined in both the
+        importing and imported module share the same flat
+        namespace. The contents of RELAX NG named patterns may either
+        keep the namespace of the schema where they are defined or
+        inherit the namespace of the importing module, analogically to
+        YANG. However, in order to achieve the latter behavior, the
+        imported module must be prepared in a special way as a library
+        module that cannot be used as a stand-alone schema.</t>
+      </list></t>
+      <t>So the conclusion is that the modularity mechanisms of YANG
+      and RELAX NG, albeit similar, are not directly
+      compatible. Therefore, the corresponding design decision for the
+      mapping algorithm is to collect all information in a single
+      schema for the conceptual tree, even if it comes from multiple
+      YANG modules or submodules. In other words, translations of
+      imported groupings and typedefs are installed in the translation
+      of importing module - but only if they are really used
+      there.</t>
+
+      <t>NOTE: The 'include' statement that is used in YANG for
+      including submodules has in fact the same semantics as the
+      &lt;rng:include&gt; pattern. However, since we don't map the
+      modular structure for YANG modules, it seems to have little
+      sense to do it for submodules. Consequently, the contents of
+      submodules appear directly in the conceptual tree schema,
+      too.</t>
+    </section>
+
+    <section anchor="granularity" title="Granularity">
+      <t>RELAX NG supports different styles of schema structuring:
+      One extreme, often called "Russian Doll", specifies the
+      structure of an XML instance document in a single hierarchy. The
+      other extreme, the flat style, uses a similar approach as the
+      Data Type Definition (DTD) schema language - every XML element
+      is introduced inside a new named pattern. In practice, some
+      compromise between the two extremes is usually chosen.</t>
+      <t>YANG supports both styles in principle, too, but in most
+      cases the modules are organized in a way that's closer to the
+      "Russian Doll" style, which provides a better insight into the
+      structure of the configuration data. Groupings are usually
+      defined only for contents that are prepared for reuse in
+      multiple places via the 'uses' statement. In contrast, RELAX NG
+      schemas tend to be much flatter, because finer granularity is
+      also needed in RELAX NG for extensibility of the schemas - it is
+      only possible to replace or modify schema fragments that are
+      factored out as named patterns. For YANG this is not an issue
+      since its 'augment' and 'refine' statements can delve, by using
+      path expressions, into arbitrary depths of existing
+      structures.</t>
+      <t>In general, it not feasible to map YANG extension mechanisms
+      to those of RELAX NG. For this reason, the mapping essentially
+      keeps the granularity of the original YANG data model:
+      definitions of named patterns in the resulting RELAX NG schema
+      usually have direct counterparts in YANG groupings and
+      definitions of derived types.</t>
+    </section>
+
+    <section anchor="XML-NS" title="Handling of XML Namespaces">
+
+      <t>Most modern XML schema languages including RELAX NG,
+      Schematron and DSRL support schemas for so-called compound XML
+      documents, which contain elements from multiple namespaces. This
+      is useful for our purpose since the YANG-to-DSDL mapping
+      algorithm allows for multiple input YANG modules that naturally
+      leads to compound document schemas.</t>
+      <t>RELAX NG offers two alternatives for defining the "target"
+      namespaces in the schema:
+      <list style="numbers">
+        <t anchor="xmlns-att">First possibility is the traditional XML
+        way via the @xmlns:xxx attribute.</t>
+        <t anchor="ns-att">One of the target namespace
+        URIs may be declared using the @ns attribute.</t>
+      </list></t>
+      <t>In both cases these attributes are typically attached to the
+      &lt;rng:grammar&gt; element.</t>
+      <t>The design decision for the mapping is to use exclusively the
+      alternative <xref format="counter" target="xmlns-att"/>, since
+      all YANG modules are represented symmetrically, which makes
+      further processing of the conceptual tree schema considerably
+      easier. Moreover, this way the namespace prefixes declared in
+      all input modules are recorded in the resulting schema - the
+      prefix for the namespace declared using @ns would be lost.</t>
+      <t>In contrast, there is no choice for Schematron and DSRL since
+      both schema languages require the target namespaces to be
+      defined by special means. In Schematron, &lt;sch:ns&gt;
+      subelements of the root &lt;sch:schema&gt; element serve this
+      purpose, whereas in DSRL it is the @targetNamespace attribute of
+      the root &lt;dsrl:maps&gt; element.</t>
+    </section>
+  </section>
+
+  <section
+      anchor="desc-yang-to-cts"
+      title="Mapping YANG Data Models to the Conceptual Tree Schema">
+
+    <t>This section explains the main principles underlying the first
+    step of the mapping. Its result is an annotated RELAX NG schema of
+    the conceptual tree, which is described in <xref
+    target="conceptualTree"/>.</t>
+
+    <t>As a special case, if the input YANG modules contain no data
+    nodes (this is typical e.g., for datatype library modules), an
+    implementation MAY entirely remove the schema of the (empty)
+    conceptual tree - the &lt;rng:start&gt; element with all its
+    contents. The output RELAX NG schema will then contain only named
+    pattern definitions translated from YANG groupings and
+    typedefs.</t>
+
+    <t>Detailed specification of the mapping of individual YANG
+    statements is contained in <xref target="yang-to-rng"/>.</t>
+
+    <section anchor="optionalMandatoryContent"
+             title="Optional and Mandatory Content">
+
+      <t>In YANG, the decision whether a given data node is mandatory
+      or optional is driven by the following rules, see <xref
+      target="YANG"/>, Section 3.1:</t>
+      <t>Leaf and choice nodes are mandatory if they contain
+      the substatement</t>
+      <figure>
+        <artwork>mandatory true;</artwork>
+      </figure>
+      <t>In addition, leaf nodes are mandatory if they are declared as
+      list keys.</t>
+      <t>Lists or leaf-lists are mandatory if they contain
+      'min-elements' substatement with argument value greater than zero.</t>
+      <t>A slightly more complicated situation arises for YANG
+      containers. First, containers with the 'presence' substatement
+      are always optional since their presence or absence carries
+      specific information. On the other hand, non-presence containers
+      may be omitted if they are empty. This leads to the following
+      recursive rule:</t>
+      <t>A container node is optional if its definition contains the
+      'presence' substatement or none of its child nodes is
+      mandatory.</t>
+
+      <t>In RELAX NG, all elements that are optional must be
+      explicitly wrapped in the &lt;rng:optional&gt; element. The mapping
+      algorithm thus uses the above rules to determine whether a YANG
+      node is optional and if so, insert the &lt;rng:optional&gt; element
+      in the RELAX NG schema.</t>
+    </section>
+
+    <section anchor="grouping-typedef"
+             title="Mapping YANG Groupings and Typedefs">
+
+      <t>YANG groupings and typedefs are generally mapped to RELAX NG
+      named patterns. There are, however, several caveats that the
+      mapping has to take into account.</t>
+
+      <t>First of all, YANG typedefs and groupings may appear at all
+      levels of the module hierarchy and are subject to lexical
+      scoping, see <xref target="YANG"/>, Section 5.5. Moreover,
+      top-level symbols from external modules are imported as
+      qualified names represented using the external module namespace
+      prefix and the name of the symbol. In contrast, named patterns
+      in RELAX NG (both local and imported via the &lt;rng:include&gt;
+      pattern) share the same namespace and within a grammar they are
+      always global - their definitions may only appear at the top
+      level as children of the &lt;rng:grammar&gt;
+      element. Consequently, whenever YANG groupings and typedefs are
+      mapped to RELAX NG named pattern definitions, their names
+      MUST be disambiguated in order to avoid naming conflicts. The
+      mapping uses the following procedure for mangling the names of
+      groupings and type definitions:
+      <list style="symbols">
+        <t>Names of groupings and typedefs appearing at the <spanx
+        style="emph">top level</spanx> of the YANG module hierarchy
+        are prefixed with the module name and two underscore
+        characters ("__").</t>
+        <t>Names of other groupings and typedefs, i.e., those that do
+        not appear at the top level of a YANG module, are prefixed
+        with the module name, double underscore, and then the names of
+        all ancestor data nodes separated by double underscore.</t>
+        <t>Since the names of groupings and typedefs in YANG have
+        different namespaces, an additional underline character is
+        added to the front of the mangled names of all groupings.</t>
+      </list>
+      </t>
+
+      <t>For example, consider the following YANG module which imports
+      the standard module "inet-types" <xref target="Ytypes"/>:</t>
+      <figure>
+        <artwork>
+<![CDATA[module example1 {
+    namespace "http://example.com/ns/example1";
+    prefix "ex1";
+    import "inet-types" {
+        prefix "inet";
+    }
+    typedef vowels {
+        type string {
+            pattern "[aeiouy]*";
+        }
+    }
+    grouping "grp1" {
+        leaf "void" {
+            type "empty";
+        }
+    }
+    container "cont" {
+        grouping "grp2" {
+            leaf "address" {
+                type "inet:ip-address";
+            }
+        }
+        leaf foo {
+            type vowels;
+        }
+        uses "grp1";
+        uses "grp2";
+    }
+}]]></artwork>
+      </figure>
+
+      <t>The resulting RELAX NG schema will then contain the following
+      named pattern definitions (long regular expression patterns for
+      IPv4 and IPv6 addresses are not shown):</t>
+
+      <figure>
+        <artwork>
+<![CDATA[<rng:define name="example1__vowels">
+  <rng:data type="string">
+    <rng:param name="pattern">[aeiouy]*</param>
+  </rng:data>
+</rng:define>
+
+<rng:define name="_example1__grp1">
+  <rng:optional>
+    <rng:element name="t:void">
+      <rng:empty/>
+    </rng:element>
+  </rng:optional>
+</rng:define>
+
+<rng:define name="_example1__cont__grp2">
+  <rng:optional>
+    <rng:element name="t:address">
+      <rng:ref name="inet-types__ip-address"/>
+    </rng:element>
+  </rng:optional>
+</rng:define>
+
+<rng:define name="inet-types__ip-address">
+  <rng:choice>
+    <rng:ref name="inet-types__ipv4-address"/>
+    <rng:ref name="inet-types__ipv6-address"/>
+  </rng:choice>
+</rng:define>
+
+<rng:define name="inet-types__ipv4-address">
+  <rng:data type="string">
+    <rng:param name="pattern">... regex pattern ...</param>
+  </rng:data>
+</rng:define>
+
+<rng:define name="inet-types__ipv6-address">
+  <rng:data type="string">
+    <rng:param name="pattern">... regex pattern ...</param>
+  </rng:data>
+</rng:define>]]></artwork>
+      </figure>
+
+      <section anchor="refine-augment" title="YANG Refinements and Augments">
+
+        <t>YANG groupings represent a similar concept as named pattern
+        definitions in RELAX NG and both languages also offer
+        mechanisms for their subsequent modification. However, in
+        RELAX NG the definitions themselves are modified whereas YANG
+        allows for modifying <spanx style="emph">expansions</spanx> of
+        groupings. Specifically, YANG provides two statements for this
+        purpose that may appear as substatements of 'uses':
+        <list style="symbols">
+          <t>'refine' statement allows for changing parameters of a
+          schema node inside the grouping referenced by the parent
+          'uses' statement;</t>
+          <t>'augment' statement can be used for adding new schema
+          nodes to the grouping content.</t>
+        </list></t>
+        <t>Both 'refine' and 'augment' statements are quite powerful
+        in that they can address, using a subset of XPath 1.0
+        expressions as arguments, schema nodes that are arbitrarily
+        deep inside the grouping content. In contrast, definitions of
+        named patterns in RELAX NG operate exclusively at the topmost
+        level of the named pattern content. In order to achieve a
+        modifiability of named patterns comparable to YANG, the RELAX
+        NG schema would have to be extremely flat (cf. <xref
+        target="granularity"/>) and very difficult to read.</t>
+        <t>Since the goal of the mapping described in this document is
+        to generate ad hoc DSDL schemas, we decided to avoid these
+        complications and instead expand the grouping and refine
+        and/or augment it "in place". In other words, every 'uses'
+        statement which has 'refine' and/or 'augment' substatements is
+        virtually replaced by the content of the corresponding
+        grouping, the changes specified in the 'refine' and 'augment'
+        statements are applied and the resulting YANG schema fragment
+        is mapped as if the 'uses'/'grouping' indirection wasn't
+        there.</t>
+        <t>If there are further 'uses' statements inside the grouping
+        content, they may require expansion, too: it is necessary if
+        the contained 'uses'/'grouping' pair lies on the "modification
+        path" specified in the argument of a 'refine' or 'augment'
+        statement.</t>
+      <t>EXAMPLE. Consider the following YANG module:</t>
+      <figure>
+        <artwork>
+<![CDATA[module example2 {
+    namespace "http://example.com/ns/example2";
+    prefix ex2;
+    grouping leaves {
+        uses fr;
+        uses es;
+    }
+    grouping fr {
+        leaf feuille {
+            type string;
+        }
+    }
+    grouping es {
+        leaf hoja {
+            type string;
+        }
+    }
+    uses leaves;
+}]]></artwork>
+      </figure>
+
+      <t>The resulting conceptual tree schema contains three named
+      pattern definitions corresponding to the three groupings,
+      namely</t>
+      <figure>
+        <artwork>
+<![CDATA[<rng:define name="_example2__leaves">
+  <rng:ref name="_example2__fr"/>
+  <rng:ref name="_example2__es"/>
+</rng:define>
+
+<rng:define name="_example2__fr">
+  <rng:optional>
+    <rng:element name="feuille">
+      <rng:data type="string"/>
+    </rng:element>
+  </rng:optional>
+</rng:define>
+
+<rng:define name="_example2__es">
+  <rng:optional>
+    <rng:element name="hoja">
+      <rng:data type="string"/>
+    </rng:element>
+  </rng:optional>
+</rng:define>
+]]></artwork>
+      </figure>
+      <t>and the configuration data part of the conceptual tree schema
+      is a single named pattern reference:</t>
+      <figure>
+        <artwork>
+<![CDATA[<rng:ref name="_example2__leaves"/>]]></artwork>
+      </figure>
+      <t>Now assume that the "uses leaves" statement is refined:</t>
+      <figure>
+        <artwork>
+<![CDATA[uses leaves {
+    refine "hoja" {
+        default "alamo";
+    }
+}]]></artwork>
+      </figure>
+      <t>The resulting conceptual tree schema now contains just one
+      named pattern definition - "_example__fr". The other two
+      groupings "leaves" and "es" have to be expanded because they
+      both lie on the "modification path", i.e., contain the leaf
+      "hoja" that is being refined. The configuration data part of the
+      conceptual tree now looks like this:</t>
+      <figure>
+        <artwork>
+<![CDATA[<rng:ref name="_example2__fr"/>
+<rng:optional>
+  <rng:element name="hoja" nma:default="alamo">
+    <rng:data type="string"/>
+  </rng:element>
+</rng:optional>]]></artwork>
+      </figure>
+
+      </section>
+
+      <section anchor="chtypes" title="Type derivation chains">
+        <t>RELAX NG has no equivalent of the type derivation mechanism
+        in YANG, where a base built-in type may be modified (in
+        multiple steps) by adding new restrictions. Therefore, when
+        mapping YANG derived types with restrictions, the derived
+        types MUST be "unwound" all the way back to the base built-in
+        type. At the same time, all restrictions found along the type
+        derivation chain MUST be combined and their intersection used
+        as facets restricting the corresponding type in RELAX NG.</t>
+        <t>When a derived YANG type is used without restrictions, the
+        'type' statement is mapped simply to the &lt;rng:ref&gt;
+        element, i.e., a named pattern reference. However, if
+        restrictions are specified as substatements of the 'type'
+        statement, the type MUST be expanded at that point so that
+        only the base built-in type appears in the output schema,
+        restricted with facets that again correspond to the
+        combination of all restrictions found along the type
+        derivation chain and also in the 'type' statement.</t>
+        <t>EXAMPLE. Consider this YANG module:</t>
+        <figure>
+          <artwork>
+<![CDATA[module example3 {
+    namespace "http://example.com/ns/example3";
+    prefix ex3;
+    typedef dozen {
+        type uint8 {
+            range 1..12;
+        }
+    }
+    leaf month {
+        type dozen;
+    }]]></artwork>
+        </figure>
+        <t>The 'type' statement in "leaf month" is mapped simply to
+        the reference &lt;rng:ref name="example__dozen"/&gt; and the
+        corresponding named pattern is defined as follows:</t>
+        <figure>
+          <artwork>
+<![CDATA[<rng:define name="example3__dozen">
+  <rng:data type="unsignedByte">
+    <rng:param name="minInclusive">1</param>
+    <rng:param name="maxInclusive">12</param>
+  </rng:data>
+</rng:define>]]></artwork>
+        </figure>
+        <t>Assume now that the definition of leaf "month" is changed
+        to</t>
+        <figure>
+          <artwork>
+<![CDATA[leaf month {
+    type dozen {
+        range 7..max;
+    }
+}]]></artwork>
+        </figure>
+        <t>The output RELAX NG schema then won't contain any named
+        pattern definition and leaf "month" will be mapped directly
+        to</t>
+        <figure>
+          <artwork>
+<![CDATA[<rng:element name="month">
+  <rng:data type="unsignedByte">
+    <rng:param name="minInclusive">7</param>
+    <rng:param name="maxInclusive">12</param>
+  </rng:data>
+</rng:element>]]></artwork>
+        </figure>
+
+      </section>
+
+    </section>
+
+    <section anchor="transXPath"
+             title="Translation of XPath Expressions">
+      <t>YANG uses full XPath 1.0 syntax <xref target="XPath"/> for
+      the arguments of 'must' and 'when' statements and a subset
+      thereof in several other statements. However, since the name of
+      a data node always belongs to the namespace of the YANG Module
+      where the data node is defined, YANG adopted a simplification
+      similar to the concept of <spanx style="emph">default
+      namespace</spanx> in XPath 2.0: node names needn't carry a
+      namespace prefix inside the module where they are defined, in
+      which case the module's namespace is assumed.</t>
+      <t>If an XPath expression is carried over to a NETMOD-specific
+      annotation in the first mapping step, it MUST be translated into
+      a fully conformant XPath 1.0 expression that also reflects the
+      hierarchy of the conceptual data tree:
+      <list style="numbers">
+        <t anchor="item-prefix">Each unprefixed node name MUST be
+        prepended with the local module's namespace prefix declared by
+        the 'prefix' statement.</t>
+        <t anchor="item-root">Absolute XPath expressions, i.e., those
+        starting with a slash, MUST be prepended with appropriate path
+        in the conceptual tree, according to the YANG specification of
+        context for XPath expressions, see <xref target="XPath"/>,
+        sections 7.5.3 and 7.19.5.</t>
+      </list></t>
+      <t>Translation rule <xref format="counter" target="item-root"/>
+      means for example that absolute XPath expressions appearing in
+      the main configuration data tree always start with
+      "nmt:netmod-tree/nmt:top/", those appearing in a notification
+      always start with
+      "nmt:netmod-tree/nmt:notifications/nmt:notification/", etc.</t>
+      <t>EXAMPLE. YANG XPath expression "/dhcp/max-lease-time"
+      appearing in the main configuration data will be translated to
+      "nmt:netmod-tree/nmt:top/dhcp:dhcp/dhcp:max-lease-time".</t>
+
+      <t>[Editor's note: We may want to introduce "$root" variable
+      that always contains the appropriate partial path in conceptual
+      tree. The translated XPath in the example would then become
+      "$root/dhcp:dhcp/dhcp:max-lease-time".]</t>
+
+      <t>The key identifiers and "descendant schema node identifiers"
+      (see the ABNF production for "descendant-schema-nodeid" in
+      Section&#xA0;12 of <xref target="YANG"/>) that appear as items
+      in the arguments of 'key' and 'unique' statements, respectively,
+      are special XPath expressions and MUST be translated in the same
+      way, i.e., after the translation each key and every component of
+      a node identifier must have the namespace prefix of the local
+      module.</t>
+    </section>
+
+  <section anchor="extensions" title="YANG Language Extensions">
+    <t>YANG allows for extending its own language in-line by adding
+    new statements with keywords from special namespaces. Such
+    extensions first have to be declared using the 'extension'
+    statement and then can be used as the native statements, only with
+    a namespace prefix qualifying the extension keyword. RELAX NG has
+    a similar extension mechanism - XML elements and attributes with
+    names from foreign namespaces may be inserted at almost every
+    place of a RELAX NG schema.</t>
+    <t>YANG language extensions may or may not have a meaning in the
+    context of DSDL schemas. Therefore, an implementation MAY ignore
+    any or all of the extensions. However, an extension that is not
+    ignored MUST be mapped to XML element(s) and/or attribute(s) that
+    exactly match the YIN form of the extension.</t>
+    <t>EXAMPLE. Consider the following extension defined by the "acme"
+    module:</t>
+    <figure>
+      <artwork>
+<![CDATA[extension documentation-flag {
+    argument number;
+}]]></artwork>
+    </figure>
+    <t>This extension can then be used in the same or another
+    module, for instance like this:</t>
+    <figure>
+      <artwork>
+<![CDATA[leaf folio {
+    acme:documentation-flag 42;
+    type string;
+}]]></artwork>
+    </figure>
+    <t>If this extension is honored by the mapping, it will be mapped
+    to</t>
+    <figure>
+      <artwork>
+<![CDATA[<rng:element name="folio">
+   <acme:documentation-flag number="42"/>
+   <rng:data type="string"/>
+</rng:element>
+ ]]></artwork>
+    </figure>
+    <t>Note that the 'extension' statement itself is not mapped in any
+    way.</t>
+  </section>
+
+</section>
+
+<section anchor="cts-to-dsdl"
+         title="Mapping Conceptual Tree Schema to DSDL">
+
+  <t>As explained in <xref target="mappingOverview"/>, the second step
+  of the YANG-to-DSDL mapping takes the conceptual tree schema and
+  transforms it to various DSDL schemas ready for validation. As an
+  input parameter, this step gets in the simplest case a specification
+  of the NETCONF XML document type (or combination of multiple types)
+  that is to be validated. These document type can be for example
+  reply to &lt;nc:get&gt; or &lt;nc:get-config&gt;, RPC requests or
+  replies and notification. Other parameters further describing the
+  context may also be provided, such as the list of active
+  capabilities, features etc.</t>
+  <t>In general, the second mapping step has to accomplish the
+  following three tasks:
+  <list style="numbers">
+    <t>Extract the part(s) of the conceptual tree schema that are
+    appropriate or the requested document type. For example, if a
+    &lt;get&gt; reply is to be validated, the subtree under
+    &lt;nmt:top&gt; must be selected.</t>
+    <t>The schema must be accommodated to the specific encapsulating
+    XML elements mandated by the RPC layer. These are, for example,
+    &lt;nc:rpc&gt; and &lt;nc:data&gt; elements in the case of a
+    datastore or &lt;en:notification&gt; for a notification.</t>
+    <t>Finally, NETMOD-specific annotations that are relevant for the
+    schema language of the generated schema must be mapped to
+    corresponding schema-language-specific rules.</t>
+  </list></t>
+  <t>These three tasks are together much simpler than the first
+  mapping step. Presumably, they can be effectively realized
+  using XSL transformations <xref target="XSLT"/>.</t>
+  <t>The following subsections describe the details of the second
+  mapping step for the individual DSDL schema languages. <xref
+  target="nma-to-dsdl"/> then contains a detailed specification for
+  the mapping of all NETMOD-specific annotations.</t>
+
+  <section anchor="step2-rng"
+           title="Generating RELAX NG Schemas for Various Document Types">
+    <t>With one minor exception, obtaining a validating RELAX NG
+    schema from the conceptual tree schema really means only taking
+    appropriate parts from the conceptual tree schema and assembling
+    them in a new RELAX NG grammar, perhaps after removing all
+    unwanted annotations. Depending on the XML document type that is
+    the target for validation (&lt;get&gt;/&lt;get-config&gt; reply,
+    RPC or notification) a corresponding top-level part of the grammar
+    MUST be added as described in the following subsections.</t>
+    <t>Schemas for multiple alternative target document types can also
+    be easily generated by enclosing the definitions for requested
+    type in &lt;rng:choice&gt; element.</t>
+    <t>In order to avoid copying identical named pattern definitions
+    to the output RELAX NG file, these schema-independent definition
+    are collected in a library file "relang-lib.rng" which is then
+    included by the validating RELAX NG schemas. <xref
+    target="app-library"/> has the listing of this library file.</t>
+    <t>The minor exception mentioned above is the annotation
+    @nma:config, which must be observed if the target document type is
+    &lt;get-config&gt; reply. In this case, each element definition
+    that has this attribute with the value "false" MUST be removed
+    from the schema together with its descendants. See <xref
+    target="nma-config"/> for more details.</t>
+
+    <section title="Reply to &lt;get&gt; or &lt;get-config&gt;">
+      <t>For a reply to &lt;get&gt; or &lt;get-config&gt;, the mapping
+      must take the part of the conceptual tree schema under the
+      definition of &lt;nmt:top&gt; and insert it in the following
+      grammar:</t>
+      <figure>
+        <artwork>
+<![CDATA[<rng:grammar ... namespaces etc. ...>
+  <rng:include href="relaxng-lib.rng"/>
+  <rng:start>
+    <rng:element name="nc:rpc-reply">
+      <rng:ref name="message-id-attribute"/>
+      <rng:element name="nc:data">
+        ... patterns defining contents of "nmt:top" subtree ...
+      </rng:element>
+    </rng:element>
+  </rng:start>
+  ... named pattern definitions ...
+</rng:grammar>]]></artwork>
+      </figure>
+
+      <t>The definition for the named pattern "message-id-attribute" is
+      found in the library file "relaxng-lib.rng" which is included on
+      the second line (see <xref target="app-library"/>).</t>
+      <t>Definitions of other named patterns MUST be copied from the
+      conceptual tree schema without any changes to the resulting
+      grammar. However, an implementation MAY choose to copy only
+      those definitions that are really used in the particular
+      output grammar.</t>
+    </section>
+
+    <section title="Remote Procedure Calls">
+
+      <t>For an RPC method named "myrpc" and defined in a YANG
+      module with prefix "yam", the corresponding schema subtree is
+      identified by the definition of &lt;nmt:rpc-method&gt; element
+      whose &lt;nmt:input&gt; subelement has &lt;yam:myrpc&gt; as the
+      only child.</t>
+      <t>The mapping must also take into account whether the target
+      document type in an RPC request or reply. For "yam:myrpc"
+      request, the resulting grammar looks as follows:</t>
+      <figure>
+        <artwork>
+<![CDATA[<rng:grammar ... namespaces etc. ...>
+  <rng:include href="relaxng-lib.rng"/>
+  <rng:start>
+    <rng:element name="nc:rpc">
+      <rng:ref name="message-id-attribute"/>
+      <rng:element name="yam:myrpc">
+        ... patterns defining contents of subtree ...
+        ... "nmt:rpc-method/nmt:input/yam:myrpc" ...
+      </rng:element>
+    </rng:element>
+  </rng:start>
+  ... named pattern definitions ...
+</rng:grammar>]]></artwork>
+      </figure>
+      <t>For "myrpc" reply, the output grammar is</t>
+      <figure>
+        <artwork>
+<![CDATA[<rng:grammar ... namespaces etc. ...>
+  <rng:include href="relaxng-lib.rng"/>
+  <rng:start>
+    <rng:element name="nc:rpc-reply">
+      <rng:ref name="message-id-attribute"/>
+      ... patterns defining contents of corresponding ...
+      ... "nmt:rpc-method/nmt:output" subtree ...
+    </rng:element>
+  </rng:start>
+  ... named pattern definitions ...
+</rng:grammar>]]></artwork>
+      </figure>
+      <t>In both cases, exact copies of named pattern definitions from
+      the conceptual tree schema MUST be inserted, but an
+      implementation MAY choose to include only those used for the
+      given RPC.</t>
+    </section>
+
+    <section title="Notifications">
+
+      <t>For a notification named "mynotif" and defined in a YANG
+      module with prefix "yam", the corresponding schema subtree is
+      identified by the definition of &lt;nmt:notification&gt; element
+      that has the single child &lt;yam:mynotif&gt;.</t>
+      <t>The resulting grammar looks as follows:</t>
+      <figure>
+        <artwork>
+<![CDATA[<rng:grammar ... namespaces etc. ...>
+  <rng:include href="relaxng-lib.rng"/>
+  <rng:start>
+    <rng:element name="en:notification">
+      <rng:ref name="eventTime-element"/>
+      <rng:element name="yam:myrpc">
+        <!-- patterns defining contents of
+             "nmt:rpc-notification/yam:mynotif" subtree -->
+      </rng:element>
+    </rng:element>
+  </rng:start>
+  <!-- named pattern definitions -->
+</rng:grammar>]]></artwork>
+      </figure>
+      <t>The definition of the named pattern "eventTime-element" is
+      found in the "relaxng-lib.rng" library file.</t>
+      <t>And again, exact copies of named pattern definitions from the
+      conceptual tree schema MUST be inserted, but an implementation
+      MAY choose to include only those used for the given
+      notification.</t>
+    </section>
+
+  </section>
+
+  <section anchor="mappingSch"
+           title="Mapping Semantic Constraints to Schematron">
+
+    <t>Schematron schemas tend to be much flatter and more uniform
+    compared to RELAX with exactly four levels of XML hierarchy:
+    &lt;sch:schema&gt;, &lt;sch:pattern&gt;, &lt;sch:rule&gt; and
+    &lt;sch:assert&gt; or &lt;sch:report&gt;.</t> <t>In a Schematron
+    schema generated by the second mapping step, the basic unit of
+    organization is a <spanx style="emph">rule</spanx> represented by
+    the &lt;sch:rule&gt; element. Every rule corresponds to exactly
+    one element definition in the conceptual tree schema. The
+    mandatory @context attribute of &lt;sch:rule&gt; is set to the
+    absolute path of the corresponding element in the data tree.</t>
+    <t>In the opposite direction, however, not every element
+    definition has a corresponding rule in the Schematron schema: only
+    those definitions are taken into account that are annotated with
+    at least one of the following NETMOD-specific annotations:
+    &lt;nma:instance-identifier&gt;, @nma:key, &lt;nma:leafref&gt;,
+    @nma:min-elements, @nma:max-elements, &lt;nma:must&gt;,
+    @nma:unique and &lt;nma:when&gt;.</t>
+    <t>Schematron rules may be further grouped into <spanx
+    style="emph">patterns</spanx> represented by the
+    &lt;sch:pattern&gt; element. The mapping uses patterns only for
+    discriminating between subsets of rules that belong to different
+    validation phases, see <xref
+    target="validationPhases"/>. Therefore, the &lt;sch:schema&gt;
+    always has exactly two &lt;sch:pattern&gt; children: one named
+    "standard" contains rules for all annotations except
+    &lt;nma:instance-identifier&gt; and &lt;nma:leafref&gt;, and
+    another named "ref-integrity" containing rules for these two
+    remaining annotations, i.e., referential integrity checks.</t>
+    <t>Element definitions in the conceptual tree schema that appear
+    inside a named pattern definition (i.e., have &lt;rng:define&gt;
+    among its ancestors) are subject to a different treatment. This is
+    because their path in the data tree is not fixed - the named
+    pattern may be referred to in multiple different places. The
+    mapping uses <spanx style="emph">abstract rules</spanx> to handle
+    this case: An element definition inside a named pattern is mapped
+    to an abstract rule and every use of the named pattern then
+    extends this abstract pattern in the concrete context.</t>
+    <t>EXAMPLE. Consider this element definition annotated with
+    &lt;nma:must&gt;:</t>
+
+    <figure>
+      <artwork>
+<![CDATA[<rng:element name="dhcp:default-lease-time">
+  <rng:data type="unsignedInt"/>
+  <nma:must assert=". &lt;= ../dhcp:max-lease-time">
+    <nma:error-message>
+      The default-lease-time must be less than max-lease-time
+    </nma:error-message>
+  </nma:must>
+</rng:element>]]></artwork>
+    </figure>
+    <t>If this element definition appears outside any named pattern
+    and as a child of &lt;dhcp:dhcp&gt; (as it does in the DHCP
+    schema, see <xref target="app-dhcp-cts"/>), it is mapped to the
+    following Schematron rule:</t>
+
+    <figure>
+      <artwork>
+<![CDATA[<sch:rule context="/nc:rpc-reply/nc:data/dhcp:dhcp/
+                  dhcp:default-lease-time">
+  <sch:assert test=". &lt;= ../dhcp:max-lease-time">
+    The default-lease-time must be less than max-lease-time
+  </sch:assert>
+</sch:rule>]]></artwork>
+    </figure>
+
+    <t>Now assume the element definition is inside a named pattern
+    definition, say</t>
+
+    <figure>
+      <artwork>
+<![CDATA[<rng:define name="_dhcp__default-lease-time">
+  <rng:element name="dhcp:default-lease-time">
+    ... same content ...
+  </rng:element>
+</rng:define>]]></artwork>
+    </figure>
+
+    <t>In this case it is mapped to an abstract rule:</t>
+
+    <figure>
+      <artwork>
+<![CDATA[<sch:rule id="id31415926" abstract="true">
+  <sch:assert test=". &lt;= ../dhcp:max-lease-time">
+    The default-lease-time must be less than max-lease-time
+  </sch:assert>
+</sch:rule>]]></artwork>
+    </figure>
+
+    <t>Any use of the named pattern definition via &lt;rng:ref
+    name="_dhcp__default-lease-time"/&gt; then results in a new rule
+    extending the abstract one, for example</t>
+
+    <figure>
+      <artwork>
+<![CDATA[<sch:rule context="/nc:rpc-reply/nc:data/dhcp:dhcp/
+                  dhcp:default-lease-time">
+  <sch:extends rule="id31415926"/>
+</sch:rule>]]></artwork>
+    </figure>
+
+    <t>Care must be taken that the value of the @context attribute in
+    general consists of two parts in this case: its beginning is
+    determined by the location of the &lt;rng:ref&gt; element in the
+    main schema tree and the rest of the path comes from the relative
+    position of the annotated element definition inside the named
+    pattern. The situation becomes even more complex when the mapping
+    has to deal with chained definitions of named patterns
+    (&lt;rng:ref&gt; inside &lt;rng:define&gt;). The @context value
+    then must be recursively glued together from multiple parts.</t>
+
+    <t>The mapping from the conceptual tree schema to Schematron
+    proceeds in the following steps:
+    <list style="numbers">
+      <t>First, the active subtree(s) of the conceptual tree schema
+      must be selected depending on the requested target document
+      type. This procedure is identical to the RELAX NG case,
+      including the handling of @nma:config if
+      the target document type is &lt;get-config&gt; reply.</t>
+      <t>Namespaces of all input YANG modules, together with the
+      namespaces of base NETCONF ("nc" prefix) or notifications ("en"
+      prefix) MUST be declared using the &lt;sch:ns&gt;
+      element, for example
+      <figure>
+        <artwork>
+<![CDATA[   <sch:ns uri="http://example.com/ns/dhcp" prefix="dhcp"/>]]></artwork>
+      </figure>
+      </t>
+      <t>Validation phases are defined (see <xref
+      target="validationPhases"/>) and their constituting patterns
+      "standard" and "ref-integrity" created.</t>
+      <t>For either validation phase, the input conceptual tree schema
+      is scanned and element definitions with annotations relevant for
+      the given phase are selected and a &lt;sch:rule&gt; is created
+      for each of them. The rule is abstract if the element definition
+      appears inside a named pattern, see above.</t>
+      <t>All annotations attached to the given element definition are
+      then mapped using the mapping rules specified in <xref
+      target="nma-to-dsdl"/>. The resulting &lt;sch:assert&gt; or
+      &lt;sch:report&gt; elements are the installed as children of the
+      &lt;sch:rule&gt; element.</t>
+    </list></t>
+
+    <section anchor="validationPhases" title="Validation Phases">
+
+      <t>In certain situations it is useful to validate XML instance
+      documents without enforcing the referential integrity
+      constraints represented by the &lt;nma:leafref&gt; and
+      &lt;nma:instance-identifier&gt; annotations. For example, a
+      candidate configuration refering to configuration parameters or
+      state data of certain hardware will not pass full validation
+      before the hardware is installed. To handle this, the Schematron
+      mapping introduces two <spanx style="emph">validation
+      phases</spanx>:
+      <list style="symbols">
+        <t>Validation phase "full", which is the default, checks all
+        semantic constraints.</t>
+        <t>Validation phase "noref" is the same as "full" except it
+        doesn't check referential integrity constraints.</t>
+      </list>
+      </t>
+      <t>A parameter identifying the validation phase to use has to be
+      passed to the Schematron processor or otherwise both patterns
+      are used by default. How this is exactly done depends on the
+      concrete Schematron processor and is outside the scope of this
+      document.</t>
+
+      <t>The validation phases are defined in Schematron by listing
+      the patterns that are to be applied for each phase. Therefore,
+      the mapping puts the rules for referential integrity checking to
+      a special &lt;sch:pattern&gt; with @id attribute set
+      to "ref-integrity". The rules mapped from the remaining semantic
+      constraints are put to another &lt;sch:pattern&gt; with @id
+      attributes set to "standard".</t>
+      <t>With validation phases, the resulting Schematron schema has
+      the following overall structure:</t>
+
+      <figure>
+        <artwork>
+<![CDATA[<sch:schema xmlns:sch="http://purl.oclc.org/dsdl/schematron">
+  <sch:ns uri="..." prefix="..."/>
+  ... more NS declarations ...
+  <sch:phase id="full">
+    <sch:active pattern="standard"/>
+    <sch:active pattern="ref-integrity"/>
+  </sch:phase>
+  <sch:phase id="noref">
+    <sch:active pattern="standard"/>
+  </sch:phase>
+  <sch:pattern id="standard">
+    ... all rules except ref. integrity checks ...
+  </sch:pattern>
+  <sch:pattern id="ref-integrity">
+    ... rules for ref. integrity checks ...
+  </sch:pattern>
+</sch:schema>]]></artwork>
+      </figure>
+    </section>
+  </section>
+
+  <section anchor="mappingDSRL"
+           title="Mapping Default Values to DSRL">
+    <t>TBD</t>
+  </section>
+
+</section>
+
+<section anchor="validation" title="NETCONF Content Validation">
+
+  <t>This section describes the procedures for validating XML instance
+  documents corresponding to various NETCONF PDUs given the set of
+  DSDL schemas generated for the particular document type.</t>
+
+  <t>[Editor's note: This section is incomplete. We have to figure out
+  what are the NETCONF instances we want to validate, and also the
+  validation contexts and modes. However, these questions are not
+  DSDL-specific and should be addressed by the WG.]</t>
+
+  <t>The validation proceeds in the following steps, see also <xref
+  target="fig-valproc"/>:
+  <list style="numbers">
+    <t>The XML instance document can be immediately checked for
+    grammatical and data type validity using the RELAX NG schema.</t>
+    <t>Second, the default values for leaves and default cases have to
+    be applied. It is important to apply the defaults before the next
+    validation step because <xref target="YANG"/> states that the data
+    tree against which XPath expressions are evaluated already has all
+    defaults filled-in. Note that this step modifies the information
+    set of the input XML document.</t>
+    <t>The semantic constraints are checked using the Schematron
+    schema.</t>
+  </list>
+  </t>
+
+    <figure anchor="fig-valproc"
+            title="Outline of the validation procedure">
+      <artwork>
+      +----------+                        +----------+
+      |          |                        |   XML    |
+      |   XML    |                        | document |
+      | document |-----------o----------->|   with   |
+      |          |           ^            | defaults |
+      |          |           |            |          |
+      +----------+           |            +----------+
+           ^                 | filling-in       ^
+           | grammar,        | defaults         | semantic
+           | datatypes       |                  | constraints
+           |                 |                  |
+      +----------+       +--------+       +------------+
+      | RELAX NG |       |  DSRL  |       | Schematron |
+      |  schema  |       | schema |       |   schema   |
+      +----------+       +--------+       +------------+
+      </artwork>
+    </figure>
+</section>
+
+  <section anchor="yang-to-rng"
+           title="Mapping YANG Statements to Annotated RELAX NG">
+
+    <t>Each subsection in this section is devoted to one YANG
+    statement and provides the specification how the statement is
+    mapped to the annotated RELAX NG schema of the conceptual
+    tree. This is the first step of the mapping procedure, see <xref
+    target="mappingOverview"/>. The subsections are sorted
+    alphabetically by the statement keyword.</t>
+    <t>Each YANG statement is mapped to an XML fragment, typically a
+    single element or attribute but it may also be a larger
+    structure. The mapping algorithm is inherently recursive, which
+    means that after finishing a statement the mapping continues with
+    its substatements, if there are any, and a certain element of the
+    resulting fragment becomes the parent of other fragments resulting
+    from the mapping of substatements. We use the following notation:
+    <list style="symbols">
+      <t>The argument of the statement being mapped is denoted by
+      ARGUMENT.</t>
+      <t>The element in the RELAX NG schema that becomes the parent of
+      the resulting XML fragment is denoted by PARENT.</t>
+    </list></t>
+
+    <section anchor="anyxml-stmt" title="The anyxml Statement">
+      <t>This statement is mapped to &lt;rng:element&gt; element and
+      ARGUMENT becomes the value of its @name attribute. The content
+      of &lt;rng:element&gt; is</t>
+      <figure>
+        <artwork>
+<![CDATA[<rng:ref name="__anyxml__"/>]]></artwork>
+      </figure>
+      <t>Substatements of the 'anyxml' statement are mapped
+      to additional children of the RELAX NG element definition.</t>
+      <t>If the 'anyxml' statement occurs in any of the input YANG
+      modules, the following pattern definition MUST be added exactly
+      once to the RELAX NG schema as a child of the &lt;rng:grammar&gt;
+      element (cf. <xref target="Vli04"/>, p. 172):</t>
+      <figure>
+        <artwork>
+<![CDATA[<rng:define name="__anyxml__">
+  <rng:zeroOrMore>
+    <rng:choice>
+      <rng:attribute>
+        <rng:anyName/>
+      </rng:attribute>
+      <rng:element>
+        <rng:anyName/>
+        <rng:ref name="__anyxml__"/>
+      </rng:element>
+      <rng:text/>
+    </rng:choice>
+  </rng:zeroOrMore>
+</rng:define>]]></artwork>
+      </figure>
+      <t>EXAMPLE: YANG statement</t>
+      <figure>
+        <artwork>
+<![CDATA[anyxml data {
+    description "Any XML content allowed here.";
+}]]></artwork>
+      </figure>
+      <t>maps to the following fragment:</t>
+      <figure>
+        <artwork>
+<![CDATA[<rng:element name="data">
+    <a:documentation>Any XML content allowed here</a:documentation>
+    <rng:ref name="__anyxml__"/>
+</rng:element>]]></artwork>
+      </figure>
+    </section>
+
+    <section anchor="argument-stmt" title="The argument Statement">
+      <t>This statement is not mapped to the output schema, but see
+      the rules for extension handling in <xref
+      target="extensions"/>.</t>
+    </section>
+
+    <section anchor="augment-stmt" title="The augment Statement">
+      <t>As a substatement of 'uses', this statement is handled as a
+      part of 'uses' mapping, see <xref target="uses-stmt"/>.</t>
+      <t>At the top level of a module or submodule, the 'augment'
+      statement is used for augmenting the schema tree of another YANG
+      module. If the latter module is not processed within the same
+      mapping session, the top-level 'augment' statement MUST be
+      ignored. Otherwise, the contents of the statement are added to
+      the foreign module with the namespace of the module where the
+      'augment' statement appears.</t>
+    </section>
+
+    <section anchor="base-stmt" title="The base Statement">
+      <t>This statement is ignored as a substatement of 'identity' and
+      handled within the 'identityref' type if it appears as a
+      substatement of that type definition, see <xref
+      target="identityref-type"/>.</t>
+    </section>
+
+    <section anchor="belongs-to-stmt" title="The belongs-to Statement">
+      <t>This statement is not used since processing of submodules
+      is always initiated from the main module, see <xref
+      target="include-stmt"/>.</t>
+    </section>
+
+    <section anchor="bit-stmt" title="The bit Statement">
+      <t>This statement is handled within the "bits" type, see <xref
+      target="bits-type"/>.</t>
+    </section>
+
+    <section anchor="case-stmt" title="The case Statement">
+      <t>This statement is mapped to &lt;rng:group&gt; element. If the
+      argument of a sibling 'default' statement equals to ARGUMENT,
+      @nma:default-case attribute with the value of "true" is added to
+      that &lt;rng:group&gt; element.</t>
+    </section>
+
+    <section anchor="choice-stmt" title="The choice Statement">
+      <t>This statement is mapped to &lt;rng:choice&gt; element.</t>
+      <t>Unless 'choice' has the 'mandatory' substatement with the
+      value of "true", the &lt;rng:choice&gt; element MUST be wrapped
+      in &lt;rng:optional&gt;.</t>
+    </section>
+
+    <section anchor="config-stmt" title="The config Statement">
+      <t>This statement is mapped to @nma:config attribute and
+      ARGUMENT becomes its value.</t>
+    </section>
+
+    <section anchor="contact-stmt" title="The contact Statement">
+      <t>This statement is not used by the mapping since the output
+      RELAX NG schema may result from multiple YANG modules created by
+      different authors. The schema contains references to all input
+      modules in the Dublin Core elements &lt;dc:source&gt;, see <xref
+      target="module-stmt"/>. The original modules are the
+      authoritative sources of the authorship information.</t>
+    </section>
+
+    <section anchor="container-stmt" title="The container Statement">
+      <t>Using the procedure outlined in <xref
+      target="optionalMandatoryContent"/>, the mapping algorithm MUST
+      determine whether the statement defines an optional container,
+      and if so, insert the &lt;rng:optional&gt; element and make it
+      the new PARENT.</t>
+      <t>The container defined by this statement is then mapped to the
+      &lt;rng:element&gt; element, which becomes a child of PARENT and
+      uses ARGUMENT as the value of its @name attribute.</t>
+    </section>
+
+    <section anchor="default-stmt" title="The default Statement">
+
+      <t>If this statement is a substatement of 'typedef' or 'leaf',
+      it is mapped to the @nma:default attribute of PARENT and
+      ARGUMENT becomes its value.</t>
+
+      <t>As a substatement of 'choice', the 'default' statement
+      identifies the default case and is handled within the 'case'
+      statement, see <xref target="case-stmt"/>. If the default case
+      uses the shorthand notation where the 'case' statement is
+      omitted, an extra &lt;rng:group&gt; element MUST be inserted with
+      @nma:default-case attribute set to "true". The net result is
+      then the same as if the 'case' statement wasn't omitted for the
+      default case.</t>
+      <t>EXAMPLE. The following 'choice' statement</t>
+      <figure>
+        <artwork>
+<![CDATA[choice leaves {
+    default feuille;
+    leaf feuille { type empty; }
+    leaf hoja { type empty; }
+}]]></artwork>
+      </figure>
+      <t>is mapped to</t>
+      <figure>
+        <artwork>
+<![CDATA[<rng:choice>
+  <rng:group nma:default="true">
+    <rng:element name="feuille">
+      <rng:empty/>
+    </rng:element>
+  </rng:group>
+  <rng:element name="hoja">
+    <rng:empty/>
+  </rng:element/>
+</rng:choice>]]></artwork>
+      </figure>
+    </section>
+
+    <section anchor="description-stmt"
+             title="The description Statement">
+      <t>This statement is ignored if it appears at the top level of
+      each input YANG module. The description can be found in the
+      source module that is referred to by Dublin Core element
+      &lt;dc:source&gt; and use ARGUMENT as its content.</t>
+      <t>Otherwise, this statement is mapped to the DTD compatibility
+      element &lt;a:documentation&gt; and ARGUMENT becomes its text.</t>
+      <t>In order to get properly formatted in the RELAX NG compact
+      syntax, this element SHOULD be inserted as the first child of
+      PARENT.</t>
+
+    </section>
+
+    <section anchor="enum-stmt" title="The enum Statement">
+      <t>This statement is mapped to &lt;rng:value&gt; element and
+      ARGUMENT becomes its text. All substatements except 'status' are
+      ignored because the &lt;rng:value&gt; element cannot contain
+      annotations, see <xref target="RNG"/>, Section 6.</t>
+    </section>
+
+    <section anchor="error-app-tag-stmt" title="The error-app-tag Statement">
+      <t>This statement is ignored unless it is a substatement of
+      'must'. In the latter case it is mapped to the
+      &lt;nma:error-app-tag&gt; element. See also <xref
+      target="must-stmt"/>.</t>
+    </section>
+
+    <section anchor="error-message-stmt" title="The error-message Statement">
+      <t>This statement is ignored unless it is a substatement of
+      'must'. In the latter case it is mapped to the
+      &lt;nma:error-message&gt; element. See also <xref
+      target="must-stmt"/>.</t>
+    </section>
+
+    <section anchor="extension-stmt" title="The extension Statement">
+     <t>This statement is ignored. However, extensions to the YANG
+     language MAY be mapped as described in <xref
+     target="extensions"/>.</t>
+    </section>
+
+    <section anchor="grouping-stmt" title="The grouping Statement">
+      <t>This statement is mapped to a RELAX NG named pattern
+      definition &lt;rng:define&gt;, but only if the grouping defined
+      by this statement is used <spanx style="emph">without
+      refinements and augments</spanx> in at least one of the input
+      modules. In this case, the named pattern definition becomes a
+      child of the &lt;rng:grammar&gt; element and its name is
+      ARGUMENT mangled according to the rules specified in <xref
+      target="grouping-typedef"/>.</t>
+      <t>Whenever a grouping is used with additional refinements
+      and/or augments, the grouping is expanded so that the
+      refinements and augments may be applied directly to the
+      prescribed schema nodes. See <xref target="refine-augment"/> for
+      further details and an example.</t>
+      <t>An implementation MAY offer the option of recording all
+      'grouping' statements as named patterns in the output RELAX NG
+      schema even if they are not referenced. This is useful for
+      mapping YANG "library" modules containing only 'typedef' and/or
+      'grouping' statements. </t>
+    </section>
+
+    <section anchor="identity-stmt" title="The identity Statement">
+      <t>This statement is not specifically mapped. However, if the
+      identity defined by this statement is used as the base for an
+      "identityref" type in any of the input modules, ARGUMENT will
+      appear as the text of one of the &lt;rng:value&gt; elements in
+      the mapping of that "identityref" type. See <xref
+      target="identityref-type"/> for more details and an example.</t>
+    </section>
+
+    <section anchor="import-stmt" title="The import Statement">
+      <t>This statement is not specifically mapped. The module whose
+      name is in ARGUMENT has to be parsed so that the importing
+      module be able to use its top-level groupings and typedefs and
+      also augment the data tree of the imported module.</t>
+      <t>If the 'import' statement has the 'revision' substatement,
+      the corresponding revision of the imported module MUST be
+      used. The mechanism for finding a given module revision is
+      outside the scope of this document.</t>
+    </section>
+
+    <section anchor="include-stmt" title="The include Statement">
+      <t>This statement is not specifically mapped. The submodule
+      whose name is in ARGUMENT has to be parsed and its contents
+      mapped exactly as if the submodule text was a subset of the main
+      module text.</t>
+      <t>If the 'include' statement has the 'revision' substatement,
+      the corresponding revision of the submodule MUST be used. The
+      mechanism for finding a given submodule revision is outside the
+      scope of this document.</t>
+    </section>
+
+    <section anchor="input-stmt" title="The input Statement">
+     <t>This statement is handled within 'rpc' statement, see <xref
+     target="rpc-stmt"/>.</t>
+    </section>
+
+    <section anchor="key-stmt" title="The key Statement">
+      <t>This statement is mapped to @nma:key attribute. ARGUMENT is
+      MUST be translated so that every key is prefixed with the
+      namespace prefix of the local module. The result of this
+      translation then becomes the value of the @nma:key
+      attribute.</t>
+    </section>
+
+    <section anchor="leaf-stmt" title="The leaf Statement">
+      <t>This statement is mapped to the &lt;rng:element&gt; element
+      and ARGUMENT becomes the value of its @name attribute.</t>
+      <t>The leaf is optional if there is no "mandatory true;"
+      substatement and if the leaf is not declared among the keys of
+      an enclosing list. In this case, the &lt;rng:element&gt; element
+      MUST be wrapped in &lt;rng:optional&gt;.</t>
+    </section>
+
+    <section anchor="leaf-list-stmt" title="The leaf-list Statement">
+      <t>This statement is mapped to a block enclosed by either
+      &lt;rng:zeroOrMore&gt; or &lt;rng:oneOrMore&gt; element
+      depending on whether the argument of 'min-elements' substatement
+      is "0" or positive, respectively (it is zero by default). This
+      &lt;rng:zeroOrMore&gt; or &lt;rng:oneOrMore&gt; element becomes
+      the PARENT.</t>
+
+      <t>&lt;rng:element&gt; is the added as a child element of PARENT
+      and ARGUMENT becomes the value of its @name attribute. If the
+      'leaf-list' statement has the 'min-elements' substatement and
+      its argument is greater than one, additional attribute
+      @nma:min-elements is attached to &lt;rng:element&gt; and the
+      argument of 'min-elements' becomes the value of this
+      attribute. Similarly, if there is the 'max-elements'
+      substatement and its argument value is not "unbounded",
+      attribute @nma:max-elements is attached to this element and the
+      argument of 'max-elements' becomes the value of this
+      attribute.</t>
+
+      <t>EXAMPLE. YANG leaf-list</t>
+      <figure>
+        <artwork>
+<![CDATA[leaf-list foliage {
+    min-elements 3;
+    max-elements 6378;
+    ordered-by user;
+    type string;
+}]]></artwork>
+      </figure>
+      <t>is mapped to the following RELAX NG fragment:</t>
+      <figure>
+        <artwork>
+<![CDATA[<rng:oneOrMore>
+  <rng:element name="foliage" nma:ordered-by="user"
+               nma:min-elements="3" nma:max-elements="6378">
+    <rng:data type="string"/>
+  </rng:element>
+</rng:oneOrMore>]]></artwork>
+      </figure>
+    </section>
+
+    <section anchor="length-stmt" title="The length Statement">
+      <t>This statement is handled within the "string" type, see <xref
+      target="string-type"/>.</t>
+    </section>
+
+    <section anchor="list-stmt" title="The list Statement">
+      <t>This statement is mapped exactly as the 'leaf-list'
+      statement, see <xref target="leaf-list-stmt"/>.</t>
+    </section>
+
+    <section anchor="mandatory-stmt" title="The mandatory Statement">
+      <t>This statement may appear as a substatement of 'leaf',
+      'choice' or 'anyxml' statement. If ARGUMENT is "true", the
+      parent data node is mapped as mandatory, see <xref
+      target="optionalMandatoryContent"/>.</t>
+    </section>
+
+    <section anchor="max-elements-stmt" title="The max-elements Statement">
+      <t>This statement is handled within 'leaf-list' or 'list'
+      statements, see <xref target="leaf-list-stmt"/>.</t>
+    </section>
+
+    <section anchor="min-elements-stmt" title="The min-elements Statement">
+      <t>This statement is handled within 'leaf-list' or 'list'
+      statements, see <xref target="leaf-list-stmt"/>.</t>
+    </section>
+
+    <section anchor="module-stmt" title="The module Statement">
+      <t>This statement is not specifically mapped except that a
+      &lt;dc:source&gt; element SHOULD be created as a child of
+      &lt;rng:grammar&gt; and contain ARGUMENT as a reference to the
+      input YANG module. See also <xref target="revision-stmt"/>.</t>
+      <t>With respect to the conceptual tree schema, substatements of
+      'module' MUST be mapped so that
+      <list style="symbols">
+        <t>top level data elements be defined as children of the
+        &lt;nmt:top&gt; element;</t>
+        <t>elements mapped from 'rpc' statements be defined as
+        children of the &lt;nmt:rpc-methods&gt; element;</t>
+        <t>elements mapped from 'notification' statements be defined
+        as children of the &lt;nmt:notifications&gt; element.</t>
+      </list></t>
+    </section>
+
+    <section anchor="must-stmt" title="The must Statement">
+      <t>This statement is mapped to the &lt;nma:must&gt; element. It
+      has one mandatory attribute @assert (with no namespace), which
+      contains ARGUMENT transformed into a valid XPath expression (see
+      <xref target="transXPath"/>). The &lt;nma:must&gt; element may
+      get other subelements resulting from mapping 'error-app-tag' and
+      'error-message' substatements. Other substatements of 'must',
+      i.e., 'description' and 'reference', are ignored.</t>
+      <t>EXAMPLE. YANG statement</t>
+      <figure>
+        <artwork>
+<![CDATA[must 'current() <= ../max-lease-time' {
+    error-message
+        "The default-lease-time must be less than max-lease-time";
+}]]></artwork>
+      </figure>
+      <t>is mapped to</t>
+      <figure>
+        <artwork>
+<![CDATA[<nma:must assert="current()&lt;=../dhcp:max-lease-time">
+  <nma:error-message>
+    The default-lease-time must be less than max-lease-time
+  </nma:error-message>
+</nma:must>]]></artwork>
+      </figure>
+    </section>
+
+    <section anchor="namespace-stmt" title="The namespace Statement">
+      <t>This statement is mapped to @xmlns:xxx attribute of the
+      &lt;rng:grammar&gt; element where "xxx"
+      is the namespace prefix specified by the sibling 'prefix'
+      statement. ARGUMENT becomes the value of this attribute.</t>
+    </section>
+
+    <section anchor="notification-stmt"
+             title="The notification Statement">
+      <t>This statement is mapped to the following subtree in the
+      RELAX NG schema ("yam" is the prefix of the local YANG module):</t>
+
+      <figure>
+        <artwork>
+<![CDATA[<rng:element name="nmt:notification">
+  <rng:element name="yam:ARGUMENT">
+    ...
+  </rng:element>
+</rng:element>]]></artwork>
+      </figure>
+
+      <t>Substatements of 'notification' are mapped under
+      &lt;rng:element name="yam:ARGUMENT"&gt;.</t>
+      <t>The &lt;rng:element name="nmt:rpc-notification"&gt; element is
+      a child of &lt;rng:element name="nmt:notifications"&gt;.</t>
+    </section>
+
+    <section anchor="ordered-by-stmt" title="The ordered-by Statement">
+      <t>This statement is mapped to @nma:ordered-by attribute and
+      ARGUMENT becomes the value of this attribute. See <xref
+      target="leaf-list-stmt"/> for an example.</t>
+    </section>
+
+    <section anchor="organization-stmt"
+             title="The organization Statement">
+      <t>This statement is not used by the mapping since the output
+      RELAX NG schema may result from multiple YANG modules authored
+      by different parties. The schema contains references to all
+      input modules in the Dublin Core elements &lt;dc:source&gt;, see
+      <xref target="module-stmt"/>. The original modules are the
+      authoritative sources of the authorship information.</t>
+    </section>
+
+    <section anchor="output-stmt" title="The output Statement">
+     <t>This statement is handled within 'rpc' statement, see <xref
+     target="rpc-stmt"/>.</t>
+    </section>
+
+    <section anchor="path-stmt" title="The path Statement">
+      <t>This statement is handled within "leafref" type, see <xref
+      target="leafref-type"/>.</t>
+    </section>
+
+    <section anchor="pattern-stmt" title="The pattern Statement">
+      <t>This statement is handled within "string" type, see <xref
+      target="string-type"/>.</t>
+    </section>
+
+    <section anchor="position-stmt" title="The position Statement">
+      <t>This statement is ignored.</t>
+    </section>
+
+    <section anchor="prefix-stmt" title="The prefix Statement">
+      <t>This statement is handled within the sibling 'namespace'
+      statement, see <xref target="namespace-stmt"/>, or within the
+      parent 'import' statement, see <xref target="import-stmt"/>. As a
+      substatement of 'belongs-to' (in submodules), the 'prefix'
+      statement is ignored.</t>
+    </section>
+
+    <section anchor="presence-stmt" title="The presence Statement">
+      <t>This statement influences the mapping of 'container' (<xref
+      target="container-stmt"/>): it makes the parent container
+      optional, regardless of its content. See also <xref
+      target="optionalMandatoryContent"/>.</t>
+    </section>
+
+    <section anchor="range-stmt" title="The range Statement">
+      <t>This statement is handled within numeric types, see <xref
+      target="numeric-types"/>.</t>
+    </section>
+
+    <section anchor="reference-stmt" title="The reference Statement">
+      <t>This statement is ignored if it appears at the top level of a
+      module or submodule.</t> <t>Otherwise, this statement is mapped
+      to &lt;a:documentation&gt; element and its text is set to
+      ARGUMENT prefixed with "See: ".</t>
+    </section>
+
+    <section anchor="require-instance-stmt"
+             title="The require-instance Statement">
+      <t>This statement is handled within the types "leafref" (<xref
+      target="leafref-type"/>) and "instance-identifier" (<xref
+      target="instance-identifier-type"/>).</t>
+    </section>
+
+    <section anchor="revision-stmt" title="The revision Statement">
+      <t>The mapping uses only the most recent instance of the
+      'revision' statement, i.e., one with the latest date in
+      ARGUMENT, which specifies the current revision of the input YANG
+      module <xref target="YANG"/>. This date SHOULD be recorded,
+      together with the name of the YANG module, in the corresponding
+      Dublin Core element &lt;dc:source&gt; (see <xref
+      target="module-stmt"/>), for example in this form:</t>
+      <figure>
+        <artwork>
+<![CDATA[<dc:source>YANG module 'foo', revision 2009-01-19</dc:source>]]></artwork>
+      </figure>
+      <t>The 'description' substatement of 'revision' is not used.</t>
+    </section>
+
+    <section anchor="rpc-stmt"
+             title="The rpc Statement">
+      <t>This statement is mapped to the following subtree in the
+      RELAX NG schema ("yam" is the prefix of the local YANG module):</t>
+
+      <figure>
+        <artwork>
+<![CDATA[<rng:element name="nmt:rpc-method">
+  <rng:element name="nmt:input">
+    <rng:element name="yam:ARGUMENT">
+      <!-- mapped content of 'input' -->
+    </rng:element>
+  </rng:element>
+  <rng:element name="nmt:output">
+    <!-- mapped content of 'output' -->
+  </rng:element>
+</rng:element>]]></artwork>
+      </figure>
+
+      <t>As indicated by the comments, contents of the 'input'
+      substatement (if any) are mapped under &lt;rng:element
+      name="yam:ARGUMENT"&gt;. Similarly, contents of the 'output'
+      substatement are mapped under &lt;rng:element
+      name="nmt:output"&gt;. If there is no 'output' substatement, the
+      &lt;rng:element name="nmt:output"&gt; MUST NOT be present.</t>
+
+      <t>The &lt;rng:element name="nmt:rpc-method"&gt; element is
+      a child of &lt;rng:element name="nmt:rpc-methods"&gt;.</t>
+    </section>
+
+    <section anchor="status-stmt" title="The status Statement">
+      <t>This statement is mapped to @nma:status attribute and
+      ARGUMENT becomes its value.</t>
+    </section>
+
+    <section anchor="submodule-stmt" title="The submodule Statement">
+      <t>This statement is not specifically mapped. Its substatements
+      are mapped as if they appeared directly in the module the
+      submodule belongs to.</t>
+    </section>
+
+    <section anchor="type-stmt" title="The type Statement">
+
+      <t>Most YANG built-in types have an equivalent in the XSD
+      datatype library <xref target="XSD-D"/> as shown in <xref
+      target="tab-types"/>.</t>
+
+      <texttable
+          anchor="tab-types"
+          title="Selected datatypes from the W3C XML Schema Type Library">
+        <ttcol align="left">YANG type</ttcol>
+        <ttcol align="left">XSD type</ttcol>
+        <ttcol align="left">Meaning</ttcol>
+        <c>int8</c><c>byte</c><c>8-bit integer value</c>
+        <c>int16</c><c>short</c><c>16-bit integer value</c>
+        <c>int32</c><c>int</c><c>32-bit integer value</c>
+        <c>int64</c><c>long</c><c>64-bit integer value</c>
+        <c>uint8</c><c>unsignedByte</c><c>8-bit unsigned integer value</c>
+        <c>uint16</c><c>unsignedShort</c><c>16-bit unsigned integer value</c>
+        <c>uint32</c><c>unsignedInt</c><c>32-bit unsigned integer value</c>
+        <c>uint64</c><c>unsignedLong</c><c>64-bit unsigned integer value</c>
+        <c>float32</c><c>float</c><c>32-bit IEEE floating-point value</c>
+        <c>float64</c><c>double</c><c>64-bit IEEE floating-point value</c>
+        <c>string</c><c>string</c><c>character string</c>
+        <c>boolean</c><c>boolean</c><c>"true" or "false"</c>
+        <c>binary</c><c>base64Binary</c><c>binary data in base64 encoding</c>
+      </texttable>
+
+      <t>Details about the mapping of individual YANG built-in types
+      are given in the following subsections.</t>
+
+      <section anchor="empty-type" title="The empty Type">
+        <t>This type is mapped to &lt;rng:empty/&gt;.</t>
+      </section>
+
+      <section anchor="boobi-types" title="The boolean and binary Types">
+        <t>These two built-in types do not allow any restrictions and
+        are mapped simply by inserting &lt;rng:data&gt; element whose @type
+        attribute is set to ARGUMENT mapped according to <xref
+        target="tab-types"/>.</t>
+      </section>
+
+      <section anchor="bits-type" title="The bits Type">
+        <t>This type is mapped to &lt;rng:list&gt; and for each 'bit'
+        substatement the following XML fragment is inserted as a child
+        of &lt;rng:list&gt;:</t>
+        <figure>
+          <artwork>
+<![CDATA[<rng:optional>
+  <rng:value>bit_name</rng:value>
+</rng:optional>]]></artwork>
+        </figure>
+        <t>where bit_name is the name of the bit as found in the
+        argument of the corresponding 'bit' statement.</t>
+      </section>
+
+      <section anchor="enuun-type"
+               title="The enumeration and union Types">
+        <t>These types are mapped to &lt;rng:choice&gt; element.</t>
+      </section>
+
+      <section anchor="identityref-type"
+               title="The identityref Type">
+        <t>This type is mapped to &lt;rng:choice&gt; element with one
+        or more &lt;rng:value&gt; subelements. Each of the
+        &lt;rng:value&gt; subelements MUST have the @type attribute and
+        its value set to "QName". One &lt;rng:value&gt; subelement
+        with argument of the 'base' substatement as its text MUST
+        always be present. In addition, one &lt;rng:value&gt;
+        substatement MUST be added for each identity declared locally
+        or in an imported module that has the argument of the 'base'
+        substatement as its base identity.</t>
+        <t>All namespace prefixes that are used for identities from
+        imported modules MUST be appropriately defined.</t>
+        <t>EXAMPLE (taken from <xref target="YANG"/>, Section
+        7.6.13). Consider the following two YANG modules:</t>
+        <figure>
+          <artwork>
+<![CDATA[module crypto-base {
+    namespace "http://example.com/crypto-base";
+    prefix "crypto";
+
+    identity crypto-alg {
+    description
+        "Base identity from which all crypto algorithms
+         are derived.";
+    }
+}
+
+module des {
+    namespace "http://example.com/des";
+    prefix "des";
+
+    import "crypto-base" {
+        prefix "crypto";
+    }
+
+    identity des {
+        base "crypto:crypto-alg";
+        description "DES crypto algorithm";
+    }
+
+    identity des3 {
+        base "crypto:crypto-alg";
+        description "Triple DES crypto algorithm";
+    }
+}]]></artwork>
+        </figure>
+
+        <t>If these two modules are imported to another module, leaf
+        definition</t>
+        <figure>
+          <artwork>
+<![CDATA[leaf crypto {
+    type identityref {
+        base "crypto:crypto-alg";
+    }
+}]]></artwork>
+        </figure>
+        <t>is mapped to</t>
+        <figure>
+          <artwork>
+<![CDATA[<rng:element name="crypto">
+  <rng:choice>
+    <rng:value type="QName">crypto:crypto-alg</value>
+    <rng:value type="QName">des:des</value>
+    <rng:value type="QName">des:des3</value>
+ </rng:choice>
+</rng:element>]]></artwork>
+        </figure>
+        <t>The "crypto" and "des" prefixes will by typically defined
+        via attributes of the &lt;rng:grammar&gt; element.</t>
+      </section>
+
+      <section anchor="instance-identifier-type"
+               title="The instance-identifier Type">
+        <t>This type is mapped to &lt;rng:data&gt; element with @type
+        attribute set to "string". In addition, empty
+        &lt;nma:instance-identifier&gt; element MUST be inserted as a
+        child of PARENT.</t>
+        <t>The 'require-instance' substatement, if it exists, is
+        mapped to the @require-instance attribute of
+        &lt;nma:instance-identifier&gt;.</t>
+      </section>
+
+      <section anchor="leafref-type" title="The leafref Type">
+        <t>This type is mapped to &lt;rng:data&gt; element with @type
+        attribute set to the type of the leaf given in the argument of
+        'path' substatement. In addition, &lt;nma:leafref&gt; element
+        MUST be inserted as a child of PARENT. The argument value of
+        the 'path' substatement is set as the text of this
+        element.</t>
+        <t>The 'require-instance' substatement, if it exists, is
+        mapped to the @require-instance attribute of
+        &lt;nma:leafref&gt;.</t>
+      </section>
+
+      <section anchor="numeric-types" title="The numeric Types">
+        <t>YANG built-in numeric types are "int8", "int16", "int32",
+        "int64", "uint8", "uint16", "uint32", "uint64", "float32" and
+        "float64". They are mapped to &lt;rng:data&gt; element with
+        @type attribute set to ARGUMENT mapped according to <xref
+        target="tab-types"/>.</t>
+        <t>All numeric types support the 'range' restriction, which is
+        handled in the following way:
+        <list style="symbols">
+          <t>If the range expression consists of a single range part,
+          insert the pair of RELAX NG facets
+          <figure>
+            <artwork>
+<![CDATA[<rng:param name="minInclusive">...</rng:param>]]></artwork>
+          </figure>
+          and
+          <figure>
+            <artwork>
+<![CDATA[<rng:param name="maxInclusive">...</rng:param>]]></artwork>
+          </figure>
+          Their contents are the lower and upper bound of the range
+          part, respectively. If the range part consists of a single
+          number, both "minInclusive" and "maxInclusive" facets use
+          this value as their content. If the lower bound is "min",
+          the "minInclusive" facet is omitted and if the upper bound
+          is "max", the "maxInclusive" facet is omitted.</t>
+
+          <t>If the range expression has multiple parts separated by
+          "|", then repeat the &lt;rng:data&gt; element once for every
+          range part and wrap them all in &lt;rng:choice&gt;
+          element. Each &lt;rng:data&gt; element contains the
+          "minInclusive" and "maxInclusive" facets for one part of the
+          range expression as described in the previous item.</t>
+        </list>
+        </t>
+        <t>For example, the 'typedef' statement</t>
+        <figure>
+          <artwork>
+<![CDATA[typedef rt {
+  type int32 {
+    range "-6378..0|42|100..max";
+  }
+}]]></artwork>
+        </figure>
+        <t>appearing at the top level of the "example" module is
+        mapped to the following RELAX NG fragment:</t>
+        <figure>
+          <artwork>
+<![CDATA[<rng:define name="example__rt">
+  <rng:choice>
+    <rng:data type="int">
+      <rng:param name="minInclusive">-6378</rng:param>
+      <rng:param name="maxInclusive">0</rng:param>
+    </rng:data>
+    <rng:data type="int">
+      <rng:param name="minInclusive">42</rng:param>
+      <rng:param name="maxInclusive">42</rng:param>
+    </rng:data>
+    <rng:data type="int">
+      <rng:param name="minInclusive">100</rng:param>
+    </rng:data>
+  </rng:choice>
+</rng:define>]]></artwork>
+        </figure>
+      </section>
+
+      <section anchor="string-type" title="The string Type">
+        <t>This type is mapped to &lt;rng:data&gt; element with the
+        @type attribute set to "string".</t>
+        <t>For the 'pattern' restriction, insert &lt;rng:param&gt; element
+        with @name attribute set to "pattern". The argument of the
+        'pattern' statement (regular expression) becomes the content
+        of this element.</t>
+        <t>The 'length' restriction is handled in the same way as the
+        'range' restriction for the numeric types, with the additional
+        twist that if the length expression has multiple parts, the
+        "pattern" facet
+        <figure>
+          <artwork>
+<![CDATA[<rng:param name="pattern">...</rng:param>]]></artwork>
+        </figure>
+        if there is any, must be repeated inside each copy of the
+        &lt;rng:data&gt; element, i.e., for each length part.</t>
+      </section>
+
+      <section anchor="derived-types" title="Derived Types">
+        <t>If the 'type' statement refers to a derived type, it is
+        mapped in one of the following ways depending on whether it
+        contains any restrictions as its substatements:
+        <list style="numbers">
+          <t>Without restrictions, the 'type' statement is mapped
+          simply to the &lt;rng:ref&gt; element, i.e., a reference to
+          a named pattern. If the RELAX NG definition of this named
+          pattern has not been added to the output schema yet, the
+          corresponding 'typedef' must be found and its mapping
+          installed as a subelement of &lt;rng:grammar&gt;, see <xref
+          target="typedef-stmt"/>. Even if a given derived type is
+          used more than once in the input YANG modules, the mapping
+          of the corresponding 'typedef' MUST be installed only
+          once.</t>
+          <t>If any restrictions are present, the base type for the
+          given derived type must be determined and the mapping of
+          this base type is used. Restrictions appearing at all stages
+          of the derivation chain must be taken into account and their
+          conjunction added to the &lt;rng:data&gt; element which
+          defines the basic type.</t>
+        </list></t>
+        <t>See <xref target="chtypes"/> for more details and an
+        example.</t>
+      </section>
+    </section>
+
+    <section anchor="typedef-stmt" title="The typedef Statement">
+      <t>This statement is mapped to a RELAX NG named pattern
+      definition &lt;rng:define&gt;, but only if the type defined by
+      this statement is used <spanx style="emph">without
+      restrictions</spanx> in at least one of the input modules. In
+      this case, the named pattern definition becomes a child of the
+      &lt;rng:grammar&gt; element and its name is ARGUMENT mangled
+      according to the rules specified in <xref
+      target="grouping-typedef"/>.</t>
+      <t>Whenever a derived type is used with additional restrictions,
+      the the base type for the derived type is used instead with
+      restrictions (facets) that are a combination of all restrictions
+      specified along the type derivation chain. See <xref
+      target="derived-types"/> for further details and an example.</t>
+      <t>An implementation MAY offer the option of recording all
+      'typedef' statements as named patterns in the output RELAX NG
+      schema even if they are not referenced. This is useful for
+      mapping YANG "library" modules containing only 'typedef' and/or
+      'grouping' statements.</t>
+    </section>
+
+    <section anchor="unique-stmt" title="The unique Statement">
+      <t>This statement is mapped to @nma:unique attribute. ARGUMENT
+      is translated so that every node identifier in each of its
+      components is prefixed with the namespace prefix of the local
+      module, unless the prefix is already present. The result of this
+      translation then becomes the value of the @nma:unique
+      attribute.</t>
+
+      <t>For example, assuming that the local module prefix is
+      "ex",</t>
+
+      <figure>
+        <artwork>unique "foo ex:bar/baz"</artwork>
+      </figure>
+
+      <t>is mapped to the following attribute/value pair:</t>
+
+      <figure>
+        <artwork>nma:unique="ex:foo ex:bar/ex:baz"</artwork>
+      </figure>
+    </section>
+
+    <section anchor="units-stmt" title="The units Statement">
+      <t>This statement is mapped to @nma:units attribute and ARGUMENT
+      becomes its value.</t>
+    </section>
+
+    <section anchor="uses-stmt" title="The uses Statement">
+      <t>If this statement has neither 'refine' nor 'augment'
+      substatements, it is mapped to &lt;rng:ref&gt; element and the
+      value of its @name attribute is set to ARGUMENT mangled
+      according to <xref target="grouping-typedef"/></t>
+      <t>If there are any 'refine' or 'augment' substatements, the
+      corresponding grouping must be looked up and its contents is
+      inserted as children of PARENT. See <xref
+      target="refine-augment"/> for further details and an
+      example.</t>
+    </section>
+
+    <section anchor="value-stmt" title="The value Statement">
+      <t>This statement is ignored.</t>
+    </section>
+
+    <section anchor="when-stmt" title="The when Statement">
+     <t>This statement is mapped to @nma:when attribute and ARGUMENT
+     becomes it value.</t>
+    </section>
+
+    <section anchor="yang-version-stmt" title="The yang-version Statement">
+      <t>This statement is not mapped to the output schema. However,
+      an implementation SHOULD check that it is compatible with the
+      YANG version declared by the statement (currently
+      version&#xA0;1).</t>
+    </section>
+
+    <section anchor="yin-element-stmt"
+             title="The yin-element Statement">
+      <t>This statement is not mapped to the output schema, but see
+      the rules for extension handling in <xref
+      target="extensions"/>.</t>
+    </section>
+  </section>
+
+  <section anchor="nma-to-dsdl"
+           title="Mapping NETMOD-specific annotations to DSDL Schema Languages">
+
+    <t>This section contains mapping specification for individual
+    NETMOD-specific annotations. In each case, the result of the
+    mapping must be inserted into an appropriate context of the target
+    DSDL schema as described in <xref target="cts-to-dsdl"/>.  The
+    context is determined by the element definition in the conceptual
+    tree schema to which the annotation is attached. In the rest of
+    this section, we will denote CONTELEM the name of this context
+    element properly qualified with its namespace prefix. Unless
+    otherwise stated, Schematron asserts are descendants of the
+    "standard" pattern and therefore active in both validation
+    phases.</t>
+
+    <section anchor="nma-config" title="The @nma:config Annotation">
+      <t>This annotation MUST be observed when generating any schema
+      for the reply to &lt;nc:get-config&gt;. In particular:
+      <list style="symbols">
+        <t>When generating RELAX NG, the contents of the CONTELEM
+        definition MUST be changed to &lt;rng:notAllowed&gt;.</t>
+        <t>When generating Schematron or DSRL, the CONTELEM
+        definition and all its descendants in the conceptual tree
+        schema MUST be ignored.</t>
+      </list>
+      </t>
+    </section>
+
+    <section anchor="nma-default" title="The @nma:default Annotation">
+      <t>TBD</t>
+    </section>
+
+    <section anchor="nma-default-case"
+             title="The @nma:default-case Annotation">
+      <t>TBD</t>
+    </section>
+
+    <section anchor="nma-error-app-tag"
+             title="The &lt;nma:error-app-tag&gt; Annotation">
+      <t>This annotation currently has no mapping defined.</t>
+    </section>
+
+    <section anchor="nma-error-message"
+             title="The &lt;nma:error-message&gt; Annotation">
+      <t>This annotation is handled within &lt;nma:must&gt;, see <xref
+      target="nma-must"/>.</t>
+    </section>
+
+    <section anchor="nma-instance-identifier"
+             title="The &lt;nma:instance-identifier&gt; Annotation">
+      <t>This annotation currently has no mapping defined.</t>
+      <t>[Editor's note: The mapping is probably not possible with
+      XPath 1.0 as the query language in Schematron. Shall we use
+      EXSLT or XPath 2.0?]</t>
+    </section>
+
+    <section anchor="nma-key" title="The @nma:key Annotation">
+      <t>Assume this annotation has the value "k_1 k_2 ... k_n", i.e.,
+      specifies n child leaves as keys. The annotation is then mapped
+      to the following Schematron report:</t>
+      <figure>
+        <artwork>
+<![CDATA[<sch:report test="CONDITION">
+  Duplicate key of list "CONTELEM"
+</sch:report>]]></artwork>
+      </figure>
+      <t>where CONDITION has this form:</t>
+      <figure>
+        <artwork>preceding-sibling::CONTELEM[C_1 and C_2 and ... and C_n]</artwork>
+      </figure>
+      <t>Each C_i, for i=1,2,...,n, specifies the condition for
+      violation of uniqueness of key k_i, namely</t>
+      <figure>
+        <artwork>
+k_i=current()/k_i</artwork>
+      </figure>
+    </section>
+
+    <section anchor="nma-leafref"
+             title="The &lt;nma:leafref&gt; Annotation">
+      <t>The mapping of this annotation depends on its
+      @require-instance attribute. If this attribute is not present or
+      its value is "true", the referred leaf must exist in the
+      instance document (this is verified by the RELAX NG schema) and
+      the &lt;nma:leafref&gt; annotation is mapped to the following
+      assert:</t>
+      <figure>
+        <artwork>
+<![CDATA[<sch:assert test="PATH=..">
+  Leafref "CONTELEM" must have the same value as "PATH"
+</sch:assert>
+]]></artwork>
+      </figure>
+      <t>where PATH is the content of &lt;nma:leafref&gt;.</t>
+      <t>If the @require-instance attribute has the value "false", then
+      the equality in contents of the context element and the referred
+      leaf is required only if the referred leaf exists. Hence,
+      &lt;nma:leafref&gt; is mapped to the following assert:</t>
+      <figure>
+        <artwork>
+<![CDATA[<sch:assert test="not(PATH) or PATH=..">
+  Leafref "CONTELEM" must have the same value as "PATH"
+</sch:assert>
+]]></artwork>
+      </figure>
+      <t>In both cases the assert is a descendant of the
+      "ref-integrity" pattern, which means that it will be used only
+      for the "full" validation phase.</t>
+    </section>
+
+    <section anchor="nma-min-elements"
+             title="The @nma:min-elements Annotation">
+      <t>This annotation is mapped to the following Schematron
+      assert:</t>
+      <figure>
+        <artwork>
+<![CDATA[<sch:assert test="count(../CONTELEM)&gt;=MIN">
+  List "CONTELEM" - item count must be at least MIN
+</sch:assert>
+]]></artwork>
+      </figure>
+      <t>where MIN is the value of @nma:min-elements.</t>
+    </section>
+
+    <section anchor="nma-max-elements"
+             title="The @nma:max-elements Annotation">
+      <t>This annotation is mapped to the following Schematron
+      assert:</t>
+      <figure>
+        <artwork>
+<![CDATA[<sch:assert test="count(../CONTELEM)&lt;=MAX">
+  List "CONTELEM" - item count must be at most MAX
+</sch:assert>]]></artwork>
+      </figure>
+      <t>where MAX is the value of @nma:min-elements.</t>
+    </section>
+
+    <section anchor="nma-must" title="The &lt;nma:must&gt;
+                                      Annotation">
+      <t>This annotation is mapped to the following Schematron
+      assert:</t>
+      <figure>
+        <artwork>
+<![CDATA[<sch:assert test="EXPRESSION">
+  MESSAGE
+</sch:assert>]]></artwork>
+      </figure>
+      <t>where EXPRESSION is the value of the mandatory @assert
+      attribute of &lt;nma:must&gt;. If the &lt;nma:error-message&gt;
+      subelement exists, MESSAGE is set to its content, otherwise it
+      is set to the default message "Condition EXPRESSION must be
+      true".</t>
+    </section>
+
+    <section anchor="nma-ordered-by"
+             title="The &lt;nma:ordered-by&gt; Annotation">
+      <t>This annotation currently has no mapping defined.</t>
+    </section>
+
+    <section anchor="nma-status"
+             title="The &lt;nma:status&gt; Annotation">
+      <t>This annotation currently has no mapping defined.</t>
+    </section>
+
+    <section anchor="nma-unique" title="The @nma:unique Annotation">
+      <t>The mapping of this annotation is almost identical as for
+      @nma:key, see <xref target="nma-key"/>, with two small
+      differences:
+      <list style="symbols">
+        <t>The value of @nma:unique is a list of descendant schema node
+        identifiers rather than simple leaf names. However, the XPath
+        expressions specified in <xref target="nma-key"/> work without
+        any modifications if the descendant schema node identifiers
+        are substituted for k_1, k_2, ..., k_n.</t>
+        <t>The message appearing as the text of &lt;sch:report&gt; is
+        different: "Violated uniqueness for list CONTELEM".</t>
+      </list>
+      </t>
+    </section>
+
+    <section anchor="nma-when" title="The @nma:when Annotation">
+      <figure>
+        <artwork>
+<![CDATA[<sch:assert test="EXPRESSION or not(..)">
+  Node "CONTELEM" requires "EXPRESSION"
+</sch:assert>
+]]></artwork>
+      </figure>
+      <t>where EXPRESSION is the value of @nma:when.</t>
+    </section>
+  </section>
+
+  <section anchor="iana" title="IANA Considerations">
+
+    <t>This document registers two namespace URIs in the IETF XML
+    registry <xref target="RFC3688"/>:</t>
+    <figure>
+      <artwork>URI: urn:ietf:params:xml:ns:netmod:dsdl-annotations:1</artwork>
+    </figure>
+    <figure>
+      <artwork>URI: urn:ietf:params:xml:ns:netmod:conceptual-tree:1</artwork>
+    </figure>
+  </section>
+
+</middle>
+
+<back>
+
+  <references>
+
+    <reference anchor='XML'
+               target='http://www.w3.org/TR/2006/REC-xml-20060816'>
+      <front>
+        <title>Extensible Markup Language (XML) 1.0 (Fourth Edition)</title>
+        <author initials='T.' surname='Bray' fullname='Tim Bray'>
+          <organization />
+        </author>
+        <author initials='J.' surname='Paoli' fullname='Jean Paoli'>
+          <organization />
+        </author>
+        <author initials='C.' surname='Sperberg-McQueen'
+                fullname='C. M. Sperberg-McQueen'>
+          <organization />
+        </author>
+        <author initials='E.' surname='Maler' fullname='Eve Maler'>
+          <organization />
+        </author>
+        <author initials='F.' surname='Yergeau' fullname='François Yergeau'>
+          <organization />
+        </author>
+        <date month='August' day='16' year='2006' />
+      </front>
+      <seriesInfo name='World Wide Web Consortium Recommendation'
+                  value='REC-xml-20060816' />
+      <format type='HTML'
+              target='http://www.w3.org/TR/2006/REC-xml-20060816' />
+    </reference>
+
+    <reference anchor='XSD'
+               target='http://www.w3.org/TR/2004/REC-xmlschema-1-20041028'>
+      <front>
+        <title>XML Schema Part 1: Structures Second Edition</title>
+        <author initials='H.' surname='Thompson' fullname='Henry S. Thompson'>
+          <organization />
+        </author>
+        <author initials='D.' surname='Beech' fullname='David Beech'>
+          <organization />
+        </author>
+        <author initials='M.' surname='Maloney' fullname='Murray Maloney'>
+          <organization />
+        </author>
+        <author initials='N.' surname='Mendelsohn' fullname='Noah Mendelsohn'>
+          <organization />
+        </author>
+        <date month='October' day='28' year='2004' />
+      </front>
+      <seriesInfo name='World Wide Web Consortium Recommendation'
+                  value='REC-xmlschema-1-20041028' />
+      <format type='HTML'
+              target='http://www.w3.org/TR/2004/REC-xmlschema-1-20041028' />
+    </reference>
+
+    <reference anchor="XSD-D"
+               target='http://www.w3.org/TR/2004/REC-xmlschema-2-20041028'>
+      <front>
+        <title>XML Schema Part 2: Datatypes Second Edition</title>
+        <author initials='P.' surname='Biron' fullname='Paul V. Biron'>
+          <organization />
+        </author>
+        <author initials='A.' surname='Malhotra' fullname='Ashok Malhotra'>
+          <organization />
+        </author>
+        <date month='October' day='28' year='2004' />
+      </front>
+      <seriesInfo name='World Wide Web Consortium Recommendation'
+                  value='REC-xmlschema-2-20041028' />
+      <format type='HTML'
+              target='http://www.w3.org/TR/2004/REC-xmlschema-2-20041028'
+              />
+    </reference>
+
+    <reference anchor='YANG'>
+      <front>
+        <title>YANG - A data modeling language for NETCONF</title>
+        <author role="editor" initials='M' surname='Bjorklund'
+                fullname='Martin Bjorklund'>
+          <organization />
+        </author>
+
+        <date month='March' day='6' year='2009' />
+      </front>
+      <seriesInfo name='Internet-Draft'
+                  value='draft-ietf-netmod-yang-04' />
+      <format type='HTML'
+              target='http://tools.ietf.org/html/draft-ietf-netmod-yang-04' />
+    </reference>
+
+    <reference anchor='RFC2119'>
+      <front>
+        <title abbrev='RFC Key Words'>Key words for use in RFCs to
+        Indicate Requirement Levels</title>
+        <author initials='S.' surname='Bradner' fullname='Scott Bradner'>
+          <organization/>
+        </author>
+        <date year='1997' month='March' />
+      </front>
+        <seriesInfo name='BCP' value='14' />
+        <seriesInfo name='RFC' value='2119' />
+        <format type='TXT' octets='4723'
+                target='ftp://ftp.isi.edu/in-notes/rfc2119.txt' />
+    </reference>
+
+    <reference anchor='RFC1157'>
+      <front>
+        <title abbrev='SNMP'>Simple Network Management Protocol (SNMP)</title>
+        <author initials='J.D.' surname='Case' fullname='Jeffrey D. Case'>
+          <organization>Simple Network Management Protocol (SNMP)
+          Research</organization>
+        </author>
+        <author initials='M.' surname='Fedor' fullname='Mark Fedor'>
+          <organization>Performance Systems International</organization>
+        </author>
+        <author initials='M.L.' surname='Schoffstall'
+                fullname='Martin Lee Schoffstall'>
+          <organization>Performance Systems International</organization>
+        </author>
+        <author initials='J.R.' surname='Davin' fullname='James R. Davin'>
+          <organization>Massachusetts Institute of Technology (MIT),
+          Laboratory for Computer Science</organization>
+        </author>
+      <date year='1990' day='1' month='May' /></front>
+      <seriesInfo name='STD' value='15' />
+      <seriesInfo name='RFC' value='1157' />
+      <format type='TXT' octets='74894'
+              target='http://www.ietf.org/rfc/rfc1157.txt' />
+    </reference>
+
+    <reference anchor='RFC5277'>
+      <front>
+        <title>NETCONF Event Notifications</title>
+        <author initials='S.' surname='Chisholm' fullname='S. Chisholm'>
+        <organization /></author>
+        <author initials='H.' surname='Trevino' fullname='H. Trevino'>
+        <organization /></author>
+        <date year='2008' month='July' />
+      </front>
+      <seriesInfo name='RFC' value='5277' />
+      <format type='TXT' octets='70878'
+              target='http://www.ietf.org/rfc/rfc5277.txt' />
+    </reference>
+
+
+    <reference anchor='XSLT'>
+      <front>
+        <title>XSL Transformations (XSLT) Version 1.0</title>
+        <author initials='J.' surname='Clark' fullname='James Clark'>
+          <organization />
+        </author>
+        <date month='November' day='16' year='1999' />
+      </front>
+      <seriesInfo name='World Wide Web Consortium Recommendation'
+                  value='REC-xslt-19991116' />
+      <format type='HTML'
+              target='http://www.w3.org/TR/1999/REC-xslt-19991116'/>
+    </reference>
+
+    <reference anchor="RNG-DTD">
+      <front>
+        <title>RELAX NG DTD Compatibility</title>
+        <author role="editor" fullname="James Clark" surname="Clark"
+                initials="J.">
+          <organization/>
+        </author>
+        <author role="editor" fullname="Murata Makoto" surname="Murata"
+                initials="M.">
+          <organization/>
+        </author>
+        <date month="December" day="3" year="2001"/>
+      </front>
+      <seriesInfo name="OASIS Committee Specification"
+                  value="3 December 2001"/>
+      <format type="HTML"
+              target="http://relaxng.org/compatibility-20011203.html"/>
+    </reference>
+
+    <reference anchor='XPath'
+               target='http://www.w3.org/TR/1999/REC-xpath-19991116'>
+      <front>
+        <title>XML Path Language (XPath) Version 1.0</title>
+        <author initials='J.' surname='Clark' fullname='James Clark'>
+          <organization />
+        </author>
+        <author initials='S.' surname='DeRose' fullname='Steven DeRose'>
+          <organization />
+        </author>
+        <date month='November' day='16' year='1999' />
+      </front>
+      <seriesInfo name='World Wide Web Consortium Recommendation'
+                  value='REC-xpath-19991116' />
+      <format type='HTML'
+              target='http://www.w3.org/TR/1999/REC-xpath-19991116' />
+    </reference>
+
+    <reference anchor='RFC3216'>
+      <front>
+        <title>SMIng Objectives</title>
+        <author initials='C.' surname='Elliott' fullname='C. Elliott'>
+        <organization/></author>
+        <author initials='D.' surname='Harrington' fullname='D. Harrington'>
+        <organization /></author>
+        <author initials='J.' surname='Jason' fullname='J. Jason'>
+        <organization /></author>
+        <author initials='J.' surname='Schoenwaelder'
+                fullname='J. Schoenwaelder'>
+        <organization /></author>
+        <author initials='F.' surname='Strauss' fullname='F. Strauss'>
+        <organization /></author>
+        <author initials='W.' surname='Weiss' fullname='W. Weiss'>
+        <organization /></author>
+        <date year='2001' month='December' />
+      </front>
+      <seriesInfo name='RFC' value='3216' />
+      <format type='TXT' octets='58551'
+              target='http://www.ietf.org/rfc/rfc3216.txt'/>
+    </reference>
+
+    <reference anchor='RFC4741'>
+
+      <front>
+        <title>NETCONF Configuration Protocol</title>
+        <author initials='R.' surname='Enns' fullname='R. Enns'>
+        <organization /></author>
+        <date year='2006' month='December' />
+      </front>
+      <seriesInfo name='RFC' value='4741' />
+      <format type='TXT' octets='173914'
+              target='http://www.ietf.org/rfc/rfc4741.txt' />
+    </reference>
+
+
+    <reference anchor='RFC5013'>
+
+      <front>
+        <title>The Dublin Core Metadata Element Set</title>
+        <author initials='J.' surname='Kunze' fullname='J. Kunze'>
+          <organization /></author>
+        <date year='2007' month='August' />
+      </front>
+      <seriesInfo name='RFC' value='5013' />
+      <format type='TXT'
+        target='http://www.ietf.org/rfc/rfc5013.txt' />
+    </reference>
+
+
+    <reference anchor="DSDL">
+      <front>
+        <title>Document Schema Definition Languages (DSDL) - Part 1:
+        Overview</title>
+        <author fullname="ISO/IEC">
+          <organization>ISO/IEC</organization>
+        </author>
+        <date day="14" month="11" year="2004"/>
+      </front>
+      <seriesInfo name="ISO/IEC" value="19757-1"/>
+      <format type="PDF"
+              target="http://www.dsdl.org/0567.pdf"/>
+    </reference>
+
+    <reference anchor="RNG">
+      <front>
+        <title>Information Technology - Document Schema Definition
+        Languages (DSDL) - Part 2: Regular-Grammar-Based Validation -
+        RELAX NG. Second Edition.</title>
+        <author fullname="ISO/IEC">
+          <organization>ISO/IEC</organization>
+        </author>
+        <date day="15" month="12" year="2008"/>
+      </front>
+      <seriesInfo name="ISO/IEC" value="19757-2:2008(E)"/>
+      <format type="ZIP"
+              target="http://http://standards.iso.org/ittf/PubliclyAvailableStandards/c052348_ISO_IEC_19757-2_2008(E).zip"/>
+    </reference>
+
+    <reference anchor="RNG-CS">
+      <front>
+        <title>Information Technology - Document Schema Definition
+        Languages (DSDL) - Part 2: Regular-Grammar-Based Validation -
+        RELAX NG. AMENDMENT 1: Compact Syntax</title>
+        <author fullname="ISO/IEC">
+          <organization>ISO/IEC</organization>
+        </author>
+        <date day="15" month="1" year="2006"/>
+      </front>
+      <seriesInfo name="ISO/IEC"
+                  value="19757-2:2003/Amd. 1:2006(E)"/>
+      <format type="HTML"
+              target="http://standards.iso.org/ittf/PubliclyAvailableStandards/c040774_ISO_IEC_19757-2_2003_Amd_1_2006(E).zip"/>
+    </reference>
+
+    <reference anchor="Schematron">
+      <front>
+        <title>Information Technology - Document Schema Definition
+        Languages (DSDL) - Part 3: Rule-Based Validation -
+        Schematron</title>
+        <author fullname="ISO/IEC">
+          <organization>ISO/IEC</organization>
+        </author>
+        <date day="1" month="6" year="2006"/>
+      </front>
+      <seriesInfo name="ISO/IEC" value="19757-3:2006(E)"/>
+      <format type="PDF"
+              target="http://standards.iso.org/ittf/PubliclyAvailableStandards/c040833_ISO_IEC_19757-3_2006(E).zip"/>
+    </reference>
+
+    <reference anchor="DSRL">
+      <front>
+        <title>Information Technology - Document Schema Definition
+        Languages (DSDL) - Part 8: Document Semantics Renaming
+        Language - DSRL</title>
+        <author fullname="ISO/IEC">
+          <organization>ISO/IEC</organization>
+        </author>
+        <date day="15" month="12" year="2008"/>
+      </front>
+      <seriesInfo name="ISO/IEC" value="19757-8:2008(E)"/>
+    </reference>
+
+    <reference anchor='RFC3688'>
+      <front>
+        <title>The IETF XML Registry</title>
+        <author initials='M.' surname='Mealling' fullname='M. Mealling'>
+        <organization/></author>
+        <date year='2004' month='January' />
+      </front>
+      <seriesInfo name='BCP' value='81' />
+      <seriesInfo name='RFC' value='3688' />
+      <format type='TXT' octets='17325'
+              target='ftp://ftp.isi.edu/in-notes/rfc3688.txt' />
+    </reference>
+
+    <reference anchor='RFC2578'>
+      <front>
+        <title abbrev='SMIv2'>Structure of Management Information
+        Version 2 (SMIv2)</title>
+        <author initials='K.' surname='McCloghrie'
+                fullname='Keith McCloghrie'
+                role='editor'>
+          <organization>Cisco Systems, Inc.</organization>
+        </author>
+        <author initials='D.' surname='Perkins'
+                fullname='David Perkins' role='editor'>
+          <organization>SNMPinfo</organization>
+        </author>
+        <author initials='J.' surname='Schoenwaelder'
+                fullname='Juergen Schoenwaelder' role='editor'>
+          <organization>TU Braunschweig</organization>
+        </author>
+      <date year='1999' month='April' /></front>
+      <seriesInfo name='STD' value='58' />
+      <seriesInfo name='RFC' value='2578' />
+      <format type='TXT' octets='89712'
+              target='fttp://www.ietf.org/rfc/rfc2578.txt' />
+    </reference>
+
+    <reference anchor='Ytypes'>
+      <front>
+        <title>Common YANG Data Types</title>
+        <author role="editor" initials='J.' surname='Schoenwaelder'
+                fullname='Juergen Schoenwaelder'>
+          <organization />
+        </author>
+
+        <date month='November' day='3' year='2008' />
+      </front>
+      <seriesInfo name='Internet-Draft'
+                  value='draft-ietf-netmod-yang-types-01' />
+      <format type='HTML'
+              target='http://tools.ietf.org/html/draft-ietf-netmod-yang-types-01'/>
+    </reference>
+
+    <reference anchor="Vli04">
+      <front>
+        <title>RELAX NG</title>
+        <author fullname="Eric van der Vlist" surname="van der Vlist"
+                initials="E.">
+          <organization/>
+        </author>
+        <date year="2004"/>
+      </front>
+      <seriesInfo name="O'Reilly" value=""/>
+      <format type="HTML"
+              target="http://books.xmlschemata.org/relaxng/"/>
+    </reference>
+  </references>
+
+  <section anchor="nma-schema"
+           title="RELAX NG Schema for NETMOD-specific Annotations">
+
+    <t>This appendix contains the RELAX NG schema for the
+    NETMOD-specific annotations in both XML and compact syntax.</t>
+    <t>[Editor's note: It is currently only a set of named pattern
+    definitions as templates for the annotation elements and
+    attributes. We should find a way how to connect this to the schema
+    for RELAX NG, which these annotations extend. One option may be
+    NVDL or it can also be done as in the spec for DTD compatibility
+    annotations.]</t>
+
+    <section anchor="nma-schema-xml" title="XML Syntax">
+      <figure>
+        <artwork>
+<![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<grammar xmlns="http://relaxng.org/ns/structure/1.0"
+ns="urn:ietf:params:xml:ns:netmod:dsdl-annotations:1"
+datatypeLibrary="http://www.w3.org/2001/XMLSchema-datatypes">
+
+<define name="config-attribute">
+  <attribute name="config">
+    <data type="boolean"/>
+  </attribute>
+</define>
+
+<define name="default-attribute">
+  <attribute name="default"/>
+</define>
+
+<define name="default-case-attribute">
+  <attribute name="default-case">
+    <data type="boolean"/>
+  </attribute>
+</define>
+
+<define name="error-app-tag-element">
+  <optional>
+    <element name="error-app-tag">
+      <text/>
+    </element>
+  </optional>
+</define>
+
+<define name="error-message-element">
+  <optional>
+    <element name="error-message">
+      <text/>
+    </element>
+  </optional>
+</define>
+
+<define name="instance-identifier-element">
+  <element name="instance-identifier">
+    <optional>
+      <attribute name="require-instance">
+        <data type="boolean"/>
+      </attribute>
+    </optional>
+  </element>
+</define>
+
+<define name="key-attribute">
+  <attribute name="key">
+    <list>
+      <data type="QName"/>
+    </list>
+  </attribute>
+</define>
+
+<define name="leafref-element">
+  <element name="leafref">
+    <optional>
+      <attribute name="require-instance">
+        <data type="boolean"/>
+      </attribute>
+    </optional>
+    <data type="string"/>
+  </element>
+</define>
+
+<define name="min-elements-attribute">
+  <attribute name="min-elements">
+    <data type="integer"/>
+  </attribute>
+</define>
+
+<define name="max-elements-attribute">
+  <attribute name="max-elements">
+    <data type="integer"/>
+  </attribute>
+</define>
+
+<define name="must-element">
+  <element name="must">
+    <attribute name="assert">
+      <data type="string"/>
+    </attribute>
+    <interleave>
+      <ref name="err-app-tag-element"/>
+      <ref name="err-message-element"/>
+    </interleave>
+  </element>
+</define>
+
+<define name="ordered-by-attribute">
+  <attribute name="ordered-by">
+    <choice>
+      <value>user</value>
+      <value>system</value>
+    </choice>
+  </attribute>
+</define>
+
+<define name="status-attribute">
+  <attribute name="status">
+    <choice>
+      <value>current</value>
+      <value>deprecated</value>
+      <value>obsolete</value>
+    </choice>
+  </attribute>
+</define>
+
+<define name="unique-attribute">
+  <attribute name="unique">
+    <list>
+      <data type="string"/>
+    </list>
+  </attribute>
+</define>
+
+<define name="units-attribute">
+  <attribute name="units">
+    <data type="string"/>
+  </attribute>
+</define>
+
+<define name="when-attribute">
+  <attribute name="when">
+    <data type="string"/>
+  </attribute>
+</define>
+
+</grammar>
+]]></artwork>
+      </figure>
+    </section>
+
+    <section anchor="nma-schema-compact" title="Compact Syntax">
+      <figure>
+        <artwork>
+<![CDATA[default namespace =
+    "urn:ietf:params:xml:ns:netmod:dsdl-annotations:1"
+
+config-attribute = attribute config { xsd:boolean }
+default-attribute = attribute default { text }
+default-case-attribute = attribute default-case { xsd:boolean }
+error-app-tag-element = element error-app-tag { text }?
+error-message-element = element error-message { text }?
+instance-identifier-element =
+  element instance-identifier {
+    attribute require-instance { xsd:boolean }?
+  }
+key-attribute =
+  attribute key {
+    list { xsd:QName }
+  }
+leafref-element =
+  element leafref {
+    attribute require-instance { xsd:boolean }?,
+    xsd:string
+  }
+min-elements-attribute = attribute min-elements { xsd:integer }
+max-elements-attribute = attribute max-elements { xsd:integer }
+must-element =
+  element must {
+    attribute assert { xsd:string },
+    (err-app-tag-element & err-message-element)
+  }
+ordered-by-attribute = attribute ordered-by { "user" | "system" }
+status-attribute =
+  attribute status { "current" | "deprecated" | "obsolete" }
+unique-attribute =
+  attribute unique {
+    list { xsd:string }
+  }
+units-attribute = attribute units { xsd:string }
+when-attribute = attribute when { xsd:string }
+]]></artwork>
+      </figure>
+    </section>
+  </section>
+
+  <section anchor="app-library" title="Schema-Independent Library">
+    <t>In order to avoid copying the same named pattern definitions to
+    the RELAX NG schemas generated in the second mapping step, we
+    collected these definitions to a library file - schema-independent
+    library - which is included by the validating schemas under the
+    file name "relaxng-lib.rng" (XML syntax) and "relaxng-lib.rnc"
+    (compact syntax). The included definitions cover patterns for
+    common elements from base NETCONF <xref target="RFC4741"/> and
+    event notifications <xref target="RFC5277"/>.</t>
+
+    <section title="XML Syntax">
+    <figure>
+      <artwork>
+<![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Library of RELAX NG pattern definitions -->
+
+<grammar xmlns="http://relaxng.org/ns/structure/1.0"
+         xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0"
+         xmlns:en="urn:ietf:params:xml:ns:netconf:notification:1.0"
+         datatypeLibrary="http://www.w3.org/2001/XMLSchema-datatypes">
+
+  <define name="message-id-attribute">
+    <attribute name="message-id">
+      <data type="string">
+        <param name="maxLength">4095</param>
+      </data>
+    </attribute>
+  </define>
+
+  <define name="ok-element">
+    <element name="nc:ok">
+      <empty/>
+    </element>
+  </define>
+
+  <define name="eventTime-element">
+    <element name="en:eventTime">
+      <data type="dateTime"/>
+    </element>
+  </define>
+</grammar>]]></artwork>
+    </figure>
+    </section>
+
+    <section title="Compact Syntax">
+      <figure>
+        <artwork>
+<![CDATA[# Library of RELAX NG pattern definitions
+
+namespace en = "urn:ietf:params:xml:ns:netconf:notification:1.0"
+namespace nc = "urn:ietf:params:xml:ns:netconf:base:1.0"
+
+message-id-attribute =
+  attribute message-id {
+    xsd:string { maxLength = "4095" }
+  }
+ok-element = element nc:ok { empty }
+eventTime-element = element en:eventTime { xsd:dateTime }
+]]></artwork>
+      </figure>
+    </section>
+  </section>
+
+  <section anchor="app-dhcp"
+          title="Mapping DHCP Data Model - A Complete Example">
+
+    <t>This appendix demonstrates both steps of the
+    YANG-to-DSDL mapping applied to the "canonical" <eref
+    target="http://www.yang-central.org/twiki/bin/view/Main/DhcpTutorial">DHCP
+    tutorial</eref> data model. The input (single) YANG module is
+    shown in <xref target="app-dhcp-yang"/> and the output schemas in
+    the following two subsections.</t>
+    <t>The conceptual tree schema was obtained by the "rng" plugin of
+    the <eref target="http://code.google.com/p/pyang/">pyang</eref>
+    tool and the validating DSDL schemas by XSLT stylesheets that are
+    also part of pyang distribution. RELAX NG schemas are shown in
+    both XML and compact syntax. The latter was obtained from the
+    former by using the <eref
+    target="http://thaiopensource.com/relaxng/trang.html">Trang
+    tool</eref></t>
+    <t>Due to the limit of 72 characters per line, few long strings
+    required manual editing, in particular the regular expression
+    patterns for IP addresses etc. in the RELAX NG schemas. In the
+    compact syntax we broke the patterns to appropriate segments and
+    joined them with the concatenation operator "~". In the XML
+    syntax, though, the long patterns had to be replaced by the
+    placeholder string "... regex pattern ...". Also, line breaks were
+    added to several documentation strings and Schematron
+    messages. Other than that, the results of the automatic
+    translations were not changed.</t>
+
+    <section anchor="app-dhcp-yang"
+             title="Input YANG Module">
+
+      <figure>
+        <artwork>
+<![CDATA[module dhcp {
+  namespace "http://example.com/ns/dhcp";
+  prefix dhcp;
+
+  import yang-types { prefix yang; }
+  import inet-types { prefix inet; }
+
+  organization
+    "yang-central.org";
+  description
+    "Partial data model for DHCP, based on the config of
+     the ISC DHCP reference implementation.";
+
+  container dhcp {
+    description
+      "configuration and operational parameters for a DHCP server.";
+
+    leaf max-lease-time {
+      type uint32;
+      units seconds;
+      default 7200;
+    }
+
+    leaf default-lease-time {
+      type uint32;
+      units seconds;
+      must '. <= ../dhcp:max-lease-time' {
+        error-message
+          "The default-lease-time must be less than max-lease-time";
+      }
+      default 600;
+    }
+
+    uses subnet-list;
+
+    container shared-networks {
+      list shared-network {
+        key name;
+
+        leaf name {
+          type string;
+        }
+        uses subnet-list;
+      }
+    }
+
+    container status {
+      config false;
+      list leases {
+        key address;
+
+        leaf address {
+          type inet:ip-address;
+        }
+        leaf starts {
+          type yang:date-and-time;
+        }
+        leaf ends {
+          type yang:date-and-time;
+        }
+        container hardware {
+          leaf type {
+            type enumeration {
+              enum "ethernet";
+              enum "token-ring";
+              enum "fddi";
+            }
+          }
+          leaf address {
+            type yang:phys-address;
+          }
+        }
+      }
+    }
+  }
+
+  grouping subnet-list {
+    description "A reusable list of subnets";
+    list subnet {
+      key net;
+      leaf net {
+        type inet:ip-prefix;
+      }
+      container range {
+        presence "enables dynamic address assignment";
+        leaf dynamic-bootp {
+          type empty;
+          description
+            "Allows BOOTP clients to get addresses in this range";
+        }
+        leaf low {
+          type inet:ip-address;
+          mandatory true;
+        }
+        leaf high {
+          type inet:ip-address;
+          mandatory true;
+        }
+      }
+
+      container dhcp-options {
+        description "Options in the DHCP protocol";
+        leaf-list router {
+          type inet:host;
+          ordered-by user;
+          reference "RFC 2132, sec. 3.8";
+        }
+        leaf domain-name {
+          type inet:domain-name;
+          reference "RFC 2132, sec. 3.17";
+        }
+      }
+
+      leaf max-lease-time {
+        type uint32;
+        units seconds;
+        default 7200;
+      }
+    }
+  }
+}]]></artwork>
+      </figure>
+    </section>
+
+    <section anchor="app-dhcp-cts" title="Conceptual Tree Schema">
+      <section title="XML Syntax">
+        <figure>
+          <artwork>
+<![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<grammar
+    xmlns="http://relaxng.org/ns/structure/1.0"
+    xmlns:a="http://relaxng.org/ns/compatibility/annotations/1.0"
+    xmlns:dc="http://purl.org/dc/terms"
+    xmlns:dhcp="http://example.com/ns/dhcp"
+    xmlns:nma="urn:ietf:params:xml:ns:netmod:dsdl-annotations:1"
+    xmlns:nmt="urn:ietf:params:xml:ns:netmod:conceptual-tree:1"
+    datatypeLibrary="http://www.w3.org/2001/XMLSchema-datatypes">
+  <dc:creator>Pyang 0.9.3, RELAX NG plugin</dc:creator>
+  <dc:source>YANG module 'dhcp'</dc:source>
+  <start>
+    <element name="nmt:netmod-tree">
+      <element name="nmt:top">
+        <interleave>
+          <optional>
+            <element name="dhcp:dhcp">
+              <a:documentation>
+      configuration and operational parameters for a DHCP server.
+              </a:documentation>
+              <optional>
+                <element name="dhcp:max-lease-time"
+                         nma:default="7200" nma:units="seconds">
+                  <data type="unsignedInt"/>
+                </element>
+              </optional>
+              <optional>
+                <element name="dhcp:default-lease-time"
+                         nma:default="600" nma:units="seconds">
+                  <data type="unsignedInt"/>
+                  <nma:must
+                      assert=". &lt;= ../dhcp:max-lease-time">
+                    <nma:error-message>
+        The default-lease-time must be less than max-lease-time
+                    </nma:error-message>
+                  </nma:must>
+                </element>
+              </optional>
+              <ref name="_dhcp__subnet-list"/>
+              <optional>
+                <element name="dhcp:shared-networks">
+                  <zeroOrMore>
+                    <element name="dhcp:shared-network"
+                             nma:key="dhcp:name">
+                      <element name="dhcp:name">
+                        <data type="string"/>
+                      </element>
+                      <ref name="_dhcp__subnet-list"/>
+                    </element>
+                  </zeroOrMore>
+                </element>
+              </optional>
+              <optional>
+                <element name="dhcp:status" nma:config="false">
+                  <zeroOrMore>
+                    <element name="dhcp:leases"
+                             nma:key="dhcp:address">
+                      <element name="dhcp:address">
+                        <ref name="inet-types__ip-address"/>
+                      </element>
+                      <optional>
+                        <element name="dhcp:starts">
+                          <ref name="yang-types__date-and-time"/>
+                        </element>
+                      </optional>
+                      <optional>
+                        <element name="dhcp:ends">
+                          <ref name="yang-types__date-and-time"/>
+                        </element>
+                      </optional>
+                      <optional>
+                        <element name="dhcp:hardware">
+                          <optional>
+                            <element name="dhcp:type">
+                              <choice>
+                                <value>ethernet</value>
+                                <value>token-ring</value>
+                                <value>fddi</value>
+                              </choice>
+                            </element>
+                          </optional>
+                          <optional>
+                            <element name="dhcp:address">
+                              <ref name="yang-types__phys-address"/>
+                            </element>
+                          </optional>
+                        </element>
+                      </optional>
+                    </element>
+                  </zeroOrMore>
+                </element>
+              </optional>
+            </element>
+          </optional>
+        </interleave>
+      </element>
+      <element name="nmt:rpc-methods">
+        <empty/>
+      </element>
+      <element name="nmt:notifications">
+        <empty/>
+      </element>
+    </element>
+  </start>
+  <define name="_dhcp__subnet-list">
+    <a:documentation>A reusable list of subnets</a:documentation>
+    <zeroOrMore>
+      <element name="dhcp:subnet" nma:key="dhcp:net">
+        <element name="dhcp:net">
+          <ref name="inet-types__ip-prefix"/>
+        </element>
+        <optional>
+          <element name="dhcp:range">
+            <optional>
+              <element name="dhcp:dynamic-bootp">
+                <a:documentation>
+        Allows BOOTP clients to get addresses in this range
+                </a:documentation>
+                <empty/>
+              </element>
+            </optional>
+            <element name="dhcp:low">
+              <ref name="inet-types__ip-address"/>
+            </element>
+            <element name="dhcp:high">
+              <ref name="inet-types__ip-address"/>
+            </element>
+          </element>
+        </optional>
+        <optional>
+          <element name="dhcp:dhcp-options">
+            <a:documentation>
+              Options in the DHCP protocol
+            </a:documentation>
+            <zeroOrMore>
+              <element name="dhcp:router" nma:ordered-by="user">
+                <a:documentation>
+                  See: RFC 2132, sec. 3.8
+                </a:documentation>
+                <ref name="inet-types__host"/>
+              </element>
+            </zeroOrMore>
+            <optional>
+              <element name="dhcp:domain-name">
+                <a:documentation>
+                  See: RFC 2132, sec. 3.17
+                </a:documentation>
+                <ref name="inet-types__domain-name"/>
+              </element>
+            </optional>
+          </element>
+        </optional>
+        <optional>
+          <element name="dhcp:max-lease-time"
+                   nma:default="7200" nma:units="seconds">
+            <data type="unsignedInt"/>
+          </element>
+        </optional>
+      </element>
+    </zeroOrMore>
+  </define>
+  <define name="inet-types__ip-prefix">
+    <choice>
+      <ref name="inet-types__ipv4-prefix"/>
+      <ref name="inet-types__ipv6-prefix"/>
+    </choice>
+  </define>
+  <define name="inet-types__ipv4-prefix">
+    <data type="string">
+      <param name="pattern">... regex pattern ...</param>
+    </data>
+  </define>
+  <define name="inet-types__ipv6-prefix">
+    <data type="string">
+      <param name="pattern">... regex pattern ...</param>
+    </data>
+  </define>
+  <define name="inet-types__ip-address">
+    <choice>
+      <ref name="inet-types__ipv4-address"/>
+      <ref name="inet-types__ipv6-address"/>
+    </choice>
+  </define>
+  <define name="inet-types__ipv4-address">
+    <data type="string">
+      <param name="pattern">... regex pattern ...</param>
+    </data>
+  </define>
+  <define name="inet-types__ipv6-address">
+    <data type="string">
+      <param name="pattern">... regex pattern ...</param>
+    </data>
+  </define>
+  <define name="inet-types__host">
+    <choice>
+      <ref name="inet-types__ip-address"/>
+      <ref name="inet-types__domain-name"/>
+    </choice>
+  </define>
+  <define name="inet-types__domain-name">
+    <data type="string">
+      <param name="pattern">... regex pattern ...</param>
+      <param name="pattern">... regex pattern ...</param>
+    </data>
+  </define>
+  <define name="yang-types__date-and-time">
+    <data type="string">
+      <param name="pattern">... regex pattern ...</param>
+    </data>
+  </define>
+  <define name="yang-types__phys-address">
+    <data type="string"/>
+  </define>
+</grammar>
+]]></artwork>
+        </figure>
+      </section>
+
+      <section title="Compact Syntax">
+        <figure>
+          <artwork>
+<![CDATA[namespace a = "http://relaxng.org/ns/compatibility/annotations/1.0"
+namespace dc = "http://purl.org/dc/terms"
+namespace dhcp = "http://example.com/ns/dhcp"
+namespace nma = "urn:ietf:params:xml:ns:netmod:dsdl-annotations:1"
+namespace nmt = "urn:ietf:params:xml:ns:netmod:conceptual-tree:1"
+
+dc:creator [ "Pyang 0.9.3, RELAX NG plugin" ]
+dc:source [ "YANG module 'dhcp'" ]
+start =
+  element nmt:netmod-tree {
+    element nmt:top {
+
+      ## configuration and operational parameters for a DHCP server.
+      element dhcp:dhcp {
+        [ nma:default = "7200" nma:units = "seconds" ]
+        element dhcp:max-lease-time { xsd:unsignedInt }?,
+        [ nma:default = "600" nma:units = "seconds" ]
+        element dhcp:default-lease-time {
+          xsd:unsignedInt
+          >> nma:must [
+               assert = ". <= ../dhcp:max-lease-time"
+               nma:error-message [
+          "The default-lease-time must be less than max-lease-time"
+               ]
+             ]
+        }?,
+        _dhcp__subnet-list,
+        element dhcp:shared-networks {
+          [ nma:key = "dhcp:name" ]
+          element dhcp:shared-network {
+            element dhcp:name { xsd:string },
+            _dhcp__subnet-list
+          }*
+        }?,
+        [ nma:config = "false" ]
+        element dhcp:status {
+          [ nma:key = "dhcp:address" ]
+          element dhcp:leases {
+            element dhcp:address { inet-types__ip-address },
+            element dhcp:starts { yang-types__date-and-time }?,
+            element dhcp:ends { yang-types__date-and-time }?,
+            element dhcp:hardware {
+              element dhcp:type { "ethernet"
+                                | "token-ring"
+                                | "fddi"
+                                }?,
+              element dhcp:address { yang-types__phys-address }?
+            }?
+          }*
+        }?
+      }?
+    },
+    element nmt:rpc-methods { empty },
+    element nmt:notifications { empty }
+  }
+
+## A reusable list of subnets
+_dhcp__subnet-list =
+  [ nma:key = "dhcp:net" ]
+  element dhcp:subnet {
+    element dhcp:net { inet-types__ip-prefix },
+    element dhcp:range {
+
+      ## Allows BOOTP clients to get addresses in this range
+      element dhcp:dynamic-bootp { empty }?,
+      element dhcp:low { inet-types__ip-address },
+      element dhcp:high { inet-types__ip-address }
+    }?,
+
+    ## Options in the DHCP protocol
+    element dhcp:dhcp-options {
+
+      ## See: RFC 2132, sec. 3.8
+      [ nma:ordered-by = "user" ]
+      element dhcp:router { inet-types__host }*,
+
+      ## See: RFC 2132, sec. 3.17
+      element dhcp:domain-name { inet-types__domain-name }?
+    }?,
+    [ nma:default = "7200" nma:units = "seconds" ]
+    element dhcp:max-lease-time { xsd:unsignedInt }?
+  }*
+inet-types__ip-prefix =
+  inet-types__ipv4-prefix | inet-types__ipv6-prefix
+inet-types__ipv4-prefix =
+  xsd:string {
+    pattern =
+      "(([0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])\.)" ~
+      "{3}([0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])/\p{N}+"
+  }
+inet-types__ipv6-prefix =
+  xsd:string {
+    pattern =
+      "((([0-9a-fA-F]{1,4}:){7})([0-9a-fA-F]{1,4})/" ~
+      "\p{N}+)|((([0-9a-fA-F]{1,4}:){6})(([0-9]{1,3}\." ~
+      "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}))/\p{N}+)|" ~
+      "((([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*(::)" ~
+      "(([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*/\p{N}+)" ~
+      "((([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*(::)" ~
+      "(([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*(([0-9]" ~
+      "{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}))/\p{N}+)"
+  }
+inet-types__ip-address =
+  inet-types__ipv4-address | inet-types__ipv6-address
+inet-types__ipv4-address =
+  xsd:string {
+    pattern =
+      "(([0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])\.){3}([0-1]?" ~
+      "[0-9]?[0-9]|2[0-4][0-9]|25[0-5])(%[\p{N}\p{L}]+)?"
+  }
+inet-types__ipv6-address =
+  xsd:string {
+    pattern =
+      "((([0-9a-fA-F]{1,4}:){7})([0-9a-fA-F]{1,4})(%[\p{N}" ~
+      "\p{L}]+)?)|((([0-9a-fA-F]{1,4}:){6})(([0-9]{1,3}\." ~
+      "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}))(%[\p{N}\p{L}]+)?)|" ~
+      "((([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*(::)" ~
+      "(([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*(%[\p{N}" ~
+      "\p{L}]+)?)((([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*" ~
+      "(::)(([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*(([0-9]{1,3}" ~
+      "\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}))(%[\p{N}\p{L}]+)?)"
+  }
+inet-types__host = inet-types__ip-address | inet-types__domain-name
+inet-types__domain-name =
+  xsd:string {
+    pattern =
+      "([a-zA-Z][a-zA-Z0-9\-]*[a-zA-Z0-9]\.)*" ~
+      "[a-zA-Z][a-zA-Z0-9\-]*[a-zA-Z0-9]"
+    pattern =
+      "([r-zA-Z][a-zA-Z0-9\-]*[a-zA-Z0-9]\.)*" ~
+      "[a-zA-Z][a-zA-Z0-9\-]*[a-zA-Z0-9]"
+  }
+yang-types__date-and-time =
+  xsd:string {
+    pattern =
+      "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}" ~
+      "(\.d*)?(Z|(\+|-)\d{2}:\d{2})"
+  }
+yang-types__phys-address = xsd:string
+]]></artwork>
+        </figure>
+      </section>
+    </section>
+
+    <section anchor="app-dhcp-2" title="Final DSDL Schemas">
+
+    <t>This appendix contains DSDL schemas that were obtained from the
+    conceptual tree schema in <xref target="app-dhcp-cts"/> by XSL
+    transformations. These schemas can be directly used for validating
+    a reply to unfiltered &lt;get&gt; with the contents corresponding
+    to the DHCP data model.</t>
+    <t>The RELAX NG schema (again shown in both XML and compact
+    syntax) includes the schema independent library from <xref
+    target="app-library"/>.</t>
+
+    <section title="RELAX NG Schema for &lt;get&gt; Reply - XML Syntax">
+
+      <figure>
+        <artwork>
+<![CDATA[<?xml version="1.0" encoding="utf-8"?>
+<grammar
+    xmlns="http://relaxng.org/ns/structure/1.0"
+    xmlns:a="http://relaxng.org/ns/compatibility/annotations/1.0"
+    xmlns:dc="http://purl.org/dc/terms"
+    xmlns:dhcp="http://example.com/ns/dhcp"
+    xmlns:nma="urn:ietf:params:xml:ns:netmod:dsdl-annotations:1"
+    xmlns:nmt="urn:ietf:params:xml:ns:netmod:conceptual-tree:1"
+    datatypeLibrary="http://www.w3.org/2001/XMLSchema-datatypes"
+    ns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <rng:include xmlns:rng="http://relaxng.org/ns/structure/1.0"
+               href="./relaxng-lib.rng"/>
+  <start>
+    <rng:element xmlns:rng="http://relaxng.org/ns/structure/1.0"
+                 name="rpc-reply">
+      <rng:ref name="message-id-attribute"/>
+      <rng:element name="data">
+        <interleave>
+          <optional>
+            <element name="dhcp:dhcp">
+              <optional>
+                <element name="dhcp:max-lease-time">
+                  <data type="unsignedInt"/>
+                </element>
+              </optional>
+              <optional>
+                <element name="dhcp:default-lease-time">
+                  <data type="unsignedInt"/>
+                </element>
+              </optional>
+              <ref name="_dhcp__subnet-list"/>
+              <optional>
+                <element name="dhcp:shared-networks">
+                  <zeroOrMore>
+                    <element name="dhcp:shared-network">
+                      <element name="dhcp:name">
+                        <data type="string"/>
+                      </element>
+                      <ref name="_dhcp__subnet-list"/>
+                    </element>
+                  </zeroOrMore>
+                </element>
+              </optional>
+              <optional>
+                <element name="dhcp:status">
+                  <zeroOrMore>
+                    <element name="dhcp:leases">
+                      <element name="dhcp:address">
+                        <ref name="inet-types__ip-address"/>
+                      </element>
+                      <optional>
+                        <element name="dhcp:starts">
+                          <ref name="yang-types__date-and-time"/>
+                        </element>
+                      </optional>
+                      <optional>
+                        <element name="dhcp:ends">
+                          <ref name="yang-types__date-and-time"/>
+                        </element>
+                      </optional>
+                      <optional>
+                        <element name="dhcp:hardware">
+                          <optional>
+                            <element name="dhcp:type">
+                              <choice>
+                                <value>ethernet</value>
+                                <value>token-ring</value>
+                                <value>fddi</value>
+                              </choice>
+                            </element>
+                          </optional>
+                          <optional>
+                            <element name="dhcp:address">
+                              <ref name="yang-types__phys-address"/>
+                            </element>
+                          </optional>
+                        </element>
+                      </optional>
+                    </element>
+                  </zeroOrMore>
+                </element>
+              </optional>
+            </element>
+          </optional>
+        </interleave>
+      </rng:element>
+    </rng:element>
+  </start>
+  <define name="_dhcp__subnet-list">
+    <zeroOrMore>
+      <element name="dhcp:subnet">
+        <element name="dhcp:net">
+          <ref name="inet-types__ip-prefix"/>
+        </element>
+        <optional>
+          <element name="dhcp:range">
+            <optional>
+              <element name="dhcp:dynamic-bootp">
+                <empty/>
+              </element>
+            </optional>
+            <element name="dhcp:low">
+              <ref name="inet-types__ip-address"/>
+            </element>
+            <element name="dhcp:high">
+              <ref name="inet-types__ip-address"/>
+            </element>
+          </element>
+        </optional>
+        <optional>
+          <element name="dhcp:dhcp-options">
+            <zeroOrMore>
+              <element name="dhcp:router">
+                <ref name="inet-types__host"/>
+              </element>
+            </zeroOrMore>
+            <optional>
+              <element name="dhcp:domain-name">
+                <ref name="inet-types__domain-name"/>
+              </element>
+            </optional>
+          </element>
+        </optional>
+        <optional>
+          <element name="dhcp:max-lease-time">
+            <data type="unsignedInt"/>
+          </element>
+        </optional>
+      </element>
+    </zeroOrMore>
+  </define>
+  <define name="inet-types__ip-prefix">
+    <choice>
+      <ref name="inet-types__ipv4-prefix"/>
+      <ref name="inet-types__ipv6-prefix"/>
+    </choice>
+  </define>
+  <define name="inet-types__ipv4-prefix">
+    <data type="string">
+      <param name="pattern">... regex pattern ...</param>
+    </data>
+  </define>
+  <define name="inet-types__ipv6-prefix">
+    <data type="string">
+      <param name="pattern">... regex pattern ...</param>
+    </data>
+  </define>
+  <define name="inet-types__ip-address">
+    <choice>
+      <ref name="inet-types__ipv4-address"/>
+      <ref name="inet-types__ipv6-address"/>
+    </choice>
+  </define>
+  <define name="inet-types__ipv4-address">
+    <data type="string">
+      <param name="pattern">... regex pattern ...</param>
+    </data>
+  </define>
+  <define name="inet-types__ipv6-address">
+    <data type="string">
+      <param name="pattern">... regex pattern ...</param>
+    </data>
+  </define>
+  <define name="inet-types__host">
+    <choice>
+      <ref name="inet-types__ip-address"/>
+      <ref name="inet-types__domain-name"/>
+    </choice>
+  </define>
+  <define name="inet-types__domain-name">
+    <data type="string">
+      <param name="pattern">... regex pattern ...</param>
+      <param name="pattern">... regex pattern ...</param>
+    </data>
+  </define>
+  <define name="yang-types__date-and-time">
+    <data type="string">
+      <param name="pattern">... regex pattern ...</param>
+    </data>
+  </define>
+  <define name="yang-types__phys-address">
+    <data type="string"/>
+  </define>
+</grammar>
+]]></artwork>
+      </figure>
+    </section>
+
+    <section
+        title="RELAX NG Schema for &lt;get&gt; Reply - Compact Syntax">
+      <figure>
+        <artwork>
+<![CDATA[default namespace = "urn:ietf:params:xml:ns:netconf:base:1.0"
+namespace a = "http://relaxng.org/ns/compatibility/annotations/1.0"
+namespace dc = "http://purl.org/dc/terms"
+namespace dhcp = "http://example.com/ns/dhcp"
+namespace nma = "urn:ietf:params:xml:ns:netmod:dsdl-annotations:1"
+namespace nmt = "urn:ietf:params:xml:ns:netmod:conceptual-tree:1"
+
+include "relaxng-lib.rnc"
+start =
+  element rpc-reply {
+    message-id-attribute,
+    element data {
+      element dhcp:dhcp {
+        element dhcp:max-lease-time { xsd:unsignedInt }?,
+        element dhcp:default-lease-time { xsd:unsignedInt }?,
+        _dhcp__subnet-list,
+        element dhcp:shared-networks {
+          element dhcp:shared-network {
+            element dhcp:name { xsd:string },
+            _dhcp__subnet-list
+          }*
+        }?,
+        element dhcp:status {
+          element dhcp:leases {
+            element dhcp:address { inet-types__ip-address },
+            element dhcp:starts { yang-types__date-and-time }?,
+            element dhcp:ends { yang-types__date-and-time }?,
+            element dhcp:hardware {
+              element dhcp:type { "ethernet"
+                                | "token-ring"
+                                | "fddi"
+                                }?,
+              element dhcp:address { yang-types__phys-address }?
+            }?
+          }*
+        }?
+      }?
+    }
+  }
+_dhcp__subnet-list =
+  element dhcp:subnet {
+    element dhcp:net { inet-types__ip-prefix },
+    element dhcp:range {
+      element dhcp:dynamic-bootp { empty }?,
+      element dhcp:low { inet-types__ip-address },
+      element dhcp:high { inet-types__ip-address }
+    }?,
+    element dhcp:dhcp-options {
+      element dhcp:router { inet-types__host }*,
+      element dhcp:domain-name { inet-types__domain-name }?
+    }?,
+    element dhcp:max-lease-time { xsd:unsignedInt }?
+  }*
+inet-types__ip-prefix =
+  inet-types__ipv4-prefix | inet-types__ipv6-prefix
+inet-types__ipv4-prefix =
+  xsd:string {
+    pattern =
+      "(([0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])\.)" ~
+      "{3}([0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])/\p{N}+"
+  }
+inet-types__ipv6-prefix =
+  xsd:string {
+    pattern =
+      "((([0-9a-fA-F]{1,4}:){7})([0-9a-fA-F]{1,4})/" ~
+      "\p{N}+)|((([0-9a-fA-F]{1,4}:){6})(([0-9]{1,3}\." ~
+      "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}))/\p{N}+)|" ~
+      "((([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*(::)" ~
+      "(([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*/\p{N}+)" ~
+      "((([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*(::)" ~
+      "(([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*(([0-9]" ~
+      "{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}))/\p{N}+)"
+  }
+inet-types__ip-address =
+  inet-types__ipv4-address | inet-types__ipv6-address
+inet-types__ipv4-address =
+  xsd:string {
+    pattern =
+      "(([0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])\.){3}([0-1]?" ~
+      "[0-9]?[0-9]|2[0-4][0-9]|25[0-5])(%[\p{N}\p{L}]+)?"
+  }
+inet-types__ipv6-address =
+  xsd:string {
+    pattern =
+      "((([0-9a-fA-F]{1,4}:){7})([0-9a-fA-F]{1,4})(%[\p{N}" ~
+      "\p{L}]+)?)|((([0-9a-fA-F]{1,4}:){6})(([0-9]{1,3}\." ~
+      "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}))(%[\p{N}\p{L}]+)?)|" ~
+      "((([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*(::)" ~
+      "(([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*(%[\p{N}" ~
+      "\p{L}]+)?)((([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*" ~
+      "(::)(([0-9a-fA-F]{1,4}:)*([0-9a-fA-F]{1,4}))*(([0-9]{1,3}" ~
+      "\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}))(%[\p{N}\p{L}]+)?)"
+  }
+inet-types__host = inet-types__ip-address | inet-types__domain-name
+inet-types__domain-name =
+  xsd:string {
+    pattern =
+      "([a-zA-Z][a-zA-Z0-9\-]*[a-zA-Z0-9]\.)*" ~
+      "[a-zA-Z][a-zA-Z0-9\-]*[a-zA-Z0-9]"
+    pattern =
+      "([r-zA-Z][a-zA-Z0-9\-]*[a-zA-Z0-9]\.)*" ~
+      "[a-zA-Z][a-zA-Z0-9\-]*[a-zA-Z0-9]"
+  }
+yang-types__date-and-time =
+  xsd:string {
+    pattern =
+      "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}" ~
+      "(\.d*)?(Z|(\+|-)\d{2}:\d{2})"
+  }
+yang-types__phys-address = xsd:string
+]]></artwork>
+      </figure>
+    </section>
+  </section>
+
+    <section title="Schematron Schema for &lt;get&gt; Reply">
+      <figure>
+        <artwork>
+<![CDATA[<?xml version="1.0" encoding="utf-8"?>
+<sch:schema xmlns:sch="http://purl.oclc.org/dsdl/schematron">
+  <sch:ns uri="http://example.com/ns/dhcp" prefix="dhcp"/>
+  <sch:ns uri="urn:ietf:params:xml:ns:netconf:base:1.0"
+          prefix="nc"/>
+  <sch:phase id="full">
+    <sch:active pattern="standard"/>
+    <sch:active pattern="ref-integrity"/>
+  </sch:phase>
+  <sch:phase id="noref">
+    <sch:active pattern="standard"/>
+  </sch:phase>
+  <sch:pattern id="standard">
+    <sch:rule id="std-id2246197" abstract="true">
+      <sch:report test="preceding-sibling::dhcp:subnet
+                        [dhcp:net=current()/dhcp:net]">
+        Duplicate key of list dhcp:subnet
+      </sch:report>
+    </sch:rule>
+    <sch:rule context="/nc:rpc-reply/nc:data/dhcp:dhcp/
+                       dhcp:default-lease-time">
+      <sch:assert test=". &lt;= ../dhcp:max-lease-time">
+        The default-lease-time must be less than max-lease-time
+      </sch:assert>
+    </sch:rule>
+    <sch:rule context="/nc:rpc-reply/nc:data/dhcp:dhcp/dhcp:subnet">
+      <sch:extends rule="std-id2246197"/>
+    </sch:rule>
+    <sch:rule context="/nc:rpc-reply/nc:data/dhcp:dhcp/
+                       dhcp:shared-networks/dhcp:shared-network">
+      <sch:report test="preceding-sibling::dhcp:shared-network
+                        [dhcp:name=current()/dhcp:name]">
+        Duplicate key of list dhcp:shared-network
+      </sch:report>
+    </sch:rule>
+    <sch:rule context="/nc:rpc-reply/nc:data/dhcp:dhcp/
+                       dhcp:shared-networks/dhcp:shared-network/
+                       dhcp:subnet">
+      <sch:extends rule="std-id2246197"/>
+    </sch:rule>
+    <sch:rule context="/nc:rpc-reply/nc:data/dhcp:dhcp/
+                       dhcp:status/dhcp:leases">
+      <sch:report test="preceding-sibling::dhcp:leases
+                        [dhcp:address=current()/dhcp:address]">
+        Duplicate key of list dhcp:leases
+      </sch:report>
+    </sch:rule>
+  </sch:pattern>
+  <sch:pattern id="ref-integrity"/>
+</sch:schema>
+]]></artwork>
+      </figure>
+    </section>
+
+    <section title="DSRL Schema for &lt;get&gt; Reply">
+      <t>TBD</t>
+    </section>
+  </section>
+
+  <section anchor="change-log" title="Change Log">
+    <section title="Changes Between Versions -00 and -01">
+      <t><list style="symbols">
+        <t>Attributes @nma:min-elements and @nma:max-elements are
+        attached to &lt;rng:element&gt; (list entry) and not to
+        &lt;rng:zeroOrMore&gt; or &lt;rng:oneOrMore&gt;.</t>
+        <t>Keys and all node identifiers in 'key' and 'unique'
+        statements are prefixed.</t>
+        <t>Fixed the mapping of 'rpc' and 'notification'.</t>
+        <t>Removed previous Sec. 7.5 "RPC Signatures and
+        Notifications" - the same information is now contained in
+        <xref target="rpc-stmt"/> and <xref
+        target="notification-stmt"/>.</t>
+        <t>Added initial "_" to mangled names of groupings.</t>
+        <t>Mandated the use of @xmlns:xxx as the only method for
+        declaring the target namespace.</t>
+        <t>Added section "Handling of XML Namespaces" to explain the
+        previous item.</t>
+        <t>Completed DHCP example in <xref target="app-dhcp"/>.</t>
+        <t>Almost all text about the second mapping step is new.</t>
+      </list></t>
+    </section>
+  </section>
+</back>
+
+</rfc>

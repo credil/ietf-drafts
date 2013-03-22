@@ -1,0 +1,465 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSPY v5 rel. 3 U (http://www.xmlspy.com)
+     by Daniel M Kohn (private) -->
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+
+<rfc category="std" ipr="trust200811" docName="draft-ietf-avt-rtcp-xr-delay-01.txt">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+    <front>
+        <title abbrev='RTCP XR Delay'>RTCP XR Report Block for Delay metric Reporting</title>
+        <author initials='G.' surname='Hunt' fullname='Geoff Hunt'>
+            <organization abbrev='BT'>BT</organization>
+		<address>
+	    <postal>
+        	<street>Orion 2 PP3</street>
+        	<street>Adastral Park</street>
+        	<street>Martlesham Heath</street>
+        	<city>Ipswich</city> <region>Suffolk</region>
+        	<code>IP5 3RE</code>
+        	<country>United Kingdom</country>
+    	    </postal>
+	    <phone>+44 1473 651704</phone>
+	    <email>geoff.hunt@bt.com</email>
+	    </address>
+        </author>
+        <author initials='A.' surname='Clark' fullname='Alan Clark'>
+            <organization abbrev='Telchemy'>Telchemy Incorporated</organization>
+		<address>
+	    <postal>
+        	<street>2905 Premiere Parkway, Suite 280</street>
+        	<city>Duluth</city> <region>GA</region>
+        	<code>30097</code>
+        	<country>USA</country>
+    	    </postal>
+	    <email>alan.d.clark@telchemy.com</email>
+	    </address>
+        </author>
+        <date month='February' year='2009' />
+       <area>Real-time Applications and Infrastructure Area</area>
+        <workgroup>Audio/Video Transport Working Group</workgroup>
+        <keyword>RFC</keyword>
+        <keyword>Request for Comments</keyword>
+        <keyword>I-D</keyword>
+        <keyword>Internet-Draft</keyword>
+        <keyword>Real Time Control Protocol</keyword>
+        <abstract>
+        <t>
+   This document defines an RTCP XR Report Block that allows the
+   reporting of Delay metrics for use in a range of RTP applications.
+        </t>
+        </abstract>
+    </front>
+
+    <middle>
+
+<section anchor='intro' title="Introduction">
+<section anchor='intro1' title="Delay Report Block">
+<t>
+   This draft defines a new block type to augment those defined
+   in <xref target='RFC3611'/> for use in a range of RTP applications.
+   The new block type supports the reporting of the mean, minimum and maximum values of the network 
+round-trip delay between RTP interfaces in peer RTP end systems as measured, for example, using the 
+RTCP method described in <xref target='RFC3550'/>. It also supports reporting of the component of the round-trip delay 
+internal to the local RTP system.
+</t>
+<t>
+The network metrics belong to the class of packet transport delay metrics defined in [MONARCH] (work in progress).
+</t>
+<t>
+Instances of this Metrics Block refer by tag to the separate auxiliary Measurement Identity block 
+<xref target='MEASIDENT'/> which contains information 
+such as the SSRC of the measured stream, and RTP sequence numbers and time intervals indicating the span of the report.
+</t>
+</section>
+<section anchor='intro2' title="RTCP and RTCP XR Reports">
+<t>
+   The use of RTCP for reporting is defined in <xref target='RFC3550'/>. 
+   <xref target='RFC3611'/> defined an extensible structure for reporting using
+   an RTCP Extended Report (XR).  This draft defines
+   a new Extended Report block that MUST be used as defined in
+   <xref target='RFC3550'/> and <xref target='RFC3611'/>.
+</t>
+</section>
+<section anchor='intro3' title="Performance Metrics Framework">
+<t>
+   The Performance Metrics Framework <xref target='PMOLFRAME'/> provides guidance on the
+   definition and specification of performance metrics.  Metrics
+   described in this draft either reference external definitions
+   or define metrics generally in accordance with the guidelines
+   in <xref target='PMOLFRAME'/>.
+</t>
+</section>
+<section anchor='intro4' title="Applicability">
+<t>
+This metric is believed to be applicable to all RTP applications.
+</t>
+</section>
+</section>
+
+<section anchor='definitions' title='Definitions'>
+
+<t>Numeric formats</t>
+<t><list style='empty'><t>
+   This report block makes use of binary fractions.  The terminology used is
+</t><t>
+   S X:Y
+</t><t>
+   where S indicates a two's complement signed representation, X the number 
+of bits prior to the decimal place and Y the number of bits
+   after the decimal place.
+</t><t>
+   Hence 8:8 represents an unsigned number in the range 0.0 to 255.996
+   with a granularity of 0.0039.  S7:8 would represent the range
+   -128.000 to +127.996. 0:16 represents a proper binary fraction with range 
+</t><t>0.0 to 1 - 1/65536 = 0.9999847
+</t><t>
+though note that use of flag values at the top of the numeric range slightly reduces
+this upper limit. For example, if the 16-bit values 0xfffe and 0xffff are used as flags for 
+"over-range" and "unavailable" conditions, a 0:16 quantity has range
+</t><t>0.0 to 1 - 3/65536 = 0.9999542
+</t></list></t>
+</section>
+
+<section anchor='blockdef' title="Delay Block">
+<section anchor='blockdef1' title="Report Block Structure">
+    <figure anchor='blockdata' title="Report Block Structure">
+        <artwork>
+   Delay metrics block
+    0               1               2               3
+    0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |    BT=NDEL    |I| tag | resv  |      block length = 2         |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   | Mean Network Round Trip Delay |       End System Delay        |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   | Min Network Round Trip Delay  | Max Network Round Trip Delay  |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	</artwork>
+    </figure>
+</section>
+<section anchor='blockdef2' title="Definition of Fields in Delay Metrics Report Block">
+<t>
+   block type (BT): 8 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+         A Delay Report Block is identified by the constant 
+         NDEL. 
+</t>
+</list>
+</t>
+<t>
+[Note to RFC Editor: please replace NDEL with the
+         IANA provided RTCP XR block type for this block.]
+</t>
+<t>
+   Interval Metric flag (I): 1 bit
+</t>
+<t>
+<list style='empty'>
+<t>
+This field is used to indicate whether the Delay metric block is an Interval or a Cumulative metric block, 
+that is, whether the reported values apply to the most 
+recent measurement interval duration between successive metrics reports (I=1) (the Interval Duration) or to the accumulation period 
+characteristic of cumulative 
+measurements (I=0) (the Cumulative Duration). Numerical values for both these intervals are provided in the Measurement Identifier block 
+referenced by the tag field below.
+</t>
+</list>
+</t>
+<t>
+   Measurement Identifier association (tag): 3 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+This field is used to identify the Measurement Identifier block <xref target='MEASIDENT'/> which describes this measurement. The relevant 
+Measurement Identifier block has the same tag value as the Delay block. Note that there may be 
+more than one Measurement Identifier block per RTCP packet.
+</t>
+</list>
+</t>
+<t>
+   Reserved (resv): 4 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+These bits are reserved. They SHOULD be set to zero by senders and MUST be ignored by receivers.
+</t>
+</list>
+</t>
+<t>
+   block length: 16 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+The length of this report block in 32-bit words, minus one. For the Delay block, the block length 
+is equal to 2.
+</t>
+</list>
+</t>
+<t>
+Mean Network Round Trip Delay (ms): 16 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+   The Mean Network Round Trip Delay is the mean value of
+   the RTP-to-RTP interface round trip delay in ms over the measurement period, 
+typically determined using RTCP SR/RR.
+</t><t>
+If only one measurement of Round Trip Delay is available for the timespan of the report (whether Interval or Cumulative),
+this single value should be reported as the mean value.
+</t><t>
+   If the measured value exceeds 0xFFFD, the value 0xFFFE SHOULD be
+   reported to indicate an over-range measurement.  If the measurement
+   is unavailable, the value 0xFFFF SHOULD be reported.
+</t>
+</list>
+</t>
+<t>
+End System Delay (ms): 16 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+   The End System Delay is the internal round trip delay within the
+   reporting endpoint, calculated using the nominal value of the jitter
+   buffer delay plus the accumulation/ encoding and decoding / playout
+   delay associated with the codec being used.
+</t><t>
+   If the measured or estimated value exceeds 0xFFFD, the value 0xFFFE
+   SHOULD be reported to indicate an over-range measurement.  If the
+   measurement is unavailable, the value 0xFFFF SHOULD be reported.
+</t>
+</list>
+</t>
+<t>
+Min Network Round Trip Delay (ms): 16 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+   The Min Network Round Trip Delay is the minimum value of
+   the RTP-to-RTP interface round trip delay in ms over the measurement period, 
+typically determined using RTCP SR/RR.
+</t><t>
+If only one measurement of Round Trip Delay is available for the timespan of the report (whether Interval or Cumulative),
+this single value should be reported as the minimum value.
+</t><t>
+   If the measured value exceeds 0xFFFD, the value 0xFFFE SHOULD be
+   reported to indicate an over-range measurement.  If the measurement
+   is unavailable, the value 0xFFFF SHOULD be reported.
+</t>
+</list>
+</t>
+<t>
+Max Network Round Trip Delay (ms): 16 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+   The Max Network Round Trip Delay is the maximum value of
+   the RTP-to-RTP interface round trip delay in ms over the measurement period, 
+typically determined using RTCP SR/RR.
+</t><t>
+If only one measurement of Round Trip Delay is available for the timespan of the report (whether Interval or Cumulative),
+this single value should be reported as the maximum value.
+</t><t>
+   If the measured value exceeds 0xFFFD, the value 0xFFFE SHOULD be
+   reported to indicate an over-range measurement.  If the measurement
+   is unavailable, the value 0xFFFF SHOULD be reported.
+</t>
+</list>
+</t>
+</section>
+</section>
+
+<section anchor='sdp' title="SDP Signaling">
+<t>
+   <xref target='RFC3611'/> defines the use of SDP (Session Description Protocol) 
+   <xref target='RFC4566'/> for signaling the use of XR blocks.  XR blocks MAY be used without
+   prior signaling.
+</t>
+<t>
+   This section augments the SDP <xref target='RFC4566'/> attribute "rtcp-xr" defined in 
+   <xref target='RFC3611'/> by providing an additional value of "xr-format" to signal the use of the report
+   block defined in this document. 
+</t><t>
+     rtcp-xr-attrib = "a=" "rtcp-xr" ":" [xr-format *(SP xr-format)] CRLF
+</t><t>
+     (defined in <xref target='RFC3611'/>)
+</t><t>
+     xr-format = xr-format / 
+                xr-delay-block
+</t><t>
+     xr-delay-block   = "delay"
+</t>
+</section>
+
+<section title="IANA Considerations">
+<t>
+   New block types for RTCP XR are subject to IANA registration.  For
+   general guidelines on IANA considerations for RTCP XR, refer to
+   [RFC3611].
+</t>
+<section title="New RTCP XR Block Type value">
+<t>   
+   This document assigns the block type value NDEL in the IANA "RTCP XR Block
+   Type Registry" to the "Delay Metrics Block".
+</t>
+<t>
+[Note to RFC Editor: please replace NDEL with the
+         IANA provided RTCP XR block type for this block.]
+</t>
+</section>
+<section title="New RTCP XR SDP Parameter">
+<t>
+This document also registers a new
+   parameter "delay" in the "RTCP XR SDP Parameters Registry".
+</t>
+</section>
+<section title="Contact information for registrations">
+<t>
+   The contact information for the registrations is:
+</t>
+<t>
+   Geoff Hunt (geoff.hunt@bt.com)
+</t>
+<t>
+   Orion 2 PP3, Adastral Park, Martlesham Heath, Ipswich IP5 3RE, United Kingdom
+</t>
+</section>
+</section>
+
+<section title="Security Considerations">
+<t>
+   It is believed that this proposed RTCP XR report block introduces no
+   new security considerations beyond those described in <xref target='RFC3611'/>.  This block does not provide 
+   per-packet statistics so the risk
+   to confidentiality documented in Section 7, paragraph 3 of <xref target='RFC3611'/> does
+   not apply.
+</t>
+</section>
+<section title="Contributors">
+<t>
+   The authors gratefully acknowledge the comments and contributions
+   made by Bruce Adams, Philip Arden, Amit Arora, Bob Biskner, Kevin Connor, Claus Dahm, Randy Ethier, 
+   Roni Even, Jim Frauenthal, Albert Higashi, Tom Hock, 
+   Shane Holthaus, Paul Jones, Rajesh Kumar, Keith Lantz, Mohamed Mostafa, Amy Pendleton, 
+   Colin Perkins, Mike Ramalho, 
+   Ravi Raviraj,
+   Albrecht Schwarz, Tom Taylor, and Hideaki Yamada.
+</t>
+</section>
+<section title="Changes from previous version">
+<t>
+Expanded and clarified IANA Considerations section.
+</t>
+<t>
+Changed SDP tag for block to "delay".
+</t>
+</section>
+</middle>
+
+    <back>
+<references title='Normative References'>
+                <reference anchor='MEASIDENT'>
+			<front> 
+				<title>RTCP XR Measurement Identifier Block</title> 
+				<author initials='G.' surname='Hunt' fullname='Geoff Hunt'> 
+					<organization>BT</organization> 
+				</author> 
+				<date month='February' year='2009' /> 
+			</front> 
+			<seriesInfo name='ID' value='draft-ietf-avt-rtcp-xr-measid-01' /> 	
+			<format type='TXT' /> 
+		</reference>
+                <reference anchor='RFC3550'>
+			<front> 
+				<title>RTP: A Transport Protocol for Real-Time Applications</title> 
+				<author initials='H.' surname='Schulzrinne' fullname='Henning Schulzrinne'> 
+					<organization>Columbia University</organization> 
+				</author> 
+				<date month='July' year='2003' /> 
+			</front> 
+			<seriesInfo name='RFC' value='3550' /> 	
+			<format type='TXT' /> 
+		</reference>
+                <reference anchor='RFC3611'>
+			<front> 
+				<title>RTP Control Protocol Extended Reports (RTCP XR)</title> 
+				<author initials='T. (Ed)' surname='Friedman' fullname='Timur Friedman'> 
+					<organization> Paris 6 </organization> 
+				</author> 
+				<date month='November' year='2003' /> 
+			</front> 
+			<seriesInfo name='RFC' value='3611' /> 	
+			<format type='TXT' /> 
+		</reference>
+                <reference anchor='RFC2119'>
+			<front> 
+				<title>Key words for use in RFCs to Indicate Requirement Levels</title> 
+				<author initials='S.' surname='Bradner' fullname='Scott Bradner'> 
+					<organization>Harvard University</organization> 
+				</author> 
+				<date month='March' year='1997' /> 
+			</front> 
+			<seriesInfo name='RFC' value='2119' /> 	
+			<seriesInfo name='BCP' value='14' /> 	
+			<format type='TXT' /> 
+		</reference>
+                <reference anchor='RFC4566'>
+			<front> 
+				<title>SDP: Session Description Protocol</title> 
+				<author initials='M.' surname='Handley' fullname='Mark Handley'> 
+					<organization>UCL</organization> 
+				</author> 
+				<date month='July' year='2006' /> 
+			</front> 
+			<seriesInfo name='RFC' value='4566'/>
+			<format type='TXT' /> 
+		</reference>
+</references>
+        <references title='Informative References'>
+		<reference anchor='PMOLFRAME'>
+			<front>
+                                <title>Framework for Performance Metric Development</title> 
+                                <author initials='A.' surname='Clark' fullname='Alan Clark'> 
+                                        <organization>Telchemy Incorporated</organization> 
+				</author> 
+                                <date month='July' year='2008' /> 
+			</front> 
+                        <seriesInfo name='ID' value='draft-ietf-pmol-metrics-framework-00' />  
+			<format type='TXT' /> 
+            </reference>
+                <reference anchor='MONARCH'>
+			<front> 
+				<title>Monitoring Architectures for RTP</title> 
+				<author initials='G.' surname='Hunt' fullname='Geoff Hunt'> 
+					<organization>BT</organization> 
+				</author> 
+				<date month='August' year='2008' /> 
+			</front> 
+			<seriesInfo name='ID' value='draft-hunt-avt-monarch-01' /> 	
+			<format type='TXT' /> 
+		</reference>
+	</references>
+    </back>
+
+</rfc>

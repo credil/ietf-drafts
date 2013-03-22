@@ -1,0 +1,1557 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<rfc category="std" docName="draft-ietf-dccp-simul-open-08" ipr="trust200811"
+     updates="4340">
+  <?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+  <?rfc toc="yes" ?>
+
+  <?rfc sortrefs="yes"?>
+
+  <?rfc symrefs="yes" ?>
+
+  <!--
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+-->
+
+  <front>
+    <title abbrev="DCCP Simultaneous-Open Technique">DCCP Simultaneous-Open
+    Technique to Facilitate NAT/Middlebox Traversal</title>
+
+    <author fullname="Godred Fairhurst" initials="G." surname="Fairhurst">
+      <organization>University of Aberdeen</organization>
+
+      <address>
+        <postal>
+          <street>School of Engineering</street>
+
+          <street>Fraser Noble Building</street>
+
+          <city>Aberdeen</city>
+
+          <code>AB24 3UE</code>
+
+          <country>Scotland</country>
+        </postal>
+
+        <email>gorry@erg.abdn.ac.uk</email>
+
+        <uri>http://www.erg.abdn.ac.uk</uri>
+      </address>
+    </author>
+
+    <date day="02" month="May" year="2009" />
+
+    <area>Transport</area>
+
+    <workgroup>DCCP Working Group</workgroup>
+
+    <keyword>DCCP</keyword>
+
+    <keyword>NAT traversal</keyword>
+
+    <keyword>Middlebox Issues</keyword>
+
+    <keyword>Internet-Draft</keyword>
+
+    <abstract>
+      <t>This document specifies an update to the Datagram Congestion Control
+      Protocol (DCCP), a connection-oriented and datagram-based transport
+      protocol. The update adds support for the DCCP-Listen packet. This
+      assists DCCP applications to communicate through middleboxes (e.g. a
+      DCCP server behind a firewall, or a Network Address Port Translator),
+      where peering endpoints need to initiate communication in a
+      near-simultaneous manner to establish necessary middlebox state.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section anchor="intro" title="Introduction">
+      <t>The Datagram Congestion Control Protocol (DCCP) <xref
+      target="RFC4340"></xref> is both datagram-based and connection-oriented.
+      According to RFC 4340, DCCP servers establish connections by passively
+      listening for incoming connection requests that are actively transmitted
+      by DCCP clients. These asymmetric roles can cause problems when the
+      server is 'inside' a middlebox, such as a Network Address and Port
+      Translator (NAPT) that only allows connection requests to be initiated
+      from inside (e.g. due to port overloading) <xref
+      target="ID-BEHAVE-DCCP"></xref>. Host-based and network firewalls can
+      also implement policies that lead to similar problems. This behaviour is
+      currently the default for many firewalls.</t>
+
+      <t>UDP can support middlebox traversal using various techniques <xref
+      target="RFC4787"></xref> that leverage the connectionless nature of UDP
+      and are therefore not suitable for DCCP. TCP supports middlebox
+      traversal through the use of its simultaneous open procedure <xref
+      target="RFC5382"></xref>. The concepts of the TCP solution are
+      applicable to DCCP, but DCCP can not simply reuse the same methods (see
+      Appendix A).</t>
+
+      <t>After discussing the problem space for DCCP, this document specifies
+      an update to the DCCP state machine to offer native support to allow a
+      DCCP client to establish a connection to a DCCP server that is inside
+      one or more middleboxes. This reduces dependence on external aids such
+      as data relay servers <xref target="ID-BEHAVE-TURN"></xref> by
+      explicitly supporting a widely used principle known as 'hole
+      punching'.</t>
+
+      <t>The method requires only a minor change to the standard DCCP
+      operational procedure. The use of a dedicated DCCP packet type ties
+      usage to a specific condition, ensuring the method is inter-operable
+      with hosts that do not implement this update, or choose to disable it
+      (see Section 4).</t>
+
+      <section anchor="intro1" title="Scope of this Document">
+        <t>This method is useful in scenarios when a DCCP server is located
+        inside the perimeter controlled by a middlebox. It is relevant to both
+        client/server and peer-to-peer applications, such as VoIP, file
+        sharing, or online gaming and assists connections that utilise prior
+        out-of-band signaling (e.g. via a well-known rendezvous server (<xref
+        target="RFC3261"></xref>, <xref target="H.323"></xref>)) to notify
+        both endpoints of the connection parameters (<xref
+        target="RFC3235"></xref>, <xref target="NAT-APP"></xref>).</t>
+      </section>
+
+      <section title="DCCP NAT Traversal">
+        <t>The behavioural requirements for NAT devices supporting DCCP are
+        described in <xref target="ID-BEHAVE-DCCP"></xref>. A "traditional
+        NAT" <xref target="RFC3022"></xref>, that directly maps an IP address
+        to a different IP address does not require the simultaneous open
+        method described in this document.</t>
+
+        <t>The method is required when the DCCP server is positioned behind
+        one or more NAPT devices in the path (hierarchies of nested NAPT
+        devices are possible). This document refers to DCCP hosts located
+        inside the perimeter controlled by one or more NAPT devices as having
+        "private" addresses, and to DCCP hosts located in the global address
+        realm as having "public" addresses.</t>
+
+        <t>DCCP NAT traversal is considered for the following scenarios:</t>
+
+        <t><list style="numbers">
+            <t>Private client connects to public server.</t>
+
+            <t>Public client connects to private server.</t>
+
+            <t>Private client connects to private server.</t>
+          </list></t>
+
+        <t>A defining characteristic of traditional NAT devices <xref
+        target="RFC3022"></xref> is that private hosts can connect to external
+        hosts, but not vice versa. Hence the case (1) is possible using the
+        protocol defined in <xref target="RFC4340"></xref>. A pre-configured,
+        static NAT address map would allow outside hosts to connections in
+        cases (2) and (3).</t>
+
+        <t>A DCCP implementation conforming to <xref target="RFC4340"></xref>
+        and a NAT device conforming to <xref target="ID-BEHAVE-DCCP"></xref>
+        would require a DCCP relay server to perform NAT traversal for cases
+        (2) and (3).</t>
+
+        <t>This document describes a method to support cases (2) and (3)
+        without the aid of a DCCP relay server. This method updates RFC 4340
+        and requires the DCCP server to discover the IP address and the DCCP
+        port that correspond to the DCCP client. Such signalling may be
+        performed out-of-band (e.g. using SDP <xref
+        target="RFC4566"></xref>).</t>
+      </section>
+
+      <section anchor="intro3" title="Structure of this Document">
+        <t>For background information on existing NAT traversal techniques,
+        please consult <xref target="BGND"></xref>.</t>
+
+        <t>The normative specification of the update is presented in <xref
+        target="SPEC"></xref>. An informative discussion of underlying design
+        decisions then follows, in <xref target="rationale"></xref>. Security
+        considerations are provided in <xref target="SECURITY"></xref> and
+        IANA considerations in the concluding <xref target="IANA"></xref>.</t>
+      </section>
+    </section>
+
+    <!-- introduction -->
+
+    <section anchor="SPEC" title="Procedure for Near-Simultaneous Open">
+      <t>This section is normative and specifies the simultaneous-open
+      technique for DCCP. It updates the connection-establishment procedures
+      of <xref target="RFC4340"></xref>.</t>
+
+      <section title="Conventions and Terminology">
+        <t>The document uses the terms and definitions provided in <xref
+        target="RFC4340"></xref>. Familiarity with this specification is
+        assumed. In particular, the following convention from (<xref
+        target="RFC4340"></xref>, 3.2) is used: <list style="empty">
+            <t>"Each DCCP connection runs between two hosts, which we often
+            name DCCP A and DCCP B. Each connection is actively initiated by
+            one of the hosts, which we call the client; the other, initially
+            passive host is called the server."</t>
+          </list></t>
+
+        <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+        "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+        document are to be interpreted as described in <xref
+        target="RFC2119"></xref>.</t>
+      </section>
+
+      <section anchor="protocol_method" title="Protocol Method">
+        <t>The term "session" is used as defined in (<xref
+        target="RFC2663"></xref>, 2.3): DCCP sessions are uniquely identified
+        by the tuple of &lt;source IP-address, source port, target IP-address,
+        target port&gt;.</t>
+
+        <t>DCCP, in addition, introduces Service Codes, which can be used to
+        identify different services available via the same port <xref
+        target="ID-DCCP-SC"></xref>.</t>
+
+        <section anchor="listen_packet" title="DCCP-Listen Packet Format">
+          <t>This document adds a new DCCP packet type, DCCP-Listen, whose
+          format is shown below.</t>
+
+          <figure anchor="listen_packet_format"
+                  title="Format of a DCCP-Listen Packet">
+            <artwork><![CDATA[
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|          Source Port          |           Dest Port           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|  Data Offset  | CCVal | CsCov |           Checksum            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| Res | Type  |X|   Reserved    |  Sequence Number High Bits    |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Sequence Number Low Bits                   |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                         Service Code                          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+]]></artwork>
+          </figure>
+
+          <t>
+            <list style="symbols">
+              <t>The Source Port is the port on which the DCCP server is
+              listening for a connection from the IP address that appears as
+              the destination IP address in the packet.</t>
+
+              <t>The Destination Port is the port selected by a DCCP client to
+              identify a connection by the DCCP client. In this technique,
+              this value must be communicated out-of-band to the server.</t>
+
+              <t>The value of X MUST be set to 1. A DCCP-Listen packet is sent
+              before a connection is established, therefore there is no way to
+              negotiate use of short sequence numbers (<xref
+              target="RFC4340" />, 5.1).</t>
+
+              <t>The value of the sequence number field in a DCCP-Listen
+              packet is not related to the DCCP sequence number used in normal
+              DCCP messages (see <xref target="rationale" /> for a description
+              of the use of the DCCP sequence number). Thus, for DCCP-Listen
+              packets:<list style="symbols">
+                  <t>A DCCP server SHOULD set the high and low bits of the
+                  Sequence Number field to 0.</t>
+
+                  <t>A DCCP client MUST ignore the value of the Sequence
+                  Number field.</t>
+
+                  <t>Middleboxes MUST NOT interpret sequence numbers on
+                  DCCP-Listen packets.</t>
+                </list></t>
+
+              <t>The Service Code field contains the Service Code value for
+              which the server is listening for a connection (<xref
+              target="RFC4340" />, 8.1.2, <xref target="ID-DCCP-SC" />). This
+              value MUST correspond to a Service Code that the server is
+              actually offering for a connection identified by the same source
+              IP address and the same Source Port as that of the DCCP-Listen
+              packet. Since the server may use multiple Service Codes, the
+              specific value of the Service Code field needs to be
+              communicated out-of-band, from client to server, prior to
+              sending the DCCP-Listen packet, e.g. described using the Session
+              Description Protocol, SDP <xref target="RFC4566" />.</t>
+
+              <t>At the time of writing, there are no known uses of header
+              options (<xref target="RFC4340" /> , sec. 5.8) with a
+              DCCP-Listen packet. Clients MUST ignore all options in received
+              DCCP-Listen packets. Therefore, feature values can not be
+              negotiated using a DCCP-Listen packet.</t>
+
+              <t>At the time of writing, there are no known uses of payload
+              data with a DCCP-Listen packet. Since DCCP-Listen packets are
+              issued before an actual connection is established, endpoints
+              MUST ignore any payload data encountered in DCCP-Listen
+              packets.</t>
+
+              <t>The following protocol fields are required to have specific
+              values:<list style="symbols">
+                  <t>Data Offset MUST have a value of five or more (i.e. at
+                  least 20 bytes).</t>
+
+                  <t>CCVal MUST be zero (a connection has not been
+                  established).</t>
+
+                  <t>CsCov MUST be zero (use of the CsCov feature can not be
+                  negotiated).</t>
+
+                  <t>Type has the value 10, assigned by IANA to denote a
+                  DCCP-Listen packet.</t>
+
+                  <t>X MUST be 1 (the Generic header must be used).</t>
+                </list></t>
+            </list>
+          </t>
+
+          <t>The remaining fields, including the "Res" and "Reserved" fields
+          are specified by <xref target="RFC4340" /> and its successors. The
+          interpretation of these fields is not modified by this document.</t>
+
+          <note title="Note to the RFC Editor:">
+            <t>This value assigned to the DCCP-Listen packet needs to be
+            confirmed by IANA when this document is published. Please then
+            remove this note.</t>
+
+            <t>==&gt; End of note to the RFC Editor. &lt;==</t>
+          </note>
+        </section>
+
+        <section title="Protocol Method for DCCP Server Endpoints">
+          <t>This document updates section 8.1 of <xref
+          target="RFC4340"></xref> for the case of a fully specified DCCP
+          server endpoint. The update modifies the way the server performs a
+          passive-open.</t>
+
+          <t>Prior to connection setup, it is common for a DCCP server
+          endpoint to not be fully specified: before the connection is
+          established, a server usually specifies only the destination port,
+          and Service Code. (Sometimes the destination address is also
+          specified.) This leaves the source address and source port
+          unspecified. The endpoint only becomes fully specified after
+          performing the handshake for an incoming connection. For such cases,
+          this document does not update <xref target="RFC4340"></xref>, i.e.
+          the server adheres to the existing state transitions in the left
+          half of <xref target="state_diagram"></xref> (CLOSED =&gt; LISTEN
+          =&gt; RESPOND).</t>
+
+          <t>A fully specified DCCP server endpoint permits exactly one
+          client, identified by source IP-address:port, destination
+          IP-address:port, plus a single Service Code, to set up the
+          connection. Such a server SHOULD perform the actions and state
+          transitions shown in the right half of <xref
+          target="state_diagram"></xref> in section 8.4, and specified
+          below.</t>
+
+          <figure anchor="state_diagram"
+                  title="Updated state transition diagram for DCCP-Listen">
+            <artwork><![CDATA[
+        unspecified remote   +--------+   fully specified remote
+       +---------------------| CLOSED |---------------------+
+       |                     +--------+   send DCCP-Listen  |
+       |                                                    |
+       v                                                    v
+  +--------+                                  timeout  +---------+
+  | LISTEN |                           +---+-----------| INVITED |
+  +--------+                           |   |           +---------+
+       |                               |   |  1st / 2nd  ^  |
+       |                 more than 2   |   |  retransm.  |  | receive
+       |               retransmissions |   +-------------+  | Request
+       |                               |    resend Listen   v
+       |                               |               +---------+
+       |                               +-------------->| LISTEN1 |
+       |                                               +---------+
+       |                                                    |
+       |  receive Request   +---------+    receive Request* |
+       +------------------->| RESPOND |<--------------------+
+          send Response     +---------+    send Response
+
+* Note: A server that responds a DCCP-Request in the INVITED state, 
+transitions to the LISTEN1 state and then immediately transitions 
+to the RESPOND state. This does not require reception of an 
+additional DCCP-Request packet.
+
+]]></artwork>
+          </figure>
+
+          <t>This diagram introduces two additional DCCP server states in
+          addition to those listed in section 4.3 of <xref
+          target="RFC4340"></xref>:</t>
+
+          <t><list style="symbols">
+              <t>INVITED The INVITED state is associated with a specific DCCP
+              connection and represents a fully-specified server socket in the
+              listening state that is generating DCCP-Listen packets towards
+              the client.</t>
+
+              <t>LISTEN1 The LISTEN1 state is associated with a specific DCCP
+              connection and represents a fully-specified server socket in the
+              passive listening state that will not generate further
+              DCCP-Listen packets towards the client.</t>
+            </list></t>
+
+          <t>A fully specified server endpoint performs a passive-open from
+          the CLOSED state by inviting the remote client to connect. This is
+          performed by sending a single DCCP-Listen packet to the specified
+          remote IP-address:port, using the format specified in <xref
+          target="listen_packet"></xref>. The figure below provides pseudocode
+          describing the packet processing in the INVITED state. This
+          processing step follows Step 2 in section 8,5 of <xref
+          target="RFC4340"></xref>).</t>
+
+          <t>The INVITED state is, like LISTEN, a passive state, characterised
+          by waiting in the absence of an established connection. If the
+          server endpoint in the INVITED state receives a DCCP-Request that
+          matches the set of bound ports and addresses, it transitions to the
+          LISTEN' state and then immediately transitions to the RESPOND state,
+          where further processing resumes as specified in <xref
+          target="RFC4340"></xref>.</t>
+
+          <t>The server SHOULD repeat sending a DCCP-Listen packet while in
+          the INVITED state, at a 200 millisecond interval with up to at most
+          2 repetitions (<xref target="rationale"></xref> discusses this
+          choice of time interval). If the server is still in the INVITED
+          state after a further period of 200ms following transmission of the
+          third DCCP-Listen packet, it SHOULD progress to the
+          LISTEN1state.</t>
+
+          <t>Fully specified server endpoints SHOULD treat ICMP error messages
+          received in response to a DCCP-Listen packet as "soft errors" that
+          do not cause a state transition. Reception of an ICMP error message
+          as a result of sending a DCCP-Listen packet does not necessarily
+          indicate a failure of the following connection request, and
+          therefore should not result in a server state change. This reaction
+          to soft errors exploits the valuable feature of the Internet that
+          for many network failures, the network can be dynamically
+          reconstructed without any disruption of the endpoints.</t>
+
+          <t>Server endpoints SHOULD ignore any incoming DCCP-Listen packets.
+          A DCCP server in the LISTEN, INVITED, or LISTEN1states MAY generate
+          a DCCP-Reset packet (Code 7, "Connection Refused") in response to a
+          received DCCP-Listen packet. This DCCP-Reset packet is an indication
+          that two servers are simultaneously awaiting connections on the same
+          port.</t>
+
+          <t>Further details on the design rationale are discussed in <xref
+          target="rationale"></xref>.</t>
+
+          <t>The figure below provides pseudocode describing the packet
+          processing in the INVITED state. This processing step follows Step 2
+          in section 8.5 of RFC 4340 <xref target="RFC4340"></xref></t>
+
+          <figure anchor="pseudocode"
+                  title="Updated DCCP pseudocode for INVITED and LISTEN' states">
+            <artwork><![CDATA[
+ Step 2a: Process INVITED state
+   If S.state == INVITED,
+       /* State only entered for fully-specified server endpoints */
+       /* on entry S will have been set to a socket */
+       If P.type == Request
+          /* Exit INVITED state and continue to process the packet */
+          S.state = LISTEN1
+          Continue with S.state := LISTEN1
+       Otherwise,
+          If P.type == Listen
+             /* The following line is optional */
+             Generate Reset(Connection Refused)
+             /* otherwise Drop packet and return */
+          Otherwise,
+             Generate Reset(No Connection) unless P.type == Reset
+
+ Step 2b: Process LISTEN1 state
+   If S.state == LISTEN1,
+       /* State only entered for fully-specified server endpoints */
+       /* Follows receipt of a Response packet */
+       /* or sending third Listen packet (after timer expiry) */
+       If P.type == Request,
+          S.state = RESPOND
+          Choose S.ISS (initial seqno) or set from Init Cookies
+          Initialize S.GAR := S.ISS
+          Set S.ISR, S.GSR, S.SWL, S.SWH from packet or Init Cookies
+          Continue with S.state == RESPOND
+          /* A Response packet will be generated in Step 11 */
+       Otherwise,
+          If P.type == Listen
+             /* The following line is optional */
+             Generate Reset(Connection Refused)
+             /* otherwise Drop packet and return */
+          Otherwise,
+             Generate Reset(No Connection) unless P.type == Reset
+]]></artwork>
+          </figure>
+        </section>
+
+        <section title="Protocol Method for DCCP Client Endpoints">
+          <t>This document updates section 8.1.1 of <xref
+          target="RFC4340"></xref>, by adding the following rule for the
+          reception of DCCP-Listen packets by clients:</t>
+
+          <t>A client in any state MUST silently discard any received
+          DCCP-Listen packet, unless it implements the optional procedure
+          defined in the following section.</t>
+
+          <section title="Optional generation of Triggered Requests">
+            <t>This section describes an optional optimisation at the client
+            that can avoid clients having to wait for a timeout following a
+            dropped DCCP-Request. The operation requires clients to respond to
+            reception of DCCP-Listen packets when received in the REQUEST
+            state. DCCP-Listen packets MUST be silently discarded in all other
+            states.</t>
+
+            <t>A client implementing this optmisation MAY immediately perform
+            a retransmission of a DCCP-Request following the reception of the
+            first DCCP-Listen packet. The retransmission is performed in the
+            same manner as a timeout in the REQUEST state <xref
+            target="RFC4340"></xref>. A triggered retransmission SHOULD result
+            in the client increasing the exponential-backoff timer
+            interval.</t>
+
+            <t>Note that a path delay greater than 200ms will result in
+            multiple DCCP-Listen packets arriving at the client before a
+            DCCP-Response is received. Clients MUST therefore perform only one
+            such retransmission for each DCCP connection. This requires
+            maintaining local state (e.g. one flag per connection)</t>
+
+            <t>Implementors and users of this optional method need to be aware
+            that host timing or path reordering can result in a server
+            receiving two DCCP-Requests (i.e., the server sending one
+            unnecessary packet). This would, in turn, trigger a client to send
+            a second corresponding DCCP-Response (also unnecessary). These
+            additional packets are not expected to modify or delay the DCCP
+            open procedure <xref target="RFC4340"></xref>.</t>
+
+            <t>Section 2.3.2 provides examples of the use of triggered
+            retransmission.</t>
+          </section>
+
+          <!---->
+        </section>
+
+        <section title="Processing by Routers and Middleboxes">
+          <t>DCCP-Listen packets do not require special treatment and should
+          thus be forwarded end-to-end across Internet paths, by routers and
+          middleboxes alike.</t>
+
+          <t>Middleboxes may utilise the connection information (address,
+          port, Service Code) to establish local forwarding state. The
+          DCCP-Listen packet carries the necessary information to uniquely
+          identify a DCCP session in combination with the source and
+          destination addresses (found in the enclosing IP-header), including
+          the DCCP Service Code value <xref target="ID-DCCP-SC"></xref>. The
+          processing of the DCCP-Listen packet by NAT devices is specified in
+          <xref target="ID-BEHAVE-DCCP"></xref>.</t>
+        </section>
+      </section>
+
+      <!-- Protocol Method -->
+
+      <section title="Examples of Use">
+        <t>In the examples below, DCCP A is the client and DCCP B is the
+        server. A middlebox device (NAT/Firewall), NA is placed before DCCP A,
+        and another middlebox, NB, is placed before DCCP B. Both NA and NB use
+        a policy that permits DCCP packets to traverse the device for outgoing
+        links, but only permit incoming DCCP packets when a previous packet
+        has been sent out for the same connection.</t>
+
+        <t>In the figure below, DCCP A and DCCP B decide to communicate using
+        an out-of-band mechanism (in this case labelled SDP), whereupon the
+        client and server are started. DCCP B actively indicates its listening
+        state by sending a DCCP-Listen message. This fulfils the requirement
+        of punching a hole in NB (also creating the binding to the external
+        address and port). This message is dropped by NA since no hole exists
+        there yet. DCCP A initiates a connection by entering the REQUEST state
+        and sending a DCCP-Request. (It is assumed that if NA were a NAT
+        device, then this would also result in a binding that maps the pinhole
+        to the external address and port.) The DCCP-Request is received by
+        DCCP B, via the binding at NB. DCCP B transmits the DCCP-Response and
+        connects through the bindings now in place at NA and NB.</t>
+
+        <figure anchor="server_before_client"
+                title="Event sequence when the server is started before the client">
+          <artwork><![CDATA[
+ DCCP A                                        DCCP B
+ ------               NA      NB               ------
+ +-----------------+  +-+    +-+  +-----------------+
+ |                 |  | |    | |  |                 | State = CLOSED
+ | SDP -->         |--+-+----+-+->|                 | State = INVITED
+ |                 |  | |X---+-+--|<-- DCCP-Listen  |
+ |(State=REQUEST)  |  | |    | |  |                 |
+ |DCCP-Request --> |--+-+----+-+->|                 |
+ |(State=PARTOPEN) | <+-+----+-+--|<-- DCCP-Response| State = RESPOND
+ |DCCP-Ack -->     |--+-+----+-+> |                 |
+ |                 |  | |    | |  |                 |
+ |                 |  | |    | |  |                 |
+ |DCCP-Data -->    |--+-+----+-+->|                 | State = OPEN
+ +-----------------+  +-+    +-+  +-----------------+
+]]></artwork>
+        </figure>
+
+        <t></t>
+
+        <section title="Repetition of DCCP-Listen">
+          <t>This section examines the effect of not receiving the
+          DCCP-Request.</t>
+
+          <t>The figure below shows the sequence of packets where the DCCP
+          server enters the INVITED state after reception of out-of-band
+          signaling (e.g. SDP). The key timer operations at the client and
+          server are respectively shown on the left and right of the diagram.
+          It considers the case when the server does not receive a
+          DCCP-Request within the first 600 ms (often the request would be
+          received within this interval).</t>
+
+          <t>The repetition of DCCP-Listen packets may be implemented using a
+          timer. The timer is restarted with an interval of 200ms when sending
+          each DCCP-Listen packet. It is cancelled when the server leaves the
+          INVITED state. If the timer expires after the first and second
+          transmission, it triggers a transmission of another DCCP-Listen
+          Packet. If it expires after sending the third DCCP-Listen packet,
+          the server leaves the INVITED state, to enter the LISTEN1state
+          (where it passively waits for a DCCP-Request).</t>
+
+          <figure anchor="retx" title="Repetition of the DCCP-Listen Packet">
+            <artwork><![CDATA[
+             DCCP A                           DCCP B
+             ------  NA      NB               ------
+             +----+  +-+    +-+  +-----------------+
+             |    |  | |    | |  |                 | State = CLOSED
+             | -->|--+-+----+-+--|--> SDP          |
+             |    |  | |    | |  |                 | State = INVITED
+             |    |  | |    | |  |                 |
+             |    |  | |X---+-+--|<-- DCCP-Listen  | Timer Starts
+             |    |  | |    | |  |                 |      |
+DCCP-Request | -->|--->+--X | |  |   (dropped)     |      |
+Timer Starts |    |  | |    | |  |                 |      |
+      |      |    |  | |    | |  |                 | 1st Timer Expiry
+      |      |    |<-+-+----+++--|<-- DCCP-Listen  |
+      |      |    |  | |    | |  |                 | Timer Starts
+      |      |    |  | |    | |  |                 |       |
+      |      |    |  | |    | |  |                 | 2nd Timer Expiry
+      |      |    |  | |    | |  |                 |
+      |      |    |<-+-+----+-+--|<-- DCCP-Listen  | Timer Starts
+      |      |    |  | |    | |  |                 |       |
+      |      |    |  | |    | |  |                 | 3rd Timer Expiry
+      |      |    |  | |    | |  |                 |
+      |      |    |  | |    | |  |                 | State = LISTEN1
+      |      ~    ~  ~ ~    ~ ~  ~                 ~
+      |      |    |  | |    | |  |                 |
+Timer Expiry | -->|--+-+----+-+--|--> DCCP-Request |
+             |    |  | |    | |  |                 | State = RESPOND
+             | <--|--+-+----+-+--|<-- DCCP-Response|
+             +----+  +-+    +-+  +-----------------+
+]]></artwork>
+          </figure>
+        </section>
+
+        <section title="Optional Triggered Retransmission of DCCP-Request">
+          <t>The following figure illustrates a triggered retransmission. In
+          this figure, the first DCCP-Listen is assumed to be lost in the
+          network (e.g. does not open a pin-hole at NB). A later DCCP-Request
+          is also not received (perhaps as a side-effect of the first loss).
+          After 200ms, the DCCP-Listen packet is retransmitted and correctly
+          received. This triggers the retransmission of the DCCP-Request,
+          which, when received, results in a corresponding DCCP-Response.</t>
+
+          <t><figure anchor="triggered"
+              title="Example showing a triggered DCCP-Request">
+              <artwork><![CDATA[
+DCCP A                                         DCCP B
+------               NA      NB               ------
++-----------------+  +-+    +-+  +-----------------+
+|                 |  | |    | |  |                 | State = CLOSED
+|SDP              |--+-+----+-+->|                 | State = INVITED
+|(State= REQUEST) |  | |    | |  |                 |
+|                 |  | |    | |X-|<-- DCCP-Listen  |
+|DCCP-Request --> |--+-+---X| |  |                 |
+|                 | <+-+----+-+--|<-- DCCP-Listen  |(retransmit)
+|                 |  | |    | |  |                 |
+|DCCP-Request --> |--+-+----+-+->|                 | State = RESPOND
+|  (Triggered)    |  | |    | |  |                 |
+|                 |<-+-+----+-+--|<-- DCCP-Response|
+|(State= PARTOPEN)|  | |    | |  |                 | 
+|DCCP-Ack -->     |--+-+----+-+->|                 | State = OPEN
++-----------------+  +-+    +-+  +-----------------+
+]]></artwork>
+            </figure>The figure below illustrates the sequence of packets
+          exchanged when a DCCP-Listen and DCCP-Request are processed out of
+          order. Reception of the DCCP-Listen packet by the client triggers
+          retransmission of the DCCP-Request. The server responds to the first
+          DCCP-Request, and enters the RESPOND state. The server subsequently
+          responds to the second DCCP-Request with another DCCP-Response,
+          which is ignored by the client (already in the PARTOPEN
+          state).<figure anchor="triggered2"
+              title="Example showing an unnecessary triggered DCCP-Request">
+              <artwork><![CDATA[
+DCCP A                                        DCCP B
+------                NA     NB              ------
++-----------------+  +-+    +-+  +-----------------+
+|                 |  | |    | |  |                 | State = CLOSED
+|SDP              |--+-+----+-+->|                 | State = INVITED
+|(State = REQUEST)|  | |    | |  |                 |
+|DCCP-Request --> |--+-+-  -+-+--|<-- DCCP-Listen  |
+|                 |  | | \/ | |  |                 |
+|                 |  | | /\ | |  |                 |
+|                 |<-+-+-  -+-+->|                 |
+|DCCP-Request --> |--+-+-  -+-+--|<-- DCCP-Response| State = RESPOND
+|  (Triggered)    |  | | \/ | |  |                 |
+|                 |  | | /\ | |  |                 |
+|                 |<-+-+-  -+-+->|                 |
+|(State= PARTOPEN)|  | |    | |  |                 | 
+|DCCP-Ack     --> |--+-+-  -+-+--|<-- DCCP-Response| 
+|  (Triggered)    |  | | \/ | |  |                 |
+|                 |  | | /\ | |  |                 |
+|  (Ignored)      |<-+-+-  -+-+->|                 | State = OPEN
+|                 |  | |    | |  |                 | 
++-----------------+  +-+    +-+  +-----------------+
+]]></artwork>
+            </figure></t>
+        </section>
+      </section>
+
+      <section title="Backwards Compatibility with RFC 4340">
+        <t>No changes are required if a DCCP client conforming to this
+        document communicates with a DCCP server conforming to <xref
+        target="RFC4340"></xref>.</t>
+
+        <t>If a client implements only <xref target="RFC4340"></xref>, an
+        incoming DCCP-Listen packet would be ignored due to step 1 in <xref
+        target="RFC4340"></xref>, 8.1, which at the same time also conforms to
+        the behaviour specified by this document.</t>
+
+        <t>This document further does not modify communication for any DCCP
+        server that implements a passive-open without fully binding the
+        addresses, ports and Service Codes to be used. The authors therefore
+        do not expect practical deployment problems with existing conformant
+        DCCP implementations.</t>
+      </section>
+    </section>
+
+    <!-- protocol approach -->
+
+    <section anchor="rationale" title="Discussion of Design Decisions">
+      <t>This is an informative section that reviews the rationale for the
+      design of this method.</t>
+
+      <section title="Rationale for a New Packet Type">
+        <t>The DCCP-Listen packet specified in <xref
+        target="listen_packet"></xref> has the same format as the DCCP-Request
+        packet (<xref target="RFC4340"></xref>, 5.1), the only difference is
+        in the value of the Type field. The usage, however, differs. The
+        DCCP-Listen packet serves as an advisory message, not as part of the
+        actual connection setup: sequence numbers have no meaning, and no
+        payload can be communicated.</t>
+
+        <t>A DCCP-Request packet could in theory also have been used for the
+        same purpose. The following arguments were against this:</t>
+
+        <t>The first problem was that of semantic overloading: the
+        DCCP-Request defined in <xref target="RFC4340"></xref> serves a
+        well-defined purpose, being the initial packet of the 3-way handshake.
+        Additional use in the manner of a DCCP-Listen packet would have
+        required DCCP processors to have had two different processing paths:
+        one where a DCCP-Request was interpreted as part of the initial
+        handshake, and another where the same packet was interpreted as an
+        indicator message. This would complicate packet processing in hosts
+        and in particular stateful middleboxes (which may have restricted
+        computational resources).</t>
+
+        <t>The second problem is that a client receiving a DCCP-Request from a
+        server could generate a DCCP-Reset packet if it had not yet entered
+        the REQUEST state (step 7 in <xref target="RFC4340"></xref>, 8.5). The
+        method specified in this document lets client endpoints ignore
+        DCCP-Listen packets. Adding a similar rule for the DCCP-Request packet
+        would have been cumbersome: clients would not have been able to
+        distinguish between a Request meant to be an indicator message and a
+        genuinely erratic connection initiation.</t>
+
+        <t>The third problem is similar, and refers to a client receiving the
+        indication after having itself sent a (connection-initiation)
+        DCCP-Request. Step 7 in section 8.5 of <xref target="RFC4340"></xref>
+        requires the client to reply to an "indicator message" Request from
+        the server with a DCCP-Sync. Since sequence numbers are ignored for
+        this type of message, additional and complex processing would become
+        necessary: either to ask the client not to respond to a DCCP-Request
+        when the request is of type "indicator message"; or ask middleboxes
+        and servers to ignore Sync packets generated in response to "indicator
+        message" DCCP-Requests. Furthermore, since no initial sequence numbers
+        have been negotiated at this stage, sending a DCCP-SyncAck would not
+        be meaningful.</t>
+
+        <t>The use of a separate packet type therefore allows simpler and
+        clearer processing.</t>
+
+        <section title="Use of sequence numbers">
+          <t>Although the DCCP-Listen sequence number fields are ignored, they
+          have been retained in the DCCP-Listen packet header to reuse the
+          generic header format from section 5.1 of <xref
+          target="RFC4340"></xref>.</t>
+
+          <t>DCCP assigns a random initial value to the sequence number when a
+          DCCP connection is established <xref target="RFC4340"></xref>.
+          However, a sender is required to set this value to zero for a
+          DCCP-Listen packet. Both clients and middleboxes are also required
+          to ignore this value.</t>
+
+          <t>The rationale for ignoring the sequence number fields of
+          DCCP-Listen packets is that at the time the DCCP-Listen is
+          exchanged, the endpoints have not yet entered connection setup: the
+          DCCP-Listen packet is sent while the server is still in the
+          passive-open (INVITED) state, i.e. it has not yet allocated state,
+          other than binding to the client's IP-address:port and Service
+          Code.</t>
+        </section>
+      </section>
+
+      <section title="Generation of Listen Packets">
+        <t>A DCCP server SHOULD by default permit generation of DCCP-Listen
+        packets. Since DCCP-Listen packets solve a particular problem with NAT
+        and/or firewall traversal, the generation of DCCP-Listen packets on
+        passive sockets is tied to a condition (binding to an a priori known
+        remote address and Service Code) to ensure this does not interfere
+        with the general case of "normal" DCCP connections (where client
+        addresses are generally not known in advance).</t>
+
+        <t>In the TCP world, the analogue is a transition from LISTEN to
+        SYN_SENT by virtue of sending data: "A fully specified passive call
+        can be made active by the subsequent execution of a SEND" (<xref
+        target="RFC0793"></xref>, 3.8). Unlike TCP, this update does not
+        perform a role-change from passive to active. Like TCP, DCCP-Listen
+        packets are only sent by a DCCP-server when the endpoint is fully
+        specified (<xref target="protocol_method"></xref>).</t>
+      </section>
+
+      <section anchor="listen_repeats"
+               title="Repetition of DCCP-Listen Packets">
+        <t>Repetition is a necessary requirement, to increase robustness and
+        the chance of successful connection establishment when a DCCP-Listen
+        packet is lost due to congestion, link loss, or some other reason.</t>
+
+        <t>The decision to recommend a maximum number of 3 timeouts (2
+        repeated copies of the original DCCP-Listen packet) results from the
+        following considerations: The repeated copies need to be spaced
+        sufficiently far apart in time to avoid suffering from correlated
+        loss. The interval of 200 ms was chosen to accommodate a wide range of
+        wireless and wired network paths.</t>
+
+        <t>Another constraint is given by the retransmission interval for the
+        DCCP-Request (<xref target="RFC4340"></xref>, 8.1.1). To establish
+        state, intermediate systems need to receive a (retransmitted)
+        DCCP-Listen packet before the DCCP-Request times out (1 second). With
+        three timeouts, each spaced 200 milliseconds apart, the overall time
+        is still below one second. On the other hand, the sum of 600
+        milliseconds is sufficiently large to provide for longer one-way
+        delays, such as e.g. found on some wireless links.</t>
+
+        <t>The rationale behind transitioning to the LISTEN1 state after two
+        repetitions is that other problems, independent of establishing
+        middlebox state, may occur (such as delay or loss of the initial
+        DCCP-Request). Any late or retransmitted DCCP-Request packets will
+        then still reach the server allowing connection establishment to
+        successfully complete.</t>
+      </section>
+    </section>
+
+    <!-- discussion of issues -->
+
+    <section anchor="SECURITY" title="Security Considerations">
+      <t>General security considerations for DCCP are described in <xref
+      target="RFC4340"></xref>. Security considerations for Service Codes are
+      further described in <xref target="ID-DCCP-SC"></xref>.</t>
+
+      <t>The method specified in this document generates a DCCP-Listen packet
+      addressed to a specific DCCP client. This exposes the state of a DCCP
+      server that is in a passive listening state (i.e. waiting to accept a
+      connection from a known client).</t>
+
+      <t>The exposed information is not encrypted and therefore could be seen
+      on the network path to the DCCP client. An attacker on this return path
+      could observe a DCCP-Listen packet and then exploit this by spoofing a
+      packet (e.g. DCCP-Request, DCCP-Reset) with the IP addresses, DCCP
+      ports, and Service Code that correspond to the values to be used for the
+      connection. As in other on-path attacks, this could be used to inject
+      data into a connection or to deny a connection request. A similar
+      on-path attack is also possible for any DCCP connection, once the
+      session is initiated by the client (<xref target="RFC4340"></xref>,
+      Section 18).</t>
+
+      <t>The DCCP-Listen packet is only sent in response to explicit prior
+      out-of-band signaling from a DCCP client to the DCCP server (e.g. SDP
+      <xref target="RFC4566"></xref>) information communicated via the Session
+      Initiation Protocol <xref target="RFC3261"></xref>), and will normally
+      directly precede a DCCP-Request sent by the client (which carries the
+      same information).</t>
+
+      <t>This update does not significantly increase the complexity or
+      vulnerability of a DCCP implementation that conforms to <xref
+      target="RFC4340"></xref>. A DCCP server should therefore by default
+      permit generation of DCCP-Listen packets. A server that wishes to
+      prevent disclosing this information MAY refrain from generating
+      DCCP-Listen packets, without impacting subsequent DCCP state
+      transitions, but possibly inhibiting middlebox traversal.</t>
+
+      <t>The DCCP base specification in RFC 4340 defines an Init Cookie
+      option, which lets a DCCP server avoid having to hold any state until
+      the three-way connection setup handshake has completed. This
+      specification enables an out-of-band mechanism that forces the server to
+      hold state for a connection that has not yet been established. This is a
+      change in the security profile of DCCP, although the impact is expected
+      to be minimal and depends on the security features of the out-of-band
+      mechanism (SIP SDP is one such mechanism that provides sufficient
+      security features).</t>
+
+      <t>The method creates a new way for a client to set up a DCCP connection
+      to a server using out-of-band data, transported over a signaling
+      connection. If the signaling connection is not encrypted, an
+      eavesdropper could see the client IP address and the port for the
+      to-be-established DCCP connection and generate a DCCP-Listen packet
+      towards the client using its own server-IP address and port. However, a
+      client will only respond to a received DCCP-Listen packet if the
+      server-IP address and port match an existing DCCP connection that is in
+      the REQUEST state (section 2.3.2). The method therefore cannot be used
+      to redirect the connection to a different server IP address.</t>
+    </section>
+
+    <section anchor="IANA" title="IANA Considerations">
+      <t>The IANA should register a new Packet Type, "DCCP-Listen", in the
+      IANA DCCP Packet Types Registry. The decimal value 10 has been assigned
+      to this type. This registry entry must reference this document.</t>
+
+      <t />
+
+      <note title="Note to the RFC Editor:">
+        <t>This value of 10 must be confirmed by IANA in the registry when
+        this document is published, please then remove this note.</t>
+      </note>
+
+      <note title="Acknowledgement">
+        <t>This update was originally co-authored by Dr Gerrit Renker,
+        University of Aberdeen, and the present author acknowledges his
+        insight in design of the protocol mechanism and in careful review of
+        the early revisions of the document text. Dan Wing assisted on issues
+        relating to the use of NAT and NAPT.</t>
+      </note>
+    </section>
+
+    <!-- END -->
+
+    <section title="Disclaimer">
+      <t>This document may contain material from IETF Documents or IETF
+      Contributions published or made publicly available before November 10,
+      2008. The person(s) controlling the copyright in some of this material
+      may not have granted the IETF Trust the right to allow modifications of
+      such material outside the IETF Standards Process. Without obtaining an
+      adequate license from the person(s) controlling the copyright in such
+      materials, this document may not be modified outside the IETF Standards
+      Process, and derivative works of it may not be created outside the IETF
+      Standards Process, except to format it for publication as an RFC or to
+      translate it into languages other than English.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <reference anchor="RFC2119">
+        <front>
+          <title>Key words for use in RFCs to Indicate Requirement
+          Levels</title>
+
+          <author initials="S" surname="Bradner"></author>
+
+          <date month="March" year="1997" />
+        </front>
+      </reference>
+
+      <reference anchor="RFC4340">
+        <front>
+          <title>Datagram Congestion Control Protocol (DCCP)</title>
+
+          <author initials="E" surname="Kohler"></author>
+
+          <author initials="M" surname="Handley"></author>
+
+          <author initials="S" surname="Floyd"></author>
+
+          <date month="March" year="2006" />
+        </front>
+      </reference>
+
+      <reference anchor="ID-DCCP-SC">
+        <front>
+          <title>The DCCP Service Code</title>
+
+          <author initials="G" surname="Fairhurst"></author>
+
+          <date month="June" year="2008" />
+        </front>
+
+        <seriesInfo name="Work In Progress,"
+                    value="draft-ietf-dccp-serv-codes-09" />
+
+        <format type="TXT" />
+      </reference>
+    </references>
+
+    <references title="Informative References">
+      <reference anchor="ID-BEHAVE-DCCP">
+        <front>
+          <title>Network Address Translation (NAT) Behavioral Requirements for
+          DCCP</title>
+
+          <author fullname="R. Denis-Courmont" surname="">
+            <organization></organization>
+          </author>
+
+          <date month="" year="2008" />
+        </front>
+
+        <seriesInfo name="Work in Progress"
+                    value="draft-ietf-behave-dccp-05.txt" />
+
+        <format type="TXT" />
+      </reference>
+
+      <reference anchor="RFC5382">
+        <front>
+          <title>NAT Behavioral Requirements for TCP</title>
+
+          <author initials="S" surname="Guha"></author>
+
+          <author initials="K" surname="Biswas"></author>
+
+          <author initials="B" surname="Ford"></author>
+
+          <author initials="S" surname="Sivakumar"></author>
+
+          <author initials="P" surname="Srisuresh"></author>
+
+          <date month="April" year="2007" />
+        </front>
+
+        <seriesInfo name="" value="RFC5382" />
+
+        <format type="TXT" />
+      </reference>
+
+      <reference anchor="ID-BEHAVE-TURN">
+        <front>
+          <title>Traversal Using Relays around NAT (TURN): Relay Extensions to
+          Session Traversal Utilities for NAT (STUN)</title>
+
+          <author initials="J" surname="Rosenberg">
+            <organization>Cisco</organization>
+          </author>
+
+          <author initials="R" surname="Mahy">
+            <organization>Plantronics</organization>
+          </author>
+
+          <author initials="P" surname="Matthews">
+            <organization>Avaya</organization>
+          </author>
+
+          <date month="February" year="2008" />
+        </front>
+
+        <seriesInfo name="Work In Progress," value="draft-ietf-behave-turn-14" />
+
+        <format type="TXT" />
+      </reference>
+
+      <reference anchor="ID-MMUSIC-ICE">
+        <front>
+          <title>TCP Candidates with Interactive Connectivity Establishment
+          (ICE)</title>
+
+          <author initials="J" surname="Rosenberg">
+            <organization>Cisco</organization>
+          </author>
+
+          <date month="February" year="2008" />
+        </front>
+
+        <seriesInfo name="Work In Progress,"
+                    value="draft-ietf-mmusic-ice-tcp-07" />
+
+        <format type="TXT" />
+      </reference>
+
+      <reference anchor="RFC0793">
+        <front>
+          <title>Transmission Control Protocol</title>
+
+          <author initials="J" surname="Postel"></author>
+
+          <date month="September" year="1981" />
+        </front>
+      </reference>
+
+      <reference anchor="RFC2663">
+        <front>
+          <title>IP Network Address Translator (NAT) Terminology and
+          Considerations</title>
+
+          <author initials="P" surname="Srisuresh"></author>
+
+          <author initials="M" surname="Holdrege"></author>
+
+          <date month="August" year="1999" />
+        </front>
+      </reference>
+
+      <reference anchor="RFC3022">
+        <front>
+          <title>Traditional IP Network Address Translator (Traditional
+          NAT)</title>
+
+          <author initials="P" surname="Srisuresh"></author>
+
+          <author initials="K" surname="Egevang"></author>
+
+          <date month="January" year="2001" />
+        </front>
+      </reference>
+
+      <reference anchor="RFC3261">
+        <front>
+          <title>SIP: Session Initiation Protocol</title>
+
+          <author initials="J" surname="Rosenberg"></author>
+
+          <author initials="H" surname="Schulzrinne"></author>
+
+          <author initials="G" surname="Camarillo"></author>
+
+          <author initials="A" surname="Johnston"></author>
+
+          <author initials="J" surname="Peterson"></author>
+
+          <author initials="R" surname="Sparks"></author>
+
+          <author initials="M" surname="Handley"></author>
+
+          <author initials="E" surname="Schooler"></author>
+
+          <date month="June" year="2002" />
+        </front>
+      </reference>
+
+      <reference anchor="RFC3235">
+        <front>
+          <title>Network Address Translator (NAT)-Friendly Application Design
+          Guidelines</title>
+
+          <author initials="D" surname="Senie"></author>
+
+          <date month="January" year="2002" />
+        </front>
+      </reference>
+
+      <reference anchor="RFC4566">
+        <front>
+          <title>SDP: Session Description Protocol</title>
+
+          <author fullname="Handley, M., Jacobson, V., and C. Perkins">
+            <organization></organization>
+          </author>
+
+          <date month="July" year="2006" />
+        </front>
+      </reference>
+
+      <reference anchor="RFC4787">
+        <front>
+          <title>Network Address Translation (NAT) Behavioral Requirements for
+          Unicast UDP</title>
+
+          <author fullname=" F. Audet, Ed., C. Jennings">
+            <organization></organization>
+          </author>
+
+          <date month="January" year="2007" />
+        </front>
+      </reference>
+
+      <reference anchor="FSK05">
+        <front>
+          <title>Peer-to-Peer Communication Across Network Address
+          Translators</title>
+
+          <author initials="B" surname="Ford"></author>
+
+          <author initials="P" surname="Srisuresh"></author>
+
+          <author initials="D" surname="Kegel"></author>
+
+          <date year="2005" />
+        </front>
+
+        <seriesInfo name="Proceedings of USENIX-05," value="pages 179-192" />
+
+        <format type="TXT" />
+      </reference>
+
+      <reference anchor="NAT-APP">
+        <front>
+          <title>Application Design Guidelines for Traversal through Network
+          Address Translators</title>
+
+          <author initials="B" surname="Ford"></author>
+
+          <author initials="P" surname="Srisuresh"></author>
+
+          <author initials="D" surname="Kegel"></author>
+
+          <date month="March" year="2007" />
+        </front>
+
+        <seriesInfo name="Work In Progress," value="draft-ford-behave-app-05" />
+
+        <format type="TXT" />
+      </reference>
+
+      <reference anchor="GF05">
+        <front>
+          <title>Characterization and Measurement of TCP Traversal through
+          NATs and Firewalls</title>
+
+          <author initials="S" surname="Guha"></author>
+
+          <author initials="P" surname="Francis"></author>
+
+          <date year="2005" />
+        </front>
+
+        <seriesInfo name="Proceedings of Internet Measurement Conference (IMC-05),"
+                    value="pages 199-211" />
+
+        <format type="TXT" />
+      </reference>
+
+      <reference anchor="GTF04">
+        <front>
+          <title>NUTSS: A SIP based approach to UDP and TCP
+          connectivity</title>
+
+          <author initials="S" surname="Guha"></author>
+
+          <author initials="Y" surname="Takeda"></author>
+
+          <author initials="P" surname="Francis"></author>
+
+          <date year="2004" />
+        </front>
+
+        <seriesInfo name="Proceedings of SIGCOMM-04 Workshops, Portland, OR,"
+                    value="pages 43-48" />
+
+        <format type="TXT" />
+      </reference>
+
+      <reference anchor="Epp05">
+        <front>
+          <title>TCP Connections for P2P Apps: A Software Approach to Solving
+          the NAT Problem</title>
+
+          <author initials="J-L" surname="Eppinger"></author>
+
+          <date month="January" year="2005" />
+        </front>
+
+        <seriesInfo name="Carnegie Mellon University/ISRI Technical Report"
+                    value="CMU-ISRI-05-104" />
+
+        <format type="TXT" />
+      </reference>
+
+      <reference anchor="H.323">
+        <front>
+          <title>Packet-based Multimedia Communications Systems</title>
+
+          <author fullname="ITU-T">
+            <organization>ITU-T</organization>
+          </author>
+
+          <date month="July" year="2003" />
+        </front>
+
+        <seriesInfo name="Recommendation" value="H.323" />
+
+        <format type="TXT" />
+      </reference>
+    </references>
+
+    <section anchor="BGND"
+             title="Discussion of Existing NAT Traversal Techniques">
+      <!-- Note-->
+
+      <t>This appendix provides a brief review of existing techniques to
+      establish connectivity across NAT devices, with the aim of providing
+      background information. This first considers TCP NAT traversal based on
+      simultaneous-open, and then discuss a second technique based on role
+      reversal. Further information can be found in <xref
+      target="GTF04"></xref> and <xref target="GF05"></xref>.</t>
+
+      <t>A central idea shared by these techniques is to make peer-to-peer
+      sessions look like "outbound" sessions on each NAT device. Often a
+      rendezvous server, located in the public address realm, is used to
+      enable clients to discover their NAT topology and the addresses of
+      peers.</t>
+
+      <t>The term 'hole punching' was coined in <xref target="FSK05"></xref>
+      and refers to creating soft state in a traditional NAT device, by
+      initiating an outbound connection. A well-behaved NAT can subsequently
+      exploit this to allow a reverse connection back to the host in the
+      private address realm.</t>
+
+      <t>UDP and TCP hole punching use nearly the same technique <xref
+      target="RFC4787"></xref>. The adaptation of the basic UDP hole punching
+      principle to TCP NAT traversal <xref target="RFC5382"></xref> was
+      introduced in section 4 of <xref target="FSK05"></xref> and relies on
+      the simultaneous-open feature of TCP <xref target="RFC0793"></xref>. A
+      further difference between UDP and TCP lies in the way the clients
+      perform connectivity checks, after obtaining suitable address pairs for
+      connection establishment. Whereas in UDP a single socket is sufficient,
+      TCP clients require several sockets for the same address and port tuple:
+      <list style="symbols">
+          <t>a passive socket to listen for connectivity tests from peers
+          and</t>
+
+          <t>multiple active connections from the same address to test
+          reachability of other peers.</t>
+        </list></t>
+
+      <t>The SYN sent out by client A to its peer B creates soft state in A's
+      NAT. At the same time, B tries to connect to A: <list style="symbols">
+          <t>if the SYN from B has left B's NAT before the arrival of A's SYN,
+          both endpoints perform simultaneous-open (4-way handshake of
+          SYN/SYNACK);</t>
+
+          <t>otherwise A's SYN may not enter B's NAT, which leads to B
+          performing a normal open (SYN_SENT =&gt; ESTABLISHED) and A
+          performing a simultaneous-open (SYN_SENT =&gt; SYN_RCVD =&gt;
+          ESTABLISHED).</t>
+        </list></t>
+
+      <t>In the latter case, it is necessary that the NAT does not interfere
+      with a RST segment (REQ-4 in <xref target="RFC5382"></xref>). The
+      simultaneous-open solution is convenient due to its simplicity, and is
+      thus a preferred mode of operation in the TCP extension for ICE (<xref
+      target="ID-MMUSIC-ICE"></xref>, sec. 2).</t>
+
+      <section title="NAT traversal Based on a Simultaneous-Request">
+        <t>Among the various TCP NAT traversal approaches, the one using a TCP
+        simultaneous-open suggests itself as a candidate for DCCP due to its
+        simplicity <xref target="GF05"></xref>, <xref
+        target="NAT-APP"></xref>.</t>
+
+        <t>A characteristic of TCP simultaneous-open is that this erases the
+        clear distinction between client and server: both sides enter through
+        active (SYN_SENT) as well as passive (SYN_RCVD) states. This
+        characteristic conflicts with the DCCP design decision to provide a
+        clear separation between client and server functions (<xref
+        target="RFC4340"></xref>, 4.6).</t>
+
+        <t>In DCCP several mechanisms implicitly rely on clearly-defined
+        client/server roles:</t>
+
+        <t><list style="symbols">
+            <t>Feature Negotiation: with few exceptions, almost all of DCCP's
+            negotiable features use the "server-priority" reconciliation rule
+            (<xref target="RFC4340"></xref>, 6.3.1), whereby a peer exchanges
+            its preference lists of feature values, and the server decides the
+            outcome.</t>
+
+            <t>Closing States: only a server may generate DCCP-CloseReq
+            packets (asking the peer to hold timewait state), while a client
+            is only permitted to send DCCP-Close or DCCP-Reset packets to
+            terminate a connection (<xref target="RFC4340"></xref>, 8.3).</t>
+
+            <t>Service Codes <xref target="ID-DCCP-SC"></xref>: a server may
+            be associated with multiple Service Codes, while a client must be
+            associated with exactly one (<xref target="RFC4340"></xref>,
+            8.1.2).</t>
+
+            <t>Init Cookies: may only be used by a server and on DCCP-Response
+            packets (<xref target="RFC4340"></xref>, 8.1.4).</t>
+          </list></t>
+
+        <t>The latter two points are not obstacles per se, but would have
+        hindered the transition from a passive to an active socket. In DCCP, a
+        DCCP-Request is only generated by a client. The assumption that "all
+        DCCP hosts may be clients", was dismissed, since it would require
+        undersirable changes to the state machine and would limit application
+        programming. As a consequence, the retro-fitting a TCP-style
+        simultaneous-open into DCCP to allow simulatenous exchange of
+        DCCP-Connect packets was not recommended.</t>
+      </section>
+
+      <section title="Role Reversal">
+        <t>Another simple TCP NAT traversal scheme uses role traversal (<xref
+        target="Epp05"></xref> and <xref target="GTF04"></xref>), where a peer
+        first opens an active connection for the single purpose of punching a
+        hole in the firewall; and then reverts to a listening socket,
+        accepting connections arriving via the new path.</t>
+
+        <t>This solution would have had several disadvantages if used with
+        DCCP. First, a DCCP server would be required to change its role to
+        temporarily become a 'client'. This would have required modification
+        to the state machine, in particular the treatment of Service Codes and
+        perhaps Init Cookies. Further, the method must follow feature
+        negotiation, since an endpoint's choice of initial options can rely on
+        its role (i.e. if an endpoint knows it is the server, it can make a
+        priori assumptions about the preference lists of features it is
+        negotiating with the client, thereby enforcing a particular policy).
+        Finally, the server would have needed additional processing to ensure
+        that the connection arriving at the listening socket matches the
+        previously opened active connection.</t>
+
+        <t>This approach was therefore not recommend for DCCP.</t>
+      </section>
+    </section>
+
+    <section title="Change Log - to be removed by RFC-Ed">
+      <t>Revision 00 was based on a previous individual submission
+      draft-fairhurst-dccp-behave-update-01 by the same authors.</t>
+
+      <t>Revision 01:</t>
+
+      <t><list style="symbols">
+          <t>introduced many format changes to improve readability</t>
+
+          <t>migrated background information into the Appendix</t>
+
+          <t>added <xref target="intro3"></xref> to summarize the document
+          structure</t>
+
+          <t>updated introductory paragraph of <xref target="SPEC"></xref> to
+          account for new structure</t>
+
+          <t>added captions to all figures</t>
+
+          <t>updated the specification in <xref target="SPEC"></xref> to (i)
+          permit on DCCP-Listen packets; (ii) explain why the presence of
+          payload data is not useful; (iii) clarify that middleboxes must not
+          interpret sequence numbers on DCCP-Listen packets</t>
+
+          <t>clarified that the default value of the Allow Short Seqno feature
+          is to be used</t>
+
+          <t>added references to the Service Code draft <xref
+          target="ID-DCCP-SC"></xref></t>
+
+          <t>clarified the processing of DCCP-Listen packets by server
+          endpoints</t>
+
+          <t>corrected the reaction of a client implementing <xref
+          target="RFC4340"></xref> only - DCCP-Listen packets are treated as
+          unknown and hence do not generate a DCCP-Reset</t>
+
+          <t>swapped order of IANA / Security-Considerations sections</t>
+
+          <t>added a note in the Security Considerations section that servers
+          may refrain from generating DCCP-Listen packets</t>
+        </list></t>
+
+      <t>Revision 02:<list style="symbols">
+          <t>minor edits following WG feedback at IETF meeting</t>
+
+          <t>updated to reflect ID.Behave-DCCP</t>
+
+          <t>update to reflect comments from Colin Perkins</t>
+
+          <t>added a tentative IANA code point (as suggested at IETF-73)</t>
+        </list></t>
+
+      <t><list style="symbols">
+          <t>DRAFT -02</t>
+
+          <t>Edits following editorial corrections and suggestions from Tom
+          Phelan</t>
+
+          <t>Edits following comments from Dan Wing on role of NAT,
+          retransmission, and other issues.</t>
+
+          <t>Revised authors list</t>
+
+          <t>Reworded abstract, reworded appendices to clarify what was not
+          done</t>
+
+          <t>Checked spelling</t>
+
+          <t>Although this version includes significant changes to format and
+          text it does not seek to modify the intended procedure for a
+          server.</t>
+
+          <t></t>
+
+          <t>DRAFT - 03</t>
+
+          <t>Comments by Dan Wing</t>
+        </list><list style="symbols">
+          <t>DRAFT -04</t>
+
+          <t>Corrections by Dan Wing, and new diagram <xref
+          target="retx"></xref> to and text to clarify the retransmission
+          algorithm.</t>
+        </list><list style="symbols">
+          <t>DRAFT -05</t>
+
+          <t>Sections re-ordered to bring the packet type definition to the
+          front, and to correct a section mis-order in draft-04. References
+          linked to IETF WGs and updated to satisfy IDNiTs.</t>
+
+          <t>A number of Typos were fixed.</t>
+        </list><list style="symbols">
+          <t>DRAFT -06</t>
+
+          <t>This draft follows a completed WGLC.</t>
+
+          <t>It includes responses to comments from Eddie Kohler, during
+          WGLC.</t>
+
+          <t>Magnus Westerlund requested two updates:</t>
+
+          <t>A triggered join, based on reception of a DCCP-Listen causing a
+          retransmission of a DCCP-Request.</t>
+
+          <t>Updated figure 5.</t>
+
+          <t>Updated language to differentiate the loss-prevention DCCP-Listen
+          repetition being confused with the DCCP-Request retransmission.</t>
+
+          <t>Added pseudocode and redrew state diagram, to match the
+          pseudocode, including a transitory state transition to the
+          LISTEN1state to process the received DCCP-Request. This is intended
+          to be the same processing as in draft -05, even though the diagram
+          now looks less pretty, and another state was created.</t>
+
+          <t>This version circulated in draft form to WG on 29/11/08 - no
+          additional comments received.</t>
+
+          <t>Updated references.</t>
+
+          <t></t>
+        </list><list style="symbols">
+          <t>DRAFT -07</t>
+
+          <t>Fixed Section heading (missing in rev -06)</t>
+
+          <t>Updated figure with a note to clarify the Response (from Magnus
+          Westerlund).</t>
+
+          <t>Editorial corrections proposed by T.Phelan.</t>
+
+          <t></t>
+        </list><list style="symbols">
+          <t>DRAFT -08</t>
+
+          <t>Fixed text in response to Sec-Dir review (Chris Newman) and
+          GEN-ART review (Miguel A. Garcia)</t>
+
+          <t>SC draft made normative (draft currently with IESG)</t>
+
+          <t>Listen' changed to LISTEN1 in all places - to make this label
+          clearer in the text</t>
+
+          <t>Security considerations updated</t>
+
+          <t>Addressed editorial comments received during LC.</t>
+        </list></t>
+    </section>
+  </back>
+</rfc>

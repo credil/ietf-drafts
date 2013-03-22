@@ -1,0 +1,311 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY rfc2119 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+<!ENTITY rfc4848 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4848.xml">
+<!ENTITY I-D.bagnulo-behave-dns64 SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.bagnulo-behave-dns64.xml">
+<!ENTITY rfc4291 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4291.xml">
+<!ENTITY I-D.wing-behave-nat64-referrals SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.wing-behave-nat64-referrals.xml">
+<!ENTITY rfc3596 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3596.xml">
+<!ENTITY I-D.thomson-geopriv-res-gw-lis-discovery SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.thomson-geopriv-res-gw-lis-discovery.xml">
+<!ENTITY I-D.savolainen-mif-dns-server-selection SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.savolainen-mif-dns-server-selection.xml">
+]>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes" ?>
+<?rfc rfcprocack="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc colonspace='yes' ?>
+<?rfc tocindent='yes' ?>
+<rfc category="std" docName="draft-wing-behave-learn-prefix-01"
+     ipr="trust200902">
+  <front>
+    <title abbrev="Learning NAT64's IPv6 Prefix">Learning the IPv6 Prefix of a
+    NAT64</title>
+
+    <author fullname="Dan Wing" initials="D." surname="Wing">
+      <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+
+      <address>
+        <postal>
+          <street>170 West Tasman Drive</street>
+
+          <city>San Jose</city>
+
+          <region>CA</region>
+
+          <code>95134</code>
+
+          <country>USA</country>
+        </postal>
+
+        <email>dwing@cisco.com</email>
+      </address>
+    </author>
+
+    <date year="2009" />
+
+    <workgroup>BEHAVE Working Group</workgroup>
+
+    <abstract>
+      <t>In some IPv6/IPv4 translation scenarios it is necessary for an IPv6
+      host to know the IPv6 prefix used by its NAT64. In some of the IPv6/IPv4
+      translation proposals, the prefix is not fixed; that is, the prefix is
+      chosen by the network operator. This specification provides two methods
+      for a host learn its NAT64's IPv6 prefix and length.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Terminology">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119"></xref>.</t>
+
+      <t>AFT: Address Family Translator. A device that translates between IP
+      address families.</t>
+
+      <t>DNS64: The function of synthesizing an AAAA response from an A
+      record.</t>
+    </section>
+
+    <section anchor="introduction" title="Introduction">
+      <t>Several variations of Address Family Translators (AFT) have been
+      proposed for IPv6/IPv6 coexistence. For IPv6 hosts to access IPv4 hosts,
+      a DNS function exists which synthesizes DNS AAAA records -- this
+      function generally called "DNS64" (also "DNS rewriting") <xref
+      target="I-D.bagnulo-behave-dns64"></xref>. The DNS64 function, when used
+      in conjunction with an NAT64, allows a IPv6-only host to access
+      IPv4-only hosts. This access, for the most part, is transparent to the
+      IPv6 host -- to much the same degree that today's widely-deployed NATs
+      are transparent to IPv4 hosts. But, like with today's NATs, there are
+      applications which do not work with NAT64 or do not work with DNS64, and
+      require IPv6 hosts to implement additional functionality.</t>
+
+      <t>So far, two applications have been identified which can benefit from
+      knowing the IPv6 prefix of the host's NAT64: <list style="symbols">
+          <t>host-based DNSSEC validation (as described in Section 4.3 of 
+<xref target="I-D.bagnulo-behave-dns64"></xref>)</t>
+
+          <t>BitTorrent (<xref
+          target="I-D.wing-behave-nat64-referrals">Section 2.2 of </xref>)</t>
+        </list></t>
+    </section>
+
+    <section title="Learning IPv6 Prefix and Length">
+      <t>Both the IPv6 prefix and the prefix length need to be learned This
+      can be done using DNS or DHCP, as described in the following
+      sections.</t>
+
+      <section anchor="learn_dns"
+               title="Using DNS to Learn IPv6 Prefix and Length">
+        <t>This specification defines a new <xref
+        target="RFC4848">U-NAPTR</xref> application to discover the NAT64's
+        IPv6 prefix and length. The input domain name is the exact same as
+        would be used for a reverse DNS lookup, derived from the host's IPv6
+        in the ".ip6.arpa." tree and follows the construction rules in <xref
+        target="RFC3596">Section 2.5 of</xref>. This is shortened to 20 labels
+        (representing a /64 network prefix) and, if DNS returns an error is
+        shortened to 16 labels (representing a /48 network prefix).</t>
+
+        <t>If a NAT64 is present on the network, the successful result of one
+        of those queries will produce a NAPTR record with the desired service
+        tag "NAT64:" which contains the IPv6 prefix and prefix length o the
+        NAT64, separated by a "/" (the same syntax as specified in <xref
+        target="RFC4291">Section 2.3 of </xref>).</t>
+
+        <t>For example, a host with the IP address 2001:db8:1:2:3:4:567:89ab
+        would first send an NAPTR query for
+        3.0.0.0.2.0.0.0.1.0.0.0.8.b.d.0.1.0.0.2.IP6.ARPA (20 elements,
+        representing a /64 network prefix). If that fails (returns NXDOMAIN),
+        it would send an NAPTR query for
+        2.0.0.0.1.0.0.0.8.b.d.0.1.0.0.2.IP6.ARPA (16 elements, representing a
+        /48 network prefix).<list>
+            <t>Note: Both /64 and /48 prefix lengths are shown in this
+            version of the document for illustrative purposes. The
+            number of elements of this query will depend on the prefix
+            length(s) defined by the BEHAVE working group for a NAT64.
+            If the BEHAVE working group decides that all NAT64's will
+            have a certain prefix length, then only one DNS query is
+            sent.</t> </list></t>
+
+        <t>If the host needs to authenticate the prefix it just learned (e.g.,
+        because the host is running a DNSSEC validator) the host performs the
+        additional authentication steps described in <xref
+        target="auth"></xref>.</t>
+      </section>
+
+      <section anchor="learn_dhcp"
+               title="Using DHCP to Learn IPv6 Prefix and Length">
+        <t>A new DHCP option, OPTION_AFT_PREFIX, is defined. It contains the
+        IPv6 prefix and its length.</t>
+
+        <figure anchor="dhcp-option" title="DHCP option OPTION_AFT_PREFIX">
+          <preamble></preamble>
+
+          <artwork align="center"><![CDATA[
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|       OPTION_AFT_PREFIX       |         option-length         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| prefix-length |                                               |
++-+-+-+-+-+-+-+-+          IPv6 prefix                          |
+|                        (up to 16 octets)                      |
+|                                                               |
+|                                                               |
+|                                                               |
+|               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|               |
++-+-+-+-+-+-+-+-+
+
+    option-code:      OPTION_AFT_PREFIX (TBD)
+
+    option-length:    17
+
+    prefix-length:    Length for this prefix in bits
+
+    IPv6-prefix:      An IPv6 prefix]]></artwork>
+        </figure>
+
+        <t>In order to conserve space, it is RECOMMENDED that only the
+        significant bits of the IPv6 prefix be sent in the DHCP option.</t>
+
+        <t>If the host needs to authenticate the prefix it just learned (e.g.,
+        because the host is running a DNSSEC validator) the host performs the
+        additional authentication steps described in <xref
+        target="auth"></xref>.</t>
+      </section>
+    </section>
+
+    <section anchor="auth" title="Authenticating the Learned Prefix">
+      <t>In some cases (e.g., a host performing DNSSEC validation), the host
+      needs to authenticate the NAT64's IPv6 prefix learned via one of the
+      mechanisms described earlier. To allow such authentication the operator
+      of the NAT64 first creates a PTR record for the NAT64 (with 0's for the
+      elements after the NAT64's IPv6 prefix) which points to a hostname. The
+      hostname has a signed AAAA record for the same 0-padded IPv6 address
+      returned by the PTR query. Once those configuration steps are done, a
+      host can validate the NAT64 IPv6 prefix by performing the following
+      steps: <list style="format %c.">
+          <t>The host sends a DNS PTR query for the IPv6 address of the NAT64
+          (for "ipv6.arpa"), using 0 for the elements after the prefix length.
+          This will return the fully-qualified hostname of that NAT64
+          device.</t>
+
+          <t>Verify the full-qualified hostname is on the host's configured
+          list of authorized translators (e.g.,
+          seattle.nat64.example.net).</t>
+
+          <t>Send a DNS AAAA query for that hostname.</t>
+
+          <t>Verify the AAAA response matches the IPv6 address obtained in
+          step 1.</t>
+
+          <t>Perform DNSSEC validation of the AAAA response.</t>
+        </list></t>
+
+      <t>For example, if the NAT64's IPv6 prefix length is /48, the host would
+      send a PTR query for 2.0.0.0.1.0.0.0.0.0.0.0.1.2.3.4.IP6.ARPA which
+      would return a hostname, seattle.nat64.example.net. The host verifies
+      that seattle.nat64.example.net is on its configured list of authorized
+      NAT64 hosts, as maintained in a text file. The host sends an AAAA query
+      for seattle.nat64.example.net and verifies the AAAA response contains
+      the same IPv6 address. The host then validates the DNSSEC signature for
+      seattle.nat64.example.net.</t>
+    </section>
+
+    <section anchor="security_considerations" title="Security Considerations">
+      <t>After learning the IPv6 prefix of its translator by following the
+      procedures in this specification, the IPv6 host will utilize this
+      information for subsequent actions (e.g., sending a packet to it, or
+      using that information to synthesize DNS records or to perform DNSSEC
+      validation). If an attacker provides a fraudulent IPv6 to the IPv6 host,
+      the attacker can become on-path for traffic to/from that IPv6 host and
+      preform passive or active eavesdropping or traffic analysis. To protect
+      against this attack, it is RECOMMENDED that IPv6 hosts be configured
+      with the names of authorized translators and RECOMMENDED that IPv6 hosts
+      uses DNSSEC to validate that name matches the IPv6 prefix learned via
+      DNS or DHCPv6, as described in <xref target="auth"></xref>.</t>
+    </section>
+
+    <section anchor="iana" title="IANA Considerations">
+      <t>A new DHCPv6 option, OPTION_AFT_PREFIX, needs to be assigned by
+      IANA.</t>
+
+      <t>The new NAPTR Application Service tag "NAT64" is registered with
+      IANA.</t>
+    </section>
+
+    <section title="Acknowledgements">
+      <t>This draft was fostered by discussion on the 46translation mailing
+      list and at the v4v6 Interim in Montreal. Special thanks to Iljitsch van
+      Beijnum, Andrew Sullivan, Marcelo Bagnulo Braun, Fred Baker, and Xing Li
+      for their comments and dialog.</t>
+
+      <t>The mechanism to perform a shortened NAPTR query was described first
+      by Martin Thomson <xref
+      target="I-D.thomson-geopriv-res-gw-lis-discovery"></xref>.</t>
+
+      <t>Thanks to Ralph Droms for his help with DHCPv6. Thanks to John
+      Schnizlein for improving the DNS learning algorithm.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      &rfc2119;
+
+      &rfc4848;
+    </references>
+
+    <references title="Informative References">
+      &I-D.bagnulo-behave-dns64;
+
+      &rfc4291;
+
+      &I-D.wing-behave-nat64-referrals;
+
+      &rfc3596;
+
+      &I-D.thomson-geopriv-res-gw-lis-discovery;
+
+      &I-D.savolainen-mif-dns-server-selection;
+    </references>
+
+    <section title="For future study">
+      <section title="multi-homed hosts">
+        <t>A multi-homed host may have different NAT64 devices available on
+        each of its networks, and can learn those via DNS or via DHCP.</t>
+
+        <t>When using DNS to learn the NAT64 prefix (<xref
+        target="learn_dns"></xref>) or using DNS to authenticate the NAT64
+        prefix (<xref target="auth"></xref>, it is possible a split horizon
+        DNS exists. Such a split DNS requires the host to query the DNS server
+        associated with that network prefix as described in <xref
+        target="I-D.savolainen-mif-dns-server-selection"></xref>.</t>
+      </section>
+    </section>
+
+    <section title="Changes">
+      <section title="Changes from -00 to -01">
+        <t><list style="symbols">
+            <t>made clearer this is for NAT64 prefix (changed title and some
+            text).</t>
+
+            <t>changed from querying for "_aft_prefix" TXT record to querying
+            ipv6.arpa NAPTR record.</t>
+
+            <t>BitTorrent is another application that benefits from knowing
+            the NAT64 prefix; previously only DNSSEC was listed.</t>
+
+            <t>changed to standards track.</t>
+          </list></t>
+      </section>
+    </section>
+  </back>
+</rfc>

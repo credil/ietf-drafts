@@ -1,0 +1,790 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+
+<?rfc toc="yes"?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc strict="yes" ?>
+
+<rfc category="exp" ipr="full3978" docName="draft-ietf-rserpool-policies-10.txt">
+
+<front>
+<title abbrev="RSerPool Policies">
+Reliable Server Pooling Policies
+</title>
+
+<!-- ************** THOMAS DREIBHOLZ *************** -->
+<author initials="T." surname="Dreibholz" fullname="Thomas Dreibholz">
+   <organization abbrev="University of Duisburg-Essen">
+      University of Duisburg-Essen, Institute for Experimental Mathematics
+   </organization>
+   <address>
+      <postal>
+         <street>Ellernstrasse 29</street>
+         <city>45326 Essen</city>
+         <region>Nordrhein-Westfalen</region>
+         <country>Germany</country>
+      </postal>
+      <phone>+49-201-1837637</phone>
+      <facsimile>+49-201-1837673</facsimile>
+      <email>dreibh@iem.uni-due.de</email>
+      <uri>http://www.iem.uni-due.de/~dreibh/</uri>
+   </address>
+</author>
+
+<!-- ************** MICHAEL TUEXEN *************** -->
+<author initials="M." surname="Tuexen" fullname="Michael Tuexen">
+<organization abbrev="Muenster Univ. of Applied Sciences">
+Muenster University of Applied Sciences
+</organization>
+<address>
+    <postal>
+        <street>Stegerwaldstrasse 39</street>
+        <city>48565 Steinfurt</city>
+        <country>Germany</country>
+    </postal>
+    <phone>+49-2551-962550</phone>
+    <facsimile>+49-2551-962563</facsimile>
+    <email>tuexen@fh-muenster.de</email>
+</address>
+</author>
+
+
+<date day="14" month="July" year="2008" />
+<keyword>Internet-Draft</keyword>
+
+<abstract>
+<t>
+This document describes server pool policies for Reliable Server Pooling
+including considerations for implementing them at ENRP servers and pool
+users.
+</t>
+</abstract>
+</front>
+
+<middle>
+<section title="Introduction">
+<t>
+The protocols defined in
+<xref target="I-D.ietf-rserpool-enrp"/>,
+<xref target="I-D.ietf-rserpool-asap"/> and
+<xref target="I-D.ietf-rserpool-common-param"/>
+support a variety of server policies.
+Some of the policies use dynamic load information of the pool elements
+and others do not. Therefore, we classify them as adaptive and non-adaptive.
+The selection of the pool element is performed by two different entities,
+the ENRP server and the pool user.
+Some of the consequences for policies which are not stateless
+are described in <xref target="ICN2005" /> and <xref target="LCN2005" />.
+</t>
+<t>
+Therefore this document describes not only packet formats but also gives
+a detailed description of the procedures to be followed at the ENRP servers
+and the pool users to implement each server policy.
+</t>
+</section>
+
+<section title="Conventions">
+
+<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL"
+in this document are to be interpreted as described in
+<xref target="RFC2119"/>.
+</t>
+</section>
+
+
+<section title="Terminology and Definitions">
+
+<section title="Load">
+<t>
+The term load is a value specifying how much a pool element's resources are
+currently utilized. 0x00000000 states, that the pool element is not utilized
+(0%), 0xffffffff states that it is fully utilized (100%). Defining what
+utilization means is application-dependent and out of the scope of RSerPool.
+However, it is required that all pool elements of the same pool using
+load information have the same definition of load.
+</t>
+<t>
+For example, load may define the current amount of users out of a maximum on a
+FTP server, the CPU usage of a database server or the memory utilization of a
+compute service.
+</t>
+</section> <!-- Load -->
+
+<section title="Weight">
+<t>
+Weight defines a pool element's service capacity relatively to other pool
+elements of the same pool. Theoretically, there is no upper limit for weight
+values (although limited by datatype size). Defining what value weights
+compare is application-dependent and out of the scope of RSerPool. However,
+it is required that all pool elements of the same pool using weight information
+have the same definition of weight.
+</t>
+<t>
+A weight of 0 denotes that the pool element is not capable of providing any
+service, a higher weight of denotes that the pool element is capable of providing
+better service than a pool element having a lower weight.
+</t>
+<t>
+For example, weight may define a compute service's computation capacity. That
+is, a pool element of weight 100 will complete a work package in half of the
+time compared to a pool element of weight 50.
+</t>
+</section> <!-- Weight -->
+
+</section> <!-- Terminology and Definitions -->
+
+
+
+<section title="Non-Adaptive Policies">
+
+<section title="Round Robin Policy">
+<section title="Description">
+<t>
+The Round Robin (RR) policy is a very simple and efficient policy
+which requires state. This policy is denoted as the default policy
+and MUST be supported by all RSerPool components.
+</t>
+</section>
+<section title="ENRP Server Considerations">
+<t>
+The ENRP server SHOULD hold the pool elements of each server pool
+in a circular list and SHOULD store a pointer to one of the elements, called
+the head.
+On reception of a handle resolution request the ENRP server SHOULD return the
+pool elements from the circular list starting with head. Then head SHOULD be
+advanced by one element.
+</t>
+<t>
+Using this algorithm it is made sure that not all lists presented to the pool
+users start with the same element.
+</t>
+</section>
+<section title="Pool User Considerations">
+<t>
+A pool user SHOULD use the list of pool elements returned by the
+ENRP server in a round robin fashion, starting with the first. If
+all elements of the list have been used it should start from the
+beginning again until the information is out of date.
+</t>
+</section>
+<section title="Pool Member Selection Policy Parameter">
+<t>
+<figure><artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |    Param Type = 0x8           |         Length = 0x8          |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                   Policy Type = 0x00000001                    |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork></figure>
+</t>
+</section>
+
+</section> <!-- Round Robin Policy -->
+
+
+<section title="Weighted Round Robin Policy">
+<section title="Description">
+<t>
+The Weighted Round Robin (WRR) policy is a generalization of the RR policy.
+If all weights are 1 then WRR is just RR.
+</t>
+</section>
+<section title="ENRP Server Considerations">
+<t>
+The ENRP server SHOULD follow the same rules as for RR but initialize and
+modify the circular list differently. The ENRP server puts each pool element
+possibly multiple times into the list such that:
+<list style="symbols">
+<t>The ratio of the number of occurrences of a pool element to the list length
+is
+   the same as the ratio of the weight of that pool element to the sum of
+weights.</t>
+<t>Each pool element is inserted as distributed as possible in the
+   circular list.</t>
+</list>
+</t>
+</section>
+<section title="Pool User Considerations">
+<t>
+The pool user SHOULD follow the same rules as for RR.
+</t>
+</section>
+<section title="Pool Member Selection Policy Parameter">
+<t>
+<figure><artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |    Param Type = 0x8           |         Length = 0xc          |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                   Policy Type = 0x00000002                    |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                              Weight                           |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork></figure>
+<list style="symbols">
+   <t>Weight (32 bits, unsigned integer): Weight constant for the WRR process.</t>
+</list>
+</t>
+</section>
+
+</section> <!-- Weighted Round Robin Policy -->
+
+
+<section title="Random Policy">
+<section title="Description">
+<t>
+The Random (RAND) policy is a very simple stateless policy.
+</t>
+</section>
+<section title="ENRP Server Considerations">
+<t>
+The ENRP server selects at most the requested number of pool elements
+from the list of pool elements. Each element MUST NOT be reported more
+than once to the pool user.
+</t>
+</section>
+<section title="Pool User Considerations">
+<t>
+Each time the pool user must select one pool element it
+does this by randomly selecting one element from the list
+of pool elements received from the ENRP server.
+</t>
+</section>
+<section title="Pool Member Selection Policy Parameter">
+<t>
+<figure><artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |    Param Type = 0x8           |         Length = 0x8          |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                   Policy Type = 0x00000003                    |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork></figure>
+</t>
+</section>
+
+</section> <!-- Random Policy -->
+
+
+<section title="Weighted Random Policy">
+<section title="Description">
+<t>
+The Weighted Random (WRAND) policy is a generalization of the RAND policy,
+adding a weight for each pool element entry. RAND is equal to WRAND having
+all weights set to 1.
+</t>
+</section>
+<section title="ENRP Server Considerations">
+<t>
+The ENRP server SHOULD select at most the requested number of pool elements
+randomly from the list of pool elements. Each element MUST NOT be reported more
+than once to the pool user. The probability of selecting a pool element should
+be the ratio of the weight of that pool element to the sum of weights.
+</t>
+</section>
+<section title="Pool User Considerations">
+<t>
+Each time the pool user must select one pool element it
+does this by randomly selecting one element from the list
+of pool elements received from the ENRP server.
+</t>
+</section>
+<section title="Pool Member Selection Policy Parameter">
+<t>
+<figure><artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |    Param Type = 0x8           |         Length = 0xc          |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                   Policy Type = 0x00000004                    |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                              Weight                           |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork></figure>
+<list style="symbols">
+   <t>Weight (32 bits, unsigned integer): Weight constant for the WRAND process.</t>
+</list>
+</t>
+</section>
+
+</section> <!-- Weighted Random Policy -->
+
+
+<section title="Priority Policy">
+
+<section title="Description">
+<t>The Priority (PRIO) policy can be used to select always a pool
+element with the highest priority.</t>
+</section>
+
+<section title="ENRP Server Considerations">
+<t>The ENRP server MUST select the pool elements with the highest
+priorities.  They MUST be reported in decreasing order.  If multiple
+pool elements have the same priority, they may be listed in any
+order.</t>
+</section>
+
+<section title="Pool Element Considerations">
+<t>The pool user MUST select the active pool element with the highest
+priority.</t>
+</section>
+
+<section title="Pool Member Selection Policy Parameter">
+<t>
+<figure><artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |    Param Type = 0x8           |         Length = 0xc          |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                   Policy Type = 0x00000005                    |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                            Priority                           |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork></figure>
+<list style="symbols">
+   <t>Priority (32 bits, unsigned integer):  Larger numbers mean higher
+      priorities.</t>
+</list>
+</t>
+</section>
+
+</section>
+
+
+</section> <!-- Non-Adaptive Policies -->
+
+
+
+<section title="Adaptive Policies">
+
+<section title="Least Used Policy">
+<section title="Description">
+<t>
+The Least Used (LU) policy uses load information provided by the pool elements
+to select the lowest-loaded pool elements within the pool.
+</t>
+</section>
+<section title="ENRP Server Considerations">
+<t>
+The ENRP server SHOULD select at most the requested number of pool elements.
+Their load values SHOULD be the lowest possible ones within the pool. Each
+element MUST NOT be reported more than once to the pool user. If there is a
+choice of equal-loaded pool elements, round robin selection SHOULD
+be made among these elements. The returned list of pool elements MUST be
+sorted ascending by load value.
+</t>
+</section>
+<section title="Pool User Considerations">
+<t>
+The pool user should try to use the pool elements returned from the list
+in the order returned by the ENRP server. A subsequent call for
+handle resolution may result in the same list. Thereofore, it is RECOMMENDED for a
+pool user to request multiple entries in order to have a sufficient amount of
+feasible backup entries available.
+</t>
+</section>
+<section title="Pool Member Selection Policy Parameter">
+<t>
+<figure><artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |    Param Type = 0x8           |         Length = 0xc          |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                   Policy Type = 0x40000001                    |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                              Load                             |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork></figure>
+<list style="symbols">
+   <t>Load (32 bits, unsigned integer): Current load of the pool element.</t>
+</list>
+</t>
+</section>
+
+</section> <!-- Least Used Policy -->
+
+
+<section title="Least Used with Degradation Policy">
+<section title="Description">
+<t>
+The Least Used with Degradation (LUD) policy extends the LU policy by
+a load degradation value describing the pool element's load increment when
+a new service association is accepted.
+</t>
+</section>
+<section title="ENRP Server Considerations">
+<t>
+For every pool element entry, a degradation counter MUST be stored. When
+a pool element entry is added or updated by registration or reregistration, this
+counter MUST be set to 0. When an entry is selected for being returned to a pool
+user, the internal degradation counter MUST be incremented by 1. The selection
+of pool element entries is handled like for LU, except that the selected pool
+element entries SHOULD have the lowest possible sum of
+load value + degradation counter * load degradation value.
+</t>
+</section>
+<section title="Pool User Considerations">
+<t>
+See LU policy.
+</t>
+</section>
+<section title="Pool Member Selection Policy Parameter">
+<t>
+<figure><artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |    Param Type = 0x8           |         Length = 0x10         |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                   Policy Type = 0x40000002                    |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                              Load                             |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                        Load Degradation                       |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork></figure>
+<list style="symbols">
+   <t>Load (32 bits, unsigned integer): Current load of the pool element.</t>
+   <t>Load Degradation (32 bits, unsigned integer): Load Degradation constant of the pool element.</t>
+</list>
+</t>
+</section>
+
+</section> <!-- Least Used with Degradation Policy -->
+
+
+<section title="Priority Least Used Policy">
+<section title="Description">
+<t>
+The Priority Least Used (PLU) policy uses load information provided by the
+pool elements to select the lowest-loaded pool elements within the pool under
+the assumption that a new application request is accepted by the pool elements.
+Therefore, the pool elements also have to specify load degradation information.
+</t>
+<t>
+Example: Pool elements A and B are loaded by 50%, but the load of A will
+increase due to a new application request only by 10% while B will be fully
+loaded. PLU allows to specify this load degradation in the policy information,
+the selection is made on the lowest sum of load and degradation value. That
+is, A will be selected (50+10=60) instead of B (50+50=100).
+</t>
+</section>
+<section title="ENRP Server Considerations">
+<t>
+The ENRP server SHOULD select at most the requested number of pool elements.
+Their sums of load + degradation SHOULD be the lowest possible ones within the
+pool. Each element MUST NOT be reported more than once to the pool user. If
+there is a choice of equal-valued pool element entries, round robin SHOULD
+be made among these elements. The returned list of pool elements MUST be
+sorted ascending by the sum of load and degradation value.
+</t>
+</section>
+<section title="Pool User Considerations">
+<t>
+The pool user should try to use the pool elements returned from the list
+in the order returned by the ENRP server. A subsequent call for
+handle resolution may result in the same list. Therefore, it is RECOMMENDED for a
+pool user to request multiple entries in order to have a sufficient amount of
+feasible backup entries available.
+</t>
+</section>
+<section title="Pool Member Selection Policy Parameter">
+<t>
+<figure><artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |    Param Type = 0x8           |         Length = 0x10         |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                   Policy Type = 0x40000003                    |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                              Load                             |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                        Load Degradation                       |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork></figure>
+<list style="symbols">
+   <t>Load (32 bits, unsigned integer): Current load of the pool element.</t>
+   <t>Load Degradation (32 bits, unsigned integer): Load Degradation constant of the pool element.</t>
+</list>
+</t>
+</section>
+
+</section> <!-- Priority Least Used Policy -->
+
+
+<section title="Randomized Least Used Policy">
+<section title="Description">
+<t>
+The Randomized Least Used (RLU) policy combines LU and WRAND. That is, the pool
+element entries are selected randomly. The probability for a pool element entry
+A, utilized with load_A, to be selected is
+(0xFFFFFFFF - load_A) / (sum(0xFFFFFFFF-load_x)), i.e. this PE's unload part
+related to the whole pool unload rate.
+</t>
+</section>
+<section title="ENRP Server Considerations">
+<t>
+The ENRP server SHOULD behave like WRAND, having every PE's weight
+set to (0xffffffff - Load value provided by the pool element).
+</t>
+</section>
+<section title="Pool User Considerations">
+<t>
+See WRAND policy.
+</t>
+</section>
+<section title="Pool Member Selection Policy Parameter">
+<t>
+<figure><artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |    Param Type = 0x8           |         Length = 0xc          |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                   Policy Type = 0x40000004                    |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                              Load                             |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork></figure>
+<list style="symbols">
+   <t>Load (32 bits, unsigned integer): Current load of the pool element.</t>
+</list>
+</t>
+</section>
+
+</section> <!-- Randomized Least Used Policy -->
+
+</section> <!-- Adaptive Policies -->
+
+
+<section title="Security Considerations">
+<t>
+The security threats regarding RSerPool have been analyzed in
+<xref target="I-D.ietf-rserpool-threats">RSerPool threats</xref>.
+The server policy descriptions  in this document do not add any
+other threats.
+</t>
+</section>
+<section title="IANA Considerations">
+<t>[NOTE to RFC-Editor:
+<list>
+<t>"RFCXXXX" is to be replaced by the RFC number you assign this document.</t>
+</list>
+]</t>
+
+<t>This document (RFCXXX) is the reference for all registrations
+described in this section. All registrations need to be listed
+on an RSerPool specific page.</t>
+
+<section title="A New Table for RSerPool Policy Types">
+
+<t>RSerPool Policy Types which are 4 byte values have to be maintained by
+IANA. The format of the policy type value is defined as follows:
+<figure><artwork>
+       0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |X|A|                   Policy Number                           |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork></figure>
+<list style="symbols">
+   <t>X: If set to 1, the policy is user-defined and not standardized.
+         All standards policies reserved by the IETF use X=0.</t>
+   <t>A: If set to 1, the policy is adaptive. Otherwise, it is
+         non-adaptive.</t>
+   <t>Policy Number: The actual number of the policy.</t>
+</list>
+
+</t>
+<t>Nine initial Policy Types should be assigned and maintained in
+a new table "RSerPool Policy Types":
+<figure><artwork>
+  Value           Policy                                  Reference
+  -----           ---------                               ---------
+  0x00000000      (reserved, invalid value)               RFCXXXX
+  0x00000001      Round Robin                             RFCXXXX
+  0x00000002      Weighted Round Robin                    RFCXXXX
+  0x00000003      Random                                  RFCXXXX
+  0x00000004      Weighted Random                         RFCXXXX
+  0x00000005      Priority                                RFCXXXX
+  0x00000006      (reserved by IETF)                      RFCXXXX
+  ...
+  0x3fffffff      (reserved by IETF)                      RFCXXXX
+
+  0x40000000      (reserved, invalid value)               RFCXXXX
+  0x40000001      Least Used                              RFCXXXX
+  0x40000002      Least Used with Degradation             RFCXXXX
+  0x40000003      Priority Least Used                     RFCXXXX
+  0x40000004      Randomized Least Used                   RFCXXXX
+  0x40000005      (reserved by IETF)                      RFCXXXX
+  ...
+  0x7fffffff      (reserved by IETF)                      RFCXXXX
+
+  0x80000000      (private use, non-standard policy)      RFCXXXX
+  ...
+  0xffffffff      (private use, non-standard policy)      RFCXXXX
+</artwork></figure>
+</t>
+<t>For registering at IANA an RSerPool Policy Type in this table a request
+has to be made to assign such a number. This number must be unique and use
+the appropiate upper bits. The "Specification Required" policy of
+<xref target="RFC5226"/> MUST be applied.
+</t>
+<t>
+The Policy Type space from 0x80000000 to 0xffffffff is designated for
+private use.
+</t>
+
+</section>
+</section>
+
+<section title="Reference Implementation">
+<t>
+The reference implementation of RSerPool and the policies described in
+this document is available at <xref target="RSerPoolPage" /> and
+described in <xref target="Dre2006" />.
+</t>
+</section>
+
+</middle>
+
+<back>
+
+<references title='Normative References'>
+<?rfc include="reference.RFC.2119" ?>
+<?rfc include="reference.RFC.5226" ?>
+<?rfc include="reference.I-D.ietf-rserpool-common-param" ?>
+<?rfc include="reference.I-D.ietf-rserpool-asap" ?>
+<?rfc include="reference.I-D.ietf-rserpool-enrp" ?>
+<?rfc include="reference.I-D.ietf-rserpool-threats" ?>
+</references>
+
+<references title='Informative References'>
+
+<reference anchor="RSerPoolPage">
+   <front>
+      <title>Thomas Dreibholz's RSerPool Page</title>
+      <author initials="T." surname="Dreibholz" fullname="Thomas Dreibholz">
+         <organization>University of Duisburg-Essen</organization>
+         <address>
+            <postal>
+               <street>Ellernstrasse 29</street>
+               <city>45326 Essen</city>
+               <region>Nordrhein-Westfalen</region>
+               <country>Germany</country>
+            </postal>
+         </address>
+      </author>
+   </front>
+   <seriesInfo name="URL:" value="http://tdrwww.iem.uni-due.de/dreibholz/rserpool/" />
+</reference>
+
+
+<reference anchor="Dre2006">
+   <front>
+      <title>Reliable Server Pooling -- Evaluation, Optimization and Extension of a Novel IETF Architecture</title>
+      <author initials="T." surname="Dreibholz" fullname="Thomas Dreibholz">
+         <organization>University of Duisburg-Essen</organization>
+         <address>
+            <postal>
+               <street>Ellernstrasse 29</street>
+               <city>45326 Essen</city>
+               <region>Nordrhein-Westfalen</region>
+               <country>Germany</country>
+            </postal>
+         </address>
+      </author>
+      <date month="March" year="2007" />
+   </front>
+   <seriesInfo name="Ph.D. Thesis" value="University of Duisburg-Essen, Faculty of Economics, Institute for Computer Science and Business Information Systems" />
+   <seriesInfo name="URL:" value="http://duepublico.uni-duisburg-essen.de/servlets/DerivateServlet/Derivate-16326/Dre2006-final.pdf" />
+   <format type='PDF'
+           target='http://duepublico.uni-duisburg-essen.de/servlets/DerivateServlet/Derivate-16326/Dre2006-final.pdf' />
+</reference>
+
+
+<reference anchor="LCN2005">
+   <front>
+      <title>On the Performance of Reliable Server Pooling Systems</title>
+      <author initials="T." surname="Dreibholz" fullname="Thomas Dreibholz">
+         <organization>University of Duisburg-Essen</organization>
+         <address>
+            <postal>
+               <street>Ellernstrasse 29</street>
+               <city>45326 Essen</city>
+               <region>Nordrhein-Westfalen</region>
+               <country>Germany</country>
+            </postal>
+         </address>
+      </author>
+      <author initials="E.P." surname="Rathgeb" fullname="Erwin P. Rathgeb">
+         <organization>University of Duisburg-Essen</organization>
+         <address>
+            <postal>
+               <street>Ellernstrasse 29</street>
+               <city>45326 Essen</city>
+               <region>Nordrhein-Westfalen</region>
+               <country>Germany</country>
+            </postal>
+         </address>
+      </author>
+      <date month="November" year="2005" />
+   </front>
+   <seriesInfo name="Proceedings" value="of the 30th IEEE Local Computer Networks Conference" />
+</reference>
+
+
+<reference anchor="ICN2005">
+   <front>
+      <title>Load Distribution Performance of the Reliable Server Pooling Framework</title>
+      <author initials="T." surname="Dreibholz" fullname="Thomas Dreibholz">
+         <organization>University of Duisburg-Essen</organization>
+         <address>
+            <postal>
+               <street>Ellernstrasse 29</street>
+               <city>45326 Essen</city>
+               <region>Nordrhein-Westfalen</region>
+               <country>Germany</country>
+            </postal>
+         </address>
+      </author>
+      <author initials="E.P." surname="Rathgeb" fullname="Erwin P. Rathgeb">
+         <organization>University of Duisburg-Essen</organization>
+         <address>
+            <postal>
+               <street>Ellernstrasse 29</street>
+               <city>45326 Essen</city>
+               <region>Nordrhein-Westfalen</region>
+               <country>Germany</country>
+            </postal>
+         </address>
+      </author>
+      <author initials="M." surname="Tuexen" fullname="Michael Tuexen">
+         <organization abbrev="Univ. of Applied Sciences Muenster">University of Applied Sciences Muenster</organization>
+         <address>
+            <postal>
+               <street>Stegerwaldstrasse 39</street>
+               <city>48565 Steinfurt</city>
+               <region>Nordrhein-Westfalen</region>
+               <country>Germany</country>
+            </postal>
+         </address>
+      </author>
+      <date month="April" year="2005" />
+   </front>
+   <seriesInfo name="Proceedings" value="of the 4th IEEE International Conference on Networking" />
+</reference>
+
+</references>
+</back>
+</rfc>

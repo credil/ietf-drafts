@@ -1,0 +1,298 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd"[
+    <!ENTITY rfc2119 PUBLIC ''       'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+    <!ENTITY rfc3261 PUBLIC ''       'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3261.xml'>
+    <!ENTITY rfc2818 PUBLIC ''       'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2818.xml'>
+    <!ENTITY rfc3280 PUBLIC ''       'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3280.xml'>
+    <!ENTITY rfc3325 PUBLIC ''       'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3325.xml'>
+    <!ENTITY rfc3329 PUBLIC ''       'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3329.xml'>
+    <!ENTITY rfc3893 PUBLIC ''       'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3893.xml'>
+    <!ENTITY rfc4346 PUBLIC ''       'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4346.xml'>
+    <!ENTITY rfc4474 PUBLIC ''       'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4474.xml'>
+]
+>
+
+<rfc category="std" ipr="full3978" docName="draft-dotson-sip-certificate-auth-04">
+  <?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+  <?rfc toc="yes" ?>
+  <?rfc symrefs="yes" ?>
+  <?rfc sortrefs="yes"?>
+  <?rfc iprnotified="no" ?>
+  <?rfc strict="yes" ?>
+<front>
+   <title>Certificate Authentication in SIP</title>
+
+   <author initials="S.D." surname="Dotson" fullname="Steve Dotson">
+      <organization>CableLabs</organization>
+
+      <address>
+         <postal>
+	    <street>858 Coal Creek Circle</street>
+	    <city>Louisville</city> <region>CO</region>
+      	    <code>80027</code>
+	    <country>US</country>
+    	</postal>
+    	<email>s.dotson@cablelabs.com</email>
+       </address>
+   </author>
+
+   <date month="November" year="2007"/>
+   <area>Real-time Applications and Infrastructure Area</area>
+   <workgroup>SIP</workgroup>
+
+	<abstract>
+   	<t>
+	This document defines requirements for adding certificate authentication to the Session Initiation Protocol (SIP). The use case addressed is that of a SIP device authenticating on behalf of configured users using a device certificate for purposes such as registration. This document is being presented with the intention of providing requirements to any potential solutions specifying certificate authentication within SIP networks. Supporting certificate authentication in SIP would provide strong authentication and increase the types of possible deployment scenarios.
+   	</t>
+   	</abstract>
+</front>
+
+
+<middle>
+	
+	<section anchor="intro" title="Introduction">
+		<t>
+		SIP enables many real-time IP communications architectures. While it offers many advantages, it is restrictive regarding the types of credentials supported. As of this writing, it only provides for username and pre-shared key based credentials. The lack of stronger credential types, specifically certificate-based credentials, is restricting certain deployment scenarios and the advantages that can be realized by them.
+		<vspace blankLines="1" />
+		Certificates have been successfully deployed in many networks, such as PacketCable. They offer two distinct advantages, among others, over username and password based credentials:
+		<list style="symbols">
+		<t>They provide relatively stronger authentication, for example, when compared to usernames and passwords (as used commonly)</t>
+		<t>They allow authentication in scenarios where the clients are not pre-configured in the SIP network (using the Public Key Infrastructure, PKI)</t>
+		</list>
+		<vspace blankLines="1" />
+		Thus, SIP deployments would greatly benefit from certificate-based authentication in SIP networks. However, this requires careful consideration. This document presents such considerations, requirements, and recommendations. It does not present any solutions, which are considered out-of-scope for this document.
+		</t>
+  	       
+	<section anchor="overview" title="Overview">
+		<t>
+		The sections in the document mirror the work that was done to create the document. The use cases that were the catalyst for the document are described. The use cases in turn drove the requirements. Existing standardized solutions were then evaluated to determine their ability to meet the requirements.
+		</t>
+	</section>
+
+	<section anchor="usecases" title="Use Cases">		
+		<t>
+		The primary use case for the requirements discussed in this document is that of a UA registering with a SIP Registrar, where the UA has only a certificate for authentication to the network, or possibly multiple credentials with one credential being a certificate. The following diagram shows the message flows during a registration as currently defined in <xref target="RFC3261">RFC 3261</xref>.
+		</t>
+
+<figure>
+                                <artwork>
+<![CDATA[
+   User                          SIP Server
+     |                               |
+     |          REGISTER             |
+     |------------------------------>|
+     |                               |
+     |      401 Unauthorized         |
+     |<------------------------------|
+     |                               |
+     |          REGISTER             |
+     |------------------------------>|
+     |                               |
+     |            200 OK             |
+     |<------------------------------|
+     |                               |
+]]>
+                    </artwork>
+                </figure>
+
+		<t>
+		In this call flow, a user sends a SIP REGISTER request to the SIP Server which includes the user's identity. The SIP server provides a challenge to the user. The user uses the challenge and its credentials to create a challenge response and sends this back to the SIP server. The SIP server validates the user's credentials.
+		</t>
+
+		<t>
+		There may be multiple proxies between the UA and the Registrar. In this case, the UA needs to be able to authenticate with the Registrar using a public certificate. The following figure uses the previous example with the addition of an intermediate proxy.
+		</t>
+
+
+<figure>
+                                <artwork>
+<![CDATA[
+   User                        Proxy Server              SIP Server
+
+     |                               |                            |
+     |          REGISTER             |           REGISTER         |
+     |------------------------------>|--------------------------->|
+     |                               |                            |
+     |      401 Unauthorized         |       401 Unauthorized     |
+     |<------------------------------|<---------------------------|
+     |                               |                            |
+     |          REGISTER             |           REGISTER         |
+     |------------------------------>|--------------------------->|
+     |                               |                            |
+     |            200 OK             |            200 OK          |
+     |<------------------------------|<---------------------------|
+     |                               |                            |
+]]>
+                    </artwork>
+                </figure>
+
+
+		<t>
+		In this example, a proxy server is situated between the User and the SIP Server. The proxy does not have access to the user's subscription data. If confidentiality is used, the User and Proxy would terminate the confidentiality protection.
+		</t>
+
+		<t>
+		In regards to the entity being authenticated, there are several deployment scenarios that can be readily identified. 
+			<list style="symbols">
+			<t>The entity may be a device, in which case the certificate would contain information related to the device identity (e.g., MAC address, FQDN, etc).</t>
+			<t>The entity may be a user, in which case the certificate would contain information related to the user identity (e.g., SIP URI, etc).</t>
+			</list>
+		For the purposes of this document, only the device certificate use case is considered. The registrar contains information mapping the unique device identification asserted in the certificate to authorized SIP identities for that device. These identities can then be mapped to users of the device, or user devices connected to the device such as phone handsets, as shown in the following figure.
+
+			<figure title="SIP Device Authentication">
+                        <artwork>
+<![CDATA[
+                                     Authentication
+                                <======================>
+ +--------+             
+ | Phone  |        +------------+ 
+ | Alice  |--------|            |       +-------+       +-----------+
+ +--------+        |            |       |       |       |           | 
+                   | SIP Device |-------| Proxy |-------| Registrar | 
+ +--------+        |            |       |       |       |           |
+ | Phone  |--------|            |       +-------+       +-----------+
+ |  Bob   |        +------------+  
+ +--------+                           
+                                        
+]]>
+
+                                </artwork>
+                        </figure>
+                <vspace blankLines="1" />
+		In this example, the SIP device would authenticate on behalf of configured users (e.g., Alice, Bob) to the registrar using its device certificate. The registrar would return the authorized SIP identities for that device (e.g., alice@foo.com, bob@foo.com). These identities could then be mapped by the SIP device to different phone lines. The proxy would then be responsible for ensuring only authorized SIP identities are sourced from the SIP device.
+		</t>
+	</section>
+         
+	<section title="Terminology">
+		<t>
+		The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in  <xref target="RFC2119">RFC 2119</xref>.
+		<vspace blankLines="1" />
+		This document borrows SIP related terminology as specified in  <xref target="RFC3261">RFC 3261</xref>.
+		<vspace blankLines="1" />
+		Certificate: A <xref target="RFC3280">PKIX</xref> style certificate containing a public key and a list of identities in the subjectAltName that are bound to this key.
+		<vspace blankLines="1" />
+		End entity: User of X.509 certificates and/or end user system that is represented by the certificate.
+		</t>
+      </section>
+</section>
+
+<section anchor="existing" title="Existing Work">
+ 	
+	<t>
+	Currently, <xref target="RFC3261">RFC 3261</xref> defines procedures for performing SIP Digest authentication using usernames and passwords. SIP Digest is a challenge based mechanism for authentication. Any time a UA or proxy server receives a request it may challenge the initiator of the request to provide assurance of its identity. 	
+	<vspace blankLines="1" />
+	SIP Digest utilizes a challenge-response authentication mechanism that may be used by a server to challenge a client request and by a client to provide authentication information. The Digest scheme challenges using a nonce value. A valid response contains a checksum of the password, username, the provided nonce value, and other parameters. As a result, the password is never sent in the clear. SIP Digest provides authentication and replay detection. Because it is based on passwords, it suffers from the security weaknesses of password based systems.
+	</t>	
+
+	<t>
+	The genesis for this document was the lack of an existing solution for authentication from a UA to a registrar using a public key certificate within SIP messaging. While there are mechanisms related to SIP and certificates, and SIP and authentication, none of these, as currently specified, are able to meet all the requirements of this document. The following existing solutions were reviewed:	
+		<list style="symbols">
+		<t>TLS</t>
+		<t>SIP S/MIME</t>
+		<t>AIB</t>
+		<t>SIP Identity</t>
+		<t>SIP Security Agreement</t>
+		</list>
+	</t>
+	
+
+	<t>
+	Following is an analysis of existing work in the IETF in relation to the requirements presented in this document.
+        </t>	
+	
+	<t>
+	<vspace blankLines="1" />
+	<xref target="RFC4346">RFC 4346</xref> describes Transport Layer Security (TLS) between a client and a server. TLS provides privacy and data integrity between two communiticating applications. TLS is currently required to be supported by <xref target="RFC3261">RFC 3261</xref> proxy servers and registrars. Mutual TLS could be performed between the UA and it's nearest proxy in order to authenticate the UA to the proxy, and the proxy could then assert the identity of the UA through <xref target="RFC4474">SIP Identity</xref> or <xref target="RFC3325">RFC 4474</xref> P-Asserted-Identity headers to the registrar. In this model, the edge proxy performing the authentication is part of the operator's trusted network.  
+       	<list style='symbols'>
+		<t>Because device certificates contain the identity of a device (e.g., MAC address), and the registrar contains the mapping of device certificate to authorized identities, extra signaling from proxy to registrar may be needed in order to convey the device identity from the certificate to the registrar.</t>	
+		<t><xref target="RFC3261">RFC 3261</xref> does not define the use of client certificates for mutual TLS and SIP.</t>
+	</list>
+	</t>
+
+	
+	<t>
+	<vspace blankLines="1" />
+	<xref target="RFC3261">RFC 3261</xref> discusses the use of S/MIME and certificates to provide confidentiality, integrity and authentication of UAs. The procedures are based on the use of the CMS content types signedData, for signing messages, and enveloped data, for encrypting data. 
+	<list style='symbols'>
+		<t>S/MIME is not based on challenge/response, requiring the UA to always send dialog requests S/MIME protected. This is even more of an issue where authentication of non-REGISTERs (e.g., INVITEs) is desired.</t>
+		<t><xref target="RFC3261">RFC 3261</xref> does not define the use of using S/MIME to authenticate a UA to a registrar.</t>
+		<t>S/MIME may have issues with network intermediaries that must view or modify the bodies of SIP messages (especially SDP).</t>
+		<t>S/MIME does not have a means to negotiate authentication methods (assuming the authentication would be between the UA and registrar, and a UA may contain multiple credential types).</t>
+	</list>
+	</t>
+
+	<t>
+	<vspace blankLines="1" />
+	<xref target="RFC3893">RFC 3893</xref> Authenticated Identity Body (AIB) Format defines a more specific mechansim than the S/MIME solution in <xref target="RFC3261">RFC 3261</xref>. It changes the MIME type and reduces the number of headers included in the cryptographic operation from those recommended in RFC 3261. As the solution is similar to RFC 3261 S/MIME in relation to the requirements in this document, the solution has the same deficiencies as S/MIME described in the previous paragraph.
+	</t>
+
+	<t>
+	<xref target="RFC4474">RFC 4474</xref> SIP Identity provides a mechanism to cryptographically assure the identity of originators of SIP messages. As described in Section 5, Identity uses a private key and a certificate associated with the domain indicated in the From header. An authentication service authenticates the UAC and then inserts an Identity header and an Identity-Info header in the forwarded request. The Authentication Service is typically located at the outbound proxy and may authenticate the UAC using digest authentication and/or a TLS session.
+	<list style='symbols'> 
+	<t>Identity is not based on challenge/response, requiring the UA to always send dialog requests protected. This is even more of an issue where authentication of non-REGISTERs (e.g., INVITEs) is desired.</t>	
+	<t>Unless the UA is directly connected to the Authentication Service, TLS is not available to the UA to perform mutual TLS to the Authentication Service.</t>
+	<t>Identity requires the Authentication Service to be authoritative for a domain, and this is typically not supported on a UA as the UA would need to be its own domain.</t>
+	</list>
+        </t>
+
+	<t>
+	<xref target="RFC3329">RFC 3329</xref> Security Mechanism Agreement for the Session Initiation Protocol (SIP) describes a mechanism for a user agent and its next-hop SIP entity to negotiate security mechanisms. <xref target="RFC3329">RFC 3329</xref> may be used to enable confidentiality of messaging for the solution between a client and its next-hop SIP server, but it is not a solution in itself.
+	</t>
+
+</section>
+    
+<section title="Requirements and Recommendations">
+      	<t>
+	The following are the general requirements and recommendations for the support of certificate based authentication in SIP networks. A proposed solution MUST meet all the requirements stated in this section.
+      	<list style="numbers">
+	<t>The solution MUST utilize SIP messaging and be compliant to <xref target="RFC3261">RFC 3261</xref>.</t>
+	<t>Depending on the solution, it MAY need to follow a challenge/response paradigm, to allow the network to decide the policy for authentication (i.e., keep the client from always computing and sending authentication data).</t>
+	<t>The solution MUST provide end-to-end authentication. One example is the authentication between UAs and Registrars during a registration that includes intermediate proxies. In this case, the registrar must receive enough information to ensure the authenticity of the client and the authorization of the client to receive service.</t>
+	<t>A device certificate MUST represent an end entity that will be authenticated. The certificate MUST contain enough information that allows the end entity to be identified. <xref target="RFC2818">RFC 2818</xref> contains some rules on end entity authentication that may be utilized in the solution.</t>
+	<t>Relying parties MUST check the validity of certificates as defined in <xref target="RFC3280">RFC 3280</xref>.Relying parties MAY use the additional rules of <xref target="RFC2818">RFC 2818</xref> to validate end entity certificates.</t>
+	<t>The solution MUST support client-only authentication and mutual authentication modes. Client-only authentication modes could be employed when mutual authentication is achieved by other means (e.g., TLS).</t>
+	</list>
+	</t>	
+
+	<t>
+	The following are the recommendations that should be considered when developing a solution that complies with this document.
+	<list style="numbers">
+	<t>This document RECOMMENDS that solutions consider a way for the entities to agree on the authentication to be used. This would allow for the coexistence and the use of multiple authentication mechanisms. Exceptions include solutions that do not allow for the use of multiple credentials.</t>
+	<t>The methodology SHOULD consider message size impacts and SHOULD attempt to limit them. Bandwidth constrained environments may be impacted.</t>
+	<t>The solution SHOULD re-use existing standards and solutions where applicable.</t>
+	</list>
+	</t>	
+
+</section>
+      
+<section title="IANA Considerations">
+	<t>
+	None.
+	</t>
+</section>
+
+<section anchor="security" title="Security Considerations">
+	<t>
+      This document defines the requirements for certificate-based authentication within SIP. As such, it does not define a specific solution or set of technologies. However, the eventual technical architecture meeting these requirements must consider the security of the solution.
+	<vspace blankLines="1" />
+	Depending on the solution, confidentiality and integrity of messages may be necessary. Replay protection must be provided.
+      </t>
+</section> 
+ 
+</middle>
+
+<back>
+      <references title="Normative References">
+      &rfc2119;
+      &rfc3261;
+      &rfc2818;
+      &rfc3280;
+      &rfc3325;
+      &rfc3329;
+      &rfc3893;
+      &rfc4346;
+      &rfc4474;  
+      </references>
+</back>
+
+</rfc>

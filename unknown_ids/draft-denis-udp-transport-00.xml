@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM 'rfc2629.dtd'>
+<?rfc rfcedstyle="yes" ?>
+<?rfc tocompact="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc comments="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc strict="yes" ?>
+<?rfc iprnotified="no" ?>
+<rfc category="exp"
+  ipr="full3978"
+  docName="draft-denis-udp-transport-00">
+
+  <front>
+    <title abbrev="UDP Transports">UDP-Encapsulated Transport Protocols</title>
+    <author initials="R." surname="Denis-Courmont"
+        fullname="R&eacute;mi Denis-Courmont">
+      <organization abbrev="Nokia">Nokia Corporation</organization>
+      <address>
+        <postal>
+          <street>P.O. Box 407</street>
+          <city>NOKIA GROUP</city>
+          <code>00045</code>
+          <country>FI</country>
+        </postal>
+        <phone>+358 50 487 6315</phone>
+        <email>remi.denis-courmont@nokia.com</email>
+      </address>
+    </author>
+    <date year="2008" month="July" day="04" />
+    <area>Transport</area>
+	<workgroup>Internet Engineering Task Force</workgroup>
+
+    <keyword>STUN</keyword>
+    <keyword>test</keyword>
+    <keyword>vectors</keyword>
+    <keyword>fingerprint</keyword>
+
+    <abstract>
+      <t> This memo defines modified formats for conveyance of
+        TCP and SCTP packets within UDP datagrams,
+        to ease traversal of network address translators.
+      </t>
+    </abstract>
+  </front>
+  <middle>
+    <section title="Introduction">
+      <t> The widespread deployment of network address and port translators
+        (NATs) across the Internet constitutes a major impediment
+        to the transmission of end-to-end traffic,
+        especially when both ends of a communication channel are located
+        behind (distinct) NATs.
+      </t>
+      <t> NATs are typically designed in such a manner,
+         that the connection-oriented transport protocols, such as TCP,
+         will only operate if:
+        <list style="symbols">
+          <t> the passive end of the connection is not hindered by a NAT
+            (i.e. NATs can only be on the active end side),
+          </t>
+          <t> any NAT on the path must explicitly support the transport
+            protocol used (in practice, only TCP is commonly supported).
+          </t>
+        </list>
+        Several experiments have consistently showed that, when both sides
+        of a communication channel are behind NATs, the transmission of UDP
+        datagrams gives a much higher success rate.
+      </t>
+      <t> This memo proposes modified packet formatting rules for use
+        of the TCP and SCTP transport protocols through UDP datagram flows,
+        with optimizations to avoid having to shrink the maximum segment
+        sizes, nor require the use of IP-level packet fragmentation.
+      </t>
+    </section>
+
+    <section anchor="defs" title="Definitions">
+      <t> The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+        "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in
+        this document are to be interpreted as described in
+        <xref target="RFC2119"/>.
+      </t>
+    </section>
+
+    <section title="Applicability statement">
+      <t> UDP encapsulation is not backward compatible
+        with normal TCP and SCTP implementations.
+        They also require application-layer changes,
+        though any affected applications would likely not operate at all
+        without such modifications.
+      </t>
+      <t> Futhermore, middleboxes typically implement short binding
+        expiration timers for UDP flows
+        (commonly 30 seconds to a few minutes).
+        As a consequence, it is necessary to send keep-alive packets
+        in both direction rather frequently.
+        That precludes the use of UDP encapsulation in scenarios where
+        the sending of frequent keep-alive is not acceptable
+        (e.g. battery-powered device with a cellular access network).
+      </t>
+      <t> Because of these major limitations, the proposed mechanism
+        SHOULD only be used when normal packet formats would not work,
+        such as in NAT-to-NAT scenarios.
+      </t>
+    </section>
+
+    <section title="Packet formats">
+      <section title="Encapsulated TCP">
+        <figure title="UDP-encapsulated TCP header" align="center">
+          <artwork>
+0                   1                   2                   3
+0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|          Source Port          |       Destination Port        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|            Length             |            Checksum           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| |  Data |       |C|E|A|P|R|S|F|                               |
+|1| Offset|  Res. |W|C|C|S|S|Y|I|            Window             |
+| |       |       |R|E|K|H|T|N|N|                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        Sequence Number                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Acknowledgment Number                      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Options                    |    Padding    |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                             data                              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          </artwork>
+        </figure>
+        <t>The UDP-encapsulated TCP format is defined as follow:
+          <list style="hanging">
+            <t hangText="Source, Destination Ports:">
+              TCP/UDP source and destination port numbers.
+            </t>
+            <t hangText="Length:">
+              Length in octets of the datagram,
+              including this entire header and the data.
+            </t>
+            <t hangText="Checksum:">
+              UDP checksum (as specified in
+              <xref target="RFC0768" />).
+            </t>
+            <t hangText="1:">
+              Bit always set to 1, to differentiate STUN/UDP datagrams
+              from TCP frames.
+            </t>
+            <t hangText="Data Offset:">
+              TCP Data Offset, the number of 32-bits words
+              from Source Port (included) to data (excluded).
+              MUST be at least 5.
+            </t>
+            <t hangText="Other fields:">
+              The other have the same semantics as with the
+              TCP protocol (see <xref target="RFC0793" />).
+            </t>
+          </list>
+        </t>
+        <t>Note that the URG bit and the Urgent pointer field are suppressed.
+          Support for TCP urgent data is left for further study.
+        </t>
+        <t>The TCP checksum is removed, the UDP checksum provides the same
+          level of protection.
+        </t>
+      </section>
+      <section title="Encapsulated SCTP">
+        <figure title="UDP-encapsulated SCTP common header" align="center">
+          <artwork>
+0                   1                   2                   3
+0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|     Source Port Number        |     Destination Port Number   |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|            Length             |            Checksum           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|1|                     Verification Tag                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          </artwork>
+        </figure>
+        <t>
+          <list style="hanging">
+            <t hangText="Source, Destination Port Numbers:">
+              UDP/SCTP source and destination port numbers.
+            </t>
+            <t hangText="Length:">
+              Length in octets of the datagram,
+              including this entire header and the data.
+            </t>
+            <t hangText="Checksum:">
+              UDP checksum (as specified in
+              <xref target="RFC0768" />).
+            </t>
+            <t hangText="1:">
+              Bit always set to 1, to differentiate STUN/UDP datagrams
+              from encapsulated SCTP packets.
+            </t>
+            <t hangText="Verification Tag:">
+              31 lower order bits of the SCTP verification tag
+              defined in <xref target="RFC4960" />.
+            </t>
+          </list>
+        </t>
+      </section>
+    </section>
+
+    <section title="Usage with STUN">
+      <t> The above packet formats are defined such that the first bit
+        of UDP payload data is always set to 1.
+        This allows for sending STUN packets multiplexed through the same
+        UDP flow as either a UDP-encapsulated TCP or SCTP session.
+        Indeed STUN packets always have their first bit set to 0, as per
+        <xref target="I-D.ietf-behave-rfc3489bis" />.
+      </t>
+      <section title="Usage with ICE">
+        <t> Because of this, it is possible to establish a UDP-encapsulated
+          TCP or SCTP flow using Interactive Connection Establishment
+          <xref target="I-D.ietf-mmusic-ice" /> as for any other
+          ICE-negotiated UDP flow.
+          In that case, STUN packets are first exchanged to probe
+          end-to-end connectivity, and mutually authenticate endpoints.
+          Once a flow is successfully established, UDP-encapsulated
+          TCP or SCTP packets can be exchanged,
+          in accordance with the respective transport protocol state machines.
+        </t>
+        <t> For this to work, both endpoints need to exchange their
+          ICE candidate out-of-band, such as with SIP<xref target="RFC3261" />
+          or XMPP<xref target="RFC3920" />.
+          TBD: in case SDP conveys the ICE parameters, a new media protocol or
+          attribute will be required.
+        </t>
+      </section>
+      <section title="Keep-alives packets">
+        <t> This multiplexing scheme also allow sending and receiving of ICE
+          keepalive packets, which may be required to refresh binding timers
+          on NATs and other middleboxes on the data path.
+          It should be noted that UDP flows are commonly associated
+          with rather short bindings timeouts (30 seconds to a few minutes).
+          Therefore, keep-alives packets may need to be sent frequently.
+        </t>
+        <t> In principle,
+          TCP keep-alive packets could also be used to refresh NAT bindings.
+          However, the typical TCP keep-alive period is way too long.
+          For instance, at the time of writing,
+          the GNU/Linux operating system will send TCP keep-alives only
+          after 2 hours of TCP session inactivity
+          (assuming keep-alives are enabled for the session).
+        </t>
+      </section>
+    </section>
+
+    <section title="Alternative solutions">
+      <t>
+        This non-normative section documents other potential solutions
+        to establishing TCP and SCTP sessions through a UDP flow.
+      </t>
+      <section title="Tunneling IP over UDP">
+        <t>
+          The Teredo protocol<xref target="RFC4380" /> allows encapsulating
+          IP (version 6) packets into UDP/IPv4 datagrams.
+          This potentially allows the use of any IP-based transport protocol
+          between two NATted IPv4 hosts,
+          provided that the operating system and applications support IPv6
+          (proper IPv6 connectivity is however not required).
+        </t>
+        <t>
+          Each Teredo client is automatically provisioned with its own unique
+          IPv6 address, which can be used as the rendez-vous mechanism,
+          thus no application-layer rendez-vous protocol are needed.
+          For this to work, clients must maintain a live UDP flow binding with
+          their Teredo server, however.
+        </t>
+        <t>
+          The Teredo protocol provides a fixed per-packet overhead of 48 bytes:
+          8 bytes for the UDP header and 40 bytes for the IPv6 header.
+          In its current state, Teredo limits the packet MTU to 1280 bytes
+          (the minimum IPv6 MTU), in order to avoid fragmentation.
+          For TCP, this translates to a maximum segment size of 1220 bytes.
+        </t>
+      </section>
+      <section title="Tunneling transport header over UDP">
+        <t>
+          Another option would involve encapsulating the unmodified
+          transport protocol header into a UDP packet.
+          draft-tuexen-sctp-udp-encaps and draft-phelan-dccp-natencap
+          were example of this.
+        </t>
+      </section>
+    </section>
+
+    <section anchor="security" title="Security Considerations">
+      <t>TBD.
+      </t>
+    </section>
+
+    <section anchor="iana" title="IANA Considerations">
+      <t>This document raises no IANA considerations.
+      </t>
+    </section>
+
+  </middle>
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.RFC.0768" ?>
+      <?rfc include="reference.RFC.0793" ?>
+      <?rfc include="reference.RFC.2119" ?>
+      <?rfc include="reference.RFC.4960" ?>
+    </references>
+    <references title="Informative References">
+      <?rfc include="reference.RFC.3261" ?>
+      <?rfc include="reference.RFC.3920" ?>
+      <?rfc include="reference.RFC.4380" ?>
+      <!--?rfc include="reference.RFC.4787" ?-->
+      <!--?rfc include="reference.I-D.ietf-behave-tcp" ?-->
+      <?rfc include="reference.I-D.ietf-behave-rfc3489bis" ?>
+      <?rfc include="reference.I-D.ietf-mmusic-ice" ?>
+      <!--?rfc include="reference.I-D.ietf-mmusic-ice-tcp" ?-->
+      <!--?rfc include="reference.I-D.ietf-behave-turn" ?-->
+      <!--?rfc include="reference.I-D.niemi-simple-msrp-ice" ?-->
+    </references>
+  </back>
+</rfc>

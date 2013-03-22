@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt'?>
+<?rfc toc='yes'?>
+<?rfc tocompact='yes'?>
+<?rfc tocdepth='6'?>
+<?rfc symrefs='yes'?>
+<?rfc compact='yes'?>
+<rfc ipr="full3978" category="exp" docName="draft-ietf-rohc-ikev2-extensions-hcoipsec-04">
+
+
+	<front>
+		<title abbrev="IKEv2 Extensions to Support RoHCoIPsec">IKEv2 Extensions to Support Robust Header Compression over IPsec (RoHCoIPsec)</title>
+
+
+		<date month="October" year="2007"/>
+
+
+		<author initials="J." surname="Pezeshki" fullname="Jonah Pezeshki">
+			<organization>Booz Allen Hamilton</organization>
+			<address>
+				<postal>
+					<street>13200 Woodland Park Dr.</street>
+					<city>Herndon</city>
+					<region>VA</region>
+					<code>20171</code>
+					<country>US</country>
+				</postal>
+				<email>pezeshki_jonah@bah.com</email>
+			</address>
+		</author>
+
+		<author initials="E." surname="Ertekin" fullname="Emre Ertekin">
+			<organization>Booz Allen Hamilton</organization>
+			<address>
+				<postal>
+					<street>13200 Woodland Park Dr.</street>
+					<city>Herndon</city>
+					<region>VA</region>
+					<code>20171</code>
+					<country>US</country>
+				</postal>
+				<email>ertekin_emre@bah.com</email>
+			</address>
+		</author>
+
+		<author initials="R." surname="Jasani" fullname="Rohan Jasani">
+			<organization>Booz Allen Hamilton</organization>
+			<address>
+				<postal>
+					<street>13200 Woodland Park Dr.</street>
+					<city>Herndon</city>
+					<region>VA</region>
+					<code>20171</code>
+					<country>US</country>
+				</postal>
+				<email>jasani_rohan@bah.com</email>
+			</address>
+		</author>
+
+		<author initials="C." surname="Christou" fullname="Chris Christou">
+			<organization>Booz Allen Hamilton</organization>
+			<address>
+				<postal>
+					<street>13200 Woodland Park Dr.</street>
+					<city>Herndon</city>
+					<region>VA</region>
+					<code>20171</code>
+					<country>US</country>
+				</postal>
+				<email>christou_chris@bah.com</email>
+			</address>
+		</author>
+
+
+		<abstract>
+			<t>When using Robust Header Compression (RoHC [ROHC]) in conjunction with IPsec [IPSEC] (i.e. [RoHCOIPSEC]) a mechanism is needed to negotiate RoHC configuration parameters between end-points prior to operation.  Internet Key Exchange (IKE) is a mechanism which can be leveraged to handle these negotiations.  This document specifies extensions to Internet Key Exchange (IKEv2 [IKEV2]) that will allow RoHC and its associated configuration parameters to be negotiated for IPsec security associations (SAs).</t>
+		</abstract>
+	</front>
+
+
+	<middle>
+		
+
+		<section title="Introduction">
+			<t>Increased packet header overhead due to IPsec protection can result in inefficient utilization of bandwidth.  Coupling RoHC with IPsec offers an efficient way to transfer protected IP traffic.</t>
+                        <t>For proper RoHCoIPsec [ROHCOIPSEC] operation, RoHC requires configuration parameters to be negotiated between the compressor and decompressor, prior to operation.  Current specifications of hop-by-hop RoHC schemes negotiate these parameters through a link-layer protocol such as Point-to-Point Protocol (PPP) (i.e. RoHC over PPP [ROHCPPP]). Similarly, key exchange protocols (e.g.  IKEv2) are commonly used to negotiate parameters between IPsec peers before a SA can be established. This document proposes the use of IKEv2 to handle RoHC channel configuration for RoHCoIPsec, and details various extensions to IKEv2 which are intended to provide this functionality.</t>
+		</section>
+
+		<section title="RoHC Channel Negotiation">
+			<t>The initialization of a RoHC session requires the negotiation of a set of configuration parameters (e.g. MAX_CID, etc.).  As such, a mechanism must exist for a RoHC enabled device to share a list of supported RoHC parameters with its peer, and for the peer to select the appropriate parameters from this list.</t>
+                        <t>Similarly, negotiable parameters must also be shared between IPsec peers before a SA can be established.  To perform this negotiation, a key exchange protocol, IKEv2, is commonly used.  IKEv2 is an extensible protocol that negotiates parameters via request/response message pairs (i.e. exchanges).</t>
+                        <t>A set of extensions to IKEv2 can be defined, which will allow for RoHC parameters to be negotiated during the creation and rekeying of Child SAs.  This new Notify payload will contain values for the set of RoHC parameters to be negotiated between the two RoHC peers.</t>
+			
+			<section title="Negotiation of RoHC Channel Parameters">
+				<t>RoHC configuration parameters will be negotiated at either the establishment or rekeying of a Child SA.  Specifically, a Notify payload will be used during the IKE_AUTH and CREATE_CHILD_SA exchanges to negotiate the RoHCoIPsec session.  The Notify payload sent by the initiator will contain the configuration parameters for the RoHC scheme.  Upon receipt of the initiator's request, the responder will either ignore the payload (if it doesn't support RoHC or the proposed parameters) or respond with a Notify payload that contains the accepted RoHC channel parameters.  These accepted parameters are subset of the parameters proposed by the initiator, and the parameters supported by the responder (e.g. if the initiator proposes a MAX_CID value of 15, but the responder only supports a MAX_CID value of 13, the responder will respond with a value of 13, which is supported by both parties).  Note that only one Notify payload is used to convey RoHC parameters per exchange.  If multiple Notify payloads relaying RoHC parameters are received by the responder, all but the first such Notify payload must be dropped. </t>
+				<t>A new Notify Message Type value, denoted ROHC_SUPPORTED, will be added to indicate that the Notify payload is conveying RoHC channel parameters.  Additionally, several fields of the Notify payload (as defined in [IKEV2]) are set as follows:</t>
+				<t>Critical (1 bit)
+				<list style="empty"><t>
+				This value is set to zero to indicate that the recipient must skip this payload if it does not understand the payload type code in the Next Payload field of the previous payload.</t></list></t>
+				<t>RESERVED (7 bits)
+				<list style="empty"><t>
+				Must be sent as zero, and must be ignored on receipt.</t></list></t>
+				<t>Protocol ID (1 octet)
+				<list style="empty"><t>
+				Since the RoHC parameters are set at SA creation, and thus do not relate to an existing SA, this field must be set to zero.</t></list></t>
+				<t>SPI Size (1 octet)
+				<list style="empty"><t>
+				This value must be set to zero, since no SPI is applicable (RoHC parameters are set at SA creation, thus the SPI has not been defined).</t></list></t>
+				<t>Notify Message Type (2 octets)
+				<list style="empty"><t>
+				This field must be set to ROHC_SUPPORTED.</t></list></t>
+
+
+				<t>RoHC configuration parameters will be communicated via a new Notify message type, denoted ROHC_SUPPORTED.  The RoHC configuration parameters will be listed within the Notification Data field of the Notify payload, in the following format:</t>
+				<t>
+					<figure>
+					<preamble> </preamble>
+					<artwork><![CDATA[
+                     1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+!            MAX_CID            !              MRRU             !
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+!           MAX_HEADER          !                               !
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+!                                                               !
+~                           PROFILES...                         ~
+!                                                               !
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                                    ]]></artwork>
+					<postamble>Figure 1:  Notification Data field</postamble>
+					</figure>
+
+				</t>
+
+				<t>MAX_CID (2 octets)
+				<list style="empty"><t>
+				The MAX_CID field indicates the maximum value of a context identifier.  This value must be at least 0 and at most 16383 (The value 0 implies having one context).</t></list></t>
+				<t><list style="empty"><t>Suggested value: 15</t></list></t>
+				<t><list style="empty"><t>Note: The value of LARGE_CIDS will be implicitly determined by this value (i.e. if MAX_CID is &lt;= 15, LARGE_CIDS will be assumed to be 0).</t></list></t>
+				<t>MRRU (2 octets)
+				<list style="empty"><t>
+				The MRRU field indicates the maximum reconstructed reception unit (see [ROHC], section 5.1.1).</t></list></t>
+				<t><list style="empty"><t>Suggested value: 0</t></list></t>
+<t><list style="empty"><t>The MRRU value is used in conjunction with the segmentation protocol defined in RoHC.  Since RoHCoIPsec will generally be implemented across multiple link-layer "hops", segmentation will not normally be required.  In these cases the MRRU value will be set to zero, indicating that no segment headers are allowed on the channel.</t></list></t>
+
+				<t>MAX_HEADER (2 octets)
+				<list style="empty"><t>
+				The largest header size in octets that may be compressed.</t></list></t>
+				<t><list style="empty"><t>Suggested value: 168 octets</t></list></t>
+				<t><list style="empty"><t>Note: The MAX_HEADER parameter is not used for all RoHC profiles. If none of the RoHC profiles require this field, this value is ignored.</t></list></t>
+				<t>PROFILES
+				<list style="empty"><t>
+				The set of profiles to be enabled for the RoHC process.  Profiles are further detailed in [ROHC].  In addition, several common profiles are defined in [ROHCPROF].  These 16-bit profile identifiers are to be sent in network byte order.</t></list></t>
+					<t>Note: When a pair of SAs are created (one in each direction), the RoHC channel parameter FEEDBACK_FOR is set implicitly to the other SA of the pair (i.e. the SA pointing in the reverse direction).</t>
+
+				</section>
+			</section>
+
+
+		<section title="Security Considerations">
+			<t>The RoHC parameters negotiated via IKEv2 do not add any new vulnerabilities beyond those associated with the normal operation of IKEv2.</t>
+		</section>
+		<section title="IANA Considerations">
+			<t>This document defines a new Notify Message (Status Type).  Therefore, IANA is requested to allocate one value from the IKEv2 Notify Message registry to indicate ROHC_SUPPORTED.  Note that, since this Notify Message is a Status Type, values ranging from 0 to 16383 must not be allocated for ROHC_SUPPORTED.</t>
+		</section>
+		<section title="Acknowledgments">
+			<t>The authors would like to thank Mr. Sean O'Keeffe, Mr. James Kohler, and Ms. Linda Noone of the Department of Defense, as well as Mr. Rich Espy of OPnet for their contributions and support in the development of this document.  The authors would also like to thank Mr. Tero Kivinen for providing his technical expertise for this document. In addition, the authors would like to thank the following for their numerous reviews and comments to this document:</t>
+<t><list style="symbols">
+<t>Dr. Stephen Kent</t>
+<t>Dr. Carsten Bormann</t>
+<t>Mr. Lars-Erik Jonnson</t>
+<t>Mr. Pasi Eronen</t>
+</list></t>
+<t>Finally, the authors would also like to thank Mr. Tom Conkle, Ms. Michele Casey, and Mr. Etzel Brower.</t>
+		</section>
+
+
+	</middle>
+
+
+	<back>
+		<references title="Normative References">
+
+			<reference anchor="ROHC">
+				<front>
+					<title>RObust Header Compression (ROHC): Framework and four profiles: RTP, UDP, ESP, and uncompressed</title>
+					<author initials="C." surname="Bormann">
+						<organization/>
+					</author>
+					<author initials="C." surname="Burmeister">
+						<organization/>
+					</author>
+					<author initials="M." surname="Degermark">
+						<organization/>
+					</author>
+					<author initials="H." surname="Fukushima">
+						<organization/>
+					</author>
+					<author initials="H." surname="Hannu">
+						<organization/>
+					</author>
+					<author initials="L." surname="Jonsson">
+						<organization/>
+					</author>
+					<author initials="R." surname="Hakenberg">
+						<organization/>
+					</author>
+					<author initials="T." surname="Koren">
+						<organization/>
+					</author>
+					<author initials="K." surname="Le">
+						<organization/>
+					</author>
+					<author initials="Z." surname="Liu">
+						<organization/>
+					</author>
+					<author initials="A." surname="Martensson">
+						<organization/>
+					</author>
+					<author initials="A." surname="Miyazaki">
+						<organization/>
+					</author>
+					<author initials="K." surname="Svanbro">
+						<organization/>
+					</author>
+					<author initials="T." surname="Wiebke">
+						<organization/>
+					</author>
+					<author initials="T." surname="Yoshimura">
+						<organization/>
+					</author>
+					<author initials="H." surname="Zheng">
+						<organization/>
+					</author>
+					<date month="July" year="2001"/>
+				</front>
+				<seriesInfo name="RFC" value="3095"/>
+			</reference>
+
+			<reference anchor="IPSEC">
+				<front>
+					<title>Security Architecture for the Internet Protocol</title>
+					<author initials="S." surname="Kent" fullname="S. Kent">
+						<organization/>
+					</author>
+					<author initials="K." surname="Seo" fullname="K. Seo">
+						<organization/>
+					</author>
+					<date month="December" year="2005"/>
+				</front>
+				<seriesInfo name="RFC" value="4301"/>
+			</reference>
+
+			<reference anchor="RoHCOIPSEC">
+				<front>
+					<title>Integration of Robust Header Compression over IPsec Security Associations</title>
+					<author initials="E." surname="Ertekin" fullname="E. Ertekin">
+						<organization/>
+					</author>
+					<author initials="C." surname="Christou" fullname="C. Christou">
+						<organization/>
+					</author>
+					<author initials="R." surname="Jasani" fullname="R. Jasani">
+						<organization/>
+					</author>
+					<date month="June" year="2006"/>
+				</front>
+				<seriesInfo name="work in progress" value=""/>
+			</reference>
+
+			<reference anchor="IKEV2">
+				<front>
+					<title>Internet Key Exchange (IKEv2) Protocol</title>
+					<author initials="C." surname="Kaufman">
+						<organization/>
+					</author>
+					<date month="December" year="2005"/>
+				</front>
+				<seriesInfo name="RFC" value="4306"/>
+			</reference>
+
+			<reference anchor="ROHCPPP">
+				<front>
+					<title>Robust Header Compression (ROHC) over PPP</title>
+					<author initials="C." surname="Bormann">
+						<organization/>
+					</author>
+					<date month="April" year="2002"/>
+				</front>
+				<seriesInfo name="RFC" value="3241"/>
+			</reference>
+
+			<reference anchor="AH">
+				<front>
+					<title>IP Authentication Header</title>
+					<author initials="S." surname="Kent">
+						<organization/>
+					</author>
+					<date month="December" year="2005"/>
+				</front>
+				<seriesInfo name="RFC" value="4302"/>
+			</reference>
+
+			<reference anchor="ESP">
+				<front>
+					<title>IP Encapsulating Security Payload (ESP)</title>
+					<author initials="S." surname="Kent">
+						<organization/>
+					</author>
+					<date month="December" year="2005"/>
+				</front>
+				<seriesInfo name="RFC" value="4303"/>
+			</reference>
+
+			<reference anchor="ROHCPROF">
+				<front>
+					<title>RObust Header Compression Version 2 (RoHCv2): Profiles for RTP, UDP, IP, ESP and UDP Lite</title>
+					<author initials="G." surname="Pelletier">
+						<organization/>
+					</author>
+					<author initials="K." surname="Sandlund">
+						<organization/>
+					</author>
+					<date month="May" year="2007"/>
+				</front>
+				<seriesInfo name="www.iana.org/assignments/ROHC-pro-ids" value=""/>
+			</reference>
+
+
+		</references>
+	</back>
+</rfc>

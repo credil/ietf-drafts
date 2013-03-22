@@ -1,0 +1,234 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd"[
+    <!ENTITY rfc2119 PUBLIC ''       'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+    <!ENTITY rfc2617 PUBLIC ''       'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2617.xml'>
+    <!ENTITY rfc2069 PUBLIC ''       'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2069.xml'>
+    <!ENTITY rfc3261 PUBLIC ''       'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3261.xml'>
+]
+>
+
+<rfc category="std" ipr="full3978" docName="draft-dotson-sip-mutual-auth-01">
+  <?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+  <?rfc toc="yes" ?>
+  <?rfc symrefs="yes" ?>
+  <?rfc sortrefs="yes"?>
+  <?rfc iprnotified="no" ?>
+  <?rfc strict="yes" ?>
+<front>
+	<title>Proxy Mutual Authentication in SIP</title>
+
+   <author initials="S.D." surname="Dotson" fullname="Steve Dotson">
+      <organization>Cox</organization>
+
+      <address>
+         <postal>
+	    <street>1400 Lake Hearn Drive</street>
+	    <city>Atlanta</city> <region>GA</region>
+      	    <code>30319</code>
+	    <country>US</country>
+    	</postal>
+    	<email>steve.dotson@cox.com</email>
+       </address>
+   </author>
+
+   <author initials="S.H." surname="Hoggan" fullname="Stuart Hoggan">
+      <organization>CableLabs</organization>
+
+      <address>
+         <postal>
+	    <street>858 Coal Creek Circle</street>
+	    <city>Louisville</city> <region>CO</region>
+      	    <code>80027</code>
+	    <country>US</country>
+    	</postal>
+    	<email>s.hoggan@cablelabs.com</email>
+       </address>
+   </author>
+
+   <author initials="S.C." surname="Channabasappa" fullname="Sumanth Channabasappa">
+      <organization>CableLabs</organization>
+
+      <address>
+         <postal>
+	    <street>858 Coal Creek Circle</street>
+	    <city>Louisville</city> <region>CO</region>
+      	    <code>80027</code>
+	    <country>US</country>
+    	</postal>
+    	<email>sumanth@cablelabs.com</email>
+       </address>
+   </author>
+
+   <date month="February" year="2008"/>
+   <workgroup>Network</workgroup>
+
+	<abstract>
+		<t>
+This document defines the Proxy-Authentication-Info header field for the Session Initiation Protocol (SIP). When a UA is required to authenticate to a proxy using digest authentication specified in SIP this header field allows for the UA to authenticate the proxy, enabling mutual authentication. This header field can also provide integrity checks over the bodies.
+   	</t>
+   	</abstract>
+</front>
+
+
+<middle>
+	<section anchor="intro" title="Introduction">
+		<t>
+		The Session Initiation Protocol (SIP, <xref target="RFC3261"/>) provides a stateless, challenge-response based mechanism for authentication that is based on authentication in HTTP <xref target="RFC2617"/>.  A proxy or a user receiving a request can challenge the initiator of the request to obtain assurance of the originator's identity. A UAS, registrar, or redirect server can use 401 (Unauthorized), where as proxies use 407 (Proxy Authentication Required), for authentication challenges. Challenges result in a resend of the requests with the digest authentication information that can be used to verify the authenticity of the originator. The two parties share a username and password to support this authentication mechanism. Refer to <xref target="RFC3261"/> for more information on Digest authentication. 
+		</t>
+		<t>
+		The SIP Digest mechanism parallels the HTTP Digest mechanism specified in <xref target="RFC2617"/>. HTTP Digest <xref target="RFC2617"/> also allows for mutual authentication by allowing the client to authenticate the challenging entity, such as a proxy. Mutual authentication is facilitated via two headers: Authentication-Info for mutual authentication with a server, and Proxy-Authentication-Info for authentication with a proxy. These headers may be used by the challenging entities, server or proxy, to send challenge responses for authentication by the client. SIP specifies and allows for the usage of the Authentication-Info header by a server, but does not mention the Proxy-Authentication-Info header. This document presents an extension to allow for the use of the Proxy-Authentication-Info header. The header can be sent along with 2xx responses from the proxy to the client during digest authentication. The response digest in the "response-auth" directive allows the client to authenticate the proxy, i.e., it ensures that the proxy has knowledge of the password. This provides for mutual authentication when proxies challenge clients, and provides for limited integrity protection. It also allows for the Proxy to provide additional information such as the nonce value to use for a future authentication response.
+		</t>
+	</section>
+         
+	<section title="Terminology">
+		<t>
+		The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in  <xref target="RFC2119">RFC 2119</xref>.
+		</t>
+	</section>
+
+	<section title="Overview">
+		<t>
+                <figure anchor="ProxyToUserDigestAuthenticationInSIP" title="Proxy-to-User Digest Authentication in SIP">
+                        <artwork>
+<![CDATA[
+
+   +--------+                  +--------+
+   |  UAC   |                  |  Proxy |
+   +--------+                  +--------+
+       |                            |
+       |   SIP REQ (e.g., INVITE)   |
+       |--------------------------> |
+       |                            |
+       | 407 (Proxy Auth. Required) |
+       |<-------------------------- |
+       |                            |
+       |                            |
+       |   SIP REQ (with creds)     |
+       |--------------------------> |
+       |                            |
+       |          200 OK            |
+       |<-------------------------- |
+       |                            |
+
+]]>
+                        </artwork>        
+                </figure>
+		<xref target="ProxyToUserDigestAuthenticationInSIP"/> provides a sample message flow when the proxy challenges a client's request using digest authentication with SIP. As illustrated, the client sends a request that is challenged by the proxy via a 407 (Proxy Authentication Required) response. The client then uses the information provided in the challenge (refer to <xref target="RFC3261"/> for details) to prepare a response (to the challenge). The client then resends the request, and this time it includes the challenge response. If the response to the challenge authenticated the client, the proxy replies with a 200 OK. This allows for the proxy to authenticate the client. However, it neither allows for the proxy to send additional information regarding the successful authentication such as the nonce to use for a future authentication response, nor does it allow for a client to authenticate the proxy. This is in contrast to when the challenging entity is a server, since it can accomplish both - additional authentication information and mutual authentication - via the Authentication-Info header. This document proposes the inclusion of the Proxy-Authentication-Info header to address this deficiency in Proxy-to-User authentication. The header parallels a header of the same name for HTTP, as specified in <xref target="RFC2617"/>. The header is used by the proxy during Proxy-to-User authentication to allow for mutual authentication and additional authentication information.
+		<vspace blankLines="1"/>
+		</t>
+	</section>
+	
+	<section title="User Agent Client (UAC) Behavior">
+		<t>
+When this header field is included by a Proxy within the 2xx response, the requirements are the same as those of a client receiving an Authentication-Info header field from a Server, as specified in <xref target="RFC3261"/>.
+		</t>
+	</section>
+	
+
+	<section title="User Agent Server Behavior">
+		<t>
+UAS behavior is unaffected by this specification.
+		</t>
+	</section>
+	
+	<section title="Proxy Behavior">
+		<t>
+A Proxy MAY include this header field in a 2xx response to a request that was successfully authenticated using digest based on the Authorization header field.
+	<vspace blankLines="1"/>
+   Syntax and semantics follow those specified in <xref target="RFC2617"/>, which also defines mechanisms for backwards compatibility using the qop attribute in the request. These mechanisms MUST be used by a proxy to determine if the client supports the new mechanisms in <xref target="RFC2617"/> that were not specified in <xref target="RFC2069"/>.
+	<vspace blankLines="1"/>
+   Example:
+	<vspace blankLines="1"/>
+      Proxy-Authentication-Info: nextnonce="47364c23432d2e131a5fb210812c
+		</t>
+	</section>
+	
+	<section title="Extensibility Considerations">
+		<t>
+			This document introduces the Proxy-Authentication-Info header that may be sent from a proxy to a client during authentication. If present, it provides an opportunity for the client to authenticate the proxy, enabling mutual authentication. A proxy that is not compliant with this specification will not include the header. However, implementors need to understand that without the specified header mutual authentication may not be possible within Proxy-to-User authentication as specified by SIP. Additionally, the presence of this header allows for the proxy to indicate the nonce to be used by the client during a future authentication response. If the nextnonce field is present the client SHOULD use it when constructing the Proxy-Authorization header for its next request. This document does not alter this requirement. However, implementers need to understand that the failure of the client to act on the nextnonce field may result in a request to re-authenticate from the proxy with the "stale=TRUE". This behavior is specified in <xref target="RFC2617"/>, and is not altered by this document.
+		</t>
+	</section>
+	
+
+	<section title="Header Field Definition">
+		<t>
+The grammar for the Proxy-Authentication-Info header is defined as follows:
+		<figure>
+			<artwork>
+<![CDATA[
+Proxy-Authentication-Info = "Proxy-Authentication-Info" HCOLON painfo
+                             *(COMMA painfo)
+painfo                    =  nextnonce / message-qop
+                             / response-auth / cnonce
+                             / nonce-count
+nextnonce                 =  "nextnonce" EQUAL nonce-value
+response-auth             =  "rspauth" EQUAL response-digest
+response-digest           =  LDQUOT *LHEX RDQUOT
+]]>
+                     </artwork>
+              </figure>
+              <xref target="ExtensionToTable3"/> is an extension to Table 3 of <xref target="RFC3261"/> for the Proxy-Authentication-Info header:
+                <figure title="Extension to Table 3" anchor="ExtensionToTable3">
+                        <artwork>
+<![CDATA[
+  Header field                 where    proxy ACK BYE CAN INV OPT REG
+
+Proxy-Authentication-Info       2xx       o    -   o   -   o   o   -
+
+]]>
+                        </artwork>        
+                </figure>
+
+		</t>
+	</section>
+	
+
+
+	<section anchor="security" title="Security Considerations">
+		<t>
+		This document defines a SIP message header that provides mutual authentication during proxy authentication of a UA. When challenged by a proxy or server to perform authentication (e.g., after sending an INVITE or SUBSCRIBE request), the Proxy-Authorization header provides the proxy with proof the UA knows the correct credentials for the identity being used. By adding support for the Proxy-Authentication-Info header, proxies may provide UAs with a challenge response to prove to the UA it also knows the correct credentials. The use case most affected is where the proxy/server performing the challenge is not the next-hop proxy/server of the UA.
+		</t>
+		<t>
+		When the proxy/server is the next-hop proxy/server for the UA, TLS should be relied upon instead of this mechanism, as a malicious next-hop proxy or Man-in-The-Middle (MITM) could merely not challenge the UA, or simply not use the optional Proxy-Authorization-Info header. This header is most meaningful in environments where the UA is expecting (i.e., is configured) to perform mutual authenitication - malicious entities would be forced to prove knowledge of the UAs credentials, adding an additional layer of defense.
+      		</t>
+	</section> 
+
+	<section title="IANA Considerations">
+			<t>
+			This document defines a new SIP header field "Proxy-Authentication-Info".
+			<vspace blankLines="1" />
+			Name of header:	 Proxy-Authentication-Info
+			<vspace blankLines="1" />
+			Short form: none
+			<vspace blankLines="1" />
+			Registrant: Sumanth Channabasappa, sumanth@cablelabs.com
+			<vspace blankLines="1" />
+			Normative description:	RFCXXXX
+			<vspace blankLines="1" />
+			Note to RFC Editor: Please replace XXXX with the RFC number for this document.
+			</t>
+	</section>
+
+
+
+<section title="Acknowledgements">
+	<t>
+		The author would like to thank Keith Drage and Dean Willis for their assistance in the process for this change.
+	</t>
+</section>
+ 
+</middle>
+
+<back>
+      <references title="Normative References">
+      &rfc2119;
+      &rfc2617;
+      &rfc3261;
+      </references>
+
+      <references title="Informative References">
+      &rfc2069;
+      </references>
+</back>
+
+</rfc>

@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="us-ascii"?>
+<!-- This template is for creating an Internet Draft using xml2rfc,
+     which is available here: http://xml.resource.org. -->
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+  <!-- One method to get references from the online citation libraries.
+     There has to be one entity for each item to be referenced. 
+     An alternate method (rfc include) is described in the references. -->
+
+  <!ENTITY RFC2119 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+  <!ENTITY RFC2560 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2560.xml">
+  <!ENTITY I-D.narten-iana-considerations-rfc2434bis SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.narten-iana-considerations-rfc2434bis.xml">
+]>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc strict="yes" ?>
+<?rfc toc="yes"?>
+<?rfc tocdepth="4"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+
+<rfc category="info" docName="draft-ietf-pkix-ocspagility-00" ipr="trust200811">
+
+  <front>
+    <!-- The abbreviated title is used in the page header - it is only necessary if the 
+         full title is longer than 39 characters -->
+
+    <title abbrev="OCSP Algorithm Agility">OCSP Algorithm Agility</title>
+    <author fullname="Phillip Hallam-Baker" initials="P. M."
+            surname="Hallam-Baker">
+      <organization>VeriSign Inc</organization>
+      <address>
+        <email>pbaker@verisign.com</email>
+      </address>
+    </author>
+
+    <date day="3" month="March" year="2009" />
+
+    <area>General</area>
+
+    <workgroup>Network Working Group</workgroup>
+
+    <keyword>OCSP</keyword>
+    <keyword>Algorithm Agility</keyword>
+
+    <abstract>
+      <t>
+        The OSCP specification defined in RFC 2560 requires server responses to be signed but 
+        does not specify a mechanism for selecting the signature algorithm to be
+        used leading to possible interoperability failures in contexts where multiple
+        signature algorithms are in use. This document specifies an algorithm for 
+        server signature algorithm selection and an extension that allows a client
+        to advise a server that specific signature algorithms are supported.
+      </t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <section title="Requirements Language">
+        <t>
+          The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+          "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+          document are to be interpreted as described in <xref
+        target="RFC2119">RFC 2119</xref>.
+        </t>
+      </section>
+    </section>
+    <section title="OCSP Algorithm Agility Requirements">
+
+      <t>
+        OCSP <xref target="RFC2560">RFC 2560</xref> defines a protocol for obtaining certificate status information
+        from an online service. A particular OCSP server may or may not be
+        provided by the CA that issued the certificate whose status is being
+        queried and may or may provide a realtime indication of the
+        certificate status or a time delayed status indication.
+      </t>
+
+      <t>
+        <xref target="RFC2560">RFC 2560</xref> specifies a means for an OCSP
+        responder to indicate the signature and digest algorithms used in a
+        response but not how those algorithms are specified. The only
+        algorithm mandated by the protocol specification is that the OCSP client
+        SHALL support the DSA sig-alg-oid specified in section 7.2.2 of [RFC2459]
+        and SHOULD be capable of processing RSA signatures as specified in section 7.2.1 of
+        [RFC2459]. The only requirement placed on responders is that they
+        SHALL support the SHA1 hashing algorithm.
+      </t>
+
+      <t>
+        This requirement is clearly insufficient to ensure interoperabilty. 
+      </t>
+
+      <t>
+        While the responder may apply heuristics such as using the signature 
+        algorithm employed by the certificate issuer, such heuristics fail in 
+        many common real-world situations where multiple signature algorithms 
+        are employed:
+      </t>
+      
+      <t>
+        <list style='symbols'>
+          <t>The algorithm used to sign the certificate may differ from the 
+          subject key algorithm</t>
+          <t>The properties of the OCSP responder certificate chain are 
+          frequently only known to the responder after the fact.</t>
+          <t>
+            In an extended PKI deployment, the task of verifying certificate
+            status may be separated from the task(s) that make use of the
+            certificate.
+          </t>
+          <t>A responder cannot infer anything if a request for an unknown certificate is issued.  
+          </t>
+        </list>
+      </t>
+
+      <t>
+        The last criterion is significant as it occurs frequently in real world
+        PKI deployments and cannot be resolved through the information available 
+        from in-band signalling using the <xref target="RFC2560">RFC 2560</xref>
+        protocol without modification. 
+    </t>
+      
+      <t>
+        In addition, a system that employs a signature algorithm other than the 
+        de-facto default is frequently doing so to achieve very specific security
+        properties that may not be captured by a heuristic assumptuion designed to
+        facilitate interoperability rather than performance. In particular:
+      </t>
+
+      <t>
+        <list style='symbols'>
+          <t>
+            An implementation may intentionally employ an algorithm
+            for certificate status response that is less computationally demanding
+            than for signing the certificate itself, thus allowing for more 
+            frequent certificate status validation.
+          </t>
+          <t>
+            An implementation may intentionally wish to guard against the possibility
+            of a compromise resulting from a signature algorithm compromise by 
+            employing two separate encryption algorithms.
+          </t>
+        </list>
+      </t>
+
+      <t>
+        This document describes:
+      </t>
+
+      <t>
+        <list style='symbols'>
+          <t>A mechanism that allows a client to indicate the set of preferred 
+          signature algorithms.
+          </t>
+          <t>An algorithm for signature algorithm selection that maximizes
+          the probability of successful operation in the case that no 
+          supported prefered algorithm(s) are specified.</t>
+        </list>
+      </t>            
+            
+    </section>
+
+    <section title="Client Indication of Preferred Signature Algorithms">
+
+      <t>
+        A client MAY declare a preferred set of algorithms algorithms in
+        a request using the preferred signature algorithm extension.
+      </t>
+      <figure>
+        <artwork>
+          <![CDATA[
+id-pkix-ocsp-preferred-signature-algorithms OBJECT IDENTIFIER ::= { 
+      id-pkix-ocsp x }
+
+PreferredSignatureAlgorithms   ::=     SEQUENCE {
+      Algorithms      SEQUENCE OF AlgorithmIdentifier
+      }
+]]>
+        </artwork>
+      </figure>
+      <t>
+        If a set of preferred signature algorithms is declared the client
+        MUST support each of the specified algorithms.
+      </t>
+
+      <t>
+        If a set of preferred algorithms is declared the OCSP responder
+        SHOULD use one of the specified signing algorithms.
+      </t>
+
+    </section>
+
+
+    <section title="Responder Signature Algorithm Selection">
+
+      <t>
+        <xref target="RFC2560">RFC 2560</xref> does not specify a mechanism
+        for deciding the signature algorithm to be used in an OCSP response.
+        As previously noted this does not provide a sufficient degree of
+        certainty as to the algorithm selected to guarantee interoperation.
+      </t>
+
+      <section title="Dynamic Response">
+
+        <t>
+        A responder MAY maximize the potential for ensuring interoperability
+        by selecting a supported signature algorithm using the following order
+        of precedence where the first method has the highest precedence:
+      </t>
+      <t>
+        <list style='numbers'>
+          <t>
+            Using an algorithm specified as a preferred signing algorithm in
+            the client request.
+          </t>
+          <t>
+            Using the signing algorithm used to sign the CertID specified
+            in the query.
+          </t>
+          <t>
+            Using the signing algorithm used to sign a CRL issued by the
+            certificate issuer providing status information for the
+            certificate specified by CertID.
+          </t>
+          <t>
+            Using a signature algorithm that has been advertised as being
+            the default signature algorithm for the signing service using
+            an out of band mechanism
+          </t>
+          <t>
+            Using a mandatory signing algorithm specified for the version
+            of the OCSP protocol in use.
+          </t>
+        </list>
+      </t>
+      <t>
+        A responder SHOULD always apply the lowest numbered selection
+        mechanism that is known, supported and meets the responder's criteria
+        for cryptographic algorithm strength.
+      </t>
+
+      </section>
+      
+      <section title="Static Response">
+        <t>
+          For purposes of efficiency, an OCSP responder is permitted to generate
+          static responses in advance of a request. Although this case does not
+          permit the responder to make use of the client data directly, the
+          responder may anticipate the client request and generate a set
+          of signed responses so as to maximize the probability that it is
+          possible to generate a response that is assigned the highest 
+          preference weighting.
+        </t>
+      </section>      
+    </section>
+
+    <section anchor="Acknowledgements" title="Acknowledgements">
+      <t>
+        The author acknowleges the helpful comments made on earlier 
+        drafts of this work by Santosh Chokhani and Stefan Santesson
+      </t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>
+        The mechanism used to choose the response signing algorithm MUST
+        be considered to be sufficiently secure against cryptanalytic attack
+        for the intended application.
+      </t>
+      <t>
+        In most applications it is sufficient for the signing algorithm to
+        be at least as secure as the signing algorithm used to sign the
+        original certificate whose status is being queried. This criteria
+        may not hold in long term archival applications however in which the
+        status of a certificate is being queried for a date in the distant
+        past, long after the signing algorithm has ceased being considered
+        trustworthy.
+      </t>
+      <section title="Use of insecure algorithms">
+        <t>
+          It is not always possible for a responder to generate a response 
+          that the client is expected to understand and meets contemporary 
+          standards for cryptographic security. In such cases an application 
+          MUST balance the risk of employing a compromised security solution
+          and the cost of mandating an upgrade, including the risk that the
+          alternative chosen by end users will offer even less security or no security.
+        </t>
+        <t>
+          In archival applications it is quite possible that an OCSP responder
+          might be asked to report the validity of a certificate on a date
+          in the distant past. Such a certificate might employ a signing
+          method that is no longer considered acceptably secure. In such
+          circumstances the responder MUST NOT generate a signature for
+          a signing mechanism that is considered unacceptably insecure.
+        </t>
+        <t>
+          A client MUST accept any signing algorithm in a response that
+          it specified as a preferred signing algorithm in the request.
+          It follows therefore that a client MUST NOT specify as a preferred
+          signing algorithm any signing algorithm that is either not
+          supported or not considered acceptably secure.
+        </t>
+      </section>
+      <section title="Man in the Middle Downgrade Attack">
+        <t>
+          The mechanism to support client indication of preferred signature
+          algorithms is not protected against a man in the middle downgrade
+          attack. This constraint is not considered to be a significant security
+          concern as the client MUST NOT accept any signing algorithm that
+          does not meet
+          its own criteria for acceptable cryptographic security no matter
+          what mechanism is used to determine the signing algorithm of
+          the response.
+        </t>
+      </section>
+    </section>
+  </middle>
+
+  <!--  *****BACK MATTER ***** -->
+
+  <back>
+    <references title="Normative References">
+      &RFC2119;
+      &RFC2560;
+    </references>
+  </back>
+</rfc>
+

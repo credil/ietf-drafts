@@ -1,0 +1,577 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSPY v5 rel. 3 U (http://www.xmlspy.com)
+     by Daniel M Kohn (private) -->
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+
+<rfc category="std" ipr="trust200811" docName="draft-ietf-avt-rtcp-xr-concsec-02.txt">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+    <front>
+        <title abbrev='RTCP XR Concealed Seconds'>RTCP XR Report Block for Concealed Seconds metric Reporting</title>
+        <author initials='G.' surname='Hunt' fullname='Geoff Hunt'>
+            <organization abbrev='BT'>BT</organization>
+		<address>
+	    <postal>
+        	<street>Orion 2 PP3</street>
+        	<street>Adastral Park</street>
+        	<street>Martlesham Heath</street>
+        	<city>Ipswich</city> <region>Suffolk</region>
+        	<code>IP5 3RE</code>
+        	<country>United Kingdom</country>
+    	    </postal>
+	    <phone>+44 1473 651704</phone>
+	    <email>geoff.hunt@bt.com</email>
+	    </address>
+        </author>
+        <author initials='A.' surname='Clark' fullname='Alan Clark'>
+            <organization abbrev='Telchemy'>Telchemy Incorporated</organization>
+		<address>
+	    <postal>
+        	<street>2905 Premiere Parkway, Suite 280</street>
+        	<city>Duluth</city> <region>GA</region>
+        	<code>30097</code>
+        	<country>USA</country>
+    	    </postal>
+	    <email>alan.d.clark@telchemy.com</email>
+	    </address>
+        </author>
+        <date month='May' year='2009' />
+       <area>Real-time Applications and Infrastructure Area</area>
+        <workgroup>Audio/Video Transport Working Group</workgroup>
+        <keyword>RFC</keyword>
+        <keyword>Request for Comments</keyword>
+        <keyword>I-D</keyword>
+        <keyword>Internet-Draft</keyword>
+        <keyword>Real Time Control Protocol</keyword>
+        <abstract>
+        <t>
+   This document defines an RTCP XR Report Block that allows the
+   reporting of Concealed Seconds metrics primarily for audio applications of RTP.
+        </t>
+        </abstract>
+    </front>
+
+    <middle>
+
+<section anchor='intro' title="Introduction">
+<section anchor='intro1' title="Concealed Seconds Block">
+<t>
+   This draft defines a new block type to augment those defined
+   in <xref target='RFC3611'/>, for use primarily in audio applications of RTP.
+</t><t>
+   At any instant, the audio output at a receiver may be classified as
+   either 'normal' or 'concealed'.  'Normal' refers to playout of audio
+   payload received from the remote end, and also includes locally
+   generated signals such as announcements, tones and comfort noise.
+   Concealment refers to playout of locally-generated signals used to
+   mask the impact of network impairments such as lost packets or to reduce the audibility of
+   jitter buffer adaptations.
+</t><t>
+   The new block type provides metrics for concealment. Specifically, the first metric 
+(Unimpaired Seconds) reports the number of whole seconds
+occupied only with normal playout of data which the receiver obtained from the sender's stream. The 
+second metric 
+(Concealed Seconds) reports the number of whole seconds during which the receiver played 
+out any locally-generated media data. A third 
+metric (Severely Concealed Seconds) reports the number of whole seconds during which 
+the receiver played out locally-generated data for more than SCS Threshold (ms).
+</t>
+<t>
+The metric belongs to the class of transport-related terminal metrics defined in [MONARCH] (work in progress).
+</t><t>
+Instances of this Metrics Block refer by tag to the separate auxiliary Measurement Identity block 
+<xref target='MEASIDENT'/> which contains information 
+such as the SSRC of the measured stream, and RTP sequence numbers and time intervals indicating the span of the report.
+</t>
+</section>
+<section anchor='intro2' title="RTCP and RTCP XR Reports">
+<t>
+   The use of RTCP for reporting is defined in <xref target='RFC3550'/>. 
+   <xref target='RFC3611'/> defined an extensible structure for reporting using
+   an RTCP Extended Report (XR).  This draft defines
+   a new Extended Report block that MUST be used as defined in
+   <xref target='RFC3550'/> and <xref target='RFC3611'/>.
+</t>
+</section>
+<section anchor='intro3' title="Performance Metrics Framework">
+<t>
+   The Performance Metrics Framework <xref target='PMOLFRAME'/> provides guidance on the
+   definition and specification of performance metrics.  Metrics
+   described in this draft either reference external definitions
+   or define metrics generally in accordance with the guidelines
+   in <xref target='PMOLFRAME'/>.
+</t>
+</section>
+<section anchor='intro4' title="Applicability">
+<t>
+This metric is primarily applicable to audio applications of RTP. The reason for this restriction is that, for many video codecs, 
+packet data may contain occasional complete reference pictures, and otherwise consists of data specifying picture changes relative to a
+complete reference picture. Loss of an RTP video media packet could degrade the user experience for a variable amount of time 
+between the time of loss and the next complete reference picture. In contrast, in the audio case the degradation almost always 
+persists for a predictable period of time from the loss of the packet, which might be simply the duration of the audio data encoded in 
+the lost packet. However if a useful Concealed Seconds metric can be defined for an RTP video application, either in general or for 
+a specific type of video codec, the Concealed Seconds and 
+Severely Concealed Seconds metrics and the metric block type defined here MAY be used.
+</t>
+</section>
+</section>
+
+<section anchor='blockdef' title="Concealed Seconds Metrics Block">
+<t>
+   This sub-block provides a description of potentially audible
+   impairments due to lost and discarded packets at the endpoint,
+   expressed on a time basis analogous to a traditional PSTN T1/E1
+   errored seconds metric.
+</t><t>
+   The following metrics are based on successive one second intervals as
+   declared by a local clock.  This local clock does NOT need to be
+   synchronized to any external time reference.  The starting time of
+   this clock is unspecified.  Note that this implies that the same loss
+   pattern could result in slightly different count values, depending on
+   where the losses occur relative to the particular one-second
+   demarcation points.  For example, two loss events occurring 50ms
+   apart could result in either one concealed second or two, depending
+   on the particular 1000 ms boundaries used.
+</t><t>
+   The seconds in this sub-block are not necessarily calendar seconds.
+   At the tail end of a call, periods of time of less than 1000ms shall
+   be incorporated into these counts if they exceed 500ms and shall be
+   disregarded if they are less than 500ms.
+</t>
+<section anchor='blockdef1' title="Report Block Structure">
+    <figure anchor='blockdata' title="Report Block Structure">
+        <artwork>
+   Concealed seconds metrics block
+    0               1               2               3
+    0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |     BT=NCS    |I| tag |plc|rsv|       block length = 3        |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                      Unimpaired Seconds                       |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                       Concealed Seconds                       |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   | Severely Concealed Seconds    | RESERVED      | SCS Threshold |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	</artwork>
+    </figure>
+</section>
+<section anchor='blockdef2' title="Definition of Fields in Concealed Seconds Metrics Block">
+<t>
+   block type (BT): 8 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+         A Concealed Seconds Metrics Report Block is identified by the constant 
+         NCS. 
+</t>
+</list>
+</t>
+<t>
+[Note to RFC Editor: please replace NCS with the
+         IANA provided RTCP XR block type for this block.]
+</t>
+<t>
+   Interval Metric flag (I): 1 bit
+</t>
+<t>
+<list style='empty'>
+<t>
+This field is used to indicate whether the Concealed Seconds metric block is an Interval or a Cumulative report, 
+that is, whether the reported values apply to the most 
+recent measurement interval duration between successive metrics reports (I=1) (the Interval Duration) or to the accumulation period 
+characteristic of cumulative 
+measurements (I=0) (the Cumulative Duration). Numerical values for both these intervals are provided in the Measurement Identifier block 
+referenced by the tag field below.
+</t>
+</list>
+</t>
+<t>
+   Measurement Identifier association (tag): 3 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+This field is used to identify the Measurement Identifier block <xref target='MEASIDENT'/> which describes this measurement. The relevant 
+Measurement Identifier block has the same tag value as the Concealed Seconds Metrics block. Note that there may be 
+more than one Measurement Identifier block per RTCP packet.
+</t>
+</list>
+</t>
+<t>
+   Packet Loss Concealment Method (plc): 2 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+This field is used to identify the packet loss concealment method in use at the receiver, according to the 
+following code:
+</t>
+</list>
+</t>
+<figure>
+<artwork>
+        bits 0-3
+              0 = silence insertion
+              1 = simple replay, no attenuation
+              2 = simple replay, with attenuation
+              3 = enhanced
+              Other values reserved
+</artwork>
+</figure>
+<t>
+   Reserved (rsv): 2 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+These bits are reserved. They SHOULD be set to zero by senders and MUST be ignored by receivers.
+</t>
+</list>
+</t>
+<t>
+   block length: 16 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+The length of this report block in 32-bit words, minus one. For the Concealed Seconds block, the block length 
+is equal to 3.
+</t>
+</list>
+</t>
+<t>
+Unimpaired Seconds: 32 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+   A count of the number of unimpaired Seconds that have occurred.
+</t><t>
+   An unimpaired Second is defined as a continuous period of 1000ms
+   during which no frame loss or discard due to late arrival has
+   occurred.  Every second in a call must be classified as either OK or
+   Concealed.
+</t><t>
+   Normal playout of comfort noise or other silence concealment signal
+   during periods of talker silence, if VAD is used, shall be counted as
+   unimpaired seconds.
+</t><t>
+   If the measured value exceeds 0xFFFFFFFD, the value 0xFFFFFFFE SHOULD
+   be reported to indicate an over-range measurement.  If the
+   measurement is unavailable, the value 0xFFFFFFFF SHOULD be reported.
+</t><t>
+</t>
+</list>
+</t>
+<t>
+Concealed Seconds: 32 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+   A count of the number of Concealed Seconds that have occurred.
+</t><t>
+   A Concealed Second is defined as a continuous period of 1000ms during
+   which any frame loss or discard due to late arrival has occurred.
+</t>
+<t>
+   Equivalently, a concealed second is one in which some Loss-type
+   concealment has occurred.  Buffer
+   adjustment-type concealment SHALL not cause Concealed Seconds to be
+   incremented, with the following exception.  An implementation MAY
+   cause Concealed Seconds to be incremented for 'emergency' buffer
+   adjustments made during talkspurts.
+</t>
+<t>
+   Loss-type concealment is reactive insertion or deletion of samples
+   in the audio playout stream due to effective frame loss at the audio
+   decoder. "Effective frame loss" is the event in which a frame of
+   coded audio is simply not present at the audio decoder when
+   required.  In this case, substitute audio samples are generally
+   formed, at the decoder or elsewhere, to reduce audible impairment.
+</t>
+<t>
+   Buffer Adjustment-type concealment is proactive or controlled
+   insertion or deletion of samples in the audio playout stream due to
+   jitter buffer adaptation, re-sizing or re-centering decisions within
+   the endpoint.
+</t><t>
+   Because this insertion is controlled, rather than occurring randomly
+   in response to losses, it is typically less audible than loss-type 
+   concealment.  For example, jitter buffer adaptation 
+   events may be constrained to occur during periods of talker silence,
+   in which case only silence duration is affected, or sophisticated 
+   time-stretching methods for insertion/deletion during favorable
+   periods in active speech may be employed.  For these reasons, buffer
+   adjustment-type concealment MAY be exempted from inclusion in
+   calculations of Concealed Seconds and Severely Concealed Seconds. 
+</t><t>
+   However, an implementation SHOULD include buffer-type concealment in 
+   counts of Concealed Seconds and Severely Concealed Seconds if the 
+   event occurs at an 'inopportune' moment, with an emergency or large,
+   immediate adaptation during active speech, or for unsophisticated
+   adaptation during speech without regard for the underlying signal, in
+   which cases the assumption of low-audibility cannot hold.  In other
+   words, jitter buffer adaptation events which may be presumed to be 
+   audible SHOULD be included in Concealed Seconds and Severely 
+   Concealed Seconds counts. 
+</t><t>
+   Concealment events which cannot be classified as Buffer Adjustment-
+   type MUST be classified as Loss-type.
+</t>
+<t>
+   For clarification, the count of Concealed Seconds MUST include the
+   count of Severely Concealed Seconds.
+</t><t>
+   If the measured value exceeds 0xFFFFFFFD, the value 0xFFFFFFFE SHOULD
+   be reported to indicate an over-range measurement.  If the
+   measurement is unavailable, the value 0xFFFFFFFF SHOULD be reported.
+</t>
+</list>
+</t>
+<t>
+Severely Concealed Seconds: 16 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+   A count of the number of Severely Concealed Seconds.
+</t><t>
+   A Severely Concealed Second is defined as a non-overlapping period of
+   1000 ms during which the cumulative amount of time that has been
+   subject to frame loss or discard due to late arrival, exceeds the SCS
+   Threshold.
+</t><t>
+   If the measured value exceeds 0xFFFD, the value 0xFFFE SHOULD be
+   reported to indicate an over-range measurement.  If the measurement
+   is unavailable, the value 0xFFFF SHOULD be reported.
+</t>
+</list>
+</t>
+<t>
+RESERVED: 8 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+These bits are reserved. They SHOULD be set to zero by senders and MUST be ignored by receivers.
+</t>
+</list>
+</t>
+<t>
+SCS Threshold: 8 bits
+</t>
+<t>
+<list style='empty'>
+<t>
+   The SCS Threshold defines the amount of time corresponding to lost or
+   discarded frames that must occur within a one second period in order
+   for the second to be classified as a Severely Concealed Second.  This
+   is expressed in milliseconds and hence can represent a range of 0.1
+   to 25.5 percent loss or discard.
+</t>
+<t>
+   A default threshold of 50ms (5% effective frame loss per second) is
+   suggested.
+</t>
+</list>
+</t>
+</section>
+</section>
+
+<section anchor='sdp' title="SDP Signaling">
+<t>
+   <xref target='RFC3611'/> defines the use of SDP (Session Description Protocol) 
+   <xref target='RFC4566'/> for signaling the use of XR blocks.  XR blocks MAY be used without
+   prior signaling.
+</t>
+<t>
+   This section augments the SDP <xref target='RFC4566'/> attribute "rtcp-xr" defined in 
+   <xref target='RFC3611'/> by providing an additional value of "xr-format" to signal the use of the report
+   block defined in this document. 
+</t><t>
+The SDP attribute for the block has an additional optional paremeter, "thresh", used to supply a value for 
+the SCS Threshold parameter. If this parameter is present, the RTP system receiving the SDP SHOULD use this value
+for the current session. If the parameter is not present, the RTP system SHOULD use a locally configured value.
+</t><t>
+     rtcp-xr-attrib = "a=" "rtcp-xr" ":" [xr-format *(SP xr-format)] CRLF
+</t><t>
+     (defined in <xref target='RFC3611'/>)
+</t><t>
+     xr-format =/ xr-conc-sec-block
+</t><t>
+     xr-conc-sec-block   = "conc-sec" ["=" thresh]
+</t>
+<figure>
+<artwork>
+     thresh      = 1*DIGIT          ; threshold for SCS (ms) 
+     DIGIT          = %x30-39 
+</artwork>
+</figure>
+</section>
+
+<section title="IANA Considerations">
+<t>
+   New block types for RTCP XR are subject to IANA registration.  For
+   general guidelines on IANA considerations for RTCP XR, refer to
+   [RFC3611].
+</t>
+<section title="New RTCP XR Block Type value">
+<t>   
+   This document assigns the block type value NCS in the IANA "RTCP XR Block
+   Type Registry" to the "Concealed Seconds Metrics Block".
+</t>
+<t>
+[Note to RFC Editor: please replace NCS with the
+         IANA provided RTCP XR block type for this block.]
+</t>
+</section>
+<section title="New RTCP XR SDP Parameter">
+<t>
+This document also registers a new
+   parameter "conc-sec" in the "RTCP XR SDP Parameters Registry".
+</t>
+</section>
+<section title="Contact information for registrations">
+<t>
+   The contact information for the registrations is:
+</t>
+<t>
+   Geoff Hunt (geoff.hunt@bt.com)
+</t>
+<t>
+   Orion 2 PP3, Adastral Park, Martlesham Heath, Ipswich IP5 3RE, United Kingdom
+</t>
+</section>
+</section>
+
+<section title="Security Considerations">
+<t>
+   It is believed that this proposed RTCP XR report block introduces no
+   new security considerations beyond those described in <xref target='RFC3611'/>.  This block does not provide 
+   per-packet statistics so the risk
+   to confidentiality documented in Section 7, paragraph 3 of <xref target='RFC3611'/> does
+   not apply.
+</t>
+</section>
+<section title="Contributors">
+<t>
+   The authors gratefully acknowledge the comments and contributions
+   made by Bruce Adams, Philip Arden, Amit Arora, Bob Biskner, Kevin Connor, Claus Dahm, Randy Ethier, 
+   Roni Even, Jim Frauenthal, Albert Higashi, Tom Hock, 
+   Shane Holthaus, Paul Jones, Rajesh Kumar, Keith Lantz, Mohamed Mostafa, Amy Pendleton, 
+   Colin Perkins, Mike Ramalho, 
+   Ravi Raviraj,
+   Albrecht Schwarz, Tom Taylor, and Hideaki Yamada.
+</t>
+</section>
+<section title="Changes from previous version">
+<t>
+Changed BNF for SDP following Christian Groves' and Tom Taylor's comments (4th and 5th May 2009), now aligned with RFC 5234 section 3.3
+"Incremental Alternatives".
+</t>
+<t>
+Updated references.
+</t>
+</section>
+</middle>
+
+    <back>
+<references title='Normative References'>
+                <reference anchor='MEASIDENT'>
+			<front> 
+				<title>RTCP XR Measurement Identifier Block</title> 
+				<author initials='G.' surname='Hunt' fullname='Geoff Hunt'> 
+					<organization>BT</organization> 
+				</author> 
+				<date month='May' year='2009' /> 
+			</front> 
+			<seriesInfo name='ID' value='draft-ietf-avt-rtcp-xr-meas-identity-02' /> 	
+			<format type='TXT' /> 
+		</reference>
+                <reference anchor='RFC3550'>
+			<front> 
+				<title>RTP: A Transport Protocol for Real-Time Applications</title> 
+				<author initials='H.' surname='Schulzrinne' fullname='Henning Schulzrinne'> 
+					<organization>Columbia University</organization> 
+				</author> 
+				<date month='July' year='2003' /> 
+			</front> 
+			<seriesInfo name='RFC' value='3550' /> 	
+			<format type='TXT' /> 
+		</reference>
+                <reference anchor='RFC3611'>
+			<front> 
+				<title>RTP Control Protocol Extended Reports (RTCP XR)</title> 
+				<author initials='T. (Ed)' surname='Friedman' fullname='Timur Friedman'> 
+					<organization> Paris 6 </organization> 
+				</author> 
+				<date month='November' year='2003' /> 
+			</front> 
+			<seriesInfo name='RFC' value='3611' /> 	
+			<format type='TXT' /> 
+		</reference>
+                <reference anchor='RFC2119'>
+			<front> 
+				<title>Key words for use in RFCs to Indicate Requirement Levels</title> 
+				<author initials='S.' surname='Bradner' fullname='Scott Bradner'> 
+					<organization>Harvard University</organization> 
+				</author> 
+				<date month='March' year='1997' /> 
+			</front> 
+			<seriesInfo name='RFC' value='2119' /> 	
+			<seriesInfo name='BCP' value='14' /> 	
+			<format type='TXT' /> 
+		</reference>
+                <reference anchor='RFC4566'>
+			<front> 
+				<title>SDP: Session Description Protocol</title> 
+				<author initials='M.' surname='Handley' fullname='Mark Handley'> 
+					<organization>UCL</organization> 
+				</author> 
+				<date month='July' year='2006' /> 
+			</front> 
+			<seriesInfo name='RFC' value='4566'/>
+			<format type='TXT' /> 
+		</reference>
+</references>
+        <references title='Informative References'>
+		<reference anchor='PMOLFRAME'>
+			<front>
+                                <title>Framework for Performance Metric Development</title> 
+                                <author initials='A.' surname='Clark' fullname='Alan Clark'> 
+                                        <organization>Telchemy Incorporated</organization> 
+				</author> 
+                                <date month='March' year='2009' /> 
+			</front> 
+                        <seriesInfo name='ID' value='draft-ietf-pmol-metrics-framework-02' />  
+			<format type='TXT' /> 
+            </reference>
+                <reference anchor='MONARCH'>
+			<front> 
+				<title>Monitoring Architectures for RTP</title> 
+				<author initials='G.' surname='Hunt' fullname='Geoff Hunt'> 
+					<organization>BT</organization> 
+				</author> 
+				<date month='August' year='2008' /> 
+			</front> 
+			<seriesInfo name='ID' value='draft-hunt-avt-monarch-01' /> 	
+			<format type='TXT' /> 
+		</reference>
+	</references>
+    </back>
+
+</rfc>

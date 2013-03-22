@@ -1,0 +1,271 @@
+<?xml version="1.0"?>
+<?rfc toc="yes"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY rfc2119         SYSTEM 'reference.RFC.2119.xml'>
+<!ENTITY rfc3917         SYSTEM 'reference.RFC.3917.xml'>
+<!ENTITY RFC4234         SYSTEM 'reference.RFC.4234.xml'>
+<!ENTITY ipfixarch       SYSTEM 'reference.I-D.ietf-ipfix-architecture.xml'>
+<!ENTITY ipfixproto      SYSTEM 'reference.RFC.5101.xml'>
+<!ENTITY ipfixinfo       SYSTEM 'reference.RFC.5102.xml'>
+<!ENTITY ipfixaggregation	SYSTEM 'reference.I-D.dressler-ipfix-aggregation.xml'>
+<!ENTITY ipfixreducingredundancy	SYSTEM 'reference.I-D.ietf-ipfix-reducing-redundancy.xml'>
+]>
+<?rfc strict="yes"?>
+<?rfc toc="yes"?>
+<?rfc footer="draft-sommer-ipfix-mediator-ext-01.txt"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<rfc ipr="full3978" docName="&lt;draft-sommer-ipfix-mediator-ext-01.txt&gt;" category="std">
+	<front>
+		<title abbrev="Mediator-Specific IPFIX Extensions">Mediator-Specific Extensions to IPFIX Protocol and Information Model</title>
+		<author fullname="Christoph Sommer" initials="C." surname="Sommer">
+			<organization abbrev="Univ. Erlangen">University of Erlangen-Nuremberg</organization>
+			<address>
+				<postal>
+					<street>Department of Computer Science 7</street>
+					<street>Martensstr. 3</street>
+					<city>Erlangen</city>
+					<code>91058</code>
+					<country>Germany</country>
+				</postal>
+				<phone>+49 9131 85-27993</phone>
+				<email>christoph.sommer@informatik.uni-erlangen.de</email>
+				<uri>http://www7.informatik.uni-erlangen.de/~sommer/</uri>
+			</address>
+		</author>
+		<author fullname="Falko Dressler" initials="F." surname="Dressler">
+			<organization abbrev="Univ. Erlangen">University of Erlangen-Nuremberg</organization>
+			<address>
+				<postal>
+					<street>Department of Computer Science 7</street>
+					<street>Martensstr. 3</street>
+					<city>Erlangen</city>
+					<code>91058</code>
+					<country>Germany</country>
+				</postal>
+				<phone>+49 9131 85-27914</phone>
+				<email>dressler@informatik.uni-erlangen.de</email>
+				<uri>http://www7.informatik.uni-erlangen.de/</uri>
+			</address>
+		</author>
+		<author fullname="Gerhard Muenz" initials="G." surname="Muenz">
+			<organization abbrev="Univ. Tuebingen">University of Tuebingen</organization>
+			<address>
+				<postal>
+					<street>Computer Networks and Internet</street>
+					<street>Sand 13</street>
+					<city>Tuebingen</city>
+					<code>72076</code>
+					<country>Germany</country>
+				</postal>
+				<phone>+49 7071 29-70534</phone>
+				<email>muenz@informatik.uni-tuebingen.de</email>
+				<uri>http://net.informatik.uni-tuebingen.de/</uri>
+			</address>
+		</author>
+		<date month="July" year="2008"/>
+		<abstract>
+			<t>
+				IPFIX supports the concept of a Mediator, a device that receives, transforms, and exports data streams using IPFIX. One of the most important requirements is the reduction of the volume of IPFIX traffic by aggregating and discarding received information.
+				This document introduces a number of extensions to the IPFIX Information Model that support the export of aggregated IPFIX data, introducing abstract data types and Information Elements that optimize the transport of descriptive information in terms of flow records' amount and size. All extensions are directly applicable to the IPFIX Mediator but can be used in many different applications as well.
+			</t>
+		</abstract>
+	</front>
+	<middle>
+		<section title="Introduction">
+			<t>
+				The IPFIX Mediator is intended to provide techniques and features to process IPFIX data in a Mediation Process. This process receives data streams using IPFIX. It can apply transformations or aggregation techniques and forward the resulting Flow information to an Exporting Process and, thus, to another IPFIX collector.
+				Flow aggregation is one of the key operations in high-bandwidth networks. The main idea is to reduce both the number and the size of IPFIX messages.
+			</t>
+			<t>
+				This document introduces extensions to the IPFIX Information Model that support the export of aggregated IPFIX data. These extensions allow and optimize the transport of descriptive information on aggregated IPFIX data. Thus, more information can be preserved in the transmission while further reducing both the number and the size of IPFIX messages.
+				All the proposed extensions are directly applicable to the IPFIX Mediator but can be used in many different applications as well.
+			</t>
+			<t>
+				The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target="RFC2119"/>.
+				Illustrations of abstract data types are written in Augmented Backus-Naur Form (ABNF), as specified in <xref target="RFC4234"/>, extending the abstract data types defined in <xref target="RFC5102"/>.
+				Apart from the basic terms as defined in <xref target="RFC5101"/>, this document uses terminology first introduced in <xref target="I-D.dressler-ipfix-aggregation" />.
+			</t>
+		</section>
+		<section anchor="ipfix-extension-ol" title="Abstract data type orderedList">
+			<t>
+				IPFIX allows the transport of an ordered list of values by including in a Template several Information Elements of the same type more than once. This approach requires one Template for each possible length of the list. In the context of flow mediation, however, the number of entries in such lists typically changes with each exported compound flow, leading to a dramatic increase of Templates and associated housekeeping overhead.
+				Therefore, a new abstract data type, orderedList, is defined in this section. 
+				<figure align='left'>
+					<preamble>
+						The abstract data type orderedList defines an ordered list of Information Elements, each being of the same type (referred to as elementType) and the same, pre-defined length. An orderedList can transport any finite number of Information Elements. The length of an orderedList thus varies and is an integer multiple of the contained Information Elements' length. If more than one contained Information Element is transmitted in the form of an orderedList, reduced size encoding of elementType MUST NOT be used. If only one contained Information Element is transmitted, reduced size encoding of elementType MAY be used. 
+						In ABNF-style notation, the syntax can be summed up as follows:
+					</preamble>
+					<artwork align='center' type='abnf'><![CDATA[
+orderedList     =  *( elementType )
+]]></artwork>
+					<postamble>
+						The number of Information Elements contained in an orderedList can be determined by dividing the length of the orderedList by the length of elementType. 
+						An Information Element basing on orderedList MAY also be used as a variable-length Information Element by prefixing it with a one-octet or three-octet length specifier as defined in <xref target="RFC5101"/>.
+					</postamble>
+				</figure>
+			</t>
+			<t>
+				<xref target="ipfix-extension-ol-ex" /> shows some encoding examples if unsigned16 is used as the elementType.
+			</t>
+			<texttable anchor="ipfix-extension-ol-ex" title="orderedList Examples">
+				<ttcol>Human-Readable</ttcol><ttcol>Octets</ttcol><ttcol>Hexadecimal</ttcol><ttcol>Remarks</ttcol>
+				<c>80</c><c>1</c><c>50</c><c>Reduced size encoding</c>
+				<c>80</c><c>2</c><c>0050</c><c></c>
+				<c>80, 443</c><c>4</c><c>0050 01BB</c><c></c>
+				<c>80, 443, 8080</c><c>6</c><c>0050 01BB 1F90</c><c></c>
+			</texttable>
+		</section>
+		<section anchor="ipfix-extension-op" title="Abstract data type orderedPair">
+			<t>
+				<figure align='left'>
+					<preamble>
+						The abstract data type orderedPair defines a 2-tuple of Information Elements, each being of the same type (referred to as elementType) and the same, pre-defined length. The length of an orderedPair is thus defined as twice the length of its elementType. If more than one contained Information Element is transmitted in the form of an orderedPair, reduced size encoding of elementType MUST NOT be used. If only one contained Information Element is transmitted, reduced size encoding of orderedPair MAY be used if both contained Information Elements are of the same value. The reduced size representation of the orderedPair is in this case identical with the (full or reduced size representation) of elementType.
+						In ABNF-style notation, the syntax can be summed up as follows:
+					</preamble>
+					<artwork align='center' type='abnf'><![CDATA[
+orderedPair     =  elementType elementType
+orderedPair     =/ elementType
+]]></artwork>
+					<postamble>
+					</postamble>
+				</figure>
+			</t>
+			<t>
+				<xref target="ipfix-extension-op-ex" /> shows some encoding examples if unsigned16 is used as the elementType.
+			</t>
+			<texttable anchor="ipfix-extension-op-ex" title="orderedPair Examples">
+				<ttcol>Human-Readable</ttcol><ttcol>Octets</ttcol><ttcol>Hexadecimal</ttcol><ttcol>Remarks</ttcol>
+				<c>80, 80</c><c>1</c><c>50</c><c>Reduced size encoding</c>
+				<c>80, 80</c><c>2</c><c>0050</c><c>Reduced size encoding</c>
+				<c>80, 80</c><c>4</c><c>0050 0050</c><c></c>
+				<c>80, 443</c><c>4</c><c>0050 01BB</c><c></c>
+			</texttable>
+		</section>
+		<section anchor="ipfix-extension-pr" title="Abstract data type portRanges">
+			<t>
+				For some applications it might be useful to restrict the applicability of an Aggregation Rule to Flows with source or destination port being of a specific set of port numbers. 
+				In an Aggregation Rule, such a set of port numbers can be specified as a pattern.
+				However, the current IPFIX Information Model does not define any data type that allows transmitting a set of port numbers, which is necessary in order to export the pattern as a Common Property of the resulting Compound Flows.
+				Therefore, the new abstract data type portRanges for a list of port ranges is defined in this section.
+			</t>
+			<t>
+				The abstract data type portRanges is an orderedList of orderedPair Information Elements, each pair consisting of two unsigned16 Information Elements representing the port range's first and last port number.
+			</t>
+			<t>
+				Data types basing on portRanges MAY thus be cast down to unsigned16 using reduced size encoding to represent a single Port and, hence, the transportSourcePort and transportDestinationPort data types, currently based on the unsigned16 abstract data type, can also be parsed as portRanges-based data types.
+				As specified for data types basing on orderedList, an Information Element basing on portRanges MAY also be used as a variable-length Information Elements by prefixing it with a one-octet or three-octet length specifier as defined in <xref target="RFC5101"/>.
+			</t>
+			<t>
+				<xref target="ipfix-extension-pr-ex" /> shows some encoding examples with portRanges.
+			</t>
+			<texttable anchor="ipfix-extension-pr-ex" title="PortRanges Examples">
+				<ttcol>Port Ranges</ttcol><ttcol>Octets</ttcol><ttcol>Hexadecimal Representation</ttcol>
+				<c>80</c><c>2</c><c>0050</c>
+				<c>1:7</c><c>4</c><c>0001 0007</c>
+				<c>80,  443 </c><c>8</c><c>0050 0050  01BB 01BB</c>
+				<c>1:7, 256:1024</c><c>8</c><c>0001 0007  0100 0400</c>
+				<c>20,  80, 443</c><c>12</c><c>0014 0014  0050 0050  01BB 01BB</c>
+				<c>1:7, 80, 443</c><c>12</c><c>0001 0007  0050 0050  01BB 01BB</c>
+			</texttable>
+			<t>
+				<vspace blankLines="100" />
+			</t>
+		</section>
+		<section anchor="ipfix-extension-ip4n" title="Abstract data type ipv4Network">
+			<t>
+				Currently, the transport of IP network information as specified by IPFIX is done using two separate fields for the network address and the corresponding mask. 
+				We propose a new abstract data type ipv4Network that represents the common notation of IP networks: address/mask. 
+				<figure align='left'>
+					<preamble>
+						The ipv4Network abstract data type extends the abstract data type ipv4Address to allow a concatenated unsigned8 specifying the prefix length.
+						Alternatively, Information Elements based on the ipv4Network abstract data type MAY be transmitted using reduced size encoding to transmit only the network part of an IPv4 address.
+						In ABNF-style notation, the syntax can be summed up as follows:
+					</preamble>
+					<artwork align='center' type='abnf'><![CDATA[
+ipv4Network    =  ipv4Address unsigned8
+ipv4Network    =/ *4( unsigned8 )
+]]></artwork>
+					<postamble>
+					</postamble>
+				</figure>
+			</t>
+			<t>
+				Although using an ipv4Network field instead of two separate fields for prefix and mask will not reduce the length of resulting Flow Records, it eases the work of the aggregator:
+				With ipv4Network, the comparison of subnet addresses requires only one field lookup per Flow Record instead of two.
+				Furthermore, using the abstract data type ipv4Network reduces the Template size by one field equaling four octets.
+				Applications such as IPFIX Aggregation benefit from ipv4Network if network addresses are frequently exported.
+			</t>
+		</section>
+		<section anchor="excludedpropertiesid" title="excludedPropertiesId Information Element">
+			<t>
+				The IPFIX Information Model <xref target="RFC5102"/> defines the commonPropertiesId Information Element, which can be used to link to information which several Flows have in common.
+			</t>
+			<t>
+				Similarly, the excludedPropertiesId shall be defined to link to a set of Common Properties which a Flow does explicitly not exhibit. An Element Id of 239 is proposed for this Information Element.
+			</t>
+			<t>
+				The excludedPropertiesId works like a Boolean "and not" operation on the linked properties. This means that, if an excludedPropertiesId refers to a set of Common Properties which in turn specifies excluded properties, these transitively referenced properties are to be treated as if directly referenced via a commonPropertiesId element and, hence, as being present in the Flow in question.
+			</t>
+			<t>
+				Multiple excludedPropertiesId and commonPropertiesId specified for an IPFIX Record must never contradict each other. If an IPFIX Collector is able to detect that contradicting IEs were received, it SHOULD proceed as if it received bad or nonsensical data.
+			</t>
+			<t>
+				The excludedPropertiesId can, for example, be used when a hierarchy of Aggregation Rules with a "preceding rule" semantic, as introduced in <xref target="I-D.dressler-ipfix-aggregation" />, is configured in an IPFIX Aggregator. 
+			</t>
+			<t>	
+				<xref target="cp2" /> illustrates the use of Common Property definitions and the linking to these definitions with Information Elements of types commonPropertiesId (CP) and excludedPropertiesId (EP). In this example, two rules are defined in the aggregator: Rule 1 matches Flows with a sourceIPv4Address of 192.0.2.1, Rule 2 matches Flows with a destinationIPv4Address of 192.0.2.2. Furthermore, Rule 1 is configured to precede Rule 2 in a hierarchy of rules, i.e. Flows that matched Rule 1 will never match Rule 2. 
+			</t>
+			<t>	
+				In order to communicate this fact to a receiver, each Aggregation Rule is transmitted as two sets of Common Properties. One set of properties (shown on the right hand side of <xref target="cp2" />) directly transmits a rule's filtering criteria. The other set of properties (shown on the left hand side) refers via a commonPropertiesId to all properties that a Compound Flow exhibits, as well as via an excludedPropertiesId to all that the Compound Flow does not exhibit.
+			</t>
+			<t>
+				The Flow depicted at the bottom of <xref target="cp2" /> thus communicates a source port of 80, a destination port of 65432, a destination IP of 192.0.2.2 and a source IP of "not 192.0.2.1". However, besides the transmission of this Flow in one Data Record, previous transmissions (and the successful reception) of four Option Templates, four Option Data Records and one Template are required to communicate this information.
+			</t>
+			<t>
+				<figure anchor="cp2" title="Using excludedPropertiesId to communicate a rule hierarchy">
+					<artwork align="center"><![CDATA[
+Rule 1:
++########+------+             +######+---------------+
+# CP=101 # CP=1 |<-----------># CP=1 # SRC=192.0.2.1 |
++########+------+             +######+---------------+
+                                 ^
+            .--------------------'
+Rule 2:     v
++########+------+------+      +######+---------------+
+# CP=102 # EP=1 | CP=2 |<----># CP=2 # DST=192.0.2.2 |
++########+------+------+      +######+---------------+
+     ^
+     '-------------------.
+Flow:                    v
++--------+-----------+--------+
+| SPT=80 | DPT=65432 | CP=102 |
++--------+-----------+--------+
+]]></artwork>
+				</figure>				
+			</t>		
+		</section>
+		<section title="Security considerations">
+			<t>
+				As all methods described in this document are merely variations on methods already introduced in <xref target="RFC5101"/>, the same rules regarding exchange of Flow information apply.
+			</t>
+		</section>
+		<section title="IANA Considerations">
+			<t>
+				Use of excludedPropertiesId, as well as use of a data type basing on ipv4Network or on portRanges requires one new IPFIX Information Element identifier each to be assigned.
+				<vspace blankLines="100" />
+			</t>
+		</section>
+	</middle>
+	<back>
+		<references title="Normative References">
+			&rfc2119;
+			&RFC4234;
+			&ipfixproto;
+			&ipfixaggregation;
+			&ipfixinfo;
+		</references>
+	</back>
+</rfc>

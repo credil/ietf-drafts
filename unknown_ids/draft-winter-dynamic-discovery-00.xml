@@ -1,0 +1,160 @@
+<?xml version = '1.0'?>
+<?rfc rfcedstyle='yes'?>
+<?rfc rfcprocack='yes'?>
+<?rfc toc='yes'?>
+<?rfc symrefs='yes'?>
+<!DOCTYPE rfc SYSTEM "../xml2rfc-1.34pre3/rfc2629.dtd" [
+      <!ENTITY rfc2119     PUBLIC '' '../rfc-bib/reference.RFC.2119.xml'>
+      <!ENTITY radius-dtls PUBLIC '' '../i-d-bib/reference.I-D.dekok-radext-dtls.xml'>
+    ]>
+<rfc ipr='pre5378Trust200902' docName='draft-winter-dynamic-discovery-00' category='exp'>
+  <front>
+	  <title abbrev="RADIUS Peer Discovery" >NAI-based Dynamic Peer Discovery for RADIUS over TLS and DTLS</title>
+    <author fullname="Stefan Winter" initials="S." surname="Winter" >
+	<organization abbrev="RESTENA" >
+		  Fondation RESTENA
+	</organization>
+	<address>
+		<postal>
+			<street>6, rue Richard Coudenhove-Kalergi</street>
+			<city>Luxembourg</city>
+			<code>1359</code>
+			<country>LUXEMBOURG</country>
+		</postal>
+		<phone>+352 424409 1</phone>
+		<facsimile>+352 422473</facsimile>
+		<email>stefan.winter@restena.lu</email>
+		<uri>http://www.restena.lu.</uri>
+	</address>
+    </author>
+    <author fullname="Mike McCauley" initials="M." surname="McCauley" >
+	    <organization abbrev="OSC" >
+		    Open Systems Consultants
+	    </organization>
+	    <address>
+		    <postal>
+			    <street>9 Bulbul Place</street>
+			    <city>Currumbin Waters</city>
+			    <code>QLD 4223</code>
+			    <country>AUSTRALIA</country>
+		    </postal>
+		    <phone>+61 7 5598 7474</phone>
+		    <facsimile>+61 7 5598 7070</facsimile>
+		    <email>mikem@open.com.au</email>
+		    <uri>http://www.open.com.au.</uri>
+	    </address>
+    </author>
+    <date day="27" month="February" year="2009" />
+    <area>Operations and Management Area</area>
+    <workgroup>RADIUS Extensions Working Group</workgroup>
+    <keyword>RADIUS</keyword>
+    <keyword>AAA</keyword>
+    <keyword>Security</keyword>
+    <keyword>Reliability</keyword>
+    <keyword>DNS</keyword>
+    <abstract>
+	    <t>This document specifies a means to find authoritative AAA servers for a given NAI realm. It can be used in conjunction with RADIUS over TLS and RADIUS over DTLS.</t>
+    </abstract>
+  </front>
+  <middle>
+    <section title="Introduction" anchor="intro">
+	<t>
+	</t>
+	<section title="Requirements Language" anchor="reqlang">
+		<t>In this document, several words are used to signify the requirements of the specification.  The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119. <xref target="RFC2119" /></t>
+	</section>
+	<section title="Terminology" anchor="terms">
+		<t>RadSec node: a RadSec client or server</t>
+		<t>RadSec Client: a RadSec instance which initiates a new connection.</t>
+		<t>RadSec Server: a RadSec instance which listens on a RadSec port and accepts new connections</t>
+	</section>
+    </section>
+    <section title="DNS-based NAPTR/SRV Peer Discovery" anchor="dns">
+	    <section title="DNS RR definition" anchor="rr-def">
+	    <t>
+		    DNS definitions of RadSec servers can be either NAPTR records or SRV records. When both are defined, the resolution algorithm prefers NAPTR results (see section <xref target="algo" /> below). The NAPTR service field used is "AAA+RADSECT". The SRV prefix used is "_radsec._tcp". It is expected that in most cases, the label used for the records is the DNS representation (punycode) of the literal realm name for which the server is the AAA server.</t>
+	    <t>
+		    However, arbitrary other labels may be used if, for example, a roaming consortium uses realm names which are not associated to DNS names or special-purpose consortia where a globally valid discovery is not a use case. Such other labels require a consortium-wide agreement about the transformation from realm name to lookup label.
+	    </t>
+	    <t>Examples:
+		    <list style="letters">
+			    <t>A general-purpose AAA server for realm example.com might have DNS entries as follows:
+			    <list style="empty">
+				    <t>example.com. IN NAPTR 50 50 "s" "AAAS+RADSECT" "" _radsec._tcp.foobar.example.com.</t>
+				    <t>_radsec._tcp.example.com. IN SRV 0 10 2083 radsec.example.com.</t>
+			    </list>
+			    </t>
+			    <t>Consortium "foo" provides roaming services for banks. The realms used are of the form enterprise-name.foobankroam. The consortium operates a special purpose DNS server for the (private) TLD "foobankroam" which all AAA servers use to resolve realm names. "Rupt, Inc." is part of the consortium. On the consortium's DNS server, realm bank-rupt.foobankroam might have the following DNS entries:
+				    <list style="empty">
+					    <t>bank-rupt.foobankroam IN NAPTR 50 50 "a" "AAAS+RADSECT" "" "triple-a.bank-rupt.com"</t>
+					    <t>_radsec._tcp.bank-rupt.foobankroam IN SRV 0 10 2083 triple-a-backup.bank-rupt.com"</t>
+				    </list>
+			    </t>
+			    <t>the eduroam consortium uses realms based on DNS, but provides its services to a closed community only. However, a AAA domain participating in eduroam may also want to expose AAA services to other, general-purpose, applications (on the same or other AAA servers). Due to that, the eduroam consortium uses labels prefixed with "eduroam." and eduroam AAA servers use these labels to look up servers. An eduroam participant which also provides general-purpose AAA on a different server might have the following DNS entries:
+				    <list style="empty">
+					    <t>eduroam.restena.lu. IN NAPTR 50 50 "a" "AAAS+RADSECT" "" aaa-eduroam.restena.lu</t>
+					    <t>restena.lu. IN NAPTR 50 50 "a" "AAAS+RADSECT" "" aaa-default.restena.lu</t>
+					    <t>_radsec._tcp.eduroam.restena.lu. IN SRV 0 10 2083 aaa-eduroam.restena.lu.</t>
+					    <t>_radsec._tcp.restena.lu. IN SRV 0 10 2083 aaa-default.restena.lu.</t>
+				    </list>
+			    </t>
+		    </list>
+	    </t>
+    </section>
+    <section title="Realm to AAA server resolution algorithm" anchor="algo">
+	    <t>For a given NAI-based input realm, the following algorithm is used to determine the AAA server to contact:
+		    <list style="numbers">
+			    <t>Transform input realm into punycode.</t>
+			    <t>Optional: modify result from previous step according to agreed consortium procedures</t>
+			    <t>Perform NAPTR query for service "AAAS+RADSECT" with result of step 1 (or 2) as label</t>
+			    <t>If no result, continue at step 7.</t>
+			    <t>Evaluate NAPTR result, perform subsequent lookup steps until lookup yields one or more hostnames. Memorize Order/Preference fields for all hostnames.</t>
+			    <t>Continue at step 9.</t>
+			    <t>Prefix result of step 1 (or 2) with "_radsec._tcp."</t>
+			    <t>Perform SRV lookup with result of step 7 as label. This yields one or more hostname. Memorize Order/Preference fields for all hostnames.</t>
+			    <t>Order hostnames according to the Order/Preference fields.</t>
+			    <t>Perform A/AAAA RR lookup for all hosts in descending order of preference until one of the RRs results in a successful connection.</t>
+		    </list>
+	    </t>
+	        <t>
+	    For example, if the User-Name realm was 'example.com', and DNS contained the following records, the following subsequent lookups would be performed:
+	    <list style="empty">
+		    <t>example.com. IN NAPTR 50 50 "s" "AAAS+RADSECT" "" _radsec._tcp.example.com.</t>
+		    <t>_radsec._tcp.example.com. IN SRV 0 10 2083 radsec.example.com.</t>
+		    <t>radsec.example.com.  IN AAAA 2001:0DB8::202:44ff:fe0a:f704</t>
+	    </list>
+		    Then the target selected would be a RadSec server on port 2083 at IPv6 address 2001:0DB8::202:44ff:fe0a:f704. If no connection to this IPv6 address can be established, the algorithm continues to query a A record.</t>
+    </section>
+</section>
+    <section title="Security Considerations" anchor="sec">
+    <t>
+	    When using DNS without security, the replies to NAPTR, SRV and A/AAAA requests as described in section <xref target="dns" /> can not be trusted. RADIUS transports have an out-of-DNS-band means to verify that the discovery attempt led to the intended target (TLD/DTLS: ceritifcate verification or TLS shared secret ciphers; UDP/TCP: the RADIUS shared secret) and are safe from DNS-based redirection attacks. [Note: assuming here that a hypothetical RADIUS/UDP SRV discovery will NOT deliver the shared secret in the DNS response!]
+    </t>
+    <t>
+	    The discovery process is always susceptible to bidding down attacks if a realm has SRV records for RADIUS/UDP and/or RADIUS/TCP as well as for RADIUS/TLS and/or RADIUS/DTLS. While the SRV query will expose both transports, an attacker in the routing path might suppress the subsequent A/AAAA results for the TLS or DTLS peer and trick the inititating peer into using the weakly protected UDP or TCP transports. The use of DNSSEC can not fully mitigate this attack, since it does not provide a means to detect packet suppression. The only way to disable such bidding down attacks is by intiating connections only to the peer(s) which match or exceed a configured minimum security level. An implementation SHOULD provide a means to configure the administratively desired minimum security level.
+    </t>
+    </section>
+    <section title="IANA Considerations" anchor="iana">
+	    <t>
+		    This document contains no actions for IANA. Maybe. Not sure about the labels "AAAS+RADSECT" and "_radsec._tcp.".
+	    </t>
+    </section>
+</middle>
+<back>
+	<references title="Normative References">
+		&rfc2119;
+	</references>
+<!--	<references title="Informative References">
+	<reference anchor="radiator-manual" target="http://www.open.com.au/radiator/ref.html">
+		<front>
+			<title>Radiator Radius Server - Installation and Reference Manual</title>
+			<author>
+				<organization abbrev="OSC">Open System Consultants</organization>
+			</author>
+			<date year="2006"/>
+		</front>
+		<format type="TXT" target="http://www.open.com.au/radiator/ref.html"/>
+	</reference>
+</references> -->
+</back>
+</rfc>

@@ -1,0 +1,575 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<!-- Some of the more generally applicable PIs that most I-Ds might want to use -->
+<!-- Try to enforce the ID-nits conventions and DTD validity -->
+<?rfc strict="yes" ?>
+<!-- Items used when reviewing the document -->
+<?rfc comments="no" ?>
+<!-- Controls display of <cref> elements -->
+<?rfc inline="no" ?>
+<!-- When no, put comments at end in comments section,
+                                 otherwise, put inline -->
+<?rfc editing="no" ?>
+<!-- When yes, insert editing marks: editing marks consist of a 
+                                 string such as <29> printed in the blank line at the 
+                                 beginning of each paragraph of text. -->
+<!-- Create Table of Contents (ToC) and set some options for it.  
+         Note the ToC may be omitted for very short documents,but idnits insists on a ToC 
+         if the document has more than 15 pages. -->
+<?rfc toc="yes"?>
+<?rfc tocompact="yes"?>
+<!-- If "yes" eliminates blank lines before main section entries. -->
+<?rfc tocdepth="3"?>
+<!-- Sets the number of levels of sections/subsections... in ToC -->
+<!-- Choose the options for the references. 
+         Some like symbolic tags in the references (and citations) and others prefer 
+         numbers. The RFC Editor always uses symbolic tags.
+         The tags used are the anchor attributes of the references. -->
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes" ?>
+<!-- If "yes", causes the references to be sorted in order of tags.
+                                 This doesn't have any effect unless symrefs is "yes" also. -->
+<!-- These two save paper: Just setting compact to "yes" makes savings by not starting each 
+         main section on a new page but does not omit the blank lines between list items. 
+         If subcompact is also "yes" the blank lines between list items are also omitted. -->
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<!-- end of list of popular I-D processing instructions -->
+<!-- end of list of processing instructions -->
+<rfc category="bcp" docName="draft-baker-sava-implementation-00"
+     ipr="full3978">
+  <front>
+    <title abbrev="Verifying host address usage">Source address validation in
+    the local environment</title>
+
+    <author fullname="Fred Baker" initials="F.J." surname="Baker">
+      <organization>Cisco Systems</organization>
+
+      <address>
+        <postal>
+          <street></street>
+
+          <city>Santa Barbara</city>
+
+          <code>93117</code>
+
+          <region>California</region>
+
+          <country>USA</country>
+        </postal>
+
+        <phone>+1-408-526-4257</phone>
+
+        <email>fred@cisco.com</email>
+      </address>
+    </author>
+
+    <date year="2007" />
+
+    <area>Internet Engineering Task Force</area>
+
+    <workgroup></workgroup>
+
+    <abstract>
+      <t>This note describes how Source Address Validation might be applied in
+      an IPv6 environment. Local systems should be able to ensure that their
+      peers are using the IPv6 source addresses that the routing system uses
+      to deliver data to them. Remote systems should be able to ensure that
+      traffic they forward has reasonable source addresses.</t>
+    </abstract>
+
+    <!--		
+		<note title="Foreword">
+		</note>
+		-->
+
+    <!--
+    <note title="Requirements Language">
+        <t>The key words &quot;MUST&quot;, &quot;MUST NOT&quot;,
+        &quot;REQUIRED&quot;, &quot;SHALL&quot;, &quot;SHALL NOT&quot;,
+        &quot;SHOULD&quot;, &quot;SHOULD NOT&quot;, &quot;RECOMMENDED&quot;,
+        &quot;MAY&quot;, and &quot;OPTIONAL&quot; in this document are to be
+        interpreted as described in <xref target="RFC2119">RFC 2119</xref>.
+        </t>
+    </note>	
+    -->
+
+    <!--
+            <?rfc needLines="10" ?>
+            <texttable anchor='table_example' title="A Very Simple Table">
+                <preamble>Tables use ttcol to define column headers and widths.
+                Every cell then has a &quot;c&quot; element for its content.</preamble>
+ <ttcol align='center'>ttcol #1</ttcol>
+                    <ttcol align='center'>ttcol #2</ttcol>
+                      <c>c #1</c>		<c>c #2</c>
+                      <c>c #3</c>		<c>c #4</c>
+                      <c>c #5</c>		<c>c #6</c>
+                <postamble>which is a very simple example.</postamble>
+            </texttable>
+    -->
+  </front>
+
+  <middle>
+    <!--		
+			<t>There are multiple list styles: 'symbols', 'letters', 'numbers',
+'hanging', 'format', etc.</t>
+			<t>
+				<list style="symbols">
+					<t>First bullet</t>
+					<t>Second bullet</t>
+				</list>
+			</t>
+-->
+
+    <!--
+<figure anchor="xml_happy" title="Figure N">
+<artwork align="center">
+<![CDATA[
+	ASCII artwork goes here... 
+]]>
+</artwork>
+</figure>
+-->
+
+    <section title="Introduction">
+      <t>This note describes how Source Address Validation might be applied in
+      an <xref target="RFC2460">IPv6</xref> environment by a an IP host or
+      router, or lower layer switch directly connected to the source system.
+      Local systems, the hosts and routers directly connected to a neighbor
+      system, should be able to ensure that their peers are using the IPv6
+      source addresses that the routing system uses to deliver data to them.
+      Remote systems cannot ensure the exact matching of addresses, but can
+      determine whether the source address is reasonable. The recommendations
+      of this specification are based on experience with such features that
+      are currently available for <xref target="RFC0791">IPv4</xref> from
+      multiple vendors.</t>
+
+      <t>This is in support of the requirements of <xref
+      target="RFC2827"></xref>, which recommends that networks defend
+      themselves from spoofed traffic by dropping traffic that clearly has
+      spoofed source addresses. The place this is usually implemented, the ISP
+      ingress router, is an excellent second line of defense and very
+      appropriate for defending the ISP. However, the only system that can
+      definitively stop traffic from errant hosts is the systems they directly
+      communicate with - their LAN switches, hosts that they are the immediate
+      neighbors of, and their first hop routers. This note specifies that
+      first line of defense.</t>
+
+      <t>The purpose of Source Address Validation is to ensure that a system
+      in the network sends only datagrams that can be replied to - datagrams
+      that the routing system will deliver to that host and which the host
+      will recognize as having been directed to it. This is the first part is
+      isolating a denial of service attack; the second step is to identify
+      systems sending attack traffic and remove their traffic from the
+      network.</t>
+
+      <section title="Local Source Address Validation for IPv4">
+        <t>In IPv4, datagrams generally come from the address that has been
+        assigned to an interface, so it is sufficient to determine "the"
+        address and discard traffic that comes from other addresses. There are
+        some caveats: multi-LAN hosts may reply to a request using the address
+        of one interface but sending the datagram out another, and routers
+        forward traffic from a myriad of addresses. But such systems can be
+        treated as special cases and excluded from source address
+        validation.</t>
+
+        <t>As such, switch implementations of source address validation
+        technology observe <xref target="RFC2131">DHCP</xref> assignments of
+        addresses to hosts and drop host-originated datagrams using other
+        source addresses. Neighboring hosts or routers may similarly only
+        store one associated IP address for each MAC address, but this is more
+        frequently a bug or side-effect of implementation than something well
+        thought through, and may not operate as well as one would like.</t>
+      </section>
+
+      <section anchor="ipv6-complications"
+               title="Local Source Address Validation for IPv6">
+        <t>In an IPv6 network, the problem is somewhat more complicated than
+        it is in an IPv4 network. As with IPv4, there are some caveats:
+        multi-LAN hosts may reply to a request using the address of one
+        interface but sending the datagram out another, and routers forward
+        traffic from a myriad of addresses. But such systems can be treated as
+        special cases and excluded from source address validation.</t>
+
+        <t>The issue that complicates IPv6 is that each interface potentially
+        has many addresses, and a single prefix may straddle multiple physical
+        interfaces. It will generally have at least two: its link-local
+        address and its address in the local prefix. There may, however, be
+        multiple local prefixes, and with <xref target="RFC4941">privacy
+        addressing </xref> there may be multiple legitimate addresses within
+        the same prefix. So the mapping is not one-to-one, but rather
+        one-to-many. The system verifying the address usage must carry the
+        interface identification, in whatever form it may hold that, as an
+        attribute of the IPv6 address, and verify that a datagram using a
+        given IPv6 source address comes from the appropriate source.</t>
+      </section>
+
+      <section title="Defense in depth">
+        <t>There is also a place for ingress filtering by prefix, usually
+        accomplished via Unicast Reverse Path Forwarding or via filters. In
+        general, this is performed between administrations - at the interface
+        between peer ISPs, an ISP and its customer, or between two networks of
+        another type. In concept, however, it could be applied on every router
+        in a network. This will be discussed in <xref
+        target="remote"></xref>.</t>
+      </section>
+    </section>
+
+    <section anchor="local"
+             title="Implementating Source Address Validation in the local environment">
+      <t>This section will describe in general terms a common approach to
+      source address validation between two directly connected systems.</t>
+
+      <t>Addresses are allocated to systems in two ways in IPv6: <xref
+      target="RFC3315">DHCP</xref>, <xref target="RFC4862">Stateless Address
+      Autoconfiguration</xref>. These addresses are exchanged with a system's
+      neighbors using either <xref target="RFC4861">Neighbor Discovery</xref>,
+      or for <xref target="RFC3972">Cryptographically Generated
+      Addresses</xref>, <xref target="RFC3971">SEcure Neighbor Discovery
+      </xref>. Each of these will be looked at.</t>
+
+      <section title="Trust anchors">
+        <t>In short, the implementation approach requires neighboring devices
+        to associate a layer 3 entity addressed with an IPv6 address with a
+        layer 2 entity. The identification of the layer 2 entity may take a
+        number of forms:<list style="symbols">
+            <t>On a traditional Ethernet or for a host or router attached to a
+            switched Ethernet, the only real option is association with the
+            MAC Address.</t>
+
+            <t>The switch, however, may be able to associate the IPv6 address
+            with a switch port if it knows that only one host is attached to
+            the port.</t>
+
+            <t>In a wireless network, there are often layer 2 security
+            associations between neighboring devices, and the address can be
+            associated with that security association.</t>
+
+            <t>In a Cable Modem network, the address may be associated with
+            the combination of a MAC address and a customer relationship.</t>
+
+            <t> In a classical DSL network, it may be associated with an ATM Virtual Channel, or a PPPoE or L2TP Session ID.  </t>
+
+            <t>In some cases, an IP/IP tunnel, an MPLS LSP, or similar
+            tunneling technology is taken to a single system. In such cases,
+            local address validation can be applied to the use of the
+            tunnel.</t>
+          </list></t>
+
+        <t>The key is to have a solid understanding of <list style="symbols">
+            <t>what identifies a neighbor in the context: a MAC Address, a
+            switch port, an ATM VC, or whatever,</t>
+
+            <t>what addresses one's neighbor is in fact using, and</t>
+
+            <t>to limit what one accepts from the neighbor as so identified to
+            that which the neighbor is legitimately using.</t>
+          </list></t>
+
+        <t>One could argue that this runs counter to the Robustness Principle,
+        which is stated in RFC 793 as "be conservative in what you do, be
+        liberal in what you accept from others." In fact, it follows the
+        Robustness Principle, but adds the Russian proverb made famous in the
+        west by Ronald Reagan: "Trust, but verify".</t>
+      </section>
+
+      <section title="Host and Router validation of the addresses of neighboring systems">
+        <t>Since a peer's neighbors are intended to learn its address using
+        Neighbor Discovery or Secure Neighbor Discovery, they should look
+        there. If one system sends a datagram to a host or router on the same
+        LAN or otherwise directly connected and the receiving system does not
+        know the address to have been associated with the system that sent it,
+        both of these protocols ask the receiver to query the sender using a
+        Neighbor Solicit. Generally, this is done when sending the reply - the
+        Neighbor Solicit and responding Neighbor Advertisement must be
+        exchanged to send the application reply.</t>
+
+        <t>This specification recommends that, to protect hosts from attack
+        traffic and prevent routers from forwarding datagrams with spoofed
+        addresses, the NS/NA exchange SHOULD happen before the received
+        datagram is operated on.</t>
+
+        <t>There are two schools of thought on the holding of the datagram;
+        one holds that the host or router should hold the datagram in a short
+        queue and release it on receipt of the NA, and one holds that the
+        receiver may force the sender to retransmit it. As either approach may
+        be viewed as an attack (a sender spewing datagrams with spoofed
+        addresses may clog its neighbors with traffic, and an application
+        being forced to retransmit experiences a user-observable delay), this
+        specification takes no position on that matter. The receiver MAY hold
+        the datagram in a short queue to be operated on when the NA arrives,
+        and it MAY discard it.</t>
+
+        <t>Given this model, there is a potential front-running attack on
+        Stateless Address Autoconfiguration. When one system enters the
+        Duplicate Address Detection phase, another system could see the
+        address being verified and immediately send a message (perhaps an ICMP
+        Echo Request sent as a link layer multicast) claiming the address. The
+        systems that receive it would respond with a Neighbor Solicit, it
+        would reply with a Neighbor Advertisement, and the original system
+        would be denied the use of the address. As such, systems observing an
+        address that they have no association for being verified using
+        Duplicate Address Detection SHOULD NOT then grant it to another
+        system.</t>
+
+        <t>As noted, in IPv6 networks hosts and routers usually have multiple
+        addresses on any given interface. There is a potential attack in this
+        as well: especially with privacy addressing, one could imagine a host
+        using a new address for each TCP or SCTP session it opens, and one
+        could imagine an attack that simulates this but simply fills its
+        neighbor's tables with addresses. A host or router MAY (eg, is
+        authorized to) limit the number of addresses for a neighbor that it
+        will simultaneously hold, and the number of addresses considered
+        reasonable is intentionally not specified. It SHOULD use memory
+        allocated to that function in a Least Recently Used fashion,
+        preserving recollection of addresses a neighbor is actually using and
+        reusing table entries that appear to be unused.</t>
+
+        <t>As noted in <xref target="ipv6-complications"></xref>, caveats that
+        make this difficult include any system that might send a datagram from
+        an address unknown in the local environment. These include, but are
+        not limited to, routers and any middleware that behaves like a router,
+        in that it forwards datagrams originated by other systems using their
+        source addresses, and multi-LAN hosts. To simplify source address
+        validation, this specification declares that a host SHOULD send any
+        datagram it originates on an interface the source address is
+        associated with. Routers and router-like middleware such as firewalls
+        must be exlcuded from such analysis.</t>
+      </section>
+
+      <section title="Validation of the addresses of neighboring systems by a switch">
+        <t>In this context, a "switch" refers to a system that switches
+        messages for any lower layer protocol. Examples include Ethernet, ATM,
+        Cable Modem, DSL, and so on.</t>
+
+        <t>As with IPv4, it is reasonable for a switch to simply observe the
+        Neighbor Advertisements issued by a host or router and note that the
+        host or router may be using them. There is a potential attack in this,
+        however, in that a host could simply spew Neighbor Advertisements. For
+        this reason, the protocol calls for a Neighbor Advertisement to be in
+        response to a Neighbor Solicit. Therefore, a switch implementation
+        that observes Neighbor Discovery or Secure Neighbor Discovery SHOULD
+        remember addresses from Neighbor Advertisement only if it has seen a
+        prior Neighbor Solicit.</t>
+
+        <t>A switch MAY observe DHCP assignments of addresses to hosts and
+        drop host-originated datagrams using other source addresses. If it
+        does, it SHOULD be prepared to accept multiple simultaneous
+        assignments.</t>
+
+        <t>A switch or upstream router MAY also observe assignments of
+        prefixes to downstream routers using the <xref target="RFC3633">DHCP
+        Prefix Assignment Options</xref>, and use that information to
+        configure ingress prefix filtering.</t>
+
+        <t>As with host implementations, a switch MAY limit the number of
+        addresses it will simultaneously store. If it does so, it SHOULD use
+        memory allocated to that function in a Least Recently Used fashion,
+        preserving recollection of addresses a neighbor is actually using and
+        reusing table entries that appear to be unused.</t>
+      </section>
+    </section>
+
+    <section anchor="remote"
+             title="Implementating Source Address Validation for remote systems">
+      <t>As mentioned, it is often in an administration's interest to protect
+      itself from other administrations, which may have inadequate
+      anti-spoofing measures in place. This is the original thrust of <xref
+      target="RFC2827">BCP 38</xref>. Unfortunately, one step removed from the
+      source system, there is no anchor to verify that the address is exactly
+      correct; rather, one can only verify that it is reasonable - it is
+      within the prefix.</t>
+
+      <t>It has been argued that this is nonsensical, as anti-spoofing
+      procedures impose additional router processing and only protect other
+      networks. This is incorrect, however, for two reasons. Modern routers
+      often implement filtering or Unicast Reverse Path Forwarding procedures
+      in hardware, minimizing the processing burden, although the
+      differentiated tables may consume memory. In any event, attacks
+      perpetrated from a downstream network (obscured in some cases by address
+      spoofing) attack both the administration's network and the
+      administration's customers. Dealing with that problem is generally the
+      first step in side-stepping an attack.</t>
+
+      <t>To implement, a router MAY be configured to discard traffic that
+      routing believes is coming from an inappropriate direction. This does
+      not depend on the router's choice of routes, however; it depends on the
+      routing calculated by a router's neighbors. As such, if router A validly
+      advertises to router B that it can route traffic to a prefix, the router
+      B SHOULD accept traffic from that prefix via router A.</t>
+
+      <t>The determination of when a routing advertisement is valid is beyond
+      the scope of this specification.</t>
+    </section>
+
+    <section anchor="IANA" title="IANA Considerations">
+      <t>This memo adds no new IANA considerations.</t>
+
+      <t>Note to RFC Editor: This section will have served its purpose if it
+      correctly tells IANA that no new assignments or registries are required,
+      or if those assignments or registries are created during the RFC
+      publication process. From the author's perspective, it may therefore be
+      removed upon publication as an RFC at the RFC Editor's discretion.</t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>This note describes a set of security considerations for the IPv6
+      Internet, specifically related to attack management in <xref
+      target="RFC2460">IPv6</xref> and in the configuration and communication
+      mechanisms of <xref target="RFC4862">Stateless Address
+      Autoconfiguration</xref>, <xref target="RFC4861">Neighbor
+      Discovery</xref>, and <xref target="RFC3971">SEcure Neighbor Discovery
+      </xref>. It does not introduce new attacks, but it identifies some
+      existing ones and recommends approaches to their mitigation.</t>
+    </section>
+
+    <section anchor="Acknowledgements" title="Contributors">
+      <t>This document was developed in the SAVA context. Contributors include
+      the author, Christian Vogt, Gang Ren, Hannes Tschofenig, Jari Arkko,
+      Jianping Wu, Jun Bi, Ke Xu, and Pekka Savola.</t>
+    </section>
+  </middle>
+
+  <back>
+    <!-- references split to informative and normative -->
+
+    <references title="Normative References">
+      <!--
+0791 Internet Protocol. J. Postel. September 1981. (Format: TXT=97779
+     bytes) (Obsoletes RFC0760) (Updated by RFC1349) (Also STD0005)
+     (Status: STANDARD)
+-->
+
+      <?rfc include="reference.RFC.0791" ?>
+
+      <?rfc include='reference.RFC.2827'?>
+
+      <!--
+2460 Internet Protocol, Version 6 (IPv6) Specification. S. Deering, R.
+     Hinden. December 1998. (Format: TXT=85490 bytes) (Obsoletes RFC1883)
+     (Status: DRAFT STANDARD)
+-->
+
+      <?rfc include="reference.RFC.2460" ?>
+
+      <!--
+4861 Neighbor Discovery for IP version 6 (IPv6). T. Narten, E.
+     Nordmark, W. Simpson, H. Soliman. September 2007. (Format: TXT=235106
+     bytes) (Obsoletes RFC2461) (Status: DRAFT STANDARD)
+-->
+
+      <?rfc include="reference.RFC.4861" ?>
+
+      <!--
+4862 IPv6 Stateless Address Autoconfiguration. S. Thomson, T. Narten,
+     T. Jinmei. September 2007. (Format: TXT=72482 bytes) (Obsoletes
+     RFC2462) (Status: DRAFT STANDARD)
+-->
+
+      <?rfc include="reference.RFC.4862" ?>
+
+      <!--
+4941 Privacy Extensions for Stateless Address Autoconfiguration in
+     IPv6. T. Narten, R. Draves, S. Krishnan. September 2007. (Format:
+     TXT=56699 bytes) (Obsoletes RFC3041) (Status: DRAFT STANDARD)
+-->
+
+      <?rfc include="reference.RFC.4941" ?>
+
+      <!--
+3971 SEcure Neighbor Discovery (SEND). J. Arkko, Ed., J. Kempf, B.
+     Zill, P. Nikander. March 2005. (Format: TXT=123372 bytes) (Status:
+     PROPOSED STANDARD)
+-->
+
+      <?rfc include="reference.RFC.3971" ?>
+
+      <!--
+3315 Dynamic Host Configuration Protocol for IPv6 (DHCPv6). R. Droms,
+     Ed., J. Bound, B. Volz, T. Lemon, C. Perkins, M. Carney. July 2003.
+     (Format: TXT=231402 bytes) (Updated by RFC4361) (Status: PROPOSED
+     STANDARD)
+-->
+
+      <?rfc include="reference.RFC.3315" ?>
+    </references>
+
+    <references title="Informative References">
+      <!--
+2131 Dynamic Host Configuration Protocol. R. Droms. March 1997.
+     (Format: TXT=113738 bytes) (Obsoletes RFC1541) (Updated by RFC3396,
+     RFC4361) (Status: DRAFT STANDARD)
+-->
+
+      <?rfc include="reference.RFC.2131" ?>
+
+      <?rfc include='reference.RFC.3633'?>
+
+      <!--
+3972 Cryptographically Generated Addresses (CGA). T. Aura. March 2005.
+     (Format: TXT=51473 bytes) (Updated by RFC4581, RFC4982) (Status:
+     PROPOSED STANDARD)
+-->
+
+      <?rfc include="reference.RFC.3972" ?>
+    </references>
+
+    <section title="Summary of recommendations">
+      <t><list style="numbers">
+          <t>The NS/NA exchange on a response to a received datagram SHOULD
+          happen before the received datagram is operated on.</t>
+
+          <t>The receiver MAY hold the triggering datagram in a short queue to
+          be operated on when the NA arrives, and it MAY discard it.</t>
+
+          <t>Systems observing an address that they have no association for
+          being verified using Duplicate Address Detection SHOULD NOT then
+          grant it to another system.</t>
+
+          <t>A host or router MAY (eg, is authorized to) limit the number of
+          addresses for a neighbor that it will simultaneously hold, and the
+          number of addresses considered.</t>
+
+          <t>It SHOULD use memory allocated to that function in a Least
+          Recently Used fashion, preserving recollection of addresses a
+          neighbor is actually using and reusing table entries that appear to
+          be unused.</t>
+
+          <t>To simplify source address validation, this specification
+          declares that a host SHOULD send any datagram it originates on an
+          interface the source address is associated with.</t>
+
+          <t>A switch that monitors Neighbor Discovery or Secure Neighbor
+          Discovery SHOULD remember addresses from Neighbor Advertisement only
+          if it has seen a prior Neighbor Solicit.</t>
+
+          <t>A switch MAY observe DHCP assignments of addresses to hosts and
+          drop host-originated datagrams using other source addresses.</t>
+
+          <t>If it does, it SHOULD be prepared to accept multiple simultaneous
+          assignments.</t>
+
+          <t>A switch or upstream router MAY also observe assignments of
+          prefixes to downstream routers using the DHCP Prefix Assignment
+          Options [RFC3633], and use that information to configure ingress
+          prefix filtering.</t>
+
+          <t>A switch MAY limit the number of addresses it will simultaneously
+          store.</t>
+
+          <t>If it does so, it SHOULD use memory allocated to that function in
+          a Least Recently Used fashion, preserving recollection of addresses
+          a neighbor is actually using and reusing table entries that appear
+          to be unused.</t>
+
+          <t>A router MAY discard traffic that routing believes is coming from
+          an inappropriate direction.</t>
+
+          <t>If router A validly advertises to router B that it can route
+          traffic to a prefix, the router B SHOULD accept traffic from that
+          prefix via router A.</t>
+        </list></t>
+    </section>
+  </back>
+</rfc>

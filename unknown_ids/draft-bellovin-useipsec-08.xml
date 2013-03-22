@@ -1,0 +1,623 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc compact="yes" ?>
+<rfc ipr="full3978" docName="draft-bellovin-useipsec-08.txt" category="bcp">
+  <front>
+    <title abbrev="IPsec Usage">
+			Guidelines for Mandating the Use of IPsec Version 2
+		</title>
+    <author initials="S.M." surname="Bellovin" fullname="Steven M. Bellovin">
+      <organization>
+				Columbia University
+			</organization>
+      <address>
+        <postal>
+          <street>1214 Amsterdam Avenue</street>
+          <street>MC 0401</street>
+          <city>New York</city>
+          <region>NY</region>
+          <code>10027</code>
+          <country>US</country>
+        </postal>
+        <phone>+1 212 939 7149</phone>
+        <email>bellovin@acm.org</email>
+      </address>
+    </author>
+    <date month="July" year="2008"/>
+    <abstract>
+      <t>
+
+The Security Considerations sections of many Internet Drafts say,
+in effect, "just use IPsec".  While this is sometimes correct,
+more often it will leave users without real, interoperable security
+mechanisms.  This memo offers some guidance on when IPsec Version 2
+should and
+should not be specified.
+</t>
+    </abstract>
+  </front>
+  <middle>
+    <section title="Introduction">
+      <t>
+The Security Considerations sections of many Internet Drafts say,
+in effect, "just use IPsec".  While this is sometimes correct,
+more often it will leave users without real, interoperable security
+mechanisms.  IPsec is often unavailable in the likely endpoints.
+Even if it is available, it may not provide the proper granularity
+of protection.  Finally, if it is available and appropriate, the
+document mandating it needs to specify just how it is to be used.
+</t>
+      <t>
+Recall that the goal is realistic, interoperable security.  Specifying,
+as the only security mechanism, a configuration which is unavailable to
+-- and hence unusable by -- a majority of the user community is
+tantamount to saying "turn off security".
+</t>
+      <t>
+This document describes how to specify the use of IPsec Version 2
+<xref target="RFC2401"/>, including ESPv2 <xref target="RFC2406"/>,
+AHv2 <xref target="RFC2402"/>, and IKEv1 <xref target="RFC2409"/>.
+A separate document will describe the IPsec Version3 suite
+<xref target="RFC4301"/>
+<xref target="RFC4302"/>
+<xref target="RFC4303"/>
+<xref target="RFC4306"/>.
+</t>
+      <t>
+For further guidance on security considerations (including
+discussion of IPsec), see <xref target="RFC3552"/>.
+</t>
+      <t>
+NOTE: Many of the arguments below relate to the capabilities
+of current implementations of IPsec.  These may change over
+time; this advice based on the knowledge available to the IETF at
+publication time.
+</t>
+    </section>
+    <section title="WARNING">
+      <t>
+The design of security protocols is a subtle and difficult art.
+The cautions here about specifying the use of IPsec should NOT be taken to
+mean that that you should invent your own new security protocol for
+each new application.  If IPsec is a bad choice, using another
+standardized, well-understood security protocol will almost always give the
+best results for both implementation and deployment.  Security
+protocols are very hard to design; rolling out a new one will require
+extensive theoretical and
+practical work to confirm its security properties and will incur both
+delay and uncertainty.
+</t>
+    </section>
+    <section title="The Pieces of IPsec">
+      <t>
+IPsec is composed of a number of different pieces.
+These can be used to provide confidentiality, integrity, and replay
+protection; though some of these can be configured manually, in general
+a key management component is used.  Additionally, the decision about
+whether and how to use IPsec is controlled by a policy database of
+some sort.
+</t>
+      <section title="AH and ESP">
+        <t>
+The Authentication Header (AH) <xref target="RFC2402"/> and the Encapsulating Security
+Protocol (ESP) <xref target="RFC2406"/> are the over-the-wire security protocols.  Both
+provide (optional) replay protection.
+ESP typically is used to provide confidentiality (encryption),
+integrity and authentication for traffic. ESP also can provide
+integrity and authentication without confidentiality, which makes
+it a good alternative to AH in most cases where confidentiality is
+not a required or desired service. Finally, ESP can be used to
+provide confidentiality alone, although this is not recommended
+<xref target="Bell96"/>.
+</t>
+        <t>
+The difference in integrity protection offered by AH
+is that AH protects portions
+of the preceding IP header, including the source and destination
+address.
+However, if ESP is used in tunnel mode
+(see <xref target="tunnel"/>) and
+integrity/authentication is enabled, the IP header seen by the
+source and destination hosts is completely protected anyway.
+</t>
+        <t>
+AH can also protect those IP options that need to be seen by 
+intermediate routers, but must be intact and authentic
+when delivered to the receiving system.  At this time, use
+(and existence) of such
+IP options is extremely rare. 
+</t>
+        <t>
+If an application requires such protection, and if the
+information to be protected cannot be inferred from the key management
+process, AH must be used.  (ESP is generally regarded as easier to
+implement; however, virtually all IPsec packages support both.)
+If confidentiality is required, ESP must be used.
+It is possible to use AH in conjunction with ESP, but this combination
+is rarely required.
+</t>
+        <t>
+All variants of IPsec have problems with NAT boxes -- see
+<xref target="RFC3715"/> for details -- but AH is considerably more troublesome.
+In environments where there is substantial likelihood that the
+two end-points will be separated by a NAT box --
+this includes almost all
+services involving user-to-server traffic, as opposed to server-to-server
+traffic --
+NAT traversal <xref target="RFC3948"/>
+should be mandated and
+AH should be avoided.
+(Note that <xref target="RFC3948"/> is for ESP only,
+and cannot be used for AH.)
+</t>
+      </section>
+      <section title="Transport and Tunnel Mode" anchor="tunnel">
+        <t>
+AH and ESP can both be used in either transport mode or tunnel mode.
+In tunnel mode, the IPsec header is followed by an inner IP header;
+this is the normal usage for Virtual Private Networks (VPN),
+and it is generally required whenever either end of the IPsec-protected
+path is not the ultimate IP destination, e.g., when IPsec is
+implemented in a firewall, router, etc.
+</t>
+        <t>
+Transport mode is preferred for point-to-point communication, though
+tunnel mode can be used for this purpose.
+</t>
+      </section>
+      <section title="Key Management">
+        <t>
+Any cryptographic system requires key management.  IPsec provides
+for both manual and automatic key management schemes.  Manual
+key management is easy; however, it doesn't scale very well.
+Also, IPsec's replay protection mechanisms are not available
+if manual key management is used.
+The need for automatic key exchange is discussed in more
+detail in <xref target="RFC4107"/>.
+</t>
+        <t>
+The primary automated key exchange mechanism for IPsec
+is the Internet Key Exchange
+(IKE) <xref target="RFC2409"/>.  A new, simpler version of IKE has been
+approved, but there many existing systems still use
+IKEv1 <xref target="RFC4306"/>.  This document does not discuss
+IKEv2 and IPsecv3.
+A second mechanism, Kerberized Internet Negotiation of Keys (KINK) <xref target="RFC4430"/>,
+has been defined.
+It, of course, uses Kerberos, and is suitable if and only
+if a Kerberos infrastructure is available.
+</t>
+        <t>
+If a decision to use IKE is made, the precise mode of operation
+must be specified as well.  IKE can be used in main mode or aggressive mode;
+both support digital signatures, two different ways of using
+public key encryption, and shared secrets for authentication.
+</t>
+        <t>
+Shared secret authentication is simpler; however, it doesn't scale as well in
+many-to-many communication scenarios,
+since each endpoint must share a unique secret with every
+peer with which it can
+communicate.
+Note, though, that using shared secrets in IKE is far preferable
+to manual keying.
+</t>
+        <t>
+In most real-world situations where public key modes of IKE are used,
+locally-issued certificates are employed.  That is, the administrator
+of the system or network concerned will issue certificates to
+all authorized users.  These certificates are useful only for IPsec.
+</t>
+        <t>
+It is sometimes possible to use certificates <xref target="RFC3280"/> from an existing
+public key infrastructure (PKI)
+with IKE.  In practice, this is rare.
+Furthermore, there not only is no global
+PKI covering most Internet endpoints,
+there probably never will be one.  Designing
+a structure which assumes such a PKI is a mistake.
+In particular, assuming that an arbitrary node will have an
+"authentic" certificate, issued by a mutually trusted third party
+and vouching for that node's identity, is wrong.  
+Again, such a PKI does not and probably will not exist.
+Public key IKE is generally a good idea, but almost always
+with locally-issued certificates.
+</t>
+        <t>
+Note that public key schemes require a substantial amount of
+computation.  Protocol designers should consider whether or not
+such computations are feasible on devices of interest to their
+clientele.
+Using certificates roughly doubles the number of large exponentiations
+that must be performed, compared with shared secret versions of IKE.
+</t>
+        <t>
+Today, even low-powered devices can generally perform enough computation
+to set up a limited number of security associations; concentration
+points, such as firewalls or VoIP servers, may require hardware
+assists, especially if many peers are expected to create
+security associations at about the same time.
+</t>
+<t>
+	Using any automated key management mechanism can be difficult
+	when trying to protect low-level protocols.  For example, even
+	though <xref target="RFC2461"/> specified the use of IPsec to
+	protect IPv6 Neighbor Discovery, it was impossible to do
+	key management: nodes couldn't use IKE because it required
+	IP-level communication, and that isn't possible before
+	Neighbor Discovery associations are set up.
+</t>
+      </section>
+      <section title="Applications Program Interface (API)">
+        <t>
+It is, in some sense, a misnomer to speak of the API as
+a part of IPsec, since
+that piece is missing on many systems.  To the extent that it
+does exist, it isn't standardized.  The problem is simple:  it
+is difficult or impossible to request IPsec protection, or to
+tell if was used for given inbound packets or connections.
+</t>
+        <t>
+There are additional problems:
+<list style='symbols'>
+<t>
+Applications have rarely access to such APIs.  Rather, IPsec is usually
+configured by a system or network administrator.
+</t>
+<t>
+Applications are unable to verify that IPsec services
+are being used underneath.
+</t>
+<t>
+Applications are unaware of the specific identities and
+properties of the protected channel provided by IPsec.
+For instance, the IPsec key management mechanisms may
+be aware of the identity and authorization of the peer,
+but this information cannot be used by the application,
+nor linked to application-level decisions, such as access
+to resources reserved to the entity identified by this
+identity.
+</t>
+</list>
+</t>
+        <t>
+Router- or firewall-based
+IPsec implementations pose even greater problems,
+since there is no standardized over-the-wire protocol for communicating
+this information from outboard encryptors to hosts.
+</t>
+<t>By contrast, higher-layer security services such as TLS are
+able to provide the necessary control and assurance.
+</t>
+      </section>
+    </section>
+    <section title="Availability of IPsec in Target Devices">
+      <t>
+Although IPsec is now widely implemented, and is available for current
+releases of most host operating systems, it is less available for
+embedded systems.  Few hubs, network address translators, etc.,
+implement it, especially at the low end.  It is generally inappropriate to
+rely on IPsec when many of the endpoints are in this category.
+</t>
+      <t>
+Even for host-to-host use, IPsec availability (and experience, and
+ease of use) has generally been for VPNs.
+Hosts that support IPsec for VPN use frequently do not
+support it on a point-to-point
+basis, especially via a stable, well-defined API or user interface.
+</t>
+      <t>
+Finally, few implementations support multiple layers of IPsec.  If
+a telecommuter is using IPsec in VPN mode to access an organizational
+network, he or she may not be able to employ a second level of IPsec
+to protect an application connection to a host within the organization.
+(We note that such support is, in fact, mandated by Case 4 of Section
+4.5 of <xref target="RFC2401"/>.  Nevertheless, it is not widely available.)
+The likelihood of such deployment scenarios should be taken into
+account when deciding whether or not to mandate IPsec.
+</t>
+    </section>
+    <section title="Endpoints">
+      <t><xref target="RFC2401"/> describes many different forms of endpoint identifier.
+These include source addresses (both IPv4 and IPv6), host names
+(possibly as embedded in X.500 certificates), and user IDs (again,
+possibly as embedded in a certificate).  Not all forms of identifier
+are available on all implementations; in particular, user-granularity
+identification is not common.  This is especially a concern for
+multi-users systems, where it may not be possible to use different
+certificates to distinguish between traffic from two different users.
+</t>
+      <t>
+Again, we note that the ability to provide fine-grained protection,
+such as keying each connection separately, and with per-user
+credentials,
+was one of the original design goals of IPsec.  Nevertheless, only
+a few platforms support it.
+Indeed, some implementations do not even support using port numbers
+when deciding whether or not to apply IPsec protection.
+</t>
+    </section>
+    <section title="Selectors and the SPD">
+      <t>
+Section 4.4 of <xref target="RFC2401"/> describes the Security Policy Database (SPD)
+and "selectors" used to decide what traffic should be protected by
+IPsec.  Choices include source and destination addresses (or address
+ranges), protocol numbers (i.e., 6 for TCP and 17 for UDP), and port
+numbers for TCP and UDP.  Protocols whose protection requirements cannot
+be described in such terms are poorer candidates for IPsec;
+in particular, it becomes impossible to apply protection at any finer
+grain than "destination host".  Thus,
+traffic embedded in an L2TP <xref target="RFC2661"/> session cannot be protected
+selectively by IPsec above the L2TP layer, because IPsec has no selectors
+defined that let it peer into the L2TP packet to find the TCP port
+numbers.  Similarly, SCTP <xref target="RFC2960"/> did not exist when <xref target="RFC2401"/> was written;
+thus, protecting individual SCTP applications on the basis of port
+number could not be done until a new document was written <xref target="RFC3554"/> that
+defined new selectors for IPsec, and implementations appeared.
+</t>
+<t>
+Furthermore, in a world that runs to a large extent on dynamically assigned
+addresses and often uses dynamically assigned port numbers as well, an
+all-or-nothing policy for VPNs can work well; other policies, however, can be
+difficult to create in any usable form.
+</t>
+      <t>
+The granularity of protection available may have side-effects.
+If certain traffic between a pair of machines is protected by
+IPsec, does the implementation permit other traffic to be unprotected,
+or protected by different policies?
+Alternatively, if the implementation is such that it is only
+capable of protecting all traffic or none, does the device have
+sufficient CPU capacity to encrypt everything?
+Note that some low-end devices
+may have limited secure storage capacity for keys, etc.
+</t>
+      <t>
+Implementation issues are also a concern here.  As before, too many
+vendors have not implemented the full specification; too many
+IPsec implementations are not capable of using port numbers in
+their selectors.  Protection of traffic between two hosts is thus on
+an all or nothing basis when these non-compliant implementations
+are employed.
+</t>
+    </section>
+    <section title="Broadcast and Multicast">
+      <t>
+	Although the designers of IPsec tried to leave room for protection
+	of multicast traffic, a complete design wasn't finished until much
+	later.
+	As such, many IPsec implementations do not support multicast.
+	<xref target="I-D.ietf-msec-ipsec-extensions"/>
+	describes extensions to IPsec to support it.  Other
+	relevant documents include
+	<xref target="RFC3830"/>,
+	<xref target="RFC3547"/>,
+	and
+	<xref target="RFC4535"/>,
+      </t>
+      <t>
+	Because of the delay, protocol designers who use multicast
+	should consider
+	the availability of these extensions in target platforms of interest.
+      </t>
+    </section>
+    <section title="Mandating IPsec">
+      <t>
+Despite all of the caveats given above, it may still be appropriate
+to use IPsec in particular situations.  The range of choices make it
+mandatory to define precisely how IPsec is to be used.  Authors of
+standards documents that rely on IPsec must specify the following:
+</t>
+      <t>
+        <list style="letters">
+          <t>
+What selectors the initiator of the conversation (the client,
+in client-server architectures) should use?
+What addresses, port numbers, etc., are to be used?
+</t>
+          <t>
+What IPsec protocol is to be used:  AH or ESP?  What mode
+is to be employed:  transport mode or
+tunnel mode?
+</t>
+          <t>
+What form of key management is appropriate?
+</t>
+          <t>
+What form of identification should be used?  Choices include
+IP address, DNS name with or without a user name, and X.500 distinguished name.
+</t>
+          <t>
+If the application server will switch userids (i.e., is a login service
+of some sort) and user name identification is used, is a new security
+association negotiated that utilizes a user-granularity certificate?
+If so, when?
+</t>
+          <t>
+What form of authentication should be used?
+Choices include pre-shared secrets and certificates.
+</t>
+<t>
+How are the participants authorized to perform the
+operations that they request? For instance, are all
+devices with a certificate from a particular source
+allowed to use any application with with IPsec or
+access any resource?
+(This problem can appear with any security service, of course.)
+</t>
+          <t>
+Which of the many variants of IKE must be supported?
+Main mode?  Aggressive mode?
+<vspace blankLines="1"/>
+Note that the are two different versions of IKE, IKE and IKEv2.  IKEv2
+is simpler and cleaner, but is not yet widely available.  You must
+specify which version of IKE you require.
+</t>
+          <t>
+Is suitable IPsec support available in likely configurations of
+the products that would have to employ IPsec?
+</t>
+        </list>
+      </t>
+    </section>
+    <section title="Example">
+      <t>
+Suppose that the designers of the Border Gateway
+Protocol (BGP) <xref target="RFC4271"/> wished to use IPsec
+for security, rather than the mechanism described in <xref target="RFC2385"/>.
+Does it meet these criteria?
+(Note that the deeper security issues raised by BGP are not
+addressed by IPsec or any other transmission security mechanism.
+See <xref target="Kent00a"/> and <xref target="Kent00b"/> for more details.)
+</t>
+      <t>
+        <list style="hanging" hangIndent="17">
+          <t hangText="Selectors">
+BGP runs between manually-configured pairs of hosts on TCP
+port 179.  The appropriate selector would be the
+pair of BGP speakers, for that port only.
+Note that the router's "loopback address" is almost certainly the
+address to use.
+</t>
+          <t hangText="Mode">
+Transport mode would be the proper choice if IPsec were used.
+The information
+being communicated is generally not confidential, so encryption
+need not be used.
+Either AH or ESP can be used; if ESP is used, the sender's IP
+address would need to be checked against the IP address asserted
+in the key management exchange.  (This check is mandated
+by <xref target="RFC2401"/>.)
+For the sake of interoperability, either AH or ESP
+would need to be specified as mandatory to implement.
+</t>
+          <t hangText="Key Management">
+To permit replay detection, an automated key management system
+should be used, most likely IKE.
+Again, the RFC author should pick one.
+</t>
+          <t hangText="Security Policy">
+Connections should be accepted only from the designated peer.
+(Note that this restriction applies only to BGP.  If the router -- or
+any IPsec host -- runs multiple services with different security needs,
+each such service requires its own security policy.)
+</t>
+          <t hangText="Authentication">
+Given the number of BGP-speaking routers used
+internally by large ISPs,
+it is likely that shared key mechanisms are inadequate.
+Consequently, certificate-based IKE must be supported.
+However, shared secret mode is reasonable on peering links, or
+(perhaps) on
+links between ISPs and customers.
+Whatever scheme is used, it must tie back to a source IP
+address or AS number in some fashion, since other BGP policies are
+expressed in these terms.  If certificates are used, would they use
+IP addresses or AS numbers?  Which?
+</t>
+          <t hangText="Availability">
+For this scenario, availability is the crucial question.  Do
+likely BGP speakers -- both backbone routers and access routers --
+support the profile of IPsec described above?
+Will use of IPsec, with its attendant expensive cryptographic
+operations, raise the issue of new denial of service attacks?
+The working group
+and the IESG must make these determinations before deciding to use
+IPsec to protect BGP.
+</t>
+        </list>
+      </t>
+      <t>
+</t>
+    </section>
+    <section title="Security Considerations">
+      <t>
+IPsec provides transmission security and simple access
+control only.  There are many
+other dimensions to protocol security that are beyond the scope of
+this memo, including most notably availability.  For example,
+using IPsec does little to defend against denial of service attacks;
+in some situations, i.e., on CPU-limited systems, it may contribute to
+the attacks.
+Within its scope, the security of any resulting protocol
+depends heavily on the accuracy of the analysis that resulted
+in a decision to use IPsec.
+</t>
+    </section>
+    <section title="Acknowledgments">
+      <t>
+Ran Atkinson,
+Lakshminath Dondeti,
+Barbara Fraser,
+Paul Hoffman,
+Russ Housley,
+Stephen Kent,
+Eric Fleischman,
+assorted members of the IESG,
+and a plethora of others have
+made many useful suggestions.
+</t>
+    </section>
+  </middle>
+  <back>
+    <references title="Normative References">
+<?rfc include="reference.RFC.2401.xml" ?>
+<?rfc include="reference.RFC.2402.xml" ?>
+<?rfc include="reference.RFC.2406.xml" ?>
+<?rfc include="reference.RFC.2409.xml" ?>
+<?rfc include="reference.RFC.3280.xml" ?>
+<?rfc include="reference.RFC.3554.xml" ?>
+<?rfc include="reference.RFC.3948.xml" ?>
+<?rfc include="reference.RFC.4107.xml" ?>
+<?rfc include="reference.I-D.ietf-msec-ipsec-extensions.xml" ?>
+    </references>
+    <references title="Informative References">
+<?rfc include="reference.RFC.2385.xml" ?>
+<?rfc include="reference.RFC.2461.xml" ?>
+<?rfc include="reference.RFC.2661.xml" ?>
+<?rfc include="reference.RFC.2960.xml" ?>
+<?rfc include="reference.RFC.3547.xml" ?>
+<?rfc include="reference.RFC.3552.xml" ?>
+<?rfc include="reference.RFC.3715.xml" ?>
+<?rfc include="reference.RFC.3830.xml" ?>
+<?rfc include="reference.RFC.4271.xml" ?>
+<?rfc include="reference.RFC.4301.xml" ?>
+<?rfc include="reference.RFC.4302.xml" ?>
+<?rfc include="reference.RFC.4303.xml" ?>
+<?rfc include="reference.RFC.4306.xml" ?>
+<?rfc include="reference.RFC.4430.xml" ?>
+<?rfc include="reference.RFC.4535.xml" ?>
+      <reference anchor="Bell96">
+        <front>
+          <title>Problem Areas for the IP Security Protocols</title>
+          <author initials="S.M." surname="Bellovin" fullname="Steven M. Bellovin"/>
+          <date year="1996"/>
+        </front>
+        <seriesInfo name="Proc. Sixth Usenix Security Symposium" value="pp. 205-214"/>
+      </reference>
+      <reference anchor="Kent00a">
+        <front>
+          <title>Secure Border Gateway Protocol (Secure-BGP)</title>
+          <author initials="S" surname="Kent" fullname="Stephen Kent"/>
+          <author initials="C" surname="Lynn" fullname="C. Lynn"/>
+          <author initials="K" surname="Seo" fullname="Karen Seo"/>
+          <date year="2000"/>
+        </front>
+        <seriesInfo name="IEEE Journal on Selected Areas in Communications 18:4" value="pp. 582-592"/>
+      </reference>
+      <reference anchor="Kent00b">
+        <front>
+          <title>Secure Border Gateway Protocol (Secure-BGP) -- Real World Performance and Deployment Issues</title>
+          <author initials="S" surname="Kent" fullname="Stephen Kent"/>
+          <author initials="C" surname="Lynn" fullname="C. Lynn"/>
+          <author initials="J" surname="Mikkelson" fullname="J. Mikkelson"/>
+          <author initials="K" surname="Seo" fullname="Karen Seo"/>
+          <date year="2000"/>
+        </front>
+        <seriesInfo name="Proc. Network and Distributed System Security Symposium" value="(NDSS)"/>
+      </reference>
+    </references>
+  </back>
+</rfc>

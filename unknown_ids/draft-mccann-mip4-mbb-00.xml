@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!-- Edited by Pete McCann  -->
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY RFC2119 SYSTEM 'C:\Program Files\xml2rfc\bibxml\reference.RFC.2119.xml' >
+    <!ENTITY RFC3344 SYSTEM 'C:\Program Files\xml2rfc\bibxml\reference.RFC.3344.xml' >
+    <!ENTITY RFC4721 SYSTEM 'C:\Program Files\xml2rfc\bibxml\reference.RFC.4721.xml' >
+    <!ENTITY RFC3957 SYSTEM 'C:\Program Files\xml2rfc\bibxml\reference.RFC.3957.xml' >
+    <!ENTITY I-D.leung-mip4-proxy-mode SYSTEM 'C:\Program Files\xml2rfc\bibxml3\reference.I-D.leung-mip4-proxy-mode.xml' >
+]>
+<!--   'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'> -->
+
+
+<rfc category="bcp" ipr="full3978" docName="draft-mccann-mip4-mbb-00.txt">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+    <front>
+        <title abbrev="MIP4 Make-Before-Break">
+           Make-Before-Break Handoffs with Mobile IPv4
+        </title>
+        <author initials='P.J.M.' surname="McCann" fullname='Peter J. McCann'>
+            <organization>Motorola
+            </organization>
+            <address>
+              <postal>
+	         <street>Rm 2240</street>
+	         <street>1301 E. Algonquin Rd</street>
+	         <city>Schaumburg</city>
+                 <region>IL</region>
+                 <code>60196</code>
+	      </postal>
+	      <phone>+1 847 576 3440</phone>
+	      <email>pete.mccann@motorola.com</email>
+	    </address>
+        </author>
+        <date/>
+        <abstract>
+           <t>
+              A make-before-break handoff is one where resources on a
+              target system are allocated prior to releasing the 
+              resources on a source system.  Make-before-break can be
+              an effective means to provide a more seamless handoff with 
+              fewer dropped packets.  The existing Mobile IPv4 specification
+              supports simultaneous bindings, which can facilitate a 
+              make-before-break handoff.  However, the binding state at
+              the home agent is only one example of a resource that can
+              be allocated; others include the link connection to the
+              Foreign Agent (or access router) and the provision of
+              security associations between the mobile node and the 
+              mobility agents.  It may be desirable to set up these
+              resources on the target system without necessarily creating
+              a binding entry on the Home Agent.  This document provides
+              some additional conventions on the use of simultaneous
+              bindings in a make-before-break handoff that can be used
+              to optimize the allocation of resources in these scenarios.
+           </t>
+        </abstract>
+    </front>
+
+    <middle>
+       
+       <section title="Introduction">
+          <t>
+          During a make-before-break handoff, a mobile node attempts to
+          set up resources on a target system while still connected 
+          to a source system.  For example, a mobile node might have
+          two wireless interfaces, one connected to FA1 (the source
+          system) and another connected to FA2 (the target system).
+          The mobile node would like to allocate some resources on
+          FA2 before disconnecting from FA1, so that the time needed
+          for actual media handoff is as short as possible.</t>
+          
+          <t>The base Mobile IP specification <xref target="RFC3344"/>
+          provides for simultaneous bindings with the setting of the
+          'S' bit in a Registration Request.  When the Home Agent (HA)
+          receives such a request, it sets up an additional binding
+          entry for the Mobile Node (MN) without deleting any existing
+          binding(s).  The multiple bindings cause packets destined
+          for the MN to be duplicated and sent once for each binding
+          to the corresponding Care-of-Address (CoA) registered as
+          part of the binding.  In a real-time communications scenario
+          such as Voice-over-IP (VoIP), simultaneous bindings can
+          allow for the packet stream to be ready and waiting on the
+          new CoA before the old CoA is released.
+          </t>
+          
+          <t>
+             However, the simultaneous bindings as currently specified
+             lacks some flexibility.  In particular, the MN may need to
+             set up a relationship with the HA (and a new FA) in advance 
+             of the handoff without necessarily beginning the forwarding 
+             of traffic.  This is especially true if the Mobile IP
+             Registration Request / Response exchange is used for access
+             control on the new link <xref target="RFC4721"/> and to 
+             distribute keys to the MN and mobility agents 
+             <xref target="RFC3957"/>.  It is desirable to allow these
+             procedures to complete without sending media to the new
+             access link, which would be wasteful of resources in case
+             the MN will stay attached to its existing link for a period
+             of time.
+          </t>
+          
+          <t>
+             In this document we define a new convention for the use
+             of the 'S' bit to establish a new session and distribute
+             keys, but without the establishment of binding state at
+             the HA.  Also, we give an implementation hint for HAs that
+             implement simultaneous bindings that is expected to increase
+             the quality of a real-time communication session.
+          </t>
+       </section>
+       
+        <section title="Requirements Notation">
+            <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+            "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+            and "OPTIONAL" in this document are to be interpreted as
+            described in <xref target="RFC2119"/>.</t>
+        </section>
+
+       <section title="Authentication Only Registration Request">
+          <t>
+             In this section we define an Authentication Only Registration
+             Request that can be used to provide access control and
+             set up security associations between the MN and mobility
+             agents.  The existing text in the base Mobile IP specification
+             says the following in Section 3.8.2.2:
+          </t>
+          <t><list>
+             <t>
+             -  If the Lifetime is zero and the Care-of Address equals the
+             mobile node's home address, the home agent deletes all of the
+             entries in the mobility binding list for the requesting mobile
+             node.  This is how a mobile node requests that its home agent
+             cease providing mobility services.
+             </t>
+             
+             <t>
+             -  If the Lifetime is zero and the Care-of Address does not equal
+             the mobile node's home address, the home agent deletes only the
+             entry containing the specified Care-of Address from the
+             mobility binding list for the requesting mobile node.  Any
+             other active entries containing other care-of addresses will
+             remain active.
+             </t>
+             
+             <t>
+             -  If the Lifetime is nonzero, the home agent adds an entry
+             containing the requested Care-of Address to the mobility
+             binding list for the mobile node.  If the 'S' bit is set and
+             the home agent supports simultaneous mobility bindings, the
+             previous mobility binding entries are retained.  Otherwise, the
+             home agent removes all previous entries in the mobility binding
+             list for the mobile node.
+             </t>
+          </list>
+          </t>
+          
+          <t>
+             This document proposes a new case be added:
+          </t>
+          
+             <t><list>
+                <t>
+                   -  If the Lifetime is zero and the Care-of Address does
+                   not equal the mobile node's home address and the 'S' bit
+                   is set, then treat the Registration Request as an 
+                   Authentication Only Registration Request.  Perform
+                   authentication and key distribution <xref target="RFC3957"/>
+                   but do not establish a binding to the Care-of Address.
+                   Leave existing bindings unchanged.
+                </t>
+             </list>
+             </t>
+             
+             <t>
+                With this new convention, the MN will be able to perform
+                access control on the new link and set up security associations
+                with the home and foreign agents without yet directing
+                traffic to the new CoA.  When the MN is ready to perform
+                the actual handoff of bearer to the new access link, it
+                can send an ordinary registration request (with or without
+                the 'S' bit set) to start receiving packets on the new CoA.
+             </t>
+             
+             <t>
+                The above procedure might be especially useful when handing
+                off from a technology that uses Proxy Mobile IPv4 
+                <xref target="I-D.leung-mip4-proxy-mode"/>
+                to a technology that uses client Mobile IPv4.  In this
+                case, the MN does not yet have a security association with
+                the FA and HA while it is connected to the Proxy Mobile IP
+                network, and needs to develop one with the new FA and 
+                existing HA prior
+                to the actual handoff of traffic.
+             </t>
+       </section>
+       
+       <section title="Bi-receiving">
+          <t>
+             During the process of handoff, the MN will establish
+             new bindings and tear down old bindings.  There may be 
+             a race condition here, because the message to delete a 
+             binding may arrive at the HA prior to some data packets
+             that were sent from the old access router.  For this 
+             reason, we propose that the HA implement a short hang
+             timer when deleting a given binding, during which it 
+             will continue to receive and process data packets from
+             the old point of attachment.  This timer should be configured
+             according to the expected deployment scenario.
+          </t>
+       </section>
+       
+       <section title="Security Considerations">
+          <t>
+             None for now.
+          </t>
+       </section>
+    </middle>
+
+    <back>
+        <references title='Normative References'>
+           &RFC2119;
+           &RFC3344;
+           &RFC4721;
+           &RFC3957;
+           &I-D.leung-mip4-proxy-mode;
+        </references>
+    </back>
+
+</rfc>

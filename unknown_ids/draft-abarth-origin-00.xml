@@ -1,0 +1,356 @@
+<?xml version="1.0"?>
+<?rfc toc="yes"?>
+<!DOCTYPE rfc SYSTEM "rfcXXXX.dtd">
+<rfc ipr="trust200811" docName="draft-abarth-origin-00">
+  <front>
+    <title abbrev="The HTTP Origin Header">
+      The HTTP Origin Header
+    </title>
+    <author initials="A." surname="Barth" fullname="Adam Barth">
+      <organization abbrev="U.C. Berkeley">
+        University of California, Berkeley
+      </organization>
+      <address>
+        <email>abarth@eecs.berkeley.edu</email>
+        <uri>http://www.adambarth.com/</uri>
+      </address>
+    </author>
+    <author initials="C." surname="Jackson" fullname="Collin Jackson">
+      <organization abbrev="Stanford University">
+        Stanford University
+      </organization>
+      <address>
+        <email>collinj@cs.stanford.edu</email>
+        <uri>http://www.collinjackson.com/</uri>
+      </address>
+    </author>
+    <author initials="I." surname="Hickson" fullname="Ian Hickson">
+      <organization>
+        Google, Inc.
+      </organization>
+      <address>
+        <email>ian@hixie.ch</email>
+        <uri>http://ln.hixie.ch/</uri>
+      </address>
+    </author>
+    <date month="January" year="2009"/>
+    <workgroup>Working Group</workgroup>
+    <keyword>Internet-Draft</keyword>
+    <abstract>
+      <t>This document defines the HTTP Origin header.  The Origin header is
+      added by the user agent to describe the security context that
+      initiated an HTTP request.  HTTP servers can use the Origin header to
+      defend themselves against Cross-Site Request Forgery (CSRF)
+      attacks.</t>
+    </abstract>
+  </front>
+  <middle>
+    <section anchor="intro" title="Introduction">
+      <t>This document describes the HTTP Origin header.  The Origin header
+      identifies the security context that initiated an HTTP request and can
+      be used by Web sites to mitigate cross-site request forgery (CSRF)
+      vulnerabilities.</t>
+    </section>
+    <section anchor="origin" title="Origin">
+      <t>The following algoritm MUST be used to compute the origin of a URL.
+      <list style="numbers">
+        <t>Let /url/ be the URL for which the origin is being
+        determined.</t>
+
+        <t>Parse /url/.</t>
+
+        <t>If /url/ does not use a server-based naming authority, or if
+        parsing /url/ failed, or if /url/ is not an absolute URL, then
+        return an implementation-defined value.</t>
+
+        <t>Let /scheme/ be the scheme component of /url/, converted to
+        lowercase.</t>
+
+        <t>If the implementation doesn't support the protocol given by
+        /scheme/, then return an implementaion-defined value.</t>
+
+        <t>If /scheme/ is "file", then the implementation MAY return a
+        implementation-defined value.</t>
+
+        <t>Let /host/ be the host component of /url/.</t>
+
+        <t>Apply the IDNA ToASCII algorithm to /host/, with both the
+        AllowUnassigned and UseSTD3ASCIIRules flags set.  Let /host/ be the
+        result of the ToASCII algorithm.</t>
+
+        <t>If ToASCII fails to convert one of the components of the string
+        (e.g. because it is too long or because it contains invalid
+        characters), then return an implementation-defined value.</t>
+        
+        <t>Let /host/ be the result of converting /host/ to lowercase.</t>
+
+        <t>If there is no port component of /url/, then let /port/ be the
+        default port for the protocol given by /scheme/.  Otherwise, let
+        /port/ be the port component of /url/.</t>
+
+        <t>Return the tuple (/scheme/, /host/, /port/).</t>
+      </list>
+      </t>
+      
+      <t>Implementations MAY define other types of origins in addition to
+      the scheme/host/port tuple type defined above.  (For example, user
+      agents could implement globally unique origins or certificate-based
+      origins.)</t>
+    </section>
+    <section anchor="same-origin" title="Comparing Origins">
+      <t>Implementations MUST use the following algorithm to test whether
+      two origins are the "same origin".
+      <list style="numbers">
+        <t>Let /A/ be the first origin being compared, and let B be the
+        second origin being compared.</t>
+
+        <t>If either /A/ or /B/ is not a scheme/host/port tuple, return an
+        implementation-defined value.</t>
+
+        <t>If /A/ and /B/ have scheme components that are not identical,
+        return false.</t>
+
+        <t>If /A/ and /B/ have host components that are not identical,
+        return false.</t>
+
+        <t>If /A/ and /B/ have port components that are not identical,
+        return false.</t>
+
+        <t>Return true.</t>
+      </list>
+      </t>
+    </section>
+    <section anchor="serialization" title="Serializing Origins">
+      <section anchor="unicode-serialization"
+               title="Unicode Serialization of an Origin">
+        <t>Implementations MUST using the following algorithm to compute the
+        Unicode serialization of an origin:
+        <list style="numbers">
+          <t>If the origin in question is not a scheme/host/port tuple, then
+          return the string
+          <list style="empty">
+            <t>null</t>
+          </list>
+          (i.e., the character sequence U+006E, U+0075, U+006C, U+006C) and
+          abort these steps.</t>
+          
+          <t>Otherwise, let /result/ be the scheme part of the origin
+          tuple.</t>
+          
+          <t>Append the string "://" to /result/.</t>
+          
+          <t>Apply the IDNA ToUnicode algorithm to each component of the
+          host part of the origin tuple, and append the results of each
+          component, in the same order, separated by U+002E FULL STOP
+          characters (".") to /result/.</t>
+          
+          <t>If the port part of the origin tuple gives a port that is
+          different from the default port for the protocol given by the
+          scheme part of the origin tuple, then append a U+003A COLON
+          character (":") and the given port, in base ten, to /result/.</t>
+          
+          <t>Return /result/.</t>
+        </list>
+        </t>
+      </section>
+      <section anchor="ascii-serialization"
+               title="ASCII Serialization of an Origin">
+        <t>Implementations MUST using the following algorithm to compute the
+        ASCII serialization of an origin:
+        <list style="numbers">
+          <t>If the origin in question is not a scheme/host/port tuple, then
+          return the string
+          <list style="empty">
+            <t>null</t>
+          </list>
+          (i.e., the character sequence U+006E, U+0075, U+006C, U+006C) and
+          abort these steps.</t>
+
+          <t>Otherwise, let /result/ be the scheme part of the origin tuple.</t>
+
+          <t>Append the string "://" to /result/.</t>
+
+          <t>Apply the IDNA ToASCII algorithm the host part of the origin
+          tuple, with both the AllowUnassigned and UseSTD3ASCIIRules flags
+          set, and append the result to /result/.</t>
+
+          <t>If ToASCII fails to convert one of the components of the
+          string, e.g. because it is too long or because it contains invalid
+          characters, then return the literal string "null" and abort these
+          steps.</t>
+
+          <t>If the port part of the origin tuple gives a port that is
+          different from the default port for the protocol given by the
+          scheme part of the origin tuple, then append a U+003A COLON
+          character (":") and the given port, in base ten, to /result/.</t>
+
+          <t>Return /result/.</t>
+        </list>
+        </t>
+      </section>
+    </section>
+    <section anchor="ua-behavior" title="User Agent Behavior">
+      <t>Whenever a user agent issues an HTTP request, the user agent MAY
+      include an HTTP header named "Origin".</t>
+
+      <t>Whenever a user agent issues an HTTP request whose method is
+      neither "GET" nor "HEAD", the user agent MUST include exactly one HTTP
+      header named "Origin".</t>
+
+      <t>Whenever a user agent issues an HTTP request that contains an HTTP
+      header named "Origin", the value of that header MUST either be
+      <list style="numbers">
+        <t>the string "null" (i.e., the character sequence U+006E, U+0075,
+        U+006C, U+006C) or</t>
+        
+        <t>the ASCII serialization of the origin that initiated the HTTP
+        request.</t>
+      </list>
+      </t>
+      
+      <t>Whenever a user agent issues an HTTP request that contains an HTTP
+      header named "Origin", if the request was initiated on behalf of an
+      origin, the user agent SHOULD use the ASCII serialization of that
+      origin as the value of the Origin header.
+      <list style="empty">
+        <t>Note: This behavior differs from that of the HTTP Referer header,
+        which user agents often suppress when an origin with an "https"
+        scheme issues a request for a URL with an "http" scheme.</t>
+      </list>
+      </t>
+
+      <t>If a user agent issues an HTTP request in reaction to an HTTP
+      redirect, the Origin header MUST contain the same value as the Origin
+      header in the HTTP request that generated the redirect.</t>
+    </section>
+    <section anchor="server-behavior" title="HTTP Server Behavior">
+      <t>HTTP Servers MAY use the Origin header to "defend themselves
+      against CSRF attacks."  Such servers are known as "participating
+      servers" in this section.</t>
+
+      <t>Let the /origin white list/ of a participating server be a set of
+      strings selected by the operator of that server.</t>
+
+      <t>The string "null" MUST NOT be a member of the /origin white list/
+      for any participating server.
+      <list style="empty">
+        <t>Example: The origin white list for the example.com Web server
+        could be the strings "http://example.com", "https://example.com",
+        "http://www.example.com", and "https://www.example.com".</t>
+      </list>
+      </t>
+
+      <t>A participating server MUST use the following algorithm when
+      determining whether to modify state in response to an HTTP request:
+      <list style="numbers">
+        <t>If the request method is "GET", return "MUST NOT modify state"
+        and abort these steps.</t>
+
+        <t>If the request method is "HEAD", return "MUST NOT modify state"
+        and abort these steps.</t>
+
+        <t>If the request does not contain a header named "Origin", return
+        "MAY modify state" abort these stepts.</t>
+
+        <t>For each request header named "Origin", let /initiating origin/
+        be the value of the header:
+        <list style="numbers">
+          <t>If /initiating origin/ is not a member of the /origin white
+          list/ for this server, return "MUST NOT modify state" and abort
+          these steps.</t>
+        </list>
+        </t>
+
+        <t>Return "MAY modify state".</t>
+      </list>
+      </t>
+      
+      <t>
+      <list style="empty">
+        <t>Example: A Web server could modify state in response to POST
+        requests that lack an Origin header (because these requests are sent
+        by non-supporting user agents) and could modify state in response to
+        POST requests that have an Origin header of "http://example.com",
+        "https://example.com", "http://www.example.com", or
+        "https://www.example.com".</t>
+      </list>
+      </t>
+
+      <t>A participating server MUST NOT instruct a user agent to issue an
+      HTTP request for a given URL unless the following algorithm returns
+      "Safe".
+      <list style="numbers">
+        <t>If the request method is "GET", return "Safe" and abort these
+        steps.</t>
+
+        <t>If the request method is "HEAD", return "Safe" and abort these
+        steps.</t>
+
+        <t>Let /url/ be the URL in question.</t>
+
+        <t>Let /target origin/ be the origin of /url/.</t>
+
+        <t>If the ASCII serialization of /target origin/ is a member of the
+        server's /origin white list/, then return "Safe" and abort these
+        steps.</t>
+
+        <t>Return "Unsafe".</t>
+      </list>
+      </t>
+
+      <t>
+      <list style="empty">
+        <t>Example: A Web server would be vulnerable to a CSRF attack if it
+        responded to an HTTP request with HTML that generated a POST request
+        to http://attacker.com/ because the attacker's server could respond
+        with an HTTP 307 status and redirect the POST back to the original
+        server.</t>
+      </list>
+      </t>
+    </section>
+    <section anchor="privacy" title="Privacy Considerations">
+      <t>This section is not normative.</t>
+
+      <t>The Origin header improves on the Referer header by respecting the
+      user's privacy: The Origin header includes only the information
+      required to identify the principal that initiated the request
+      (typically the scheme, host, and port of initiating origin).  In
+      particular, the Origin header does not contain the path or query
+      portions of the URL included in the Referer header that invade privacy
+      without providing additional security.</t>
+
+      <t>The Origin header also improves on the Referer header by NOT
+      leaking intranet host names to external Web sites when a user follows
+      a hyperlink from an intranet host to an external site because
+      hyperlinks generate GET requests.</t>
+    </section>
+    <section anchor="security" title="Security Considerations">
+      <t>This section is not normative.</t>
+
+      <t>Because a supporting user agent will always include the Origin
+      header when making HTTP requests, HTTP servers can detect that a
+      request was initiated by a supporting user agent by observing the
+      presence of the header.  This design prevents an attacker from making
+      a supporting user agent appear to be a non-supporting user agent.
+      Unlike the Referer header, which is absent when suppressed by the user
+      agent, the Origin header takes on the value "null" when suppressed by
+      the user agent.</t>
+
+      <t>In existing user agents, The Origin header can be spoofed for
+      same-site XMLHttpRequests.  Sites that rely only on network
+      connectivity for authentication should use a DNS rebinding defense,
+      such as validating the HTTP Host header, in addition to CSRF
+      protection.</t>
+    </section>
+    <section anchor="iana" title="IANA Considerations">
+      <t>TODO: The "Origin" header should be registered.</t>
+    </section>
+    <section anchor="todo" title="TODO">
+      <t>Think about how this interacts with proxies.</t>
+
+      <t>Think about how this interacts with caches.</t>
+    </section>
+  </middle>
+  <back>
+  </back>
+</rfc>

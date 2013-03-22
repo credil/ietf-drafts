@@ -1,0 +1,734 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="rfc2629.xslt" ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc toc="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc comments="yes" ?>
+<!--<?rfc editing="yes" ?>-->
+
+<rfc category="info" ipr="noModification3978" docName="draft-ietf-btns-c-api-03">
+<front>
+<title abbrev="IPsec APIs">IPsec Application Programming Interfaces</title>
+
+    <author fullname="Michael C. Richardson" initials="M."
+            surname="Richardson">
+      <organization abbrev="SSW">Sandelman Software Works</organization>
+
+      <address>
+        <postal>
+          <street>470 Dawson Avenue</street>
+
+          <city>Ottawa</city>
+
+          <region>ON</region>
+
+          <code>K1Z 5V7</code>
+
+          <country>CA</country>
+        </postal>
+
+        <email>mcr@sandelman.ottawa.on.ca</email>
+
+        <uri>http://www.sandelman.ottawa.on.ca/</uri>
+      </address>
+    </author>
+
+    <author fullname="Nicolas Williams" surname="Williams">
+      <organization abbrev="SSW">SUN Microsystems</organization>
+
+      <address>
+        <postal>
+          <street>5300 Riata Trace Ct</street>
+
+          <city>Austin</city>
+
+          <region>TX</region>
+
+          <code>TX  78727</code>
+
+          <country>US</country>
+        </postal>
+
+        <email>Nicolas.Williams@sun.com</email>
+      </address>
+    </author>
+
+<author fullname="Miika Komu" initials="M.K.T." surname="Komu">
+  <organization>Helsinki Institute for Information Technology</organization>
+  <address>
+  <postal>
+    <street>Tammasaarenkatu 3</street>
+    <city>Helsinki</city>    
+    <country>Finland</country>
+  </postal>
+  <phone>+358503841531</phone>
+  <facsimile>+35896949768</facsimile>
+  <email>miika@iki.fi</email>
+  <uri>http://www.iki.fi/miika/</uri>
+  </address>
+</author>
+
+<author fullname="Sasu Tarkoma" initials="" surname="Tarkoma">
+  <organization>Helsinki Institute for Information Technology</organization>
+  <address>
+  <postal>
+    <street>Tammasaarenkatu 3</street>
+    <city>Helsinki</city>
+    <country>Finland</country>
+  </postal>
+  <phone>+358503841517</phone>
+  <facsimile>+35896949768</facsimile>
+  <email>sasu.tarkoma@hiit.fi</email>
+  <uri>http://www.cs.helsinki.fi/u/starkoma/</uri>
+  </address>
+</author>
+
+<date year="2008"/>
+<area>Internet Area</area>
+<workgroup>Better than Nothing Security</workgroup>
+  <abstract>
+
+  <t>IPsec based security is usually transparent for applications and
+     and they have no standard APIs for gathering information about
+     protected network connections and for detecting the underlying
+     security mechanisms.  This document specifies an API that
+     increases the visibility of IPsec to applications. The API allows
+     applications to allow BTNS extensions, control the
+     channel bindigs, and control also other security
+     properties related to IPsec.
+  </t>
+
+  </abstract>
+
+</front>
+
+<middle>
+
+<section anchor="sec:intro" title="Introduction">
+
+<t>
+The "better than nothing" (BTNS) extensions for IKE <xref
+target="I-D.ietf-btns-core" /> are intended to protect network traffic
+on their own (Stand Alone BTNS, or SAB), and may be useful in
+providing network layer security that can be authenticated by higher
+layers in the protocol stack, called Channel Bound BTNS (CBB). The
+motivation for SAB is to remove the need to deploy authentication
+information altogether. The motivation for CBB is to remove the need
+for redundant authentication at multiple layers.  This document
+defines APIs for these purposes. The APIs can also be used by other
+protocols such as HIP.
+</t>
+
+<t>The network communications of applications are usually secured
+explicitly with TLS on transport layer <xref target="RFC4346" />, or
+using even higher layer interfaces such as GSS <xref target="RFC2744"
+/> or SASL <xref target="RFC4422" /> APIs. However, such interfaces do
+not exist for IPsec because it operates on lower layers and is mostly
+transparent to applications. Using IPsec to protect existing
+applications is therefore easier than with, for example, TLS because
+IPsec does not require changes in the application. However, it is
+difficult for an application to detect when network connections are
+secured using IPsec. IPsec can be used as an "all or nothing" security
+measure, which can be problematic especially in deployments where the
+number of IPsec enabled machines is small. An alternative approach is
+to use IPsec when peer supports it. However, the application or the
+user may not have any knowledge that the communications was actually
+protected by IPsec in this case. In addition, it is more efficient to
+remove redundant authentications when IPsec and TLS are being used for
+the same connection.
+</t>
+
+<t>
+In this document, we defined APIs that increase the visibility of the
+IPsec layer to the applications. This document fulfisl the BTNS
+requirements presented in <xref target="I-D.ietf-btns-ipsec-apireq" />
+and present C-bindings to the abstract APIs <xref
+target="I-D.ietf-btns-abstract-api" />.  The APIs defined in this
+document are based on the sockets API <xref target="POSIX" /> or
+similar APIs that provide socket descriptors for applications.  For
+related API work, please refer to <xref
+target="I-D.ietf-hip-native-api" />, <xref target="mcdonald" /> and
+<xref target="atkinson" />.
+</t>
+
+<t>
+The documents defines an explicit way of enabling IPsec in
+applications. This API allows the dual use of both IPsec and higher
+layer security mechanisms (TLS, GSS or SASL) simultaneously. The
+security and performance related benefits of this are described in
+more detail in <xref target="I-D.ietf-btns-prob-and-applic" />.
+</t>
+
+<figure anchor="fig:layering" title="API Layering">
+<artwork>
+                +---------+---------+---------+---------+ 
+                | App # 1 | App # 2 | App # 3 | App #4  |
+                +-----+---+-----+---+---+-----+----+----+
+                      |         |       |           |   
+                      |     +---v-------v--+        |  
+                      |     | TLS/GSS/SASL |        |        
+                +-----v-----+-------+------+        |
+Appl. Layer     |   IPsec APIs      |   |           |
+                +-----+---------+---+   |           |   
+                      |         |       |           |
+                +-----v---------v-------v-----------v---+
+Sockets Layer   |           IPv4 and IPv6 APIs          |
+                +-----------+--------------+------------+
+Transport Layer |    SCTP   |      TCP     |    UDP     |
+                +-----------+--------------+------------+
+IPsec Layer     |                  IPsec                |
+                +--------------------+------------------+
+Network Layer   |        IPv4        |      IPv6        |
+                +--------------------+------------------+
+Link Layer      |       Ethernet     |        Etc       |
+                +--------------------+------------------+
+</artwork>
+</figure>
+
+<!--
+TLS provides its own authentication
+credentials. The application reuses the credentials to the resulting
+IPsec channel when IKE based authentication is not possible or to  double authentication.  Now, the application can bind the TLS
+authentication credentials to resulting IPsec channel. The channel
+binding is a local operation, i.e., it does not involve any extra
+communications with the peer application or host.
+-->
+
+<t>
+<xref target="fig:layering" /> illustrates four different
+applications. The first application is using only the IPsec APIs based
+on either IKE based authentication or Stand-alone BTNS. The second
+application is using both TLS (or other similar APIs) and IPsec
+APIs. In this case, the application can skip IKE authentication
+because of it is already provided by TLS. On the other hand, the
+application can avoid the use of TLS altogether when IKE
+authentication is available.'The third application is using only TLS
+and the fourth one is using neither IPsec or TLS APIs.
+</t>
+
+<t>
+In the first three cases, the application is explicitly modified to
+use either TLS or IPsec. In contrast, the fourth application is not
+using either TLS or IPsec explicitly, but it may be using IPsec
+implicitly. This document covers the use of applications one and two.
+</t>
+
+</section>
+
+<section anchor="sec:ipsec_apis" title="IPsec APIs">
+
+<t>
+This section defines constants, data structures and functions for
+manipulating IPsec related data structures. The definitions are based
+on C-language. The integer values are always in host byte order.
+</t>
+
+<section anchor="sec:token_attr" title="Token Attributes">
+
+<t>
+IPsec properties are handled indirectly using objects called
+tokens. They are are opaque data structures that must not be
+manipulated directly. Instead, the application uses the accessor
+functions shown in <xref target="fig:pToken_attr" />.
+</t>
+
+<figure anchor="fig:pToken_attr">
+<artwork>
+  int ipsec_get_token_attr(const void *token,
+                            uint32_t attr_type,
+                            uint32_t *attr_len,
+                            void **attr_val);
+  int ipsec_set_token_attr(const void *token,
+                            uint32_t attr_type,
+                            uint32_t attr_len,
+                            const void *attr_val);
+</artwork>
+</figure>
+
+<t>
+   Function ipsec_token_attr_get() searches for the given attribute
+   type (attr_type) from the token.  The attr_val pointer may have
+   memory allocated for it already. If so, it will be non-NULL, and
+   the attr_len must have the size of the allocated memory set.  When
+   attr_val pointer is NULL, the function allocates memory into attr_val
+   (using malloc) and copies the attribute into the allocated memory.
+   On successful operation, the function sets the attribute length in attr_len.
+   When attr_val is NULL, then no object will be returned, but attr_len
+   will still be set to the size of the attr_val.
+</t>
+
+<t>
+Function ipsec_set_token_attr() writes the attribute (attr_val) to the
+token. The type and length of the attribute must be set in attr_type
+and attr_len.
+</t>
+
+</section>
+
+<section anchor="sec:identity_tokens" title="Identity Tokens">
+
+<t>
+This section describes the use of IPsec identity tokens. The identity
+tokes can be used for querying the peer identity and for requiring
+certain channel bindings for a socket to implement ACLs or for logging
+purposes. Then, the application can communicate with a peer through
+the socket and the communication succeeds only when channel bindings
+are acceptable to the application. The application can also
+communicate with an peer of unkown identity, and to store and require
+the same peer identity in subsequent communications.
+</t>
+
+<section title="Creation of Identity Tokens">
+
+<t>
+Identity tokens, iTokens, are machine-readable, opaque data
+structures. They can present either the local or remote identity, such
+as a public key. The iToken has a typedef which is illustrated in
+<xref target="fig:iToken" />.
+</t>
+
+<figure anchor="fig:iToken">
+<artwork>
+  typedef struct ipsec_iToken * ipsec_iToken_t;
+</artwork>
+</figure>
+
+<t>
+The size of a iToken is variable and applications MUST NOT declare
+it directly. Instead, the application uses the constructor and
+destructor functions shown in  <xref target="fig:create_iToken"/>.
+</t>
+
+<figure anchor="fig:create_iToken">
+<artwork>
+  ipsec_iToken_t ipsec_create_iToken();
+  int ipsec_free_iToken(ipsec_iToken_t p);
+</artwork>
+</figure>
+
+<t>
+Function ipsec_create_iToken() allocates memory for a iToken and
+initializes it.  The function returns the created iToken, or NULL upon
+failure.
+</t>
+
+<t>
+Function ipsec_free_iToken() deinitializes and frees the memory
+allocated to an iToken.  It returns zero on success, and non-zero upon
+failure.
+</t>
+
+</section>
+
+<section title="Attributes of Identity Tokens">
+
+<t>
+Identity token attributes are shown in <xref target="fig:iTokenAttr"/>.
+They are accessed using the functions defined in <xref target="sec:token_attr" />.
+</t>
+
+<figure anchor="fig:iTokenAttr">
+<artwork>
+  enum {
+       IPSEC_API_ATTR_auditString,
+       IPSEC_API_ATTR_authenticationMethod,
+       IPSEC_API_ATTR_certificateAuthorityDN,
+       IPSEC_API_ATTR_certificateDN,
+       IPSEC_API_ATTR_pubKeyID,
+       IPSEC_API_ATTR_channelBinding
+  } iToken_attribute;
+
+  enum {
+       IPSEC_API_ATTR_authMeth_NONE,
+       IPSEC_API_ATTR_authMeth_BTNS,
+       IPSEC_API_ATTR_authMeth_LEAFOFFAITH,
+       IPSEC_API_ATTR_authMeth_PRESHAREDKEY,
+       IPSEC_API_ATTR_authMeth_GROUPKEY,
+       IPSEC_API_ATTR_authMeth_XAUTH,
+       IPSEC_API_ATTR_authMeth_EAP,
+       IPSEC_API_ATTR_authMeth_PKIX_TRUSTED,
+       IPSEC_API_ATTR_authMeth_PKIX_INLINE,
+       IPSEC_API_ATTR_authMeth_PKIX_OFFLINE
+  } iToken_auth_meth;
+</artwork>
+</figure>
+
+<t>
+The first group of attributes defined in iToken_attribute enumeration
+cannot be modified. The auditString attribute is a character array
+ending with a zero byte. It contains a human-readable description of the
+peer identity. The authenticationMethod attribute defines the key
+manager authentication method in an unsigned integer of two octets. Possible values are XX TBD. The
+certificateAuthorityDN attribute is a character array ending with a zero
+byte and contains a human-readable description of the peer certificate
+authority. The pubKeyID attribute contains a binary presentation of
+the peer public key. The channelBinding attribute s a character array
+ending with a zero byte. It contains a human-readable description of the
+channel binding. Two channel bindings can be compared with the memcmp() function.
+</t>
+
+<t>
+The second group of attributes in iToken_auth_meth enumeration
+contains a list of authentication methods. These attributes are both
+writable before network communications and readable after network
+communications. Here the use of the attributes is described only from
+writing point of view.
+</t>
+
+<t>
+The attibutes for the second group are 2-octet unsigned integer values, with values
+IPSEC_API_ATTR_ENABLE, IPSEC_API_ATTR_DISABLE and
+IPSEC_API_ATTR_ANY. The first two of the values enable or disable the
+attribute, and third one refers that the application relies on the system
+defaults. NONE describes that no authentication should be used.
+</t>
+
+<t>
+In the second group, BTNS enables or disables the extensions in <xref
+target="I-D.ietf-btns-core" /> . The LEAFOFFAITH attribute declares
+that the application does not have to know the peer identity
+beforehand.  The PRESHAREDKEY attribute denotes that a preshared key
+should be used (XX REF) and GROUPKEY correspondingly refers to a group
+key (XX REF).  The XAUTH and EAP attributes refer to the
+authentication methods defined in (XX REFS). The PKIX methods refer to
+the authentication methods in (XX REF).
+</t>
+
+<!-- XX describe tokens -->
+
+</section>
+
+</section>
+
+
+<section anchor="sec:pTokens" title="Protection Tokens">
+
+<t>
+An application creates a "protection token" and attaches some
+attributes for it. For example, the application can define in the
+attributes of protection token that it accepts BTNS extensions for a
+certain socket.
+</t>
+
+<section anchor="sec:pToken_struct" title="Creation of Protection Tokens">
+
+<t>
+Protection tokens, or pTokens, are used as handles to the key
+management or the IPsec module of the host. The two main
+pToken attributes are enabling the BTNS extensions and controlling of
+iTokens. The former allows the use of IPSec without authentication,
+and the latter allows e.g. quering of channel bindings.
+</t>
+
+<t>
+The data structure that represents a pToken is contained
+in an opaque ipsec_pToken structure. The application must not alter
+the data structure contents directly, but rather use the accessor
+functions introduced in the following sections. The application can use
+ipsec_pToken_t typedef as a short hand for the policy structure. The
+typedef is shown in <xref target="fig:pToken_t" />.
+</t>
+
+<figure anchor="fig:pToken_t">
+<artwork>
+  typedef struct ipsec_pToken * ipsec_pToken_t;
+</artwork>
+</figure>
+
+<t>
+The size of a policy is variable and applications MUST NOT declare
+them directly. Instead, the application uses the constructor and
+destructor functions shown in  <xref target="fig:create_pToken"/>.
+</t>
+
+<figure anchor="fig:create_pToken">
+<artwork>
+  ipsec_pToken_t ipsec_create_pToken();
+  int ipsec_free_pToken(ipsec_pToken_t p);
+</artwork>
+</figure>
+
+<t>
+Function ipsec_create_pToken() allocates memory for a pToken and
+initializes it.  The function returns the created pToken, or NULL upon
+failure.
+</t>
+
+<t>
+Function ipsec_free_pToken() deinitializes and frees the memory
+allocated to a pToken.  It returns zero on success, and non-zero upon
+failure.
+</t>
+
+</section>
+
+<section anchor="sec:pToken_attr" title="Attributes of Protection Tokens">
+
+<t>
+Protection token attributes are shown in <xref target="fig:pTokenAttr"/>.
+They are get or set using the functions defined in <xref target="sec:token_attr" />.
+</t>
+
+<figure anchor="fig:pTokenAttr">
+<artwork>
+  enum {
+       IPSEC_API_ATTR_privacyProtection,
+       IPSEC_API_ATTR_integrityProtection,
+       IPSEC_API_ATTR_compression,
+       IPSEC_API_ATTR_iToken,
+       IPSEC_API_ATTR_auditString
+  } pToken_attribute;
+</artwork>
+</figure>
+
+<t>
+The privacy, intergrity and compression attributes are 2-octet
+unsigned integer values. These attributes are writable before network
+communication and readable after network communications.  Here the use
+of the attributes is described only from writing point of view. Value
+IPSEC_API_ATTR_DISABLE defines that the attribute should not be
+used. Value IPSEC_API_ATTR_ENABLE describes that the corresponding
+attribute should be used. It is possible to enable the attribute by
+declaring the "level" of the attribute with
+IPSEC_API_ATTR_LEVEL_LOW, IPSEC_API_ATTR_LEVEL_MEDIUM or
+IPSEC_API_ATTR_LEVEL_HIGH.
+</t>
+
+<t>
+The attribute iToken is the peer identity in an iToken data
+structure. The auditString is a character array ending in zero byte
+and contains a human readable description of the protection token.
+</t>
+
+<!-- XX describe tokens (privacy 0,1,2,3) -->
+
+</section>
+
+<section anchor="sec:pToken_socket" title="Connection Oriented Communications">
+
+<t>
+Declaring a pToken does not affect the networking communications of an
+application. For connection oriented communications, the application
+must first attach the pToken to the socket before the pToken is effective.
+It is also possible to query for the pToken attached to a socket as
+shown in <xref target="fig:socket_pToken" />.
+</t>
+
+<figure anchor="fig:socket_pToken">
+<artwork>
+  int ipsec_set_socket_pToken(int fd, const ipsec_pToken_t pToken);
+  int ipsec_get_socket_pToken(int fd, ipsec_pToken_t *pToken);
+</artwork>
+</figure>
+
+<t>
+Both functions input an socket descriptor as the first argument and a
+pToken as the second argument.  Function ipsec_set_socket_pToken()
+attaches the given pToken to the socket descriptor fd. For
+ipsec_get_socket_pToken(), the pToken is actually a double pointer
+because the function also allocates the memory for the queried pToken.
+</t>
+
+<t>
+Both functions return zero upon success, and non-zero upon failure.
+</t>
+
+</section>
+
+
+<section anchor="sec:pToken_func" title="Datagram Oriented Communications">
+
+<t>
+The previous section covered the use of connected sockets. Datagram
+oriented communications based on sendmsg() and recvmsg() functions are
+supported in the API, but sendto() and recvfrom() are not supported.
+Datagram related functions are applicable both to incoming and
+outgoing packets. The IPsec API functions related sendmsg() and
+recvmsg() are shown in <xref target="fig:msg_pToken" />.
+</t>
+
+<figure anchor="fig:msg_pToken">
+<artwork>
+  int ipsec_set_msg_pToken(const struct msghdr *msg,
+                           const ipsec_pToken_t pToken);
+  int ipsec_get_msg_pToken(const struct msghdr *msg,
+                           ipsec_pToken_t *pToken);
+</artwork>
+</figure>
+
+<t>
+Function ipsec_set_msg_pToken() attaches the given pToken to the
+ancillary data of msg. The pToken of a msg can be queried using
+ipsec_get_msg_pToken(). The function allocates the memory required for the pToken
+and returns it to the caller in pToken, which is effectively a double
+pointer.
+</t>
+
+<t>
+Both functions return zero on success and non-zero on failure.
+</t>
+
+</section>
+
+<section anchor="sec:pToken_misc" title="Equivalency of Protection Tokens">
+
+<t>
+An application is not allowed to read or write to pTokens
+directly. The same restriction applies also to comparison of pTokens.
+The function for comparing two pTokens is shown in <xref
+target="fig:cmp_pToken" />.
+</t>
+
+<figure anchor="fig:cmp_pToken">
+<artwork>
+  int ipsec_cmp_pToken(ipsec_pToken_t p1, ipsec_pToken_t p2);
+</artwork>
+</figure>
+
+<t>
+   Function ipsec_cmp_policy() inputs two policies, p1 and p2, and returns
+   zero if they represent two SAs that cover identical SPD ranges, and
+   have equivalent cryptographic security properties.  The two SAs need not
+   represent SAs that identical --- they might vary in many different
+   ways, including, but not limited to: 
+</t>
+
+<t>
+<list style="symbols">
+         <t>Time: One SA may have been created later, but both are valid.</t>
+         <t>Jitter/performance properties: One SA may be on hardware and
+                   the other on software, and have different properties
+                   about what kind of latency or jitter a packet might
+                   experience</t>
+         <t>Algorithm: one SA might use AES128-CBC while the other uses
+                      AES128-CTR (DISCUSS) for performance reasons.</t>
+         <t>IPsec SA endpoints. The two SAs may cover the same inner
+                   IP packets, but might connect using differing outer
+                   IP addresses, and be used in some kind of multipath
+                   IPsec (such as MOBIKE).</t>
+</list>
+</t>
+
+</section>
+
+<section title="Duplication of Protection Tokens">
+
+<t>
+Byte-wise copying of pTokens is not allowed e.g. with memcpy().
+Function ipsec_dup_pToken() duplicates given pToken p and writes it to
+p_dup. The function allocates the memory for duplicated pToken that
+the caller is responsible of freeing.  Return value is zero on success
+and non-zero on failure.
+</t>
+
+<figure anchor="fig:dup_pToken">
+<artwork>
+  int ipsec_dup_pToken(ipsec_pToken_t *p, ipsec_pToken_t *p_dup);
+</artwork>
+</figure>
+
+</section>
+
+</section>
+
+</section>
+
+<section title="Security Considerations">
+
+<t>
+The BTNS Stand Alone mode allows applications to omit network
+layer authentication. In this case, an application is using a
+higher level security mechanism, such as TLS, and thus the required
+level of security is maintained. The application has the control
+and duplicate security techniques are not applied.
+</t>
+
+<t>
+The channel bindings allow applications to create and manage security
+channels. Given that applications omit higher layer security
+techniques based on information in an existing pToken and the
+corresping channel binding, there is a possibility for a security
+channel downgrade attack. In this attack, another application modifies
+the current application's channel binding in such a way that the
+application believes that an authenticated IPsec security channel to
+be active eventhough there is no such channel.  If the application
+omits TLS or other higher level security mechanism, then there will
+not be a secured channel and transmitted data is exposed.
+</t>
+
+</section>
+
+<section anchor="sec:iana" title="IANA Considerations">
+
+<t>TBD</t>
+
+</section>
+
+<section anchor="sec:acknowledgements" title="Acknowledgements">
+
+<t>Thanks for Love Hörnquist Åstrand, Julien Laganier for feedback,
+   ideas and discussion on the topic. The authors wish to thank also
+   Simon Josefsson and Daniel McDonald for comments on the draft.</t>
+
+</section>
+
+<!-- XX FIXME: add copyright statement on the code examples -->
+<!--
+<appendix anchor="sec:appendix" title="Appendix">
+</appendix>
+-->
+
+</middle>
+<back>
+
+<references title="Normative References">
+  <reference anchor="POSIX">
+  <front>
+     <title>IEEE Std. 1003.1-2001 Standard for Information Technology -
+            Portable Operating System Interface (POSIX)</title>
+        <author>
+        <organization>Institute of Electrical and Electronics Engineers
+        </organization>
+        </author>
+        <date month="Dec" year="2001" />
+  </front>
+  </reference>
+  <?rfc include="reference.I-D.ietf-btns-ipsec-apireq" ?>
+  <?rfc include="reference.I-D.ietf-btns-prob-and-applic" ?>
+  <?rfc include="reference.I-D.ietf-btns-core" ?>
+  <?rfc include="reference.I-D.ietf-btns-abstract-api" ?>
+</references>
+
+<references title="Informative References">
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2744" ?> <!-- &gss; -->
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.4346" ?> <!-- &tls; -->
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.4422" ?> <!-- &sasl; -->
+      <?rfc include="reference.I-D.ietf-hip-native-api" ?>
+
+      <reference anchor="mcdonald">
+        <front>
+        <title>A Simple IP Security API Extension to BSD Sockets</title>
+        <author fullname="Daniel McDonald">
+        <organization abbrev="IETF">Internet Engineering Task Force</organization>
+        </author>
+        <date month="Mar" year="1997" />
+        </front>
+      </reference>
+
+      <reference anchor="atkinson">
+        <front>
+        <title>Implementation of IPv6 in 4.4 BSD</title>
+        <author fullname="Randall Atkinson et al">
+        <organization>USENIX 1996 Annual Technical Conference</organization>
+        </author>
+        <date month="Jan" year="1996" />
+        </front>
+      </reference>
+</references>
+
+</back>
+</rfc>

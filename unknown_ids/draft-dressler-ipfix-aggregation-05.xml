@@ -1,0 +1,437 @@
+<?xml version="1.0"?>
+<?rfc toc="yes"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY rfc2119         SYSTEM 'reference.RFC.2119.xml'>
+<!ENTITY rfc3917         SYSTEM 'reference.RFC.3917.xml'>
+<!ENTITY ipfixarch       SYSTEM 'reference.I-D.ietf-ipfix-architecture.xml'>
+<!ENTITY ipfixproto      SYSTEM 'reference.RFC.5101.xml'>
+<!ENTITY ipfixinfo       SYSTEM 'reference.RFC.5102.xml'>
+<!ENTITY ipfixmediatorext	SYSTEM 'reference.I-D.sommer-ipfix-mediator-ext.xml'>
+]>
+<?rfc strict="yes"?>
+<?rfc toc="yes"?>
+<?rfc footer="draft-dressler-ipfix-aggregation-05.txt"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<rfc ipr="full3978" docName="&lt;draft-dressler-ipfix-aggregation-05.txt&gt;" category="std">
+	<front>
+		<title abbrev="IPFIX Flow Aggregation">IPFIX Flow Aggregation</title>
+		<author fullname="Falko Dressler" initials="F." surname="Dressler">
+			<organization abbrev="Univ. Erlangen">University of Erlangen-Nuremberg</organization>
+			<address>
+				<postal>
+					<street>Department of Computer Science 7</street>
+					<street>Martensstr. 3</street>
+					<city>Erlangen</city>
+					<code>91058</code>
+					<country>Germany</country>
+				</postal>
+				<phone>+49 9131 85-27914</phone>
+				<email>dressler@informatik.uni-erlangen.de</email>
+				<uri>http://www7.informatik.uni-erlangen.de/</uri>
+			</address>
+		</author>
+		<author fullname="Christoph Sommer" initials="C." surname="Sommer">
+			<organization abbrev="Univ. Erlangen">University of Erlangen-Nuremberg</organization>
+			<address>
+				<postal>
+					<street>Department of Computer Science 7</street>
+					<street>Martensstr. 3</street>
+					<city>Erlangen</city>
+					<code>91058</code>
+					<country>Germany</country>
+				</postal>
+				<phone>+49 9131 85-27993</phone>
+				<email>christoph.sommer@informatik.uni-erlangen.de</email>
+				<uri>http://www7.informatik.uni-erlangen.de/~sommer/</uri>
+			</address>
+		</author>
+		<author fullname="Gerhard Muenz" initials="G." surname="Muenz">
+			<organization abbrev="Univ. Tuebingen">University of Tuebingen</organization>
+			<address>
+				<postal>
+					<street>Computer Networks and Internet</street>
+					<street>Sand 13</street>
+					<city>Tuebingen</city>
+					<code>72076</code>
+					<country>Germany</country>
+				</postal>
+				<phone>+49 7071 29-70534</phone>
+				<email>muenz@informatik.uni-tuebingen.de</email>
+				<uri>http://net.informatik.uni-tuebingen.de/</uri>
+			</address>
+		</author>
+		<author fullname="Atsushi Kobayashi" initials="A.K." surname="Kobayashi">
+			<organization abbrev="NTT PF Lab.">NTT Information Sharing Platform Laboratories</organization>
+			<address>
+				<postal>
+					<street>3-9-11 Midori-cho</street>
+					<city>Musashino-shi</city><region>Tokyo</region>
+					<code>180-8585</code>
+					<country>Japan</country>
+				</postal>
+				<phone>+81-422-59-3978</phone>
+				<email>akoba@nttv6.net</email>
+			</address>
+		</author>
+		<date month="July" year="2008"/>
+		<abstract>
+			<t>
+				IPFIX Flow Aggregation describes a methodology for reducing the amount of measurement data exchanged between monitoring devices (IPFIX Exporters) and analyzers (IPFIX Collectors).
+				Aggregation techniques represent a necessary enhancement in order to cope with increasing amounts of monitoring data that accrue with the ever-growing network capacities.
+				Using Flow Selection Criteria and Compound Flow creation techniques, measurement information of multiple Flows that are sharing some common criteria is merged to be exported in one Compound Flow.
+				Subsets of Flows eligible for aggregation, as well as the desired degree of similarity, can be customized using a set of Aggregation Rules.
+			</t>
+		</abstract>
+	</front>
+	<middle>
+		<section title="Introduction">
+			<t>
+				Flow measurement in high-speed large-scale networks easily produces an amount of data that can no longer be handled by a single IPFIX Collector.
+				Also, many applications processing Flow measurement data do not require detailed Flow-level information, but require only generic Flow information, with the scope of this information being very application-specific.
+				Examples for applications benefiting of IPFIX Flow aggregation are charging and intrusion detection. In the former application, detailed information about individual Flows is not required. Similarly, intrusion detection applications may be satisfied with Flow information for specific subnets.
+				Flow aggregation is also a viable solution for the anonymization of Flow information.
+			</t>
+			<t>
+				This document presents a flexible Flow aggregation scheme that helps reduce the number and the size of exported Flow Records, as well as helps adapt the transmitted measurement information to the requirements of deployed applications. 
+				Measurement data reduction is achieved by discarding unneeded measurement information and merging multiple individual Flows into a smaller number of Compound Flows, which are then exported to the analyzer.
+			</t>
+			<t>
+				Flow aggregation will usually take place in an IPFIX concentrator. Monitoring networks can thus be deployed in a logical tree topology, using multiple levels of intermediate concentrators, rather than in a logical star topology.
+			</t>
+			<t>
+				The following sections illustrate the design and implementation of Flow aggregation.
+				The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target="RFC2119"/>.
+			</t>
+		</section>
+		<section anchor="terminology" title="Terminology">
+			<t>
+				Apart from the basic terms described in <xref target="RFC3917"/>, <xref target="RFC5101"/>, and <xref target="I-D.ietf-ipfix-architecture"/>, the following terms are used within this document:
+				<list style="hanging">
+					<t hangText="Compound Flow:">
+						<vspace blankLines="0" />
+						A Compound Flow is the result of an aggregation of one or more individual input Flows that matched an Aggregation Rule. 
+						It might, for example, contain the total count of all packets addressed to a common subnet that were observed within a given time interval.
+					</t>				
+					<t hangText="Aggregation Rule:">
+						<vspace blankLines="0" />
+						An Aggregation Rule defines the properties of a Compound Flow and the contents of the corresponding Flow Records.
+						Optionally, a set of selection criteria MAY be specified in order to restrict the applicability of the Aggregation Rule to those Flows that show certain patterns.
+					</t>
+					<t hangText="Preceding Rule:">
+						<vspace blankLines="0" />
+						The Preceding Rule represents a mechanism to inform the collector about the position of the matching Aggregation Rule in the entire chain or tree of Aggregation Rules. This parameter MAY be used to dynamically transmit parts of the rule chain or tree.
+					</t>
+				</list>
+			</t>
+		</section>
+		<section anchor="aggregation" title="Aggregation">
+			<t>
+				An IPFIX concentrator, as introduced in <xref target="RFC3917"/>, MAY be employed to save processing resources of distributed monitoring devices by providing aggregation techniques. Aggregated Flow data is exported in form of Compound Flows. Furthermore, concentrators enable cascaded, multi-level aggregation of Flow information.
+			</t>
+			<t>
+				In order to efficiently customize both the contents and the size of exported Compound Flows, a two-step approach is proposed. 
+				<list style="numbers">
+					<t>
+						Incoming Flows are selected by comparing contained information with configured Selection Criteria, enabling the aggregator to discard unwanted Flows.
+					</t>
+					<t>
+						The selected Flows are aggregated by discarding fields or parts of fields, enabling the aggregator to create Compound Flows by merging Flows according to a reduced Flow Key. 
+					</t>
+				</list>
+				These two independent steps are introduced in the next two sections. A mediation device can use either one or both.
+			</t>
+		</section>
+		<section anchor="common-properties" title="Selection">
+			<t>
+				Depending on the configuration of the mediator, the receiver of Flows may be only interested in a subset of all Flows that matches certain patterns.
+				Thus, patterns act as criteria that enable the selection of Flows eligible for aggregation and subsequent export to the analyzer.
+				For example, the pattern "80" can configured for the sourceTransportPort field in order to export only Compound Flows sent by an HTTP server.
+			</t>
+			<t>
+				Selecting Flows means that all of the source Flows that make up a certain Compound Flow will share a specific set of field values (e.g. destination address 192.0.2.1 and destination port 80). This common set of field values MUST be transmitted to receivers along with Compound Flows' specific field values, so as not to lose information. 
+			</t>
+			<t>
+				In order to conserve traffic volume it SHOULD, however, not be directly included in all exported Compound Flow Records, but rather communicated by more bandwidth-conserving means which still guarantee a stable association from specific properties to Common Properties of a Flow. 
+			</t>
+			<t>
+				One such means is the transmission as a set of Common Properties. This concept is introduced in <xref target="RFC5102" /> and illustrated in <xref target="cp1"/>. In order to unambiguously communicate to receivers which Common Properties of a Flow stem from aggregation, when multiple Common Properties are transmitted in one Flow, an aggregator SHOULD make sure that the first commonPropertiesID transmitted in Flows directly corresponds to the set of selection criteria used. 
+			</t>
+			<t>
+					<figure anchor="cp1" title="Using Common Properties to transmit Selection Criteria">
+						<artwork align="center"><![CDATA[
+Selection Criterion 1:
++######+---------------+
+# CP=1 # SRC=192.0.2.1 |
++######+---------------+
+
+
+Selection Criterion 2:
++######+---------------+
+# CP=2 # DST=192.0.2.2 |
++######+---------------+
+     ^
+     '-------------------.
+Flow:                    v
++--------+-----------+------+
+| SPT=80 | DPT=65432 | CP=2 |
++--------+-----------+------+
+]]></artwork>
+					</figure>				
+			</t>
+		</section>
+		<section anchor="compound-flows" title="Compound Flow Creation">
+			<t>
+				The second aggregation step is the creation of Compound Flows. Selected Flows can be aggregated by discarding fields or parts of fields, enabling the aggregator to create Compound Flows by merging Flows according to a reduced Flow Key. The following field modifiers can be applied:
+				<list style="hanging">
+					<t hangText="discard:">
+						<vspace blankLines="0" />
+						The field is not included in Compound Flow Records, i.e. Compound Flows are not distinguishable with respect to this field.
+						Incoming Flows with different values for this field can be merged and thus contribute to the same Compound Flow.
+					</t>
+					<t hangText="keep:">
+						<vspace blankLines="0" />
+						The field is included unmodified in Compound Flow Records, i.e. Compound Flows are distinguishable with respect to this field.
+						Incoming Flows with different values for this field are not merged, but contribute to different Compound Flows instead.
+					</t>
+					<t hangText="mask to n bits:">
+						<vspace blankLines="0" />
+						The field is included in Compound Flow Records, but the number of significant bits is reduced (applicable to IP addresses only).
+						Incoming Flows with IP addresses belonging to the same subnet are merged, so Compound Flows are distinguishable with respect to resulting subnet addresses only.
+						In accordance with <xref target="RFC5102"/>, the resulting subnet address MAY be encoded with an IP prefix field and an IP mask field. 
+						For performance reasons it SHOULD, however, be encoded with a single field of the abstract data type ipv4Network introduced in <xref target="I-D.sommer-ipfix-mediator-ext" />.
+					</t>
+					<t hangText="aggregate:">
+						<vspace blankLines="0" />
+						The field is included in Compound Flow Records, but field values derived from multiple incoming Flows' values.
+					</t>
+				</list>
+			</t>
+			<t>
+				The value of fields with a field modifier of "aggregate" is computed from the corresponding values of the original Flows by taking the most appropriate of the following actions (listed in ascending order of priority):
+				<list style="numbers">
+					<t>
+						As also specified in <xref target="RFC5102"/> the value of variable fields, which may change from packet to packet within a single Flow, is determined by the first packet observed for the corresponding Compound Flow. 
+						As a consequence, if no other action is more appropriate, the default behavior requires using the value of the incoming Flow Record with the earliest start timestamp.							
+					</t>
+					<t>
+						For some Information Elements, <xref target="RFC5102"/> explicitly specifies a different semantic, which is to then take precedence over the aforementioned default behavior.
+					</t>
+					<t>
+						For some Information Elements, <xref target="implicit-rules-table" /> specifies an aggregation function that has to be used in order to obtain a correct, aggregated value. 
+						If such an aggregation function is listed, it takes precedence over all other available functions.
+						For example, the start timestamp of the Compound Flow is always set to the minimum of the original start timestamps, while packet and octet counts of aggregated Flows are always summed up.
+					</t>
+				</list>
+			</t>
+			<texttable anchor="implicit-rules-table" title="Treatment of Fields Carrying Metering Information">
+				<ttcol>Information Element</ttcol><ttcol align="center">Aggregation Function</ttcol>
+				<c>minimumPacketLength</c><c>min</c>
+				<c>minimumTtl</c><c>min</c>
+				<c>flowStartSeconds</c><c>min</c>
+				<c>flowStartMilliSeconds</c><c>min</c>
+				<c>maximumPacketLength</c><c>max</c>
+				<c>maximumTtl</c><c>max</c>
+				<c>flowEndSeconds</c><c>max</c>
+				<c>flowEndMilliSeconds</c><c>max</c>
+				<c>octetDeltaCount</c><c>sum</c>
+				<c>packetDeltaCount</c><c>sum</c>
+			</texttable>
+		</section>
+		<section anchor="aggregation-rule" title="Aggregation Rules">
+			<t>
+				For the configuration of selection and compound flow creation, a rule-based approach is proposed, where each aggregator is supplied a list of user-defined Aggregation Rules.
+			</t>
+			<section anchor="aggregation-rules" title="Single Aggregation Rule">
+				<t>
+					An Aggregation Rule (see <xref target="example-rule" /> for an example) consists of multiple instructions, one for each data field that is to be considered. Each of the Aggregation Rules' instructions comprises the following elements:
+					<list style="symbols">
+						<t>
+							The data field the instruction refers to (e.g. destinationIPv4Address).
+							Only Flows that contain the field mentioned will be eligible for aggregation according to this Aggregation Rule.
+						</t>
+						<t>
+							An optional Selection Criterion (<xref target="common-properties"/>), e.g. 192.0.2.0/24, for this field that further restricts eligibility of incoming Flows to those that match the given value(s).
+							Only Flows that match all patterns of the Aggregation Rule will be aggregated.
+						</t>
+						<t>
+							An optional field modifier enabling Compound Flow creation (<xref target="compound-flows"/>) , e.g. mask to 28 bits, that either configures how much information in this field should be retained unmodified by the aggregator or that the field's values should be aggregated instead.
+						</t>
+					</list>
+				</t>
+				<t>
+					Fields that do not appear in any of an Aggregation Rule's instructions are not part of its associated Compound Flow Records.
+					Incoming Flows that are not covered by any Aggregation Rule are discarded.
+				</t>
+			</section>
+			<section anchor="semantics" title="Multiple Aggregation Rules">
+				<t>
+					By default, incoming Flow Records are checked against all of the configured Aggregation Rules.
+					If an Aggregation Rule matches, i.e. if the Flow Record comprises all required fields and matches all given patterns, the field modifiers are applied and corresponding Compound Flow Records generated or updated.
+					Therefore, incoming Flow Records that match multiple Aggregation Rules contribute to multiple Compound Flows.
+				</t>
+				<t>
+					In some cases, it is preferred that an incoming Flow Record that matched a certain Aggregation Rule is not checked against further Aggregation Rules in order to avoid that this Flow contributes to multiple Compound Flows.
+					Therefore, it is possible to indicate a Preceding Rule for each Aggregation Rule.
+					If a Preceding Rule is set for an Aggregation Rule, an aggregator first tries to aggregate an incoming Flow according to the Preceding Rule.
+					Only if the Preceding Rule is not applicable, e.g. because the incoming Flow does not match the given pattern, the current Aggregation Rule is applied.
+					Using the Preceding Rule relationship, Aggregation Rules can thus be organized in rule chains and rule trees where only the first matching Aggregation Rule is applied in every chain or branch.
+					Consequently, each incoming Flow Record is aggregated at most once per chain or tree.
+					Rules that do not define a Preceding Rule constitute the beginning of a rule chain or the root of a rule tree and are used to check all incoming Flow Records.
+				</t>
+				<t>
+					If a Preceding Rule is set for an Aggregation Rule, a suitable mechanism SHOULD be employed by an aggregator to communicate to receivers of a Compound Flow not only its common inclusion criteria, i.e. having matched the Aggregation Rule's selection patterns, but also its common exclusion criteria, i.e. not having matched any Preceding Rule's selection patterns.
+					IPFIX extensions that enable efficient transport of such information are introduced in <xref target="I-D.sommer-ipfix-mediator-ext" />.
+				</t>
+			</section>
+
+			<section anchor="deriving-templates" title="Deriving Templates from Aggregation Rules">
+				<t>
+					With the definition of an Aggregation Rule as being comprised of one instruction per Compound Flow field, each Aggregation Rule unambiguously defines the structure of these Compound Flows. 
+					As illustrated in <xref target="rule-template-mapping" />, all selection patterns of an Aggregation Rule become Common Properties of associated Compound Flows. 
+					With the exception of fields that are discarded, all fields of an Aggregation Rule transmit specific properties of Compound Flows and will thus need to be included in each exported Flow Record. Of those fields, all fields, except those that were aggregated, form the Flow Key of Compound Flows, as defined in <xref target="I-D.ietf-ipfix-architecture"/>.
+				</t>
+				<texttable anchor="rule-template-mapping" title="Mapping Rules to Templates">
+					<ttcol>Selection</ttcol><ttcol>Aggregation</ttcol><ttcol align="center">Common Property</ttcol><ttcol align="center">Specific Property</ttcol><ttcol align="center">Flow Key</ttcol>
+					<c>any</c><c>discard</c><c></c><c></c><c></c>
+					<c>any</c><c>keep</c><c></c><c>x</c><c>x</c>
+					<c>any</c><c>mask</c><c></c><c>x</c><c>x</c>
+					<c>any</c><c>aggregate</c><c></c><c>x</c><c></c>
+					<c>pattern</c><c>discard</c><c>x</c><c></c><c></c>
+					<c>pattern</c><c>keep</c><c>x</c><c>x</c><c>x</c>
+					<c>pattern</c><c>mask</c><c>x</c><c>x</c><c>x</c>
+					<c>pattern</c><c>aggregate</c><c>x</c><c>x</c><c></c>
+				</texttable>
+				<t>
+					It should be noted that certain combinations of selection and aggregation instructions can cause undesirable side effects and SHOULD NOT be used. These combinations are:
+					<list style="hanging">
+						<t hangText="atomic pattern, do not discard:">
+							<vspace blankLines="0" />
+							Selecting Flows to only allow a specific field value (as opposed to a range of values) and retaining this field as a discriminating property will lead to the transmission of the selection pattern as both a Common Property of all Compound Flows and a discriminating property. If only an atomic pattern is used, the field can be discarded with no loss of information.  
+						</t>
+						<t hangText="any field value, discard:">
+							<vspace blankLines="0" />
+							If neither a pattern nor a field modifier should apply to a field, it is sufficient for an Aggregation Rule to not include an instruction for this field. Specifying for a field neither a pattern nor a modifier will mandate presence of the field for an incoming Flow to be eligible for aggregation, but not accomplish any real selection or aggregation.  
+						</t>
+						<t hangText="pattern, aggregate:">
+							<vspace blankLines="0" />
+							Selecting Flows to only allow certain field values in non-discriminating properties, such as packet counters, then modifying these properties, can lead to semantic conflicts when interpreting the received Compound Flows.
+						</t>
+					</list>
+				</t>
+			</section>
+		</section>
+		<section anchor="example-rule" title="Example">
+			<t>
+				An Aggregation Rule shown in <xref target="example-rule-1" /> will set up a stream of Compound Flows, creation of which is performed as follows.
+				<list style="hanging">
+					<t hangText="Selection:">
+						<vspace blankLines="0" />
+						Only Flows containing at least fields for the source address, destination address, destination port, and the packet count will be considered for aggregation. 
+						In addition, the destination address must be in the subnet 192.0.2.0/28 and the destination port must be equal to 80.
+					</t>
+					<t hangText="Compound Flow creation:">
+						<vspace blankLines="0" />
+						Destination addresses are merged according to subnets in 192.0.2.0/30 and all packet counters of one Compound Flow are added up.
+					</t>
+					<t hangText="Export:">
+						<vspace blankLines="0" />
+						The resulting Compound Flow Records comprise the source address, the destination subnet address, and the packet counter as their specific properties, as well as a destination subnet of 192.0.2.0/28 and a destination port of 80 as their Common Property.
+					</t>
+				</list>
+			</t>
+			<texttable anchor="example-rule-1" title="Example Aggregation Rule">
+				<ttcol>IPFIX&nbsp;Field</ttcol><ttcol>Selection</ttcol><ttcol>Aggregation</ttcol>
+				<c>sourceIPv4Address</c><c></c><c>keep</c>
+				<c>destinationIPv4Address</c><c>192.0.2.0/28</c><c>mask&nbsp;to&nbsp;30&nbsp;bit</c>
+				<c>destinationTransportPort</c><c>80</c><c>discard</c>
+				<c>packetDeltaCount</c><c></c><c>aggregate</c>
+			</texttable>
+			<t>
+				Adding the Aggregation Rule shown in <xref target="example-rule-2" /> and configuring it with a Preceding Rule, the Aggregation Rule of <xref target="example-rule-1" />, will set up a second stream of Compound Flows, creation of which is performed as follows.
+				<list style="hanging">
+					<t hangText="Selection:">
+						<vspace blankLines="0" />
+						As introduced in <xref target="semantics"/>, Flows that were already aggregated according to the Preceding Rule will be skipped. 
+						In addition, only Flows containing at least fields for the source address, destination address, destination port, and the packet count will be considered for aggregation. 
+						Furthermore, the destination port of incoming Flows must be equal to 80.
+					</t>
+					<t hangText="Compound Flow creation:">
+						<vspace blankLines="0" />
+						Source and destination addresses are merged according to subnets in 192.0.2.0/30 and all packet counters of one Compound Flow are added up.
+					</t>
+					<t hangText="Export:">
+						<vspace blankLines="0" />
+						The resulting Compound Flow Records comprise the source subnet address, the destination subnet address, and the packet counter as their specific properties, as well as a destination port of 80 as their Common Property.
+						Furthermore, a Common Property of all Compound Flow Records is that they did not match the Preceding Rule, i.e. the combination of their destination subnet and destination port was not 192.0.2.0/28 and 80.
+					</t>
+				</list>
+			</t>
+			<texttable anchor="example-rule-2" title="Second Aggregation Rule (Chained)">
+				<ttcol>IPFIX&nbsp;Field</ttcol><ttcol>Selection</ttcol><ttcol>Aggregation</ttcol>
+				<c>sourceIPv4Address</c><c></c><c>mask&nbsp;to&nbsp;30&nbsp;bit</c>
+				<c>destinationIPv4Address</c><c></c><c>mask&nbsp;to&nbsp;30&nbsp;bit</c>
+				<c>destinationTransportPort</c><c>80</c><c>discard</c>
+				<c>packetDeltaCount</c><c></c><c>aggregate</c>
+			</texttable>
+			<t>
+				The following example <xref target="RichTemplate.ex.in" /> illustrates the application of the described chain of Aggregation Rules to selected Flows.
+			</t>
+			<texttable anchor="RichTemplate.ex.in" title="Incoming Flows">
+				<ttcol>Source IP</ttcol><ttcol>Source Port</ttcol><ttcol>Destination IP</ttcol><ttcol>Destination Port</ttcol><ttcol>Packets</ttcol>
+				<c>192.0.2.1</c><c>64235</c><c>192.0.2.101</c><c>80</c><c>10</c>
+				<c>192.0.2.2</c><c>64236</c><c>192.0.2.102</c><c>110</c><c>10</c>
+				<c>192.0.2.3</c><c>64237</c><c>192.0.2.103</c><c>80</c><c>10</c>
+				<c>192.0.2.101</c><c>64238</c><c>192.0.2.1</c><c>80</c><c>10</c>
+				<c>192.0.2.102</c><c>64239</c><c>192.0.2.2</c><c>80</c><c>10</c>
+			</texttable>
+			<t>
+				Two sets of Compound Flows, as depicted in <xref target="RichTemplate.ex.agg-1" /> and <xref target="RichTemplate.ex.agg-2" />, will be exported in our example according to the Aggregation Rules shown in <xref target="example-rule-1" /> and <xref target="example-rule-2" />, respectively.
+			</t>
+			<texttable anchor="RichTemplate.ex.agg-1" title="Compound Flows according to the first Aggregation Rule">
+				<ttcol>Source IP</ttcol><ttcol>Destination IP</ttcol><ttcol>Destination Port</ttcol><ttcol>Packets</ttcol>
+				<c>192.0.2.101</c><c>192.0.2.0</c><c>80</c><c>10</c>
+				<c>192.0.2.102</c><c>192.0.2.0</c><c>80</c><c>10</c>
+			</texttable>
+			<texttable anchor="RichTemplate.ex.agg-2" title="Compound Flows according to the second Aggregation Rule">
+				<ttcol>Source IP</ttcol><ttcol>Destination IP</ttcol><ttcol>Destination Port</ttcol><ttcol>Packets</ttcol>
+				<c>192.0.2.0</c><c>192.0.2.100</c><c>80</c><c>20</c>
+			</texttable>
+		</section>
+		<section title="Open Issues">
+			<t>
+				While the aggregation methodology introduced in <xref target="aggregation"/> solves most problems that could arise when doing Flow aggregation, some issues are left unresolved. These issues require special attention or need to be addressed at higher layers and are presented in this section.
+			</t>
+			<t>
+				One problem arises when received Option Data Records are forwarded by an aggregator. Option Data Records that refer to an Observation Domain, e.g. Data Records based on the Metering Process (Reliability) Statistics Option Template, only include an observationDomainId. However, <xref target="RFC5102"/> only mandates that the observationDomainId be locally unique to an Exporting Process, so in order to unambiguously refer to an Observation Domain, an additional identifier of the Exporting Process would need to be transmitted. While the selection of an Observation Domain ID that is unique to the aggregation domain would alleviate this issue, a more generic solution seems to be preferable.
+			</t>
+			<t>
+				Another problem arises when different sources transmit Flows containing merely pseudonyms instead of IP addresses, and these Flows are to be aggregated e.g. by an IPFIX concentrator. If an aggregator is not explicitly informed of the anonymous nature of received Flows, it assumes that identical IP address values refer to identical hosts, which might not be the case if Flow sources employ different algorithms to generate pseudonyms.
+			</t>
+		</section>		
+		<section title="Security Considerations">
+			<t>
+				As all methods described in this document are merely variations on methods already introduced in <xref target="RFC5101"/>, the same security considerations regarding exchange of Flow information apply.
+			</t>
+		</section>
+		<section title="IANA Considerations">
+			<t>
+				This document has no actions for IANA.
+			</t>
+		</section>
+	</middle>
+	<back>
+		<references title="Normative References">
+			&rfc2119;
+			&ipfixproto;
+			&ipfixinfo;
+		</references>
+		<references title="Informative References">
+			&ipfixarch;
+			&ipfixmediatorext;
+			&rfc3917;
+		</references>
+	</back>
+</rfc>

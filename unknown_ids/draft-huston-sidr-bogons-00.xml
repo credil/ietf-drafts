@@ -1,0 +1,615 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc compact="yes"?>
+<rfc category="info" docName="draft-huston-sidr-bogons-00.txt"  ipr="full3978">
+<front>
+  <title abbrev="Bogon Attestations">A profile for Bogon Origin Attestations (BOAs)</title>
+
+  <author fullname="Geoff Huston" initials="G." surname="Huston">
+      <organization abbrev="APNIC">Asia Pacific Network Information
+      Centre</organization>
+      <address>
+        <email>gih@apnic.net</email>
+        <uri>http://www.apnic.net</uri>
+      </address>
+    </author>
+
+  <author fullname="Terry Manderson" initials="T." surname="Manderson">
+      <organization abbrev="APNIC">Asia Pacific Network Information
+      Centre</organization>
+      <address>
+        <email>terry@apnic.net</email>
+        <uri>http://www.apnic.net</uri>
+      </address>
+    </author>
+
+  <author fullname="George Michaelson" initials="G." surname="Michaelson">
+      <organization abbrev="APNIC">Asia Pacific Network Information
+      Centre</organization>
+      <address>
+        <email>ggm@apnic.net</email>
+        <uri>http://www.apnic.net</uri>
+      </address>
+    </author>
+
+  <date year="2008" />
+
+  <area>Individual Submission</area>
+
+  <workgroup>Individual Submission</workgroup>
+
+  <abstract>
+
+    <t> This document defines a standard profile for Bogon Origin
+    Attestations (BOAs).  A BOA is a digitally signed object that
+    provides a means of verifying that an IP address block holder has
+    not authorized any Autonomous System (AS) to originate routes that
+    describe or encompass any of the addresses listed in the BOA, and
+    also provides a means of verifying that BGP speaker is not using
+    an AS as a BGP speaker without appropriate authority to use that
+    AS. The proposed application of BOAs is intended to fit within the
+    requirements for adding security to inter-domain routing,
+    including the ability to support incremental and piecemeal
+    deployment of security measures, and does not require any changes
+    to the specification of BGP. </t>
+
+  </abstract>
+</front>
+<middle>
+  <section anchor="intro" title="Introduction">
+
+    <t>This document defines an application of the Resource Public Key
+    Infrastructure (RPKI) to validate the attestations of Internet
+    Registries that certain addresses are currently neither allocated
+    nor assigned to any party, and any appearance of such addresses or
+    ASes in a routing advertisement in the Border Gateway Protocol
+    (BGP) <xref target="RFC4271" /> should be considered an invalid
+    use of such addresses or ASes.</t>
+
+    <t>The RPKI is based on on Resource Certificates.  Resource
+    Certificates are X.509 certificates that conform to the PKIX
+    profile <xref target="RFC3280" />, and to the extensions for IP
+    addresses and AS identifiers <xref target="RFC3779" />. A Resource
+    Certificate describes an action by an Issuer that binds a list of
+    IP address blocks and Autonomous System (AS) numbers to the
+    Subject of a certificate, identified by the unique association of
+    the Subject's private key with the public key contained in the
+    Resource Certificate. The PKI is structured such that each current
+    Resource Certificate matches a current resource allocation or
+    assignment. This is described in <xref target="ID.ietf-sidr-arch"
+    />.</t>
+
+    <t>BOAs can be regarded as a logical opposite of a Route Origin
+    Authorization (ROA) <xref target="ID.ietf-sidr-roa-format" />,
+    and allows a resource holder to explicitly list those IP addresses
+    and ASes that are denoted by the holder as not validly appearing
+    in any routing advertisement, and to make this attestation in a
+    manner that a relying party can validate under the framework of
+    the RPKI.</t>
+
+    <t>A BOA is a digitally signed object that makes use of
+    Cryptographic Message Syntax (CMS) <xref target="RFC3852" /> as a
+    standard encapsulation format. CMS was chosen to take advantage of
+    existing open source software available for processing messages in
+    this format.</t>
+
+    </section>
+    <section title="Basic Format">
+
+    <t>Using CMS syntax, a BOA is a type of signed-data object.  The
+    general format of a CMS object is:</t>
+
+    <figure>
+    <artwork><![CDATA[
+      ContentInfo ::= SEQUENCE { 
+        contentType ContentType, 
+        content [0] EXPLICIT ANY DEFINED BY contentType } 
+    
+      ContentType ::= OBJECT IDENTIFIER 
+ ]]></artwork>
+      </figure>
+    
+    <t>As a BOA is a signed-data object, it uses the corresponding
+    OID, 1.2.840.113549.1.7.2. <xref target="RFC3852" />.</t>
+
+  <section title="Signed-Data Content Type">
+
+    <t>According to the CMS standard, the signed-data content type
+    shall have ASN.1 type SignedData:</t>
+
+    <figure>
+    <artwork><![CDATA[
+      SignedData ::= SEQUENCE { 
+        version CMSVersion, 
+        digestAlgorithms DigestAlgorithmIdentifiers, 
+        encapContentInfo EncapsulatedContentInfo, 
+        certificates [0] IMPLICIT CertificateSet OPTIONAL, 
+        crls [1] IMPLICIT RevocationInfoChoices OPTIONAL, 
+        signerInfos SignerInfos } 
+    
+      DigestAlgorithmIdentifiers ::= SET OF DigestAlgorithmIdentifier 
+    
+      SignerInfos ::= SET OF SignerInfo 
+ ]]></artwork>
+      </figure>
+
+      <section title="version">
+
+      <t>The version is the syntax version number.  It MUST be 3,
+      corresponding to the signerInfo structure having version number
+      3.</t>
+
+      </section>
+      <section title="digestAlgorithms">
+
+      <t>The digestAlgorithms set MUST include only SHA-256, the OID
+      for which is 2.16.840.1.101.3.4.2.1. <xref target="RFC4055" />
+      It MUST NOT contain any other algorithms.</t>
+ 
+      </section>
+      <section title="encapContentInfo">
+
+      <t>encapContentInfo is the signed content, consisting of a
+      content type identifier and the content itself.</t>
+
+      <figure>
+      <artwork><![CDATA[
+      EncapsulatedContentInfo ::= SEQUENCE { 
+        eContentType ContentType, 
+        eContent [0] EXPLICIT OCTET STRING OPTIONAL } 
+    
+      ContentType ::= OBJECT IDENTIFIER 
+ ]]></artwork>
+      </figure>
+    
+      <section title="eContentType">
+
+      <t>The ContentType for a BOA is defined as
+      routeOriginAttestation and has the numerical value of
+      1.2.840.113549.1.9.16.1.[TBS].</t>
+
+      <figure>
+      <artwork><![CDATA[
+      id-smime OBJECT IDENTIFIER ::= { iso(1) member-body(2) us(840) 
+          rsadsi(113549) pkcs(1) pkcs9(9) 16 } 
+    
+      id-ct OBJECT INDENTIFIER ::= { id-smime 1 } 
+    
+      BogonOriginAttestion OBJECT IDENTIFIER ::= { id-ct [TBS] } 
+ ]]></artwork>
+      </figure>
+
+      </section>
+      <section title="eContent">
+
+      <t>The content of a BOA identifies a list of one or more ASs and
+      a list of one or more IP address prefixes that are asserted to
+      be "bogons" and, accordingly, BOAs are intended to act as a
+      constraint on the routing system to signal that no route object
+      that that includes these ASs or IP addresses should be
+      interpreted as representing a valid routing attestation. A BOA
+      is formally defined as:</t>
+
+      <figure>
+      <artwork><![CDATA[
+      BogonOriginAttestation ::= { 
+         version [0] INTEGER DEFAULT 0, 
+         asIDs        SEQUENCE OF asIdsOrRange, 
+         ipAddrBlocks BOAIPAddrBlocks } 
+
+      ASIdOrRange   ::= CHOICE {
+         id               ASId,
+         range            ASRange }
+
+      ASRange       ::= SEQUENCE {
+         min              ASId,
+         max              ASId }
+
+      ASId          ::= INTEGER
+
+      BOAIPAddrBlocks ::= SEQUENCE of BOAIPAddressFamily 
+       
+      BOAIPAddressFamily ::= SEQUENCE { 
+         addressFamily OCTET STRING (SIZE (2..3)), 
+         addresses SEQUENCE OF IPAddress } 
+    
+      IPAddress ::= BIT STRING 
+ ]]></artwork>
+      </figure>
+ 
+      <section title="version">
+
+      <t>The version number of the BogonOriginAttestation MUST be 0.</t>
+
+      </section>
+      <section title="asIDs">
+
+      <t>The asIDs field contains the AS numbers that are to be
+      regarded as Bogon ASes. The set of AS numbers may be explictly
+      listed, or specified as a continuous range of values. (See <xref
+      target="RFC3779" /> for more details.)</t>
+      
+      </section>
+      <section title="BOAipAddrBlocks">
+
+      <t>The BOAipAddrBlocks field encodes the set of IP address
+      prefixes that are to be regarded as Bogon IP addresses that are
+      to be constrained from appearing in any routing advertisement.
+      The intended semantics is that any route object that has the
+      same address prefix as that listed as a Bogin, or is a more
+      general prefix that encompasses any Bogon address prefix, or is
+      a more specific prefix of a Bogin is a Bogon.</t>
+
+      <t>Note that the syntax here is more restrictive than that used
+      in the IP Address Delegation extension defined in RFC 3779. That
+      extension can represent arbitrary address ranges, whereas BOAs
+      contain only prefixes.</t>
+
+      <t>Within the BOAIPAddressFamily structure, addressFamily
+      contains the Address Family Identifier (AFI) of an IP address
+      family. This specification only supports IPv4 and
+      IPv6. Therefore, addressFamily MUST be either 0001 or 0002. The
+      addresses field represents prefixes as a sequence of type
+      IPAddress. (See <xref target="RFC3779" /> for more details.)</t>
+
+      </section>
+      </section>
+      <section title="certificates">
+
+      <t>The certificates field MAY be included.  If so, it MUST
+      contain only the end entity certificate needed to validate this
+      BOA. This certificate should be present only if the BOA is being
+      transmitted to a relying party.  Thus in the initial use of
+      BOAs, where they are being made available to relying parties via
+      a repository system, this certificate SHOULD be omitted.</t>
+
+      </section>
+      <section title="crls">
+    
+      <t>The crls field MUST be omitted.</t>
+
+      </section>
+      <section title="signerInfo">
+
+      <t>SignerInfo is defined under CMS as:</t> 
+
+      <figure>
+      <artwork><![CDATA[
+      SignerInfo ::= SEQUENCE { 
+        version CMSVersion, 
+        sid SignerIdentifier, 
+        digestAlgorithm DigestAlgorithmIdentifier, 
+        signedAttrs [0] IMPLICIT SignedAttributes OPTIONAL, 
+        signatureAlgorithm SignatureAlgorithmIdentifier, 
+        signature SignatureValue, 
+        unsignedAttrs [1] IMPLICIT UnsignedAttributes OPTIONAL } 
+ ]]></artwork></figure>
+  <section title="version">
+
+   <t>The version number MUST be 3, corresponding with the choice of 
+   SubjectKeyIdentifier for the sid.</t>
+
+      </section>
+      <section title="sid">
+
+      <t>The sid is defined as:</t>
+
+      <figure>
+      <artwork><![CDATA[
+      SignerIdentifier ::= CHOICE { 
+        issuerAndSerialNumber IssuerAndSerialNumber, 
+        subjectKeyIdentifier [0] SubjectKeyIdentifier } 
+ ]]></artwork>
+      </figure>
+    
+      <t>For a BOA, the sid MUST be a SubjectKeyIdentifier.</t> 
+    
+      </section>
+      <section title="digestAlgorithm">
+
+      <t>The digestAlgorithm MUST be SHA-256, the OID for which is
+      2.16.840.1.101.3.4.2.1. <xref target="RFC4055" /></t>
+
+      </section>
+      <section title="signedAttrs">
+
+      <t>signedAttrs MUST be omitted.</t> 
+
+      </section>
+      <section title="signatureAlgorithm">
+
+      <t>The signatureAlgorithm MUST be RSA (rsaEncryption), the OID
+      for which is 1.2.840.113549.1.1.1.</t>
+
+      </section>
+      <section title="signature">
+
+      <t>The signature value is defined as:</t>
+    
+      <figure>
+      <artwork><![CDATA[
+      SignatureValue ::= OCTET STRING 
+ ]]></artwork>
+      </figure>
+    
+      <t>The signature characteristics are defined by the digest and
+      signature algorithms.</t>
+
+      </section>
+      <section title="unsignedAttrs">
+
+      <t>unsignedAttrs MUST be omitted.</t> 
+
+       </section>
+       </section>
+       </section>
+       </section>
+  </section>
+       <section title="BOA Validation">
+
+       <t>Before a relying party can use a BOA as a constrictor of a
+       routing announcement, the relying party must use the RPKI to
+       validate the BOA. To do this the relying party performs the
+       following steps:<vspace blankLines="1" />
+
+       <list style="numbers">
+
+       <t>Verify that the BOA syntax complies with this
+       specification. In particular, verify the following:<vspace blankLines="1" />
+
+       <list style="letters">
+
+       <t>The contentType of the CMS object is SignedData (OID
+       1.2.840.113549.1.7.2)<vspace blankLines="1" /></t>
+
+       <t>The version of the SignedData object is 3.</t>
+
+       <t>The digestAlgorithm in the SignedData object is SHA-256 (OID 
+          2.16.840.1.101.3.4.2.1).<vspace blankLines="1" /></t>
+
+       <t>The crls field in the SignedData object is omitted.<vspace blankLines="1" /></t>
+
+       <t>The eContentType in the EncapsulatedContentInfo is 
+          BogonOriginAttestation (OID 1.2.840.113549.1.9.16.1.[TBS]).<vspace blankLines="1" /></t>
+
+       <t>The version of the BogonOriginAttestation is 0.<vspace blankLines="1" /></t>
+
+       <t>The addressFamily in the BOAIPAddressFamily is either IPv4
+       or IPv6 (0001 and 0002, respectively).<vspace blankLines="1" /></t>
+
+       <t>The version of the SignerInfo is 3.<vspace blankLines="1" /></t>
+
+       <t>The digestAlgorithm in the SignerInfo object is SHA-256 (OID 
+          2.16.840.1.101.3.4.2.1).<vspace blankLines="1" /></t>
+
+       <t>The signatureAlgorithm in the SignerInfo object is RSA (OID 
+          1.2.840.113549.1.1.1).<vspace blankLines="1" /></t> 
+ 
+       <t>The signedAttrs field in the SignerInfo object is omitted.<vspace blankLines="1" /></t>
+
+       <t>The unsignedAttrs field in the SignerInfo object is omitted.<vspace blankLines="1" /></t>
+       </list></t>
+
+
+   <t>Obtain an EE certificate that has a Subject Key Identifier (SKI) 
+      that matches the sid field of the SignerInfo object. This 
+      certificate may be obtained from the certificates field of the 
+      SignedData object (if present), the RPKI repository 
+      system, or a local cache.<vspace blankLines="1" /></t> 
+
+   <t>Use the public key in the EE certificate to verify the signature 
+      on the BOA.<vspace blankLines="1" /></t>
+
+   <t>Verify that the EE certificate has an IP Address Delegation
+   extension [RFC3779] and that the IP address prefix(es) in that
+   extension exactly matches the IP address prefix(es) in the BOA, and
+   the AS numbers in that extension exactly match the AS numbers in
+   the BOA.<vspace blankLines="1" /></t>
+
+    <t>Verify that the EE certificate is a valid end-entity
+    certificate in the resource PKI by constructing a valid
+    certificate path to a trust anchor. (See <xref
+    target="ID.ietf-sidr-res-certs" /> for more details.)
+          </t>
+          </list></t>
+
+      <t>Note that requiring an exact match between the IP address
+      prefixes and ASes in a BOA and the IP address prefixes and ASes
+      in the corresponding EE certificate does not place any
+      limitations on BOA use. Since each EE certificate in the RPKI
+      architecture is used to verify only a single BOA, it is natural
+      to have the IP address prefixes in the certificate match those
+      in the corresponding BOA.</t>
+
+  </section>
+  <section title="BOA Use Practices">
+
+    <t>BOAs are intended to allow relying parties a means of
+    validating whether route origination information as described in a
+    route advertisement refers to an IP address or AS number that has
+    not been validly allocated for use in the routing system.</t>
+
+    <t>Any party with a validly assigned Internet resource set and a
+    CA certificate that described this delegation can publish a BOA,
+    independently of the actions of the actions of the party that
+    assigned the resource set. BOAs are not hierarchically
+    related.</t>
+
+    <t>An Internet Registry SHOULD maintain a single BOA in relation
+    to each parent registry that has assigned resources to this
+    registry.</t>
+
+    <t>An Internet Registry SHOULD maintain a regular issuance cycle
+    for BOAs.</t>
+
+    <t>For registries that operate on a day-to-day basis in terms of
+    resource transactions, it is suggested that a local BOA management
+    practice would be that a new BOA should be issued on a regular 24
+    hour basis. The corresponding EE certificate should have a
+    validity period of no more than 72 hours from the time of
+    issuance. Each time a new EE certificate for a BOA is issued the
+    previous BOA's EE certificate should be revoked and the previous
+    BOA removed from the publication repository.</t>
+
+    <t>Parties that operate a local cache of RPKI objects should
+    ensure that they refresh BOA objects at intervals 24 hours to
+    ensure that they have the current BOA in the local cache.</t>
+
+  </section>
+  <section title="BOA Interpretation">
+
+    <t>A BOA can be used to check a route object to determine if the
+    origination information in the route object refers to invalid IP
+    addresses or an invalid AS number.</t>
+
+    <t>These procedures are applied by a BGP speaker during the BGP
+    Route selection process prior to the procedures described in
+    Section 3 of <xref target="ID.huston-sidr-roa-validation" />. The
+    local policies that apply to Bogon route objects weould normally
+    take the form of rejection of the route object via the application
+    of a Bogon filter.</t>
+
+    <t>If a route object has an AS origination that refers to an AS
+    number that is included in a valid BOA then the route object can
+    be regarded as a Bogon object, and local policies that apply to
+    Bogon ASes can be applied to the object. This holds whether or not
+    the address prefix of the route object is described by a valid ROA
+    or not.</t>
+
+    <t>If a route object has an address prefix that is an aggregate
+    of, or equal to, or is a more specific prefix of an IP address
+    that is included in a valid BOA then the route object can be
+    regarded as a Bogon object, and local policies that apply to Bogon
+    ASes can be applied to the object, unless the address prefix and
+    AS origination of the route object is also described by a valid
+    ROA, in which case the BOA is to be disregarded.</t>
+
+  </section>
+  <section title="Security Considerations">
+
+    <t>The purpose of a BOA is to convey an attestation by an address
+    holder that there is no authority for the generation of a route
+    object that refers to specified addresses or origination from
+    specified ASes. The integrity of a BOA must be established in
+    order to validate the authority of the Bogon Attestation.  The BOA
+    makes use of the CMS signed message format for integrity, and thus
+    inherits the security considerations associated with that data
+    structure. The right of the BOA signer to authorize the
+    attestation of specified IP addresses and ASes as Bogons is
+    established through use of the address space and AS number PKI
+    described in [xref target="ID.draft-ietf-sidr-arch"
+    />. Specifically, a relying party must verify the signature on the
+    BOA using an X.509 certificate issued under this PKI, and check
+    that the prefix(es) in the BOA match those in the address space
+    extension in the certificate.</t>
+
+  </section>
+  <section title="IANA Considerations">
+
+    <t>[None]</t>
+
+   </section>
+   <section title="Acknowledgments">
+
+     <t> The authors are indebted to the authors of Route Origin
+     Authorization (ROA) <xref target="ID.ietf-sidr-roa-format" />,
+     M. Lepinski, S. Kent and D. Kong, as much of the text used
+     to define a BOA has been borrowed from the ROA format
+     specification.</t>
+
+  </section>
+</middle>
+<back>
+  <references title="Normative References">
+
+
+      <reference anchor="ID.ietf-sidr-arch">
+        <front>
+          <title> An Infrastructure to Support Secure Internet Routing </title>
+          <author fullname="M. Lepinski" initials="M" surname="Lepinski">
+          <organization>BBN Technologies</organization>
+          </author>
+          <author fullname="S. Kent" initials="S" surname="Kent">
+          <organization>BBN Technologies</organization>
+          </author>
+          <author fullname="R. Barnes" initials="R" surname="Barnes">
+          <organization>BBN Technologies</organization>
+          </author>
+          <date day="14" month="November" year="2007" />
+        </front>
+        <seriesInfo name="Internet-Draft" value="draft-ietf-sidr-arch" />
+        <format target="http://draft-ietf-sidr-arch.potaroo.net" type="TXT" />
+      </reference>
+
+      <reference anchor="ID.ietf-sidr-res-certs">
+        <front>
+          <title>A Profile for X.509 PKIX Resource Certificates</title>
+
+          <author fullname="G. Huston" initials="G" surname="Huston">
+            <organization>APNIC</organization>
+          </author>
+          <author fullname="G. Michaelson" initials="G" surname="Michaleson">
+            <organization>APNIC</organization>
+          </author>
+          <author fullname="R. Loomans" initials="R" surname="Loomans">
+            <organization>APNIC</organization>
+          </author>
+
+          <date month="November" year="2007" />
+        </front>
+
+        <seriesInfo name="Work in progress: Internet Drafts" value="draft-ietf-sidr-res-certs-09.txt" />
+      </reference>
+
+      <reference anchor="ID.ietf-sidr-roa-format">
+        <front>
+          <title> An Infrastructure to Support Secure Internet Routing </title>
+          <author fullname="M. Lepinski" initials="M" surname="Lepinski">
+          <organization>BBN Technologies</organization>
+          </author>
+          <author fullname="S. Kent" initials="S" surname="Kent">
+          <organization>BBN Technologies</organization>
+          </author>
+          <author fullname="D. Kong" initials="D" surname="Kong">
+          <organization>BBN Technologies</organization>
+          </author>
+          <date month="July" year="2007" />
+        </front>
+        <seriesInfo name="Internet-Draft" value="draft-ietf-sidr-roa-format" />
+        <format target="http://draft-ietf-sidr-roa-format.potaroo.net" type="TXT" />
+      </reference>
+
+      <reference anchor="ID.huston-sidr-roa-validation">
+        <front>
+          <title>Validation of Route Origination Authorizations in BGP using the Resource Certificate PKI</title>
+
+          <author fullname="G. Huston" initials="G" surname="Huston">
+            <organization>APNIC</organization>
+          </author>
+          <author fullname="G. Michaelson" initials="G" surname="Michaleson">
+            <organization>APNIC</organization>
+          </author>
+          <date month="February" year="2008" />
+        </front>
+
+        <seriesInfo name="Work in progress: Internet Drafts" value="draft-ietf-sidr-res-certs-09.txt" />
+      </reference>
+
+
+      <?rfc include='./rfcs/bibxml/reference.RFC.3280.xml'?>
+
+      <?rfc include='./rfcs/bibxml/reference.RFC.3779.xml'?>
+
+      <?rfc include='./rfcs/bibxml/reference.RFC.3852.xml'?>
+
+      <?rfc include='./rfcs/bibxml/reference.RFC.4055.xml'?>
+
+      <?rfc include='./rfcs/bibxml/reference.RFC.4271.xml'?>
+
+    </references>
+  </back>
+</rfc>

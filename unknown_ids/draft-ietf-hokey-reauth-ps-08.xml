@@ -1,0 +1,744 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="rfc2629.xslt" ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd"
+[
+<!ENTITY I-D.ietf-eap-keying PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-eap-keying.xml'>
+<!ENTITY I-D.ietf-dime-app-design-guide PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-dime-app-design-guide.xml'>
+<!ENTITY I-D.ietf-radext-design PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-radext-design.xml'>
+<!ENTITY I-D.ietf-capwap-protocol-specification PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-capwap-protocol-specification.xml'>
+<!ENTITY I-D.josefsson-pppext-eap-tls-eap PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.josefsson-pppext-eap-tls-eap.xml'>
+<!ENTITY I-D.funk-eap-ttls-v0 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.funk-eap-ttls-v0.xml'>
+
+<!ENTITY RFC2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+<!ENTITY RFC3748 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3748.xml'>
+<!ENTITY RFC3990 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3990.xml'>
+<!ENTITY RFC4017 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4017.xml'>
+<!ENTITY RFC4186 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4186.xml'>
+<!ENTITY RFC4187 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4187.xml'>
+<!ENTITY RFC4507 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4507.xml'>
+<!ENTITY RFC4851 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4851.xml'>
+<!ENTITY RFC4962 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4962.xml'>
+]>
+
+<?rfc toc="yes"?>
+<?rfc strict="yes"?>
+<?rfc tocompact="yes"?>
+<?rfc compact="yes"?>
+<?rfc tocdepth="3"?>
+<?rfc symrefs="yes"?>
+<rfc ipr="full3978" category="info" >
+    <front>
+        <title abbrev="HOKEY Re-auth PS">Handover Key Management and Re-authentication Problem Statement</title>
+
+        <author initials="T" surname="Clancy" fullname="T. Charles Clancy, Editor">
+            <organization abbrev="LTS">Laboratory for Telecommunications Sciences</organization>
+            <address>
+	      <postal>
+                <street>US Department of Defense</street>
+                <city>College Park</city>
+                <region>MD</region>
+                <country>USA</country>
+              </postal>
+              <email>clancy@LTSnet.net</email>
+            </address>
+        </author>
+
+	<author initials="M" surname="Nakhjiri" fullname="Madjid Nakhjiri">
+	  <organization abbrev="Motorola">Motorola</organization>
+	  <address>
+	    <email>madjid.nakhjiri@motorola.com</email>
+	  </address>
+	</author>
+
+	<author initials="V" surname="Narayanan" fullname="Vidya Narayanan">
+	  <organization abbrev="Qualcomm">Qualcomm, Inc.</organization>
+	  <address>
+	    <postal>
+	      <street></street>
+	      <city>San Diego</city>
+	      <region>CA</region>
+	      <country>USA</country>
+	    </postal>
+	    <email>vidyan@qualcomm.com</email>
+	  </address>
+	</author>
+
+	<author initials="L" surname="Dondeti" fullname="Lakshminath Dondeti">
+	  <organization abbrev="Qualcomm">Qualcomm, Inc.</organization>
+	  <address>
+	    <postal>
+	      <street></street>
+	      <city>San Diego</city>
+	      <region>CA</region>
+	      <country>USA</country>
+	    </postal>
+	    <email>ldondeti@qualcomm.com</email>
+	  </address>
+	</author>
+
+
+        <date month="February" year="2008"/>
+        <workgroup>HOKEY Working Group</workgroup>
+        <keyword>HOKEY</keyword>
+	<keyword>Handover Key Management</keyword>
+	<keyword>Fast Re-authentication</keyword>
+	<keyword>Mobility</keyword>
+        <abstract>
+
+	<t>This document describes the Handover Keying (HOKEY)
+	  re-authentication problem statement.  The current Extensible
+	  Authentication Protocol (EAP) keying framework is not
+	  designed to support re-authentication and handovers without
+	  re-executing an EAP method. This often causes unacceptable
+	  latency in various mobile wireless environments. This
+	  document details the problem and defines design goals for a
+	  generic mechanism to reuse derived EAP keying material for
+	  handover.</t>
+	    
+        </abstract>
+    </front>
+    <middle>
+        <!-- ******************************************************************** -->
+        <section title="Introduction">
+
+          <t>The Extensible Authentication Protocol (EAP), specified
+          in RFC 3748 <xref target="RFC3748" /> is a generic framework
+          supporting multiple authentication methods.  The primary
+          purpose of EAP is network access control.  It also supports
+          exporting session keys derived during the authentication.
+          The EAP keying hierarchy defines two keys that are derived
+          at the top level, the Master Session Key (MSK) and the
+          Extended Master Session Key (EMSK).</t>
+
+          <t>In many common deployment scenario, an EAP peer and EAP
+          server authenticate each other through a third party known
+          as the pass-through authenticator (hereafter referred to as
+          simply "authenticator").  The authenticator is responsible
+          for encapsulating EAP packets from a network access technology
+          lower layer within the Authentication, Authorization, and
+          Accounting (AAA) protocol.  The authenticator does not
+          directly participate in the EAP exchange, and simply acts as
+          a gateway during the EAP method execution.</t>
+
+          <t>After successful authentication, the EAP server transports
+          the MSK to the authenticator.  Note that this is performed
+          using AAA protocols, not EAP itself.  The underlying L2 or
+          L3 protocol uses the MSK to derive additional keys,
+          including the transient session keys (TSKs) used for
+          per-packet encryption and authentication.</t>
+
+	  <t>Note that while the authenticator is one logical device,
+	  there can be multiple physical devices involved.  For
+	  example, the CAPWAP model <xref target="RFC3990" /> splits
+	  authenticators into two logical devices: Wireless
+	  Termination Points (WTPs) and Access Controllers (ACs).
+	  Depending on the configuration, authenticator features can
+	  be split in a variety of ways between physical devices,
+	  however from the EAP perspective there is only one logical
+	  authenticator.</t>
+
+	  <t>The current models of EAP authentication and keying are
+	  frequently not efficient in cases where the peer is a mobile
+	  device <xref target="MSA03"/><xref target="KP01"/>.  In
+	  existing implementations, when a peer arrives at the new
+	  authenticator, it runs an EAP method irrespective of whether
+	  it has been authenticated to the network recently and has
+	  unexpired keying material.  A full EAP method execution
+	  involves an EAP-Response/Identity message from the peer to
+	  server, followed by one or more round trips between the EAP
+	  server and peer to perform the authentication, followed by
+	  the EAP-Success or EAP-Failure message from the EAP server
+	  to peer.  At a minimum, the peer has 2 round trips with the
+	  EAP server.</t>
+
+          <t>There have been attempts to solve the problem of
+          efficient re-authentication in various ways.  However, those
+          solutions are either EAP-method specific or EAP lower-layer
+          specific.  Furthermore,
+          these solutions do not deal with scenarios involving
+          handovers to new authenticators, or do not conform to the
+          AAA keying requirements specified in <xref target="RFC4962"
+          />.</t>
+
+          <t>This document provides a detailed description of
+          efficient EAP-based re-authentication protocol design goals.
+          The scope of this protocol is specifically re-authentication
+          and handover between authenticators within a single
+          administrative domain.  Inter-technology handover and
+          inter-administrative-domain handover are outside the scope
+          of this protocol.</t>
+
+        </section>
+        <!-- ******************************************************************** -->
+        <section title="Terminology">
+
+          <t>In this document, several words are used to signify the
+          requirements of the specification. These words are often
+          capitalized. The key words "MUST", "MUST NOT", "REQUIRED",
+          "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",
+          "MAY", and "OPTIONAL" in this document are to be interpreted
+          as described in <xref target="RFC2119"/>, with the
+          qualification that unless otherwise stated they apply to the
+          design of the re-authentication protocol, not its
+          implementation or application.</t>
+
+          <t>With respect to EAP, this document follows the
+          terminology that has been defined in <xref target="RFC3748"
+          /> and <xref target="I-D.ietf-eap-keying" />.</t>
+
+        </section>
+        <!-- ******************************************************************** -->
+        <section anchor="psa" title="Problem Statement">
+
+	  <t>Under the existing model, any re-authentication requires
+	  a full EAP exchange with the EAP server to which the peer
+	  initially authenticated <xref target="RFC3748" />.  This
+	  introduces handover latency from both network transit time
+	  and processing delay.  In service provider networks, the
+	  home EAP server for a peer could be on the other side of the
+	  world, and typical intercontinental latencies across the
+	  Internet are 100 to 300 milliseconds per round trip
+	  <xref target="LGS07"/>.  Processing delays average a couple
+	  of milliseconds for symmetric-key operations and hundreds of
+	  milliseconds for public-key operations.</t>
+
+	  <t>An EAP conversation with a full EAP method run can take
+	  two or more round trips and to complete, causing delays in
+	  re-authentication and handover times.  Some methods specify
+	  the use of keys and state from the initial authentication to
+	  finish subsequent authentications in fewer round trips and
+	  without using public-key operations (detailed Section 6.1).
+	  However, even in those cases, multiple round trips to the
+	  EAP server are required, resulting in unacceptable handover
+	  times.</t>
+
+	  <t>In summary, it is undesirable to run an EAP Identity and
+	  complete EAP method exchange each time a peer authenticates
+	  to a new authenticator or needs to extend its current
+	  authentication with the same authenticator.  Furthermore, it
+	  is desirable to specify a method-independent, efficient,
+	  re-authentication protocol.  Keying material from the
+	  initial authentication can be used to enable efficient
+	  re-authentication.  It is also desirable to have a local
+	  server with low-latency connectivity to the peer that can
+	  facilitate re-authentication.  Lastly, a re-authentication
+	  protocol should also be capable of supporting scenarios
+	  where an EAP server passes authentication information to a
+	  remote re-authentication server, allowing a peer to
+	  re-authenticate locally without having to communicate with
+	  its home re-authentication server.</t>
+
+          <t>These problems are the primary issues to be resolved.  In
+          solving them, there are a number of constraints to conform
+          to and those result in some additional work to be done in
+          the area of EAP keying.</t>
+
+        </section>
+
+        <section title="Design Goals">
+
+          <t>The following are the goals and constraints in designing
+          the EAP re-authentication and key management protocol:</t>
+
+          <t>
+          <list style="hanging">
+
+            <t hangText="Lower latency operation:"> The protocol MUST
+            be responsive to handover and re-authentication latency
+            performance objectives within a mobile access network.  A
+            solution that reduces latency as compared to a full EAP
+            authentication will be most favorable, since in networks
+            that rely on reactive re-authentication this will directly
+            impact handover times.  <vspace blankLines="1" /></t>
+
+            <t hangText="EAP lower-layer independence:"> Any keying
+            hierarchy and protocol defined MUST be lower layer
+            independent in order to provide capabilities over
+            heterogeneous technologies.  The defined protocols MAY
+            require some additional support from the lower layers that
+            use it, but should not require any particular lower layer.
+            <vspace blankLines="1" /></t>
+
+            <t hangText="EAP method independence:"> Changes to
+            existing EAP methods MUST NOT be required as a result of
+            the re-authentication protocol.  There MUST be no
+            requirements imposed on future EAP methods, provided they
+            satisfy <xref target="I-D.ietf-eap-keying" /> and
+            <xref target="RFC4017" />.  Note that the only EAP methods
+            for which independence is required are those that
+            currently conform to the specifications of
+            <xref target="I-D.ietf-eap-keying" /> and
+            <xref target="RFC4017" />.  In particular, methods that do
+            not generate the keys required by
+            <xref target="I-D.ietf-eap-keying" /> need not be
+            supported by the re-authentication protocol.
+            <vspace blankLines="1" /></t>
+
+            <t hangText="AAA protocol compatibility and keying:"> Any
+            modifications to EAP and EAP keying MUST be compatible
+            with RADIUS <xref target="I-D.ietf-radext-design" /> and
+            Diameter <xref target="I-D.ietf-dime-app-design-guide" />.
+            Extensions to both RADIUS and Diameter to support these
+            EAP modifications are acceptable.  The designs and
+            protocols must be configurable to satisfy the AAA key
+            management requirements specified in RFC 4962
+            <xref target="RFC4962" />.  <vspace blankLines="1" /></t>
+
+            <t hangText="Compatibility:"> Compatibility and
+            co-existence with compliant (<xref target="RFC3748" />
+            <xref target="I-D.ietf-eap-keying" />) EAP deployments
+            SHOULD be provided.  Specifically, the protocol should
+	    be designed such that fall back to EAP authentication
+	    occurs if not all devices in the network support fast
+	    re-authentication.</t>
+
+	    <t hangText="Cryptographic Agility:"> Any
+	    re-authentication protocol MUST support cryptographic
+	    algorithm agility, to avoid hard-coded primitives whose
+	    security may eventually prove to be compromised.  The
+	    protocol MAY support cryptographic algorithm negotiation,
+	    provided it does not adversely affect overall performance
+	    (i.e. by requiring additional round trips).</t>
+
+          </list>
+          </t>
+
+        </section>
+
+        <!-- ******************************************************************** -->
+
+        <section title="Security Goals" anchor="sec">
+
+          <t>The section draws from the guidance provided in
+          <xref target="RFC4962" /> to further define the security
+          goals to be achieved by a complete re-authentication keying
+          solution.</t>
+
+          <section title="Key Context and Domino Effect">
+
+            <t>Any key must have a well-defined scope and must be used
+            in a specific context and for the intended use.  This
+            specifically means the lifetime and scope of each key must
+            be defined clearly so that all entities that are
+            authorized to have access to the key have the same context
+            during the validity period.  In a hierarchical key
+            structure, the lifetime of lower level keys must not
+            exceed the lifetime of higher level keys.  This
+            requirement may imply that the context and the scope
+            parameters have to be exchanged.  Furthermore, the
+            semantics of these parameters must be defined to provide
+            proper channel binding specifications.  The definition of
+            exact parameter syntax definition is part of the design of
+            the transport protocol used for the parameter exchange and
+            that may be outside scope of this protocol.</t>
+
+            <t>If a key hierarchy is deployed, compromising lower
+            level keys must not result in a compromise of higher level
+            keys which were used to derive the lower level keys.
+            The compromise of keys at each level must not result in
+            compromise of other keys at the same level.  The same
+            principle applies to entities that hold and manage a
+            particular key defined in the key hierarchy.  Compromising
+            keys on one authenticator must not reveal the keys of
+            another authenticator.  Note that the compromise of
+            higher-level keys has security implications on lower
+            levels.</t>
+
+            <t>Guidance on parameters required, caching, storage and
+            deletion procedures to ensure adequate security and
+            authorization provisioning for keying procedures must be
+            defined in a solution document.</t>
+
+            <t>All the keying material must be uniquely named so that
+            it can be managed effectively.</t>
+
+          </section>
+
+          <section title="Key Freshness">
+
+            <t>As <xref target="RFC4962" /> defines,
+            a fresh key is one that is generated for the intended use.
+            This would mean the key hierarchy must provide for
+            creation of multiple cryptographically separate child keys
+            from a root key at higher level.  Furthermore, the keying
+            solution needs to provide mechanisms for 
+            refreshing each of the keys within the key hierarchy.</t>
+
+          </section>
+
+          <section title="Authentication">
+
+            <t>Each handover keying participant must be authenticated
+            to any other party with whom it communicates to the extent
+            it is necessary to ensure proper key scoping, and securely
+            provide its identity to any other entity that may require
+            the identity for defining the key scope.</t>
+
+          </section>
+
+          <section title="Authorization">
+
+            <t>The EAP Key management document
+            <xref target="I-D.ietf-eap-keying" /> discusses several
+            vulnerabilities that are common to handover mechanisms.
+            One important issue arises from the way the authorization
+            decisions might be handled at the AAA server during
+            network access authentication.  For example, if AAA
+            proxies are involved, they may influence authorization
+            decisions.  Furthermore, the reasons for making a
+            particular authorization decision are not communicated to
+            the authenticator.  In fact, the authenticator only knows
+            the final authorization result.  The proposed solution
+            must make efforts to document and mitigate authorization
+            attacks.</t>
+
+          </section>
+
+          <section title="Channel Binding">
+
+            <t>Channel Binding procedures are needed to avoid a
+            compromised intermediate authenticator providing
+            unverified and conflicting service information to each of
+            the peer and the EAP server.  To support fast
+            re-authentication, there will be intermediate entities
+            between the peer and the back-end EAP server.  Various
+            keys need to be established and scoped between these
+            parties and some of these keys may be parents to other
+            keys.  Hence the channel binding for this architecture
+            will need to consider layering intermediate entities at
+            each level to make sure that an entity with higher level
+            of trust can examine the truthfulness of the claims made
+            by intermediate parties.</t>
+
+          </section>
+
+          <section title="Transport Aspects">
+
+            <t>Depending on the physical architecture and the
+            functionality of the elements involved, there may be a
+            need for multiple protocols to perform the key transport
+            between entities involved in the handover keying
+            architecture.  Thus, a set of requirements for each of
+            these protocols, and the parameters they will carry, must
+            be developed.</t>
+
+            <t>The use of existing AAA protocols for carrying EAP
+            messages and keying material between the AAA server and
+            AAA clients that have a role within the architecture
+            considered for the keying problem will be carefully
+            examined.  Definition of specific parameters, required for
+            keying procedures and to be transferred over any of the
+            links in the architecture, are part of the scope.  The
+            relation of the identities used by the transport protocol
+            and the identities used for keying also needs to be
+            explored.</t>
+
+          </section>
+
+        </section>
+
+        <!-- ******************************************************************** -->
+
+        <section title="Use Cases and Related Work">
+
+          <t>In order to further clarify the items listed in scope of
+          the proposed work, this section provides some background on
+          related work and the use cases envisioned for the proposed
+          work.</t>
+
+	  <section title="Method-Specific EAP Re-authentication">
+
+	    <t>A number of EAP methods support fast re-authentication.
+	    In this section we examine their properties in further
+	    detail.</t>
+
+	    <t>EAP-SIM <xref target="RFC4186"/> and EAP-AKA
+	    <xref target="RFC4187"/> supports fast re-authentication,
+	    bootstrapped by the keys generated during an initial full
+	    authentication.  In response to the typical
+	    EAP-Request/Identity, the peer sends a specially formatted
+	    identity indicating a desire to perform a fast
+	    re-authentication.  A single round-trip occurs to verify
+	    knowledge of the existing keys and provide fresh nonces
+	    for generating new keys.  This is followed by an EAP
+	    success.  In the end, it requires a single local round
+	    trip between the peer and authenticator, followed by
+	    another round trip between the peer and EAP server.  AKA
+	    is based on symmetric-key cryptography, so processing
+	    latency is minimal.</t>
+
+	    <t>EAP-TTLS <xref target="I-D.funk-eap-ttls-v0" /> and
+	    PEAP <xref target="I-D.josefsson-pppext-eap-tls-eap" />
+	    support using TLS session resumption for fast
+	    re-authentication.  During the TLS handshake, the client
+	    includes the message ID of the previous session he wishes
+	    to resume, and the server can echo that ID back if it
+	    agrees to resume the session.  EAP-FAST
+	    <xref target="RFC4851" /> also supports TLS session
+	    resumption, but additionally allows stateless session
+	    resumption as defined in <xref target="RFC4507" />.
+	    Overall, for all three protocols there are still two round
+	    trips between the peer and EAP server, in addition to the
+	    local round trip for the Identity request and
+	    response.</t>
+
+	    <t>To improve performance, fast re-authentication needs to
+	    reduce the number of overall round trips.  Optimal
+	    performance could result from eliminating the
+	    EAP-Request/Identity and EAP-Response/Identity messages
+	    observed in typical EAP method execution, and allowing a
+	    single round trip between the peer and a local
+	    re-authentication server.</t>
+
+	  </section>
+
+          <section title="IEEE 802.11r Applicability">
+
+            <t>One of the EAP lower layers, IEEE 802.11 <xref
+            target="IEEE.802-11R-D9.0" />, is in the process of
+            specifying a mechanism to avoid the problem of repeated
+            full EAP exchanges in a limited setting, by introducing a
+            two-level key hierarchy.  The EAP authenticator is
+            collocated with what is known as an R0 Key Holder (R0-KH),
+            which receives the MSK from the EAP server.  A pairwise
+            master key (PMK-R0) is derived from the last 32 octets of
+            the MSK.  Subsequently, the R0-KH derives an PMK-R1 to be
+            handed out to the attachment point of the peer.  When the
+            peer moves from one R1-KH to another, a new PMK-R1 is
+            generated by the R0-KH and handed out to the new R1-KH.
+            The transport protocol used between the R0-KH and the
+            R1-KH is not specified.</t>
+
+            <t>In some cases, a mobile may seldom move beyond the
+            domain of the R0-KH and this model works well.  A full EAP
+            authentication will generally be repeated when the PMK-R0
+            expires.  However, in general cases mobiles may roam
+            beyond the domain of R0-KHs (or EAP authenticators), and
+            the latency of full EAP authentication remains an
+            issue.</t>
+
+            <t>Another consideration is that there needs to be a key
+            transfer protocol between the R0-KH and the R1-KH; in
+            other words, there is either a star configuration of
+            security associations between the key holder and a
+            centralized entity that serves as the R0-KH, or if the
+            first authenticator is the default R0-KH, there will be a
+            full-mesh of security associations between all
+            authenticators.  This is undesirable.</t>
+
+            <t>The proposed work on EAP efficient re-authentication
+            protocol aims at addressing re-authentication in a lower
+            layer agnostic manner that also can fill some of the gaps
+            in IEEE 802.11r.</t>
+
+          </section>
+
+          <section title="CAPWAP Applicability">
+
+            <t>The CAPWAP protocol
+	    <xref target="I-D.ietf-capwap-protocol-specification" />
+	    allows the functionality of an IEEE 802.11 access point to
+	    be split into two physical devices in enterprise
+	    deployments.  Wireless Termination Points (WTPs) implement
+	    the physical and low-level MAC layers, while a centralized
+	    Access Controller (AC) provides higher-level management
+	    and protocol execution.  Client authentication is handled
+	    by the AC, which acts as the AAA authenticator.</t>
+
+	    <t>One of the many features provided by CAPWAP is the
+	    ability to roam between WTPs without executing an EAP
+	    authentication.  To accomplish this, the AC caches the MSK
+	    from an initial EAP authentication, and uses it to execute
+	    a separate four-way handshake with the station as it moves
+	    between WTPs.  The keys resulting from the four-way
+	    handshake are then distributed to the WTP to which the
+	    station is associated.  CAPWAP is transparent to the
+	    station.</t>
+
+            <t>CAPWAP currently has no means to support roaming
+	    between ACs in an enterprise network.  The proposed work
+	    on EAP efficient re-authentication addresses an
+	    inter-authenticator handover problem from an EAP
+	    perspective, which applies during handover between ACs.
+	    Inter-AC handover is a topic yet to be addressed in great
+	    detail and the re-authentication work can potentially
+	    address it in an effective manner.</t>
+
+          </section>
+
+        </section>
+
+
+        <!-- ******************************************************************** -->
+
+        <section title="Security Considerations">
+
+          <t>This document details the HOKEY problem statement.  Since HOKEY is
+          an authentication protocol, there are a myriad of security-related
+          issues surrounding its development and deployment.</t>
+
+          <t>In this document, we have detailed a variety of security
+          properties inferred from <xref
+          target="RFC4962" /> to which HOKEY must
+          conform, including the management of key context, scope,
+          freshness, and transport; resistance to attacks based on the
+          domino effect; and authentication and authorization.  See
+          section <xref target="sec" /> for further details.</t>
+
+        </section>
+        <!-- ******************************************************************** -->
+        <section title="IANA Considerations">
+
+	<t>This document does not introduce any new IANA considerations.</t>
+
+        </section>
+        <!-- ******************************************************************** -->
+        <section title="Contributors">
+
+	  <t>This document represents the synthesis of two problem statement
+	    documents.  In this section, we acknowledge their contributions,
+	    and involvement in the early documents.</t>
+
+	  <t><list style="hanging" hangIndent="2">
+
+	  <t>Mohan Parthasarathy</t>
+	  <t>Nokia</t>
+	  <t>Email: mohan.parthasarathy@nokia.com
+	    <vspace blankLines="1"/></t>
+
+	  <t>Julien Bournelle</t>
+	  <t>France Telecom R&D</t>
+	  <t>Email: julien.bournelle@orange-ftgroup.com
+	    <vspace blankLines="1"/></t>
+
+	  <t>Hannes Tschofenig</t>
+	  <t>Siemens</t>
+	  <t>Email: Hannes.Tschofenig@siemens.com
+	    <vspace blankLines="1"/></t>
+
+	  <t>Rafael Marin Lopez</t>
+	  <t>Universidad de Murcia</t>
+	  <t>Email: rafa@dif.um.es</t>
+
+	  </list></t>
+
+        </section>
+
+        <!-- ******************************************************************** -->
+        <section title="Acknowledgements">
+
+	  <t>The authors would like to thank the participants of the
+	  HOKEY working group for their review and comments, including
+	  Glen Zorn, Dan Harkins, Joe Salowey, and Yoshi Ohba.  The
+	  authors would also like to thank those that provided last
+	  call reviews, including Bernard Aboba, Alan DeKok, and
+	  Hannes Tschofenig.</t>
+
+        </section>
+
+        <!-- ******************************************************************** -->
+
+    </middle>
+
+    <!-- ******************************************************************** -->
+
+    <back>
+        <references title="Normative References">
+
+               &RFC2119;
+               &RFC3748;
+               &RFC4017;
+	       &RFC4962;
+
+	</references>
+        <references title="Informative References">
+
+	  &I-D.funk-eap-ttls-v0;
+	  &I-D.ietf-capwap-protocol-specification;
+	  &I-D.ietf-dime-app-design-guide;
+          &I-D.ietf-eap-keying;
+	  &I-D.ietf-radext-design;
+	  &I-D.josefsson-pppext-eap-tls-eap;
+
+               &RFC3990;
+               &RFC4186;
+               &RFC4187;
+               &RFC4507;
+               &RFC4851;
+
+	       <reference anchor="IEEE.802-11R-D9.0">
+	         <front>
+	           <title>
+		     Information technology - Telecommunications and
+		     information exchange between systems - Local and
+		     metropolitan area networks - Specific requirements
+		     - Part 11: Wireless LAN Medium Access Control (MAC)
+		     and Physical Layer (PHY) specifications - Amendment
+		     2: Fast BSS Transition
+		   </title>
+		   <author>
+		     <organization/>
+		   </author>
+		   <date month="January" year="2008"/>
+	         </front>
+	         <seriesInfo name="IEEE" value="Standard 802.11r"/>
+	       </reference>
+
+	       <reference anchor="KP01">
+		 <front>
+		   <title>
+		     Fast Handover and Context Relocation in Mobile Networks
+		   </title>
+		   <author initials="R" surname="Koodli">
+		     <organization/>
+		   </author>
+		   <author initials="C" surname="Perkins">
+		     <organization/>
+		   </author>
+		   <date month="October" year="2001"/>
+		 </front>
+		 <seriesInfo name="ACM SIGCOMM" value="Computer and Communications Review"/>
+	       </reference>
+
+	       <reference anchor="LGS07">
+		 <front>
+		   <title>
+		     Network Coordinates in the Wild
+		   </title>
+		   <author initials="J" surname="Ledlie">
+		     <organization/>
+		   </author>
+		   <author initials="P" surname="Gardner">
+		     <organization/>
+		   </author>
+		   <author initials="M" surname="Selter">
+		     <organization/>
+		   </author>
+		   <date month="April" year="2007"/>
+		 </front>
+		 <seriesInfo name="USENIX" value="Symposium on Networked System Design and Implementation"/>
+	       </reference>
+
+	       <reference anchor="MSA03">
+		 <front>
+		   <title>
+		     An Empirical Analysis of the IEEE 802.11 MAC-Layer Handoff Process
+		   </title>
+		   <author initials="A" surname="Mishra">
+		     <organization/>
+		   </author>
+		   <author initials="M" surname="Shin">
+		     <organization/>
+		   </author>
+		   <author initials="W" surname="Arbaugh">
+		     <organization/>
+		   </author>
+		   <date month="April" year="2003"/>
+		 </front>
+		 <seriesInfo name="ACM SIGCOMM" value="Computer and Communications Review"/>
+	       </reference>
+
+
+        </references>
+    </back>
+</rfc>

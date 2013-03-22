@@ -1,0 +1,1874 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc compact='yes'?>
+<?rfc subcompact='no'?>
+<?rfc symrefs="yes"?>
+<rfc category="std" docName="draft-ietf-behave-turn-05" ipr="full3978">
+  <front>
+    <title abbrev="TURN">Traversal Using Relays around NAT (TURN): Relay
+    Extensions to Session Traversal Utilities for NAT (STUN)</title>
+
+    <author fullname="Jonathan Rosenberg" initials="J.R." surname="Rosenberg">
+      <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+
+      <address>
+        <postal>
+          <street></street>
+
+          <city>Edison</city>
+
+          <region>NJ</region>
+
+          <country>US</country>
+        </postal>
+
+        <email>jdrosen@cisco.com</email>
+
+        <uri>http://www.jdrosen.net</uri>
+      </address>
+    </author>
+
+    <author fullname="Rohan Mahy" initials="R.M." surname="Mahy">
+      <organization abbrev="Plantronics">Plantronics, Inc.</organization>
+
+      <address>
+        <email>rohan@ekabal.com</email>
+      </address>
+    </author>
+
+    <author fullname="Philip Matthews" initials="P.M." surname="Matthews">
+      <organization abbrev="Avaya">Avaya, Inc.</organization>
+
+      <address>
+        <postal>
+          <street>1135 Innovation Drive</street>
+
+          <city>Ottawa</city>
+
+          <region>Ontario</region>
+
+          <code>K2K 3G7</code>
+
+          <country>Canada</country>
+        </postal>
+
+        <phone>+1 613 592-4343 x223</phone>
+
+        <facsimile></facsimile>
+
+        <email>philip_matthews@magma.ca</email>
+
+        <uri></uri>
+      </address>
+    </author>
+
+    <author fullname="Dan Wing" initials="D.W." surname="Wing">
+      <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+
+      <address>
+        <postal>
+          <street>170 West Tasman Drive</street>
+
+          <city>San Jose</city>
+
+          <region>CA</region>
+
+          <code>95134</code>
+
+          <country>USA</country>
+        </postal>
+
+        <phone></phone>
+
+        <facsimile></facsimile>
+
+        <email>dwing@cisco.com</email>
+
+        <uri></uri>
+      </address>
+    </author>
+
+    <date day="15" month="November" year="2007" />
+
+    <area>Transport</area>
+
+    <workgroup>Behave</workgroup>
+
+    <keyword>NAT</keyword>
+
+    <keyword>TURN</keyword>
+
+    <keyword>STUN</keyword>
+
+    <abstract>
+      <t>This specification defines an extension of the Session Traversal
+      Utilities for NAT (STUN) Protocol for asking the STUN server to relay
+      packets towards a client. This extension, called Traversal Using Relays
+      around NAT (TURN), is useful for hosts behind address dependent NATs.
+      The extension purposefully restricts the ways in which the relayed
+      address can be used. In particular, it prevents users from running
+      general purpose servers on ports obtained from the TURN server.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>Session Traversal Utilities for NAT (STUN) <xref
+      target="I-D.ietf-behave-rfc3489bis"></xref> provides a suite of tools
+      for facilitating the traversal of NAT. Specifically, it defines the
+      Binding method, which is used by a client to determine its reflexive
+      transport address towards the STUN server. The reflexive transport
+      address can be used by the client for receiving packets from peers, but
+      only when the client is behind "good" NATs. In particular, if a client
+      is behind a NAT whose mapping behavior <xref target="RFC4787"></xref> is
+      address or address and port dependent (sometimes called "bad" NATs), the
+      reflexive transport address will not be usable for communicating with a
+      peer.</t>
+
+      <t>The only way to obtain a UDP transport address that can be used for
+      corresponding with a peer through such a NAT is to make use of a relay.
+      The relay sits on the public side of the NAT, and allocates transport
+      addresses to clients reaching it from behind the private side of the
+      NAT. These allocated transport addresses are from IP addresses belonging
+      to the relay. When the relay receives a packet on one of these allocated
+      addresses, the relay forwards it toward the client.</t>
+
+      <t>This specification defines an extension to STUN, called TURN, that
+      allows a client to request an address on the TURN server, so that the
+      TURN server acts as a relay. This extension defines a handful of new
+      STUN methods. The Allocate method is the most fundamental component of
+      this set of extensions. It is used to provide the client with a
+      transport address that is relayed through the TURN server. A transport
+      address which relays through an intermediary is called a relayed
+      transport address.</t>
+
+      <t>Though a relayed transport address is highly likely to work when
+      corresponding with a peer, it comes at high cost to the provider of the
+      relay service. As a consequence, relayed transport addresses should only
+      be used as a last resort. Protocols using relayed transport addresses
+      should make use of mechanisms to dynamically determine whether such an
+      address is actually needed. One such mechanism, defined for multimedia
+      session establishment protocols based on the offer/answer protocol in
+      <xref target="RFC3264">RFC 3264</xref>, is Interactive Connectivity
+      Establishment (ICE) <xref target="I-D.ietf-mmusic-ice"></xref>.</t>
+
+      <t>Though originally invented for Voice over IP applications, TURN is
+      designed to be a general-purpose relay mechanism for NAT traversal.</t>
+    </section>
+
+    <section title="Terminology">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119">RFC 2119</xref>.</t>
+
+      <t><list style="hanging">
+          <t hangText="Relayed Transport Address:">A transport address that
+          terminates on a server, and is forwarded towards the client. The
+          TURN Allocate request can be used to obtain a relayed transport
+          address, for example.</t>
+
+          <t hangText="TURN client:">A STUN client that implements this
+          specification. It obtains a relayed transport address that it
+          provides to a small number of peers (usually one).</t>
+
+          <t hangText="TURN server:">A STUN server that implements this
+          specification. It relays data between a TURN client and its
+          peer(s).</t>
+
+          <t hangText="Peer:">A node with which the TURN client wishes to
+          communicate. The TURN server relays traffic between the TURN client
+          and its peer(s).</t>
+
+          <t hangText="Allocation:">The IP address and port granted to a
+          client through an Allocate request, along with related state, such
+          as permissions and expiration timers.</t>
+
+          <t hangText="5-tuple:">A combination of the source IP address and
+          port, destination IP address and port, and transport protocol (UDP,
+          or TCP). It uniquely identifies a TCP connection or bi-directional
+          flow of UDP datagrams.</t>
+
+          <t hangText="Permission:">A record of an IP address and transport of
+          a peer that is permitted to send traffic to the TURN client. The
+          TURN server will only forward traffic to its client from remote
+          peers that match an existing permission.</t>
+        </list></t>
+    </section>
+
+    <section title="Overview of Operation">
+      <t>In a typical configuration, a TURN client is connected to a private
+      network and through one or more NATs to the public Internet. On the
+      public Internet is a TURN server. Elsewhere in the Internet are one or
+      more peers that the TURN client wishes to communicate with. This
+      specification defines a framing mechanism and several new STUN methods.
+      Together, these add the ability for a STUN server to act as a packet
+      relay.</t>
+
+      <t>The framing mechanism serves two purposes. First, it contains a
+      length field that allow TURN nodes to find the boundaries between chunks
+      of application data when the communication with the TURN server is over
+      a stream-based transport such as TCP. Second, it carries a channel
+      number. Channel zero is used for TURN control messages, while the other
+      channel numbers are used for application data traveling to or from
+      various peers. The channel number allows the client to know which peer
+      sent data to it, and to specify which peer is to be the recipient of
+      data. Application data flowing on any non-zero channel is
+      unencapsulated, meaning that the application data starts immediately
+      after the framing header. The framing header is just four bytes. This
+      allows TURN to operate with minimal overhead, which is important for the
+      real-time protocols it is designed to support. Application data can also
+      flow in encapsulated format, meaning that it is carried in certain TURN
+      messages on channel 0. Channel numbers are independent in each
+      direction: for example, channel 5 might indicate one peer in the client
+      to server direction, but a different peer in the server to client
+      direction.</t>
+
+      <t>When the client wants to obtain a relayed transport address, the
+      client first sends an Allocate request to the server, which the server
+      authenticates. The server generates an Allocate response with the
+      allocated address, port, and target transport. All other STUN messages
+      defined by this specification happen in the context of an
+      allocation.</t>
+
+      <t>A successful Allocate transaction just reserves a transport address
+      on the TURN server. Data does not flow through an allocated transport
+      address until the TURN client asks the TURN server to open a permission,
+      which is done with a Send Indication. While the client can request more
+      than one permission per allocation, it needs to request each permission
+      explicitly and one at a time. This insures that a client can't use a
+      TURN server to run a traditional server, and partially protects the
+      client from DoS attacks.</t>
+
+      <t>Once a permission is open, the client can then receive data flowing
+      back from its peer. Initially this data is encapsulated in a Data
+      Indication. Since multiple permissions can be open simultaneously, the
+      Data Indication contains the PEER-ADDRESS attribute so the TURN client
+      knows which peer sent the data, and a CHANNEL-NUMBER attribute so the
+      client knows how the server will refer to traffic from this peer when
+      sent unencapsulated. Likewise when the client initially sends to a new
+      peer, it uses a Send Indication with the peer address in the
+      PEER-ADDRESS attribute, along with a channel number so the server knows
+      how the client will refer to unencapsulated data to this peer.</t>
+
+      <figure anchor="fig-channels" title="Example Usage of Channels">
+        <artwork><![CDATA[
+TURN                   TURN          peer
+client                 server
+  |--- Allocate Req  -->|             |
+  |<-- Allocate Resp ---|             |
+  |                     |             |
+  |--- Send (chan 2) -->|    data     |
+  |                     |============>|
+  |<-- ChannelConfirm --|             |
+  |                     |    data     |
+  |                     |<============|
+  |<-- Data (chan 5) ---|             |
+  |--- ChannelConfirm ->|             |
+  |                     |             |
+  |--- [2] + data ----->|    data     |
+  |                     |============>|
+  |                     |    data     |
+  |                     |<============|
+  |<-- [5] + data ------|             |
+]]></artwork>
+      </figure>
+
+      <t>When the client and server communicate over UDP, data and control
+      messages can arrive out of order. For this reason, the client needs to
+      verify the server knows the client channel mapping before the client
+      sends unencapsulated, and the server needs to verify the client knows
+      the server channel mapping before the server sends unencapsulated. When
+      the client and server communicate over UDP, a Channel Confirmation
+      indication is sent after the Send (or Data) indication so the client (or
+      server) knows that it can send unencapsulated.</t>
+
+      <t><xref target="fig-channels"></xref> demonstrates how this works. The
+      client performs an Allocate Request, and gets a response. It decides to
+      send data to a specific peer. Initially, it sends data to that peer
+      using a TURN Send indication on channel 0. That Send Indication tells
+      the TURN server that, once confirmed, the client will send data
+      unencapsulated to that peer on channel 2. Whenever the TURN server
+      receives a Send indication, it stores the mapping from channel number to
+      peer, and sends a ChannelConfirm indication (on channel 0). Once the
+      confirmation has been received by the client, the client can send data
+      to the peer on channel 2. Prior to receipt of the ChannelConfirm, any
+      other data the client wishes to send to the peer is sent using Send
+      indications, all of which indicate that channel 2 is to be used for
+      unencapsulated data. The same procedure happens from server to client;
+      the TURN server initially sends data using a Data indication on channel
+      0, and once confirmed with a ChannelConfirm, it can send it
+      unencapsulated on its selected channel (channel 5 in the example).</t>
+
+      <t>Over a reliable transport, such as TCP, the confirmation step is not
+      needed so the Channel Confirmation indication is not used. Clients can
+      immediately send the next piece of data to the peer on the requested
+      channel.</t>
+
+      <t>Allocations can also request specific attributes such as the desired
+      Lifetime of the allocation and the maximum Bandwidth. Clients can also
+      request specific port assignment behavior, for example, a specific port
+      number, odd or even port numbers, or pairs of sequential port
+      numbers.</t>
+
+      <section title="Transports">
+        <t>TURN clients can communicate with a TURN server using UDP, TCP, or
+        TLS over TCP. A TURN server can then relay traffic between a reliable
+        transport used between the client and server (TCP or TLS over TCP),
+        and UDP used from server to peer. When relaying data sent from a
+        stream-based protocol to a UDP peer, the TURN server emits datagrams
+        which are the same length as the length field in the TURN framing or
+        the length of the DATA attribute in a Send Indication. Likewise, when
+        a UDP datagram is received by the TURN server and relayed to the
+        client over a stream-based transport, the length of the datagram is
+        the length of the TURN framing or Data Indication's DATA
+        attribute.</t>
+
+        <t>The following table shows the possible combinations of transport
+        protocols from client to server and from server to peer:</t>
+
+        <texttable>
+          <ttcol>client to TURN server</ttcol>
+
+          <ttcol>TURN server to peer</ttcol>
+
+          <c>UDP</c>
+
+          <c>UDP</c>
+
+          <c>TCP</c>
+
+          <c>UDP</c>
+
+          <c>TLS</c>
+
+          <c>UDP</c>
+        </texttable>
+
+        <t>For TURN clients, using TLS over TCP provides two benefits. When
+        using TLS, the client can be assured that the address of the client's
+        peers are not visible to an attacker except by traffic analysis
+        downstream of the TURN server. Second, the client may be able to
+        communicate with TURN servers using TLS when it would not be able to
+        communicate with the same server using TCP or UDP, due to the
+        configuration of a firewall between the TURN client and its server.
+        TLS between the client and TURN server in this case just facilitates
+        traversal.</t>
+
+        <t>In addition, an extension to TURN is planned to add support for TCP
+        allocations <xref target="I-D.ietf-behave-turn-tcp"></xref>.</t>
+      </section>
+
+      <section title="About Tuples">
+        <t>To relay data to and from the correct location, the TURN server
+        maintains an association between the 5-tuple used to communicate with
+        the client and the 5-tuple used to communicate with each of the
+        client's peers. The 5-tuple on the client side will consist of the
+        client's reflexive address -- the apparent source address and port of
+        the client (typically as rewritten by the last NAT)--and the
+        destination address and port used by the TURN server. The <xref
+        target="fig:turn-model">figure below</xref> shows a typical topology.
+        In this diagram, the client 5-tuple is for a UDP flow between
+        192.0.2.1:7000 and 192.0.2.15:3490. The 5-tuple between the TURN
+        server and Peer B is for a UDP flow between 192.0.2.15:9000 (the TURN
+        allocated address) and 192.0.2.210:18200.</t>
+
+        <t><list>
+            <t>While the terminology used in this document refers to 5-tuples,
+            the TURN server can store whatever identifier it likes that yields
+            identical results. Specifically, many implementations may use a
+            file-descriptor in place of a 5-tuple to represent a TCP
+            connection.</t>
+          </list></t>
+
+        <figure anchor="fig:turn-model">
+          <artwork><![CDATA[
+                                                          +---------+
+                                                          |         |
+                                                          |         |
+                                                        / |  Peer A |
+    Client's              TURN                        //  |         |
+    Host                  Server                     /    |         |
+    Address               Address                  //     +---------+
+ 10.1.1.2:17240       192.0.2.15:3490             / 192.0.2.180:16400
+       |                    |                   //
+       |        +-+         |                  /
+       |        | |         |                 /
+       v        | |         |               //      192.0.2.210:18200
+ +---------+    | |         |+---------+   /              +---------+
+ |         |    |N|         ||         | //               |         |
+ | TURN    |    | |         v|  TURN   |/                 |         |
+ | Client  |----|A|----------|  Server |------------------|  Peer B |
+ |         |    | |^         |         |^                ^|         |
+ |         |    |T||         |         ||                ||         |
+ +---------+    | ||         +---------+|                |+---------+
+                | ||                    |                |
+                | ||                    |                |
+                +-+|                    |                |
+                   |                    |                |
+                   |     
+                 Client's           TURN              Peer B
+                 Reflexive          Allocated         Transport
+                 Address            Address           Address
+              192.0.2.1:7000    192.0.2.15:9000     192.0.2.210:18200
+]]></artwork>
+        </figure>
+      </section>
+
+      <section title="Keepalives">
+        <t>Since the main purpose of STUN and TURN is to traverse NATs, it is
+        natural to consider which elements are responsible for generating
+        sufficient periodic traffic to insure that NAT bindings stay alive.
+        TURN clients need to send data frequently enough to keep both NAT
+        bindings and the TURN server permissions fresh. Like NAT bindings, the
+        TURN server permissions are refreshed by ordinary data traffic relayed
+        from the client to the peer. Unlike permissions, allocations on the
+        TURN server have an explicit expiration time and need to be refreshed
+        explicitly by the client with a TURN Refresh request. When an
+        allocation expires, all permissions associated with that allocation
+        are automatically deleted.</t>
+      </section>
+    </section>
+
+    <!-- Overview -->
+
+    <section anchor="framing" title="TURN Framing Mechanism">
+      <t>All TURN control messages and all application data sent between the
+      client and the server MUST start with the TURN framing header. This
+      header is used for two purposes: indicating the channel number, and for
+      framing.</t>
+
+      <t>TURN uses a channel number to distinguish control traffic from data,
+      and to distinguish among multiple peers using the same allocation.
+      Channel number zero is reserved for TURN control messages. All TURN
+      requests, responses and indications between the client and server MUST
+      be sent on channel 0, and MUST NOT be sent on any other channel. Channel
+      0xFFFF is reserved for future use and MUST NOT be used by clients or
+      servers compliant to this specification. Other channel numbers are
+      assigned and communicated as described in <xref
+      target="sendrecv"></xref>. Because the framing is always used, TURN
+      needs to run on a separate port number from unframed STUN requests.</t>
+
+      <t>Over stream-based transports, the TURN client and server also need to
+      include an explicit length so that the TURN server can perform
+      conversion from streams to datagrams and vice versa. TURN framing has a
+      2 octet channel number and a 2 octet length field. Over stream-based
+      transports, the length field counts the number of octets immediately
+      after the length field itself. Over UDP the length is always set to
+      zero.</t>
+
+      <figure>
+        <artwork><![CDATA[
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|         Channel Number        |            Length             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  ]]></artwork>
+      </figure>
+
+      <t></t>
+
+      <t>Channel numbers are always defined within a particular allocation. If
+      a client has multiple allocations on a TURN server, there is no
+      relationship whatsoever between the channel numbers in each allocation.
+      Once created, a channel number persists for the lifetime of the
+      allocation. There is no way to explicitly remove a channel.
+      Consequently, a client which obtains an allocation with the intent of
+      holding it for extremely long periods, possibly for communication with
+      many different peers over time, may eventually exhaust the set of
+      channels. In that case, the client will need to obtain a new
+      allocation.</t>
+    </section>
+
+    <!-- Framing -->
+
+    <section title="General Behavior">
+      <t>After the initial Allocate transaction, all subsequent TURN
+      transactions need to be sent in the context of a valid allocation. The
+      source and destination IP address and ports for these TURN messages MUST
+      match the internal 5-tuple of an existing allocation. These are
+      processed using the general server procedures in <xref
+      target="I-D.ietf-behave-rfc3489bis"></xref> with a few important
+      additions. For requests (in this specification, the only subsequent
+      request possible is a Refresh request), if there is no matching
+      allocation, the server MUST generate a 437 (Allocation Mismatch) error
+      response. For indications, if there is no matching allocation, the
+      indication is silently discarded. An Allocate request MUST NOT be sent
+      by a client within the context of an existing allocation. Such a request
+      MUST be rejected by the server with a 437 (Allocation Mismatch) error
+      response.</t>
+
+      <t>A subsequent request MUST be authenticated using the same username
+      and realm as the one used in the Allocate request that created the
+      allocation. If the request was authenticated but not with the matching
+      credential, the server MUST reject the request with a 401 (Unauthorized)
+      error response.</t>
+
+      <t>When a server returns an error response, it MAY include an
+      ALTERNATE-SERVER attribute if it has positive knowledge that the problem
+      reported in the error response will not be a problem on the alternate
+      server. For example, a 443 response (Invalid IP Address) with an
+      ALTERNATE-SERVER means that the other server is responsible for that IP
+      address. A 442 (Unsupported Transport Protocol) with this attribute
+      means that the other server is known to support that transport protocol.
+      A 507 (Insufficient Capacity) means that the other server is known to
+      have sufficient capacity. Using the ALTERNATE-SERVER mechanism in the
+      507 (Insufficient Capacity) response can only be done if the rejecting
+      server has definitive knowledge of available capacity on the target.
+      This will require some kind of state sharing mechanism between TURN
+      servers, which is beyond the scope of this specification. If a TURN
+      server attempts to redirect to another server without knowledge of
+      available capacity, it is possible that all servers are in a congested
+      state, resulting in series of rejections that only serve to further
+      increase the load on the system. This can cause congestion collapse.</t>
+
+      <t>If a client sends a request to a server and gets a 500 class error
+      response without an ALTERNATE-SERVER, or the transaction times out
+      without a response, and the client was utilizing the SRV procedures of
+      <xref target="I-D.ietf-behave-rfc3489bis"></xref> to contact the server,
+      the client SHOULD try another server based on those procedures. However,
+      the client SHOULD cache the fact that the request to this server failed,
+      and not retry that server again for a configurable period of time. Five
+      minutes is RECOMMENDED.</t>
+
+      <t>TURN clients and servers MUST NOT include the FINGERPRINT attribute
+      in any of the methods defined in this document.</t>
+    </section>
+
+    <section anchor="allocations" title="Managing Allocations">
+      <t>Communications between a TURN client and a TURN server on a new flow
+      begin with an Allocate transaction. All subsequent transactions happen
+      in the context of that allocation. The client refreshes allocations and
+      deallocates them using a Refresh transaction.</t>
+
+      <section title="Client Behavior">
+        <section anchor="sec:alloc" title="Initial Allocate Requests">
+          <t>When a client wishes to obtain a transport address, it sends an
+          Allocate request to the server. This request is constructed and sent
+          using the general procedures defined in <xref
+          target="I-D.ietf-behave-rfc3489bis"></xref>. Clients MUST implement
+          the long term credential mechanism defined in <xref
+          target="I-D.ietf-behave-rfc3489bis"></xref>, and be prepared for the
+          server to use it.</t>
+
+          <t>The client SHOULD include a BANDWIDTH attribute, which indicates
+          the maximum bandwidth that will be used with this binding. If the
+          maximum is unknown, the attribute is not included in the
+          request.</t>
+
+          <t><list style="empty">
+              <t>OPEN ISSUE: Bandwidth is very much underspecified. Is anyone
+              actually using it for capacity planning? If not we should
+              remove.</t>
+            </list></t>
+
+          <t>The client MAY request a particular lifetime for the allocation
+          by including it in the LIFETIME attribute in the request.</t>
+
+          <t>The client MUST include a REQUESTED-TRANSPORT attribute. In this
+          specification, the REQUESTED-TRANSPORT will always be UDP. This
+          attribute is included to allow for future extensions to TURN.</t>
+
+          <t>The client MAY include a REQUESTED-PORT-PROPS or REQUESTED-IP
+          attribute in the request to obtain specific types of transport
+          addresses. Whether these are needed depends on the application using
+          the TURN server. As an example, the Real Time Transport Protocol
+          (RTP) <xref target="RFC3550"></xref> requires that RTP and RTCP
+          ports be an adjacent pair, even and odd respectively, for
+          compatibility with a previous version of that specification. The
+          REQUESTED-PORT-PROPS attribute allows the client to ask the relay
+          for those properties.</t>
+
+          <t>Processing of the response follows the general procedures of
+          <xref target="I-D.ietf-behave-rfc3489bis"></xref>. A successful
+          response will include both a RELAY-ADDRESS and an XOR-MAPPED-ADDRESS
+          attribute, providing both a relayed transport address and a
+          reflexive transport address, respectively, to the client. The value
+          of the LIFETIME attribute in the response indicates the amount of
+          time after which the server will expire the allocation, if not
+          refreshed with a Refresh request. The server will allow the user to
+          send and receive at least the amount of data indicated in the
+          BANDWIDTH attribute per allocation. (At its discretion the server
+          can optionally discard UDP data above this threshold.)</t>
+
+          <t>If the response is an error response and contains a 442, 443 or
+          444 error code, the client knows that its requested properties could
+          not be met. The client MAY retry with different properties, with the
+          same properties (in a hope that something has changed on the
+          server), or give up, depending on the needs of the application.
+          However, if the client retries, it SHOULD wait 500ms, and if the
+          request fails again, wait 1 second, then 2 seconds, and so on,
+          exponentially backing off.</t>
+        </section>
+
+        <section anchor="sec:refresh" title="Refresh Requests">
+          <t>Before 3/4 of the lifetime of the allocation has passed (the
+          lifetime of the allocation is conveyed in the LIFETIME attribute of
+          the Allocate Response), the client SHOULD refresh the allocation
+          with a Refresh transaction if it wishes to keep the allocation.</t>
+
+          <t>To perform a refresh, the client generates a Refresh Request. The
+          client MUST use the same username, realm and password for the
+          Refresh request as it used in its initial Allocate Request. The
+          Refresh request MAY contain a proposed LIFETIME attribute. The
+          client MAY include a BANDWIDTH attribute if it wishes to request
+          more or less bandwidth than in the original request. If absent, it
+          indicates no change in the requested bandwidth from the Allocate
+          request. The client MUST NOT include a REQUESTED-IP,
+          REQUESTED-TRANSPORT, or REQUESTED-PORT-PROPS attribute in the
+          Refresh request.</t>
+
+          <t>In a successful response, the LIFETIME attribute indicates the
+          amount of additional time (the number of seconds after the response
+          is received) that the allocation will live without being refreshed.
+          A successful response will also contain a BANDWIDTH attribute,
+          indicating the bandwidth the server is allowing for this allocation.
+          Note that an error response does not imply that the allocation has
+          expired, just that the refresh has failed.</t>
+
+          <t>If a client no longer needs an allocation, it SHOULD perform an
+          explicit deallocation. If the client wishes to explicitly remove the
+          allocation because it no longer needs it, it sends a Refresh
+          request, but sets the LIFETIME attribute to zero. This will cause
+          the server to remove the allocation, and all associated permissions
+          and channel numbers. For connection-oriented transports such as TCP,
+          the client can also remove the allocation (and all associated
+          bindings) by closing the relevant connection with the TURN
+          server.</t>
+        </section>
+
+        <!-- close client -->
+      </section>
+
+      <section title="Server Behavior">
+        <t>The server first processes the request according to the base
+        protocol procedures in <xref
+        target="I-D.ietf-behave-rfc3489bis"></xref>, extended with the
+        procedures for the long-term credential mechanism.</t>
+
+        <section anchor="sec:initial"
+                 title="Initial Allocate         Requests">
+          <t>When the server receives an Allocate request, the server attempts
+          to allocate a relayed transport address. It first looks for the
+          BANDWIDTH attribute in the request. If present, the server
+          determines whether or not it has sufficient capacity to handle a
+          binding that will generate the requested bandwidth.</t>
+
+          <t>If it does, the server attempts to allocate a transport address
+          for the client. The Allocate Request can contain several additional
+          attributes that allow the client to request specific characteristics
+          of the transport address.</t>
+
+          <section title="REQUESTED-TRANSPORT">
+            <t>First, the server checks for the REQUESTED-TRANSPORT attribute.
+            This indicates the transport protocol requested by the client.
+            This specification defines a value for UDP only, but support for
+            TCP allocations is planned in <xref
+            target="I-D.ietf-behave-turn-tcp"></xref>.</t>
+
+            <t><list>
+                <t>As a consequence of the REQUESTED-TRANSPORT attribute, it
+                is possible for a client to connect to the server over TCP or
+                TLS over TCP and request a UDP transport address. In this
+                case, the server will relay data between the transports.</t>
+              </list></t>
+
+            <t>If the requested transport is supported, the server allocates a
+            port using the requested transport protocol. If the
+            REQUESTED-TRANSPORT attribute contains a value of the transport
+            protocol unknown to the server, or known to the server but not
+            supported by the server in the context of this request, the server
+            MUST reject the request and include a 442 (Unsupported Transport
+            Protocol) in the response. If the request did not contain a
+            REQUESTED-TRANSPORT attribute, the server MUST use the same
+            transport protocol as the request arrived on.</t>
+          </section>
+
+          <section title="REQUESTED-IP">
+            <t>Next, the server checks for the REQUESTED-IP attribute. If
+            present, it indicates a specific IP address from which the client
+            would like its transport address allocated. (The client could do
+            this if it requesting the second address in a specific port pair).
+            If this IP address is not a valid one for allocations on the
+            server, the server MUST reject the request and include a 443
+            (Invalid IP Address) error code in the response, or else redirect
+            the request to a server that is known to support this IP address.
+            If the IP address is one that is valid for allocations
+            (presumably, the server is configured to know the set of IP
+            addresses from which it performs allocations), the server MUST
+            provide an allocation from that IP address. If the attribute is
+            not present, the selection of an IP address is at the discretion
+            of the server.</t>
+          </section>
+
+          <section title="REQUESTED-PORT-PROPS">
+            <t>Finally, the server checks for the REQUESTED-PORT-PROPS
+            attribute. If present, it indicates specific port properties
+            desired by the client. This attribute is split into two portions:
+            one portion for port behavior and the other for requested port
+            alignment (whether the allocated port is odd, even, reserved as a
+            pair, or at the discretion of the server).</t>
+
+            <t>If the port behavior requested is for a Specific Port, the
+            server MUST attempt to allocate that specific port for the client.
+            If the specific port is not available (in use or reserved), the
+            server MUST reject the request with a 444 (Invalid Port) response.
+            For example, the STUN server could reject a request for a Specific
+            Port because the port is temporarily reserved as part of an
+            adjacent pair of ports, or because the requested port is a
+            well-known port (1-1023).</t>
+
+            <t>If the client requests "even" port alignment, the server MUST
+            attempt to allocate an even port for the client. If an even port
+            cannot be obtained, the server MUST reject the request with a 444
+            (Invalid Port) response or redirect to an alternate server. If the
+            client requests odd port alignment, the server MUST attempt to
+            allocate an odd port for the client. If an odd port cannot be
+            obtained, the server MUST reject the request with a 444 (Invalid
+            Port) response or redirect to an alternate server. Finally, the
+            "Even port with hold of the next higher port" alignment is similar
+            to requesting an even port. It is a request for an even port, and
+            MUST be rejected by the server if an even port cannot be provided,
+            or redirected to an alternate server. However, it is also a hint
+            from the client that the client will request the next higher port
+            with a separate Allocate request. As such, it is a request for the
+            server to allocate an even port whose next higher port is also
+            available, and furthermore, a request for the server to not
+            allocate that one higher port to any other request except for one
+            that asks for that port explicitly. The server can honor this
+            request for adjacency at its discretion. The only constraint is
+            that the allocated port has to be even.</t>
+
+            <t><list>
+                <t>Port alignment requests exist for compatibility with
+                implementations of RTP which predate RFC 3550. These
+                implementations use the port numbering conventions in (now
+                obsolete) RFC 1889.</t>
+              </list></t>
+          </section>
+
+          <section title="Creating the Allocation">
+            <t>If any of the requested or desired constraints cannot be met,
+            whether it be bandwidth, transport protocol, IP address or port,
+            instead of rejecting the request, the server can alternately
+            redirect the client to a different server that may be able to
+            fulfill the request. This is accomplished using the 300 error
+            response and ALTERNATE-SERVER attribute. If the server does not
+            redirect and cannot service the request because the server has
+            reached capacity, it sends a 507 (Insufficient Capacity) response.
+            The server can also reject the request with a 486 (Allocation
+            Quota Reached) if the user or client is not authorized to request
+            additional allocations.</t>
+
+            <t>The server SHOULD only allocate ports in the range 1024-65535.
+            This is one of several ways to prohibit relayed transport
+            addresses from being used to attempt to run standard services.</t>
+
+            <t>Once a port is allocated, the server associates the allocation
+            with the 5-tuple used to communicate between the client and the
+            server. For TCP, this amounts to associating the TCP connection
+            from the TURN client with the allocated transport address.</t>
+
+            <t>The new allocation MUST also be associated with the username,
+            password and realm used to authenticate the request. These
+            credentials are used in all subsequent requests to ensure that
+            only the same client can use or modify the allocation it was
+            given.</t>
+
+            <t>In addition, the allocation created by the server is associated
+            with a set of permissions. Each permission is a specific IP
+            address identifying an external client. Initially, this list is
+            null.</t>
+
+            <t>If the LIFETIME attribute was present in the request, and the
+            value is larger than the maximum duration the server is willing to
+            use for the lifetime of the allocation, the server MAY lower it to
+            that maximum. However, the server MUST NOT increase the duration
+            requested in the LIFETIME attribute. If there was no LIFETIME
+            attribute, the server may choose a duration at its discretion. Ten
+            minutes is RECOMMENDED. In either case, the resulting duration is
+            added to the current time, and a timer, called the allocation
+            expiration timer, is set to fire at or after that time. <xref
+            target="sec:lte"></xref> discusses behavior when the timer fires.
+            Note that the LIFETIME attribute an Allocate request can be zero,
+            though this is effectively a no-op, since it will create and
+            destroy the allocation in one transaction.</t>
+          </section>
+
+          <section title="Sending the Allocate Response">
+            <t>Once the port has been obtained and the allocation expiration
+            timer has been started, the server generates an Allocate Response
+            using the general procedures defined in <xref
+            target="I-D.ietf-behave-rfc3489bis"></xref>, including the ones
+            for long term authentication. The transport address allocated to
+            the client MUST be included in the RELAY-ADDRESS attribute in the
+            response. In addition, this response MUST contain the
+            XOR-MAPPED-ADDRESS attribute. This allows the client to determine
+            its reflexive transport address in addition to a relayed transport
+            address, from the same Allocate request.</t>
+
+            <t>The server MUST add a LIFETIME attribute to the Allocate
+            Response. This attribute contains the duration, in seconds, of the
+            allocation expiration timer associated with this allocation.</t>
+
+            <t>The server MUST add a BANDWIDTH attribute to the Allocate
+            Response. This MUST be equal to the attribute from the request, if
+            one was present. Otherwise, it indicates a per-allocation limit
+            that the server is placing on the bandwidth usage on each binding.
+            Such limits are needed to prevent against denial-of-service
+            attacks (See <xref target="sec:sec"></xref>).</t>
+          </section>
+        </section>
+
+        <section anchor="sec:subsequent" title="Refresh Requests">
+          <t>A Refresh request is processed using the general server and long
+          term authentication procedures in <xref
+          target="I-D.ietf-behave-rfc3489bis"></xref>. It is used to refresh
+          and extend an allocation, or to cause an immediate deallocation. It
+          is processed as follows.</t>
+
+          <t>First, the request MUST be authenticated using the same shared
+          secret as the one associated with the allocation. If the request was
+          authenticated but not with such a matching credential, the server
+          MUST generate a Refresh Error Response with a 401 response.</t>
+
+          <t>If the Refresh request contains a BANDWIDTH attribute, the server
+          checks that it can relay the requested volume of traffic.</t>
+
+          <t>Finally, a Refresh Request will set a new allocation expiration
+          timer for the allocation, effectively canceling the previous
+          allocation expiration timer. As with an Allocate request, the server
+          can offer a shorter allocation lifetime, but never a longer one.</t>
+
+          <t>A success Refresh response MUST contain a LIFETIME attribute and
+          a BANDWIDTH attribute.</t>
+        </section>
+
+        <!-- close server -->
+      </section>
+
+      <!-- close allocate behavior -->
+    </section>
+
+    <section anchor="sendrecv" title="Sending and Receiving Data">
+      <t>As described in <xref target="framing"></xref>, TURN allows a client
+      to send and receive data without utilizing TURN Send and Data
+      indications, by sending and receiving them on channels. Before sending
+      client-to-peer or peer-to-client data for a new peer, a TURN client or
+      server needs to assign a channel number that corresponds to that remote
+      peer. Once a channel number is assigned, it remains assigned through the
+      duration of the allocation. It cannot be unassigned or reassigned to a
+      different peer.</t>
+
+      <section title="Client Behavior">
+        <section title="Sending">
+          <t>When the client wants to forward data to a peer, it checks if it
+          has assigned a channel number for communications with this peer (as
+          identified by its IP address and port) over this allocation: <list
+              style="symbols">
+              <t>If one has not been assigned, the client assigns one of its
+              own choosing. This channel number MUST be one that is currently
+              unassigned by the client for this allocation. It MUST be between
+              1 and 65534. It is RECOMMENDED that the client choose one of the
+              unassigned numbers randomly, rather than sequentially. The state
+              of the channel is set to unconfirmed.</t>
+
+              <t>If one has been assigned, that channel MUST be selected.</t>
+            </list></t>
+
+          <t>Next, the client checks if the channel number has been confirmed
+          by the server. If the channel number has been confirmed, the client
+          simply sends the data to the TURN server with the appropriate
+          channel number in the TURN framing.</t>
+
+          <t>If the channel number has not been confirmed, the client creates
+          a Send indication. It places the selected channel number in a
+          CHANNEL-NUMBER attribute, the peer IP address and port in a
+          PEER-ADDRESS attribute, and puts the data to be sent in a DATA
+          attribute. (If the client just wishes to create a permission, it can
+          omit the DATA attribute.) If the Send indication is sent over a
+          reliable transport (ex: TCP), the client marks that the channel
+          number as confirmed. When the client receives a ChannelConfirmation
+          Indication, and the channel number, IP address and port match the
+          channel number assigned to that peer, the client marks that the
+          channel number is confirmed.</t>
+
+          <t>Since Send is an Indication, it generates no response. The client
+          must rely on application layer mechanisms to determine if the data
+          was received by the peer. A ChannelConfirmation Indication just
+          means that some Send indication was received by the TURN server. It
+          does not mean that a specific Send indication was received by the
+          peer.</t>
+
+          <t><list>
+              <t>Note that Send Indications are not authenticated and do not
+              contain a MESSAGE-INTEGRITY attribute. Just like non-relayed
+              data sent over UDP or TCP, the authenticity and integrity of
+              this data can only be assured using security mechanisms at
+              higher layers.</t>
+            </list></t>
+        </section>
+
+        <section title="Receiving">
+          <t>When the client receives a Data indication, it: <list
+              style="symbols">
+              <t>records the channel number used by the server (from the
+              CHANNEL-NUMBER attribute) and associates it with the IP address
+              and port in the PEER-ADDRESS attribute, which identify the peer
+              that sent the data. The resulting mapping from channel number to
+              transport address MUST be stored by the client for the duration
+              of the allocation.</t>
+
+              <t>delivers the contents of the DATA attribute to the client
+              application as if it was received from the peer's IP address and
+              port.</t>
+
+              <t>If the Data indication was received over UDP, the client MUST
+              confirm the channel used by the server, by sending a
+              ChannelConfirmation Indication to the server. This indication
+              MUST contain the same PEER-ADDRESS and CHANNEL-NUMBER attributes
+              included in the Data indication. This indication is sent to the
+              server on channel 0 using the 5-tuple associated with this
+              allocation. Note that, due to round trip delays, a client may
+              receive several Data indications with the same channel number
+              for the same remote peer. It MUST process each as defined here,
+              resulting in several ChannelConfirmation indications.</t>
+            </list></t>
+
+          <t>When the client receives unencapsulated data, it checks the
+          received channel number. If the client has a mapping associated with
+          the server channel number it delivers the data to the client
+          application as if it was received directly from that peer.
+          Otherwise, it silently discards the data.</t>
+        </section>
+      </section>
+
+      <section title="Server Behavior">
+        <section title="Receiving Data from the Client">
+          <t>When the server receives a Data indication from the client, it:
+          <list style="symbols">
+              <t>records the channel number used by the client (from the
+              CHANNEL-NUMBER attribute) and associates it with the IP address
+              and port in the PEER-ADDRESS attribute, which identify the peer
+              to which the data is to be sent. The resulting mapping from
+              channel number to peer transport address MUST be stored by the
+              server for the duration of the allocation.</t>
+
+              <t>sends the contents of the DATA attribute in a UDP datagram,
+              sending it to the PEER-ADDRESS and sending from the allocated
+              transport address.</t>
+
+              <t>if one doesn't exist, creates a permission for the IP address
+              from the PEER-ADDRESS (the port is ignored), and attaches the
+              permission to the allocation</t>
+
+              <t>checks if a timer has been set for this permission. If none
+              has been started, the server starts one. It is RECOMMENDED that
+              it have a value of sixty seconds. If the timer is already
+              running, it MUST be reset.</t>
+
+              <t>If the Send indication was received over UDP, the server MUST
+              confirm the channel used by the client, by sending a
+              ChannelConfirmation Indication to the client. This indication
+              MUST contain the same PEER-ADDRESS and CHANNEL-NUMBER attributes
+              included in the Send indication. This indication is sent to the
+              client on channel 0 using the 5-tuple associated with this
+              allocation. Note that, due to round trip delays, a server may
+              receive several Send indications with the same channel number
+              for the same remote peer. It MUST process each as defined here,
+              resulting in several ChannelConfirmation indications.</t>
+            </list></t>
+
+          <t>When the server receives unencapsulated data, it checks the
+          received channel number: <list style="symbols">
+              <t>If the server has a mapping associated with the client
+              channel number it: <list style="symbols">
+                  <t>sends a UDP datagram to the peer using the transport
+                  address from the mapping, and sends from the allocated
+                  transport address.</t>
+
+                  <t>checks if a permission activity timer is running for the
+                  destination IP address of the peer. If one is not running,
+                  the server starts one. It is RECOMMENDED that it have a
+                  value of sixty seconds. If the timer is already running, it
+                  MUST be reset.</t>
+                </list></t>
+
+              <t>If the server has no mapping, it silently discards the
+              data.</t>
+            </list></t>
+        </section>
+
+        <section anchor="sec:recv-alloc" title="Receiving Data from Peers">
+          <t>If a server receives a UDP packet on an allocated UDP transport
+          address, it checks the permissions associated with that allocation.
+          If the source IP address of the UDP packet matches one of the
+          permissions (the source port is not used), the UDP packet is
+          accepted. Otherwise, it is discarded. If the packet is accepted, it
+          is forwarded to the client as described below.</t>
+
+          <t>The server checks if it has assigned a channel number for
+          communications from this peer (as identified by its IP address and
+          port) over this allocation: <list style="symbols">
+              <t>If one has not been assigned, the client assigns one of its
+              own choosing. This channel number MUST be one that is currently
+              unassigned by the server for this allocation. It MUST be between
+              1 and 65534. It is RECOMMENDED that the server choose one of the
+              unassigned numbers randomly, rather than sequentially. The state
+              of the channel is set to unconfirmed.</t>
+
+              <t>If one has been assigned, that channel MUST be selected.</t>
+            </list></t>
+
+          <t>Note that data from peers does not reset the permission activity
+          timer.</t>
+
+          <t>Next, the server checks if the channel number has been confirmed
+          by the client. If the channel number has been confirmed, the server
+          simply sends the data to the client with the appropriate channel
+          number in the TURN framing.</t>
+
+          <t>If the channel number has not been confirmed, the server creates
+          a Data indication. It places the selected channel number in a
+          CHANNEL-NUMBER attribute, the peer IP address and port in a
+          PEER-ADDRESS attribute, and puts the data to be sent in a DATA
+          attribute. If the Data indication is sent over a reliable transport
+          (ex: TCP), the server marks that the channel number as confirmed.
+          When the server receives a ChannelConfirmation Indication, and the
+          channel number, IP address and port match the channel number
+          assigned to that peer, the server marks that the channel number is
+          confirmed.</t>
+
+          <t>Since Data is an Indication, it generates no response. The server
+          does not provide reliability for the data. When sending over a
+          reliable transport to the client, if the server is unable to send
+          the data received from the peer (for example, because the TCP
+          connection cannot accept any more messages right now), it can
+          silently discards UDP data received from the peer.</t>
+
+          <t><list>
+              <t>Note that Send Indications are not authenticated and do not
+              contain a MESSAGE-INTEGRITY attribute. Just like non-relayed
+              data sent over UDP or TCP, the authenticity and integrity of
+              this data can only be assured using security mechanisms at
+              higher layers.</t>
+            </list></t>
+        </section>
+
+        <section anchor="sec:lte"
+                 title="Allocation Activity Timer and Permission Timeout">
+          <t>When the allocation activity timer expires, the server MUST
+          destroy the allocation. This involves freeing the allocated
+          transport address, deleting permissions and channel numbers, and
+          removing other state associated with the allocation.</t>
+
+          <t>When a permission times out, the TURN server MUST NOT forward a
+          packet from that TURN peer to the TURN client.</t>
+        </section>
+      </section>
+    </section>
+
+    <!-- Sending and Receiving Data -->
+
+    <section title="New Attributes">
+      <t>This STUN extension defines the following new attributes:</t>
+
+      <figure>
+        <preamble></preamble>
+
+        <artwork><![CDATA[
+0x000C: CHANNEL-NUMBER
+0x000D: LIFETIME
+0x0010: BANDWIDTH
+0x0012: PEER-ADDRESS
+0x0013: DATA
+0x0016: RELAY-ADDRESS
+0x0018: REQUESTED-PORT-PROPS
+0x0019: REQUESTED-TRANSPORT
+0x0022: REQUESTED-IP
+]]></artwork>
+      </figure>
+
+      <section anchor="channelnums" title="CHANNEL-NUMBER">
+        <t>The channel number attribute represents the channel number assigned
+        by the sender, that corresponds with the peer specified in the
+        PEER-ADDRESS attribute. It is a 16-bit unsigned integer, plus two
+        octets of padding which MUST be set to zero.</t>
+
+        <figure>
+          <artwork><![CDATA[
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |        Channel Number         |         Reserved = 0          |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+]]></artwork>
+        </figure>
+      </section>
+
+      <section title="LIFETIME">
+        <t>The lifetime attribute represents the duration for which the server
+        will maintain an allocation in the absence of a refresh. It is a 32
+        bit unsigned integral value representing the number of seconds
+        remaining until expiration.</t>
+      </section>
+
+      <section title="BANDWIDTH">
+        <t>The bandwidth attribute represents the peak bandwidth, measured in
+        kilobits per second, that the client expects to use on the allocation
+        in each direction.</t>
+      </section>
+
+      <section title="PEER-ADDRESS">
+        <t>The PEER-ADDRESS specifies the address and port of the peer as seen
+        from the TURN server. It is encoded in the same way as
+        XOR-MAPPED-ADDRESS.</t>
+      </section>
+
+      <section title="DATA">
+        <t>The DATA attribute is present in most Send Indications and Data
+        Indications. It contains raw payload data that is to be sent (in the
+        case of a Send Request) or was received (in the case of a Data
+        Indication).</t>
+      </section>
+
+      <section title="RELAY-ADDRESS">
+        <t>The RELAY-ADDRESS is present in Allocate responses. It specifies
+        the address and port that the server allocated to the client. It is
+        encoded in the same way as XOR-MAPPED-ADDRESS.</t>
+      </section>
+
+      <section title="REQUESTED-PORT-PROPS">
+        <t>This attribute allows the client to request certain properties for
+        the port that is allocated by the server. The attribute can be used
+        with any transport protocol that has the notion of a 16 bit port space
+        (including TCP and UDP). The attribute is 32 bits long. Its format
+        is:</t>
+
+        <figure>
+          <preamble></preamble>
+
+          <artwork><![CDATA[ 
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|       Reserved = 0        | A |    Specific Port Number       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+]]></artwork>
+        </figure>
+
+        <t>The two bits labeled A in the diagram above are for requested port
+        alignment and have the following meaning:</t>
+
+        <figure>
+          <artwork><![CDATA[
+00 no specific port alignment 
+01 odd port number 
+10 even port number 
+11 even port number; reserve next higher port 
+  ]]></artwork>
+        </figure>
+
+        <t>If the value of the A field is 00 (no specific port alignment),
+        then the Specific Port Number field can either be 0 or some non-zero
+        port number. If the Specific Port Number field is 0, then the client
+        is not putting any restrictions on the port number it would like
+        allocated. If the Specific Port Number is some non-zero port number,
+        then the client is requesting that the server allocate the specified
+        port.</t>
+
+        <t>If the value of the A field is 01 (odd port number), then the
+        Specific Port Number field must be zero, and the client is requesting
+        the server allocate an odd-numbered port.</t>
+
+        <t>If the value of the A field is 10 (even port number), then the
+        Specific Port number field must be zero, and the client is requesting
+        the server allocate an even-numbered port.</t>
+
+        <t>If the value of the A field is 11 (even port number; reserve next
+        higher port), then the Specific Port Number field must be zero, and
+        the client is requesting the server allocate an even-numbered port. In
+        addition, the client is requesting the server reserve the next higher
+        port (i.e., N+1 if the server allocates port N), and should only
+        allocate the N+1 port number if it is explicit requested (with a
+        subsequent request specifying that exact port number)</t>
+
+        <t>In all cases, if a port with the requested properties cannot be
+        allocated, the server responds with a error response with an error
+        code of 444 (Invalid Port).</t>
+      </section>
+
+      <section title="REQUESTED-TRANSPORT">
+        <t>This attribute is used by the client to request a specific
+        transport protocol for the allocated transport address. It is a 32 bit
+        unsigned integer. Its values are:</t>
+
+        <figure>
+          <preamble></preamble>
+
+          <artwork><![CDATA[
+0x0000 0000: UDP
+0x0000 0001: Reserved for TCP
+]]></artwork>
+        </figure>
+
+        <t>If an Allocate request is sent over TCP and requests a UDP
+        allocation, or an Allocate request is sent over TLS over TCP and
+        requests a UDP allocation, the server will relay data between the two
+        transports.</t>
+
+        <t>Extensions to TURN can define additional transport protocols in an
+        IETF-consensus RFC.</t>
+      </section>
+
+      <section title="REQUESTED-IP">
+        <t>The REQUESTED-IP attribute is used by the client to request that a
+        specific IP address be allocated to it. This attribute is needed since
+        it is anticipated that TURN servers will be multi-homed so as to be
+        able to allocate more than 64k transport addresses. As a consequence,
+        a client needing a second transport address on the same interface as a
+        previous one can make that request.</t>
+
+        <t>The format of this attribute is identical to XOR-MAPPED-ADDRESS.
+        However, the port component of the attribute is ignored by the server.
+        If a client wishes to request a specific IP address and port, it uses
+        both the REQUESTED-IP and REQUESTED-PORT-PROPS attributes.</t>
+      </section>
+    </section>
+
+    <!-- new attributes -->
+
+    <section title="New Error Response Codes">
+      <t>This document defines the following new Error response codes:</t>
+
+      <t><list style="hanging">
+          <t hangText="437">(Allocation Mismatch): A request was received by
+          the server that requires an allocation to be in place, but there is
+          none, or a request was received which requires no allocation, but
+          there is one.</t>
+
+          <t hangText="442">(Unsupported Transport Protocol): The Allocate
+          request asked for a transport protocol to be allocated that is not
+          supported by the server. If the server is aware of another server
+          that supports the requested protocol, it SHOULD include the other
+          server's address in an ALTERNATE-SERVER attribute in the error
+          response.</t>
+
+          <t hangText="443">(Invalid IP Address): The Allocate request asked
+          for a transport address to be allocated from a specific IP address
+          that is not valid on the server.</t>
+
+          <t hangText="444">(Invalid Port): The Allocate request asked for a
+          port to be allocated that is not available on the server.</t>
+
+          <t hangText="486">(Allocation Quota Reached): The user or client is
+          not authorized to request additional allocations.</t>
+
+          <t hangText="507">(Insufficient Capacity): The server cannot
+          allocate a new port for this client as it has exhausted its relay
+          capacity.</t>
+        </list></t>
+    </section>
+
+    <!-- error codes -->
+
+    <section title="Client Discovery of TURN Servers">
+      <t>The STUN extensions introduced by TURN differ from the binding
+      requests defined in <xref target="I-D.ietf-behave-rfc3489bis"></xref> in
+      that they are sent with additional framing and demand substantial
+      resources from the TURN server. In addition, it seems likely that
+      administrators might want to block connections from clients to the TURN
+      server for relaying separately from connections for the purposes of
+      binding discovery. As a consequence, TURN runs on a separate port from
+      STUN. The client discovers the address and port of the TURN server using
+      the same DNS procedures defined in <xref
+      target="I-D.ietf-behave-rfc3489bis"></xref>, but using an SRV service
+      name of "turn" (or "turns" for TURN over TLS) instead of just
+      "stun".</t>
+
+      <t>For example, to find TURN servers in the example.com domain, the TURN
+      client performs a lookup for '_turn._udp.example.com',
+      '_turn._tcp.example.com', and '_turns._tcp.example.com' if the STUN
+      client wants to communicate with the TURN server using UDP, TCP, or TLS
+      over TCP, respectively.</t>
+    </section>
+
+    <!-- Client Discovery -->
+
+    <section anchor="sec:sec" title="Security Considerations">
+      <t>TURN servers allocate bandwidth and port resources to clients, in
+      contrast to the Binding method defined in <xref
+      target="I-D.ietf-behave-rfc3489bis"></xref>. Therefore, a TURN server
+      requires authentication and authorization of STUN requests. This
+      authentication is provided by mechanisms defined in the STUN
+      specification itself, in particular digest authentication.</t>
+
+      <t>Because TURN servers allocate resources, they can be susceptible to
+      denial-of-service attacks. All Allocate transactions are authenticated,
+      so that an unknown attacker cannot launch an attack. An authenticated
+      attacker can generate multiple Allocate Requests, however. To prevent a
+      single malicious user from allocating all of the resources on the
+      server, it is RECOMMENDED that a server implement a modest per user
+      limit on the amount of bandwidth that can be allocated. Such a mechanism
+      does not prevent a large number of malicious users from each requesting
+      a small number of allocations. Attacks such as these are possible using
+      botnets, and are difficult to detect and prevent. Implementors of TURN
+      should keep up with best practices around detection of anomalous botnet
+      attacks.</t>
+
+      <t>A client will use the transport address learned from the
+      RELAY-ADDRESS attribute of the Allocate Response to tell other users how
+      to reach them. Therefore, a client needs to be certain that this address
+      is valid, and will actually route to them. Such validation occurs
+      through the message integrity checks provided in the Allocate response.
+      They can guarantee the authenticity and integrity of the allocated
+      addresses. Note that TURN is not susceptible to the attacks described in
+      Section 12.2.3, 12.2.4, 12.2.5 or 12.2.6 of <xref
+      target="I-D.ietf-behave-rfc3489bis"></xref> [[TODO: Update section
+      number references to 3489bis]]. These attacks are based on the fact that
+      a STUN server mirrors the source IP address, which cannot be
+      authenticated. STUN does not use the source address of the Allocate
+      Request in providing the RELAY-ADDRESS, and therefore, those attacks do
+      not apply.</t>
+
+      <t>TURN cannot be used by clients for subverting firewall policies. TURN
+      has fairly limited applicability, requiring a user to explicitly
+      authorize permission to receive data from a peer, one IP address at a
+      time. Thus, it does not provide a general technique for externalizing
+      sockets. Rather, it has similar security properties to the placement of
+      an address-restricted NAT in the network, allowing messaging in from a
+      peer only if the internal client has sent a packet out towards the IP
+      address of that peer. This limitation means that TURN cannot be used to
+      run web servers, email servers, SIP servers, or other network servers
+      that service a large number of clients. Rather, it facilitates
+      rendezvous of NATted clients that use some other protocol, such as SIP,
+      to communicate IP addresses and ports for communications.</t>
+
+      <t>Confidentiality of the transport addresses learned through Allocate
+      transactions does not appear to be that important. If required, it can
+      be provided by running TURN over TLS.</t>
+
+      <t>TURN does not and cannot guarantee that UDP data is delivered in
+      sequence or to the correct address. As most TURN clients will only
+      communicate with a single peer, the use of a single channel number will
+      be very common. Consider an enterprise where Alice and Bob are involved
+      in separate calls through the enterprise NAT to their corporate TURN
+      server. If the corporate NAT reboots, it is possible that Bob will
+      obtain the exact NAT binding originally used by Alice. If Alice and Bob
+      were using identical channel numbers, Bob will receive unencapsulated
+      data intended for Alice and will send data accidentally to Alice's peer.
+      This is not a problem with TURN. This is precisely what would happen if
+      there was no TURN server and Bob and Alice instead provided a (STUN)
+      reflexive transport address to their peers. If detecting this
+      misdelivery is a problem, the client and its peer need to use message
+      integrity on their data.</t>
+
+      <t>One TURN-specific DoS attack bears extra discussion. An attacker who
+      can corrupt, drop, or cause the loss of a Send or Data indication sent
+      over UDP, and then forge a Channel Confirmation indication for the
+      corresponding channel number, can cause a TURN client (server) to start
+      sending unencapsulated data that the server (client) will discard. Since
+      indications are not integrity protected, this attack is not prevented by
+      cryptographic means. However, any attacker who can generate this level
+      of network disruption could simply prevent a large fraction of the data
+      from arriving at its destination, and therefore protecting against this
+      attack does not seem important. The ChannelConfirmation forging attack
+      is not possible when the client to server communication is over TCP or
+      TLS over TCP.</t>
+
+      <t>Relay servers are useful even for users not behind a NAT. They can
+      provide a way for truly anonymous communications. A user can cause a
+      call to have its media routed through a TURN server, so that the user's
+      IP addresses are never revealed.</t>
+
+      <t>Any relay addresses learned through an Allocate request will not
+      operate properly with <xref target="RFC4302">IPSec Authentication Header
+      (AH)</xref> in transport or tunnel mode. However, tunnel-mode <xref
+      target="RFC4303">IPSec ESP</xref> should still operate.</t>
+    </section>
+
+    <!-- Security -->
+
+    <section title="IANA Considerations">
+      <t>This specification defines several new STUN methods, STUN attributes,
+      and STUN response codes. This section directs IANA to add these new
+      protocol elements to the IANA registry of STUN protocol elements.</t>
+
+      <section title="New STUN Methods">
+        <figure>
+          <preamble></preamble>
+
+          <artwork><![CDATA[
+Request/Response Transactions
+0x003  :  Allocate
+0x004  :  Refresh
+
+Indications
+0x006  :  Send
+0x007  :  Data
+0x009  :  Channel Confirmation
+]]></artwork>
+        </figure>
+      </section>
+
+      <section title="New STUN Attributes">
+        <figure>
+          <preamble></preamble>
+
+          <artwork><![CDATA[
+0x000C: CHANNEL-NUMBER
+0x000D: LIFETIME
+0x0010: BANDWIDTH
+0x0012: PEER-ADDRESS
+0x0013: DATA
+0x0016: RELAY-ADDRESS
+0x0018: REQUESTED-PORT-PROPS
+0x0019: REQUESTED-TRANSPORT
+0x0022: REQUESTED-IP
+]]></artwork>
+        </figure>
+      </section>
+
+      <section title="New STUN Response Codes">
+        <figure>
+          <artwork><![CDATA[
+437    Allocation Mismatch
+442    Unsupported Transport Protocol
+443    Invalid IP Address
+444    Invalid Port
+486    Allocation Quota Reached
+507    Insufficient Capacity
+]]></artwork>
+        </figure>
+      </section>
+    </section>
+
+    <section title="IAB Considerations">
+      <t>The IAB has studied the problem of "Unilateral Self Address Fixing",
+      which is the general process by which a client attempts to determine its
+      address in another realm on the other side of a NAT through a
+      collaborative protocol reflection mechanism <xref target="RFC3424">RFC
+      3424</xref>. The TURN extension is an example of a protocol that
+      performs this type of function. The IAB has mandated that any protocols
+      developed for this purpose document a specific set of
+      considerations.</t>
+
+      <t>TURN is an extension of the STUN protocol. As such, the specific
+      usages of STUN that use the TURN extensions need to specifically address
+      these considerations. Currently the only STUN usage that uses TURN is
+      <xref target="I-D.ietf-mmusic-ice">ICE</xref>.</t>
+    </section>
+
+    <!-- IAB Considerations -->
+
+    <section title="Example">
+      <t>In this example, a TURN client is behind a NAT. This TURN client is
+      running SIP. The client has a private address of 10.0.1.1. The TURN
+      server is on the public side of the NAT, and is listening for TURN
+      requests on 192.0.2.3:8776. The public side of the NAT has an IP address
+      of 192.0.2.1. The client is attempting to send a SIP INVITE to a peer,
+      and wishes to allocate an IP address and port for inclusion in the SDP
+      of the INVITE. Normally, TURN would be used in conjunction with ICE when
+      applied to SIP. However, to keep the example simple, TURN is shown
+      without ICE.</t>
+
+      <t>The client communicates with a SIP user agent on the public network.
+      This user agent uses a 192.0.2.17:12734 for receipt of its RTP
+      packets.</t>
+
+      <figure anchor="fig-example">
+        <artwork><![CDATA[
+10.0.1.1            192.0.2.1           192.0.2.3         192.0.2.17
+ Client                NAT             TURN Server            Peer
+    |                   |                   |                   |
+    |(1) Allocate       |(2) Allocate       |                   |
+    |S=10.0.1.1:4334    |S=192.0.2.1:63346  |                   |
+    |D=192.0.2.3:8776   |D=192.0.2.3:8776   |                   |
+    |------------------>|------------------>|                   |
+    |                   |                   |                   |
+    |(4) Error          |(3) Error          |                   |
+    |S=192.0.2.3:8776   |S=192.0.2.3:8776   |                   |
+    |D=10.0.1.1:4334    |D=192.0.2.1:63346  |                   |
+    |<------------------|<------------------|                   |
+    |                   |                   |                   |
+    |(5) Allocate       |(6) Allocate       |                   |
+    |S=10.0.1.1:4334    |S=192.0.2.1:63346  |                   |
+    |D=192.0.2.3:8776   |D=192.0.2.3:8776   |                   |
+    |------------------>|------------------>|                   |
+    |                   |                   |                   |
+    |                   |          (allocates port 32766)       |
+    |                   |                   |                   |
+    |                   |                   |                   |
+    |(8) Response       |(7) Response       |                   |
+    |RA=192.0.2.3:32766 |RA=192.0.2.3:32766 |                   |
+    |MA=192.0.2.1:63346 |MA=192.0.2.1:63346 |                   |
+    |S=192.0.2.3:8776   |S=192.0.2.3:8776   |                   |
+    |D=10.0.1.1:4334    |D=192.0.2.1:63346  |                   |
+    |<------------------|<------------------|                   |
+    |                   |                   |                   |
+    |(9) SIP INVITE     |                   |                   |
+    |SDP=192.0.2.3:32766|                   |                   |
+    |---------------------------------------------------------->|
+    |                   |                   |                   |
+    |(10) SIP 200 OK    |                   |                   |
+    |SDP=192.0.2.17:12734                   |                   |
+    |<----------------------------------------------------------|
+    |                   |                   |                   |
+    |                   |                   |(11) RTP           |
+    |                   |                   |S=192.0.2.17:12734 |
+    |                   |                   |D=192.0.2.3:32766  |
+    |                   |                   |<------------------|
+    |                   |                   |                   |
+    |                   |    (no permission; packet dropped)    |
+    |                   |                   |                   |
+    |(12) SIP ACK       |                   |                   |
+    |---------------------------------------------------------->|
+    |                   |                   |                   |
+    |(13) Send Indic.   |(14) Send Indic.   |                   |
+    |TURN Channel=0     |TURN Channel=0     |                   |
+    |STUN DATA=RTP      |STUN DATA=RTP      |                   |
+    |CHANNEL-NUMER=77   |CHANNEL-NUMBER=77  |                   |
+    |PA=192.0.2.17:12734|PA=192.0.2.17:12734|                   |
+    |S=10.0.1.1:4334    |S=192.0.2.1:63346  |                   |
+    |D=192.0.2.3:8776   |D=192.0.2.3:8776   |                   |
+    |------------------>|------------------>|                   |
+    |                   |                   |                   |
+    |                   |            permission created         |
+    |                   |                   |                   |
+    |                   |                   |(15) RTP           |
+    |                   |                   |S=192.0.2.3:32766  |
+    |                   |                   |D=192.0.2.17:12734 |
+    |                   |                   |------------------>|
+    |                   |                   |                   |
+    |(17) ChannelConf   |(16) ChannelConf   |                   |
+    |TURN Channel=0     |TURN Channel=0     |                   |
+    |CHANNEL-NUMBER=77  |CHANNEL-NUMBER=77  |                   |
+    |PA=192.0.2.17:12734|PA=192.0.2.17:12734|                   |
+    |S=192.0.2.3:8776   |S=192.0.2.3:8776   |                   |
+    |D=10.0.1.1:4334    |D=192.0.2.1:63346  |                   |
+    |<------------------|<------------------|                   |
+    |                   |                   |                   |
+    |(18) TURN Framed   |(19) TURN Framed   |                   |
+    |TURN Channel=77    |TURN Channel=77    |(20) RTP           |
+    |S=10.0.1.1:4334    |S=192.0.2.1:63346  |S=192.0.2.3:32766  |
+    |D=192.0.2.3:8776   |D=192.0.2.3:8776   |D=192.0.2.17:12734 |
+    |------------------>|------------------>|------------------>|
+    |                   |                   |                   |
+    |(23) Data Indic.   |(22) Data Indic.   |                   |
+    |TURN Channel=0     |TURN Channel=0     |                   |
+    |CHANNEL-NUMBER=33  |CHANNEL-NUMBER=33  |(21) RTP           |
+    |S=192.0.2.3:8776   |S=192.0.2.3:8776   |S=192.0.2.17:12734 |
+    |D=10.0.1.1:4334    |D=192.0.2.1:63346  |D=192.0.2.3:32766  |
+    |<------------------|<------------------|<------------------|
+    |                   |                   |                   |
+    |(24) ChannelConf   |(25) ChannelConf   |                   |
+    |TURN Channel=0     |TURN Channel=0     |                   |
+    |CHANNEL-NUMBER=33  |CHANNEL-NUMBER=33  |                   |
+    |S=10.0.0.1:4334    |S=192.0.2.3:8776   |                   |
+    |D=192.0.2.3:8776   |D=192.0.2.3:8776   |                   |
+    |------------------>|------------------>|                   |
+    |                   |                   |                   |
+    |(28) TURN Framed   |(27) TURN Framed   |                   |
+    |TURN Channel=33    |TURN Channel=33    |(26) RTP           |
+    |S=192.0.2.3:8776   |S=192.0.2.3:8776   |S=192.0.2.17:12734 |
+    |D=10.0.1.1:4334    |D=192.0.2.1:63346  |D=192.0.2.3:32766  |
+    |<------------------|<------------------|<------------------|
+    |                   |                   |                   |
+ 
+]]></artwork>
+      </figure>
+
+      <t>The message flow is shown in <xref target="fig-example"></xref>. In
+      step 1-2, the client allocates a UDP port from the local operating
+      system on its private interface, obtaining 4334. It then attempts to
+      obtain a port for RTP traffic. RTCP processing is not shown in the
+      example.</t>
+
+      <t>In step 1, the client sends an Allocate Request (1) with a source
+      address (denoted by S) of 10.0.1.1:4334 and a destination (denoted by D)
+      of 192.0.2.3:8776. This passes through the NAT (2), which allocates a
+      new UDP port (63346) on the NAT's public interface (192.0.2.1), and
+      creates an internal mapping between the internal address 10.0.1.1:4334
+      and that external address 192.0.2.1:63346. The NAT sends this request to
+      the TURN server (3). The TURN server challenges the request, requesting
+      credentials by sending a STUN error and including the NONCE and REALM
+      attributes. Message 3 is relayed, by the NAT, to the TURN client (4).
+      The client sends a new request (from the same UDP port), including its
+      credentials (5, 6). The TURN server authenticates the request. The TURN
+      server allocates a new UDP port on one of its interfaces,
+      192.0.2.3:32766. The TURN server puts 192.0.2.3:32766 into the
+      RELAY-ADDRESS (denoted by RA) attribute of the response, and puts the
+      source IP address and UDP port of the request (as seen by the TURN
+      server) into the XOR-MAPPED-ADDRESS attribute (denoted by MA). In step
+      7, this message is sent back to the TURN client and relayed by the NAT
+      in step 8.</t>
+
+      <t>The client now proceeds to perform a basic SIP call setup. In message
+      9, the TURN client includes the TURN server's address (which it learned
+      in message 8) in the SDP of its INVITE (e.g., using syntax described
+      in<xref target="I-D.ietf-mmusic-ice"></xref>). The called party responds
+      with its SDP in a provisional response (18x) or a final response (200
+      Ok). The called party's SDP includes its IP address and UDP port,
+      192.0.2.17:12734. Immediately after sending its 200 Ok, the called party
+      sends an RTP packet to the TURN server's IP address (11). This RTP
+      packet is dropped by the TURN server, because the TURN server has not
+      been given permission to relay that data. Incoming packets are dropped
+      until a permission is created. The SIP exchange completes with an SIP
+      200 Ok message (12).</t>
+
+      <t>Steps 13-20 show the client performing a channel allocation. The TURN
+      client needs to send an RTP packet. Since no channels and no permissions
+      have been created, the TURN client sends the RTP packet inside of a Send
+      Indication, using channel number 0, with the CHANNEL-NUMBER attribute
+      set to the channel number the TURN client wants to use for subsequent
+      communication with this TURN peer (77 is shown in the example). The TURN
+      peer's IP address and UDP port (which were learned from the SDP answer
+      received in step 10) are placed in the PEER-ADDRESS attribute (denoted
+      by PA). In message 13, the TURN client sends this Send Indication, and
+      it is relayed by the NAT to the TURN server (14). Upon receipt of that
+      message, the TURN server creates a permission, which allows subsequent
+      traffic from that same peer address to be relayed to that TURN client's
+      IP address and UDP port. The TURN server sends the contents of the Send
+      Indication's DATA attribute towards the PEER-ADDRESS (15); this will
+      typically be an RTP packet. Note that the source address and port of
+      message 15 is the TURN server's address, 192.0.2.3:32766, which is the
+      allocated transport address communicated to the TURN client in messages
+      7 and 8.</t>
+
+      <t>In step 16, the TURN server sends a channel confirmation message to
+      the TURN client. Once the TURN client receives this message, it can
+      forgo using the Send Indication for that channel. Instead, it can
+      utilize the channel number in the TURN framing header. Steps 18 and 19
+      show the TURN client sending a message to TURN server using the TURN
+      framing header, with channel=1. Step 20 shows the TURN server removing
+      the TURN framing and sending the RTP packet to the TURN peer.</t>
+
+      <t>Steps 21-28 show an RTP packet from the TURN peer, which causes a
+      channel allocation by the TURN server. In packet 21, an RTP packet is
+      sent by the TURN peer to the TURN server. There is an existing
+      permission (created in step 14), so the TURN server accepts this
+      incoming RTP packet. The TURN server knows the TURN client to send this
+      packet to, but does not yet have a channel assigned for traffic in this
+      direction. The TURN server chooses a channel number (33 in the example),
+      and sends a Data Indication to the TURN client (message 22). The NAT
+      relays this to the TURN client (message 23). The TURN client sends an
+      Channel Confirmation message (24) which is relayed by the NAT (25). When
+      the TURN server receives the Channel Confirmation, it no longer needs to
+      use a Send Indication for traffic from that remote peer; instead, it can
+      use TURN framing with its chosen channel number (33). The next RTP
+      packet that arrives from that peer (26) is sent by the TURN server using
+      TURN framing indicating the channel number (message 27) and relayed by
+      the NAT to the TURN client (28).</t>
+    </section>
+
+    <!-- Example -->
+
+    <section title="Changes since version -04">
+      <t>This section lists the major changes between thiis document and
+      draft-ietf-behave-turn-04:<list style="symbols">
+          <t>Removed the ability to allocate addresses for TCP relaying. This
+          is now covered in a separate document. However, communication
+          between the client and the server can still run over TCP or TLS/TCP.
+          This resulted in the removal of the Connect method and the TIMER-VAL
+          and CONNECT-STAT attributes.</t>
+
+          <t>Added the concept of channels. All communication between the
+          client and the server flows on a channel. Channels are numbered
+          0..65535. Channel 0 is used for TURN messages, while the remaining
+          channels are used for sending unencapsulated data to/from a remote
+          peer. This concept adds a new Channel Confirmation method and a new
+          CHANNEL-NUMBER attribute. The new attribute is also used in the Send
+          and Data methods.</t>
+
+          <t>The framing mechanism formally used just for stream-oriented
+          transports is now also used for UDP, and the former Type and
+          Reserved fields in the header have been replaced by a Channel Number
+          field. The length field is zero when running over UDP.</t>
+
+          <t>TURN now runs on its own port, rather than using the STUN port.
+          The use of channels requires this.</t>
+
+          <t>Removed the SetActiveDestination concept. This has been replaced
+          by the concept of channels.</t>
+
+          <t>Changed the allocation refresh mechanism. The new mechanism uses
+          a new Refresh method, rather than repeating the Allocation
+          transaction.</t>
+
+          <t>Changed the syntax of SRV requests for secure transport. The new
+          syntax is "_turns._tcp" rather than the old "_turn._tls". This
+          change mirrors the corresponding change in STUN SRV syntax.</t>
+
+          <t>Renamed the old REMOTE-ADDRESS attribute to PEER-ADDRESS, and
+          changed it to use the XOR-MAPPED-ADDRESS format.</t>
+
+          <t>Changed the RELAY-ADDRESS attribute to use the XOR-MAPPED-ADDRESS
+          format (instead of the MAPPED-ADDRESS format)).</t>
+
+          <t>Renamed the 437 error code from "No Binding" to "Allocation
+          Mismatch".</t>
+
+          <t>Added a discussion of what happens if a client's public binding
+          on its outermost NAT changes.</t>
+
+          <t>The document now consistently uses the term "peer" as the name of
+          a remote endpoint with which the client wishes to communicate.</t>
+
+          <t>Rewrote much of the document to describe the new concepts. At the
+          same time, tried to make the presentation clearer and less
+          repetitive.</t>
+        </list></t>
+    </section>
+
+    <section title="Acknowledgements">
+      <t>The authors would like to thank Marc Petit-Huguenin for his comments
+      and suggestions.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.I-D.ietf-behave-rfc3489bis"?>
+
+      <?rfc include="reference.RFC.2119"?>
+    </references>
+
+    <references title="Informative References">
+      <?rfc include="reference.RFC.3550"?>
+
+      <?rfc include="reference.RFC.3264"?>
+
+      <?rfc include="reference.RFC.4302"?>
+
+      <?rfc include="reference.RFC.4303"?>
+
+      <?rfc include="reference.RFC.3424"?>
+
+      <?rfc include="reference.I-D.ietf-mmusic-ice"?>
+
+      <?rfc include="reference.RFC.4787"?>
+
+      <?rfc include="reference.I-D.ietf-behave-turn-tcp"?>
+    </references>
+  </back>
+</rfc>
+<!--  
+<?rfc include="reference.RFC.2782"?>
+<?rfc include="reference.RFC.2617"?>
+<?rfc include="reference.RFC.2327"?>
+<?rfc include="reference.RFC.2326"?>
+<?rfc include="reference.RFC.3235"?>
+-->
+<!-- Notes for Rohan from conversation with JDR
+  
+1. The Connect Request doesn't make sense.  If the peer could receive a TCP connection request,
+the client would just open a connection to the peer directly.
+  
+2. Still need the concept of a door if we want TCP to TCP case to work behind most NATs/FWs. 
+   Took serveral steps to make sure door concept does not allow you to run a real server.
+   Can't ask for a door and specific port number.  Can't get a door with a well known port.
+   Can't open a door twice.
+  
+   (Also, the door can eliminate the use of two TURN servers if the caller and callee are both
+   behind bad NATs, as long as thier is no forking.  With ICE, everything works fine.  
+   You try one TURN server and if that doesn't work you try both.)
+  
+3. Introduce lightweight TCP framing. Send any data with magic cookie over UDP in a Data/Send
+  
+4. Disallow UDP (client to relay)  to   TCP (relay to peer) case.
+  
+5. Add connection status notification as an indication. This works well since the client to
+server connection is always reliable now anytime you would get this indication.
+  
+6. Add "move my flow over here" feature.
+  -->
+<!-- from my notes while doing turn-00-->
+<!-- need to align the turn draft with the long term direction of stun
+and turn for control of nat. In particular, this means ultimately
+allowing multiple mapped address attributes returned from a stun query
+(one from each nat processing the stun) and also having the binding
+lifetime make its way into turn somehow -->
+<!-- need to fix the big disambiguation problem, of how to know whether
+this stun request is for me as a turn server, or for a downstream stun server
+as in the ice case -->
+<!-- terminology check - the draft uses the terms binding and allocation
+too loosely. Allocation is the transport address allocated to the client,
+and permissions needs to be used consistently. Also the term external
+5-tuples is used a bunch and this probably needs to be removed. Other 
+terminology things: use correspondent instead of external client; it
+sound sbetter. Also suggest allocated transport address instead of
+external local, and well-known transport address instead of internal
+local. Suggest reflexive for internal remote. -->
+<!-- Draft needs to be a bit clearer on lifecycle management of
+allocations. -->
+<!-- Encoding of addresses - should these be using xor form or regular
+form? in places like RELAY-ADDRESs and DESTINATION-ADDRESS  -->
+<!-- IANA registry needs to be added. THis includes registering the
+new methods and attributes, and creating registries for the few things
+in here, like port properties -->
+<!-- Check to make sure all response codes mentioned in the back of
+the document are used, and vice a versa -->
+<!-- need to clean up terminology around shared secrets. There are two
+types, long term and short term, with a relationship between them
+(been using derived-from). That needs to be explained. Also, need to
+be clearer on which credentials are reall required in a turn request -
+needs to be equal to or cousin to one from original allocate -->
+<!-- rewrite IAB consideratoins -->
+<!-- major work on security considerations - what about data packets
+and indications in particular? -->
+<!-- scrub references, make sure all are used -->
+<!-- spec says you need to include mapped address. But, more like, use
+mapped address if magic cookie is not there, and xor-mapped if it is
+-->
+<!-- remove active 5-tuple terminology -->
+<!-- I've used the term 'linkage' to try and include the traditional
+tcp connection and udp connection. Need to decide if i like it and use
+it or not -->
+<!-- should i make turn into a mobile ip replacement? can be done, by
+allowing internal address to be updated in an allocate. requires
+changing keying structures around. today, incoming allocate uses
+incoming 'linkage' or connection to refer to allocation. Would need to
+be identified some other way. Would be cool though. Thats an OPEN
+ISSUE  -->
+<!-- add table of mandatory/optional attributes here -->
+<!-- maybe add a discussion about how alternate server can be used,
+with a front end load balancer -->
+<!-- Add text about using multiple virtual turn servers to deal with the
+case where the turn server is effectively or virtually mutli-homed. -->
+<!-- is message-integrity needed for the error responses? If so, it
+belongs in rfc3489bis too -->
+<!-- ISSUE: how to allow the server whether to know to start tls
+procedures when it receives a tcp connection? Is this assuming
+start-tls or are we using a separate port?? -->
+<!-- ISSUE: once udp destination is set, server looks for TURN packets by magic cookie. But what
+if packet being send is e2e stun connectivity check which 
+also has magic cookie! This is a real use case. Need to move to model where 
+control transitions, like for tcp.
+-->
+<!-- xtunnel 1: udp to tcp, specify qos parameters for leaky bucket -->
+<!-- xteunnel 2: tcp one direction, udp the other?? -->
+<!-- xtunnel 3: forking issue - requires creation of a new allocation. Alternative is to always
+encapsulate with something more lightweight -->
+<!-- xtunnel 4: some issue with requiring a third changed address to deal with running out of
+local ports on the client. Rob says he'll send me some text
+on the situation -->
+<!-- add example -->
+<!-- turn encapsulation issue raised by Justin Umberti - what if the data
+that is sent unencapsulated is less than 7 bytes? Server has to buffer
+7 (is it 7) bytes to look for the cookie. -->
+<!-- from ietf65: add note that contiguous port requests is for legacy 
+interop -->
+<!-- new framing proposal: use my 32 bit framing word for tcp. Note that,
+you can put multiple tcp application frames within a data frame. Length
+only indicates frequency of stun signaling. For UDP, don't use this.
+However, packets inwards towards stun relay, stun relay looks for
+magic cookie in the bytes 5-7 and uses data indication if they are
+there. Similarly, client should look for cookie in those bytes before
+sending and if present, use Send. This means you don't have the
+problem of figuring out whether data is destined for this turn server
+or not - those data are always done with Send. Nice. -->
+<!-- agree to have refreshes come from different source/dest IP -->
+<!-- from adam's note on behave 3/28, remove capability for udp from client
+to turn server and then tcp outwards. No way this works -->

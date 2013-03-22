@@ -1,0 +1,795 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSPY v5 rel. 3 U (http://www.xmlspy.com)
+     by Daniel M Kohn (private) -->
+<!-- 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml' -->
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY rfc2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+<!ENTITY rfc5246 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.5246.xml'>
+<!ENTITY rfc2743 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2743.xml'>
+<!ENTITY rfc4422 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4422.xml'>
+<!ENTITY rfc4646 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4646.xml'>
+<!ENTITY rfc4647 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4647.xml'>
+<!ENTITY rfc5056 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.5056.xml'>
+<!ENTITY sasl-channel-bindings PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-sasl-channel-bindings.xml'>
+<!ENTITY gs2 PUBLIC     '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-sasl-gs2.xml'>
+]>
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc tocindent="no" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+<rfc category="std" ipr="trust200902" docName="draft-williams-tls-app-sasl-opt-03.txt">
+    <front>
+	<title abbrev="TLS/SA">TLS Extension for Optimizing Application Protocols, Specifically SASL with GSS-API mechanisms</title>
+        <author initials='N.' surname="Williams" fullname='Nicolas
+            Williams'>
+            <organization abbrev="Sun">Sun Microsystems</organization>
+            <address>
+                <postal>
+                    <street>5300 Riata Trace Ct</street>
+                    <city>Austin</city> <region>TX</region>
+                    <code>78727</code> <country>US</country>
+                </postal>
+                <email>Nicolas.Williams@sun.com</email>
+            </address>
+        </author>
+        <date month="April" year="2009"/>
+        <area>Security</area>
+        <keyword>Internet-Draft</keyword>
+	<abstract>
+	    
+	    <t>This document specifies an extension to Transport Layer
+		Security (TLS) for carrying application data which is
+		suitable for delayed integrity protection and does not
+		require privacy protection.  In particular we describe
+		how to use this extension to reduce the number of
+		round trips needed for application-layer authentication,
+		specifically Simple Authentication (SASL), and through
+		it, Generic Security Services (GSS-API).  The use of
+		this extension to optimize SASL/GSS-API authentication
+		is termed "TLS/SA".</t>
+	    
+	    <t>This extension can also be used to optimize application
+		protocols.</t>
+
+        </abstract>
+    </front>
+
+    <middle>
+
+	<section title="Introduction">
+
+	    <t>Many applications use TLS <xref target='RFC5246'/> and
+		then Simple Authentication and Security Layers (SASL)
+		<xref target='RFC4422'/> on top of TLS.  This requires
+		at least two round trips for TLS, then one round trip
+		for SASL mechanism negotiation, then as many round trips
+		as the negotiated SASL mechanism requires.  One and a
+		half of the TLS round trips can carry extensions such
+		that we could piggyback some application data on those
+		TLS messages to save up to two round trips.  This
+		document specifies how to take advantage of TLS
+		extensions to reduce the number of round trips needed
+		altogether.</t>
+
+	    <t>First we define a TLS extension for use in Client Hello
+		and Handshake messages.  This extension will carry typed
+		application data.  Then we describe how to reduce the
+		number of round trips for SASL applications.  And
+		through the new SASL/GSS-API bridge <xref
+		    target='I-D.ietf-sasl-gs2'/> we obtain support for
+		use of GSS-API <xref target='RFC2743'/> mechanisms as
+		well.  <xref target='RFC2743'/> applications.
+		Altogether we achieve a one and a half round trip
+		reduction for SASL applications.</t>
+
+	    <t>In the case of SASL applications we use the first TLS
+		round trip to optimize the SASL mechanism negotiation.
+		Then we use the client's handshake message to send the
+		first authentication message of the selected SASL
+		mechanism.  Note that the TLS channel binding <xref
+		    target='RFC5056'/> can be made available at that
+		time, thus no special considerations apply to how
+		channel binding is done (but see <xref
+		    target='cbinding'/> below).  Use of channel binding
+		protects against man-in-the-middle attacks, including
+		downgrade attacks on mechanism negotiation.</t>
+
+	    <t>This extension is motivated by:
+
+		<list style='symbols'>
+
+		    <t>a desire to reduce the number of round trips
+			needed by SASL and GSS-API applications running
+			over TLS;</t>
+
+		    <t>a desire to replace an earlier proposal for
+			"TLS/GSS" with one that passes muster at the TLS
+			WG;</t>
+
+		    <t>a desire to provide a profile that new
+			applications may use for TLS with GSS-API for
+			user authentication.</t>
+
+		</list>
+
+	    </t>
+
+	    <t>The use of this extension to optimize SASL/GSS-API
+		authentication is termed "TLS/SA".</t>
+
+	    <section title="Conventions used in this document">
+
+		<t>The key words "MUST", "MUST NOT", "REQUIRED",
+		    "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+		    "RECOMMENDED", "MAY", and "OPTIONAL" in this
+		    document are to be interpreted as described in <xref
+			target="RFC2119"/>.</t>
+
+	    </section>
+
+	</section>
+
+	<section anchor='ext' title="TLS Extensions for Optimization of
+	    Application protocols">
+
+	    <t>When a client application wishes to exchange one or more
+		application messages prior to the conclusion of a TLS
+		exchange it uses the TLS Client Hello message extension
+		to a) indicate its intention to the server, and b)
+		optionally send the first application message to the
+		server.  These messages will not have any privacy or
+		integrity protection applied by TLS unless a
+		ChangeCipherSpec has been done earlier (i.e., unless the
+		application has already done one TLS handshake).</t>
+
+	    <t>When this message is received the server MUST either
+		ignore the extension or pass it to the application,
+		which then MUST respond to that application data via a
+		new handshake message (see below).  If the server
+		ignores it then the client will discover that the server
+		does not support this extension when the client receives
+		the server's handshake messages.  Otherwise there must
+		be a corresponding application data handshake message in
+		the server's response, and that indicates that the
+		server TLS and application implementations support this
+		extension.</t>
+
+	    <t>The extension contents are defined by the application.
+		In order to save the application having to encode
+		application data types and lengths we define two
+		application data extension types and we allow the Client
+		Hello to carry one of each of these extensions:
+
+		<list style='symbols'>
+
+		    <t>app_hello (&lt;TBD&gt;)</t>
+		    <t>sasl_sml_req (&lt;TBD&gt;)</t>
+		    <t>early_start_req (&lt;TBD&gt;)</t>
+
+		</list>
+
+	    </t>
+
+	    <t>It is the application's responsibility to define the
+		contents of the app_hello client Hello extension.</t>
+
+	    <t>The sasl_sml_req (SASL server mechanism list request)
+		message contains an empty payload.</t>
+
+	    <t>The early_start_req extension requests permission to
+		start the application data record protocol before
+		receiving the server's Finished message (but after
+		sending the client's).  A server that supports this
+		extension MUST include the same extension in its Hello
+		message with the same value.  The value of
+		early_start_req consists of an encoded enum that
+		indicates the kind of application data that will be sent
+		early:</t>
+
+	    <figure>
+		<artwork>
+      enum { app_protocol (0), generic_sasl(1), (255)
+      } EarlyStartProto;
+		</artwork>
+	    </figure>
+
+	    <t>We also define new Handshake messages that may be used
+		after the Client Hello messages:</t>
+
+	    <figure>
+		<artwork>
+      enum {
+          finished(20), app_hello(&lt;TBD&gt;),
+          sasl_sml(&lt;TBD&gt;), sasl_msg(&lt;TBD&gt;), (255)
+      } HandshakeType;
+
+      struct {
+          HandshakeType msg_type;    /* handshake type */
+          uint24 length;             /* bytes in message */
+          select (HandshakeType) {
+              case hello_request:       HelloRequest;
+              ...
+              /* Application pre-Finished message data */
+              case app_hello:          AppHello;
+              /* SASL server mechanism list */
+              case sasl_sml:           SaslSML;
+          } body;
+      } Handshake;
+
+      opaque AppHello&lt;2^16-1&gt;;
+      opaque SaslSML&lt;2^16-1&gt;;
+		</artwork>
+	    </figure>
+
+	    <t>A generic application protocol using these extensions
+		might look like:</t>
+
+	    <figure>
+		<artwork>
+		    <![CDATA[
+   Client                                               Server
+
+   ClientHello w/ sasl_sml_req 
+                     app_hello
+               early_start_req -------->
+                                                ServerHello w/
+                                               early_start_req
+                                                     AppHello*
+                                                      SaslSML*
+                                                  Certificate*
+                                            ServerKeyExchange*
+                                           CertificateRequest*
+                                <--------      ServerHelloDone
+   Certificate*
+   ClientKeyExchange
+   CertificateVerify*
+   [ChangeCipherSpec]
+   Finished
+   SASL auth message as data    -------->   
+                                            [ChangeCipherSpec]
+                                                      Finished
+                                <--------    SASL auth message
+   SASL auth messages           <------->   SASL auth messages
+                                <--------      Outcome of SASL
+                                                authentication
+   Application Data             <------->     Application Data
+		    ]]>
+		</artwork>
+	    </figure>
+
+	</section>
+
+	<section title="Application Hello Messages">
+
+	    <t>The app_hello client Hello message extension can be used
+		to send arbitrary application-specific messages in the
+		client Hello.  The application MUST NOT use this
+		extension unless both of these requirements are met: a)
+		the application data being sent in the app_hello and the
+		reply expected in the AppHello reply MUST NOT require
+		privacy protection unless this is a secondary TLS
+		handshake, b) the application on the server side knows
+		unambiguously what data to expect in an app_hello or
+		it is safe for the application on the server side to
+		ignore the app_hello if it does not understand it.</t>
+
+	    <t>For example, SMTP could use the app_hello extension to
+		send its EHLO before the TLS handshake completes.</t>
+	    
+	    <t>The app_hello extension data and AppHello handshake
+		message are integrity protected once the TLS Finished
+		message exchange completes.</t>
+
+	    <section anchor='mech_nego' title="Optimizing SASL Mechanism Negotiation">
+
+		<t>A client wishing to optimize SASL mechanism
+		    negotiation MUST send a sasl_sml_req extension in
+		    the client's TLS Hello message.  The client MUST NOT
+		    send a payload in its sasl_sml_req client hello
+		    extension.</t>
+		
+		<t>If the server supports SASL mechanism negotiation
+		    optimization and the server's mechanism list is
+		    shorter than 2^16 - 1 bytes then the server MUST
+		    include a SaslSML message in its reply to the
+		    client.  The payload of the server's SaslSML message
+		    MUST be a comma-separated list of SASL mechanism
+		    names (note: no NUL terminator is needed, but if
+		    present the client MUST ignore the NUL).</t>
+
+	    </section>
+
+	</section>
+
+	<section anchor='early_start' title="Application Data Protocol Early Start">
+
+	    <t>Applications may request that the TLS application data
+		record protocol comment after the client's Finished
+		message is sent but before the server's Finished message
+		is received.  To do this the client includes the client
+		Hello extension 'early_start_req' in its Hello message
+		with a value of 'app_protocol'.  If the server responds
+		with the same extension in its server Hello message then
+		the server will allow the early start of the TLS
+		application data record protocol.</t>
+
+	    <t>This extension MUST NOT be used if the nature of the
+		application data to be sent early is such that the
+		server must be authenticated to the client before
+		sending the data.  For example, passwords MUST NOT be
+		sent early.</t>
+
+	</section>
+
+	<section title="Use with StartTLS-like Protocols">
+
+	    <t>These extensions can be used over "raw TLS" and
+		"StartTLS" protocols equally.</t>
+
+	</section>
+
+	<section title="Using TLS with the GSS-API">
+
+	    <t>In order to use TLS with the GSS-API for user and/or
+		server authentication an application must use "TLS/SA"
+		as described below, using the SASL/GS2 family of SASL
+		mechanisms  <xref target='I-D.ietf-sasl-gs2'/> that maps
+		GSS-API mechanisms onto SASL ones.  See the next
+		section.</t>
+
+	</section>
+
+	<section anchor='existing_sasl_apps' title="Using these Extensions with Existing SASL
+	    Applications">
+
+	    <t>Applications that already support SASL can be trivially
+		reduce the number of round trips needed to authenticate
+		by two (2) as follows: a) optimize the SASL mechanism
+		negotiation as described in <xref target='mech_nego'/>,
+		b) start the application data protocol early as
+		described in <xref target='early_start'/>.  Having
+		listed the server's SASL mechanism list early the
+		application can then immediately begin authentication
+		using its preferred SASL mechanism.</t>
+
+	    <t>The application MUST NOT use any SASL mechanism that
+		might send credentials (passwords) in cleartext or
+		cleartext-equivalent ways before the TLS handshake
+		completes (i.e., before the server's Finished message is
+		received and validated).  It is RECOMMENDED that
+		applications use only SASL/GS2 <xref
+		    target='I-D.ietf-sasl-gs2'/> mechanisms using
+		channel binding to TLS.  Channel binding to TLS is
+		RECOMMENDED.</t>
+
+	</section>
+
+	<section anchor='generic-sasl' title="TLS/SA (TLS + SASL)">
+
+	    <t>In this section we describe a generic way to use SASL/GS2
+		<xref target='I-D.ietf-sasl-gs2'/> mechanisms in TLS
+		applications in a round trip optimized manner.  We call
+		this protocol "TLS/SA".  TLS/SA defines those parts of
+		the SASL authentication process which SASL <xref
+		    target='RFC4422'/> leaves to applications.</t>
+	    
+	    <t>Existing SASL applications MAY, but need not use TLS/SA;
+		instead existing SASL applications SHOULD use the method
+		described in <xref target='existing_sasl_apps'/>.</t>
+
+	    <t>TLS/SA defines the framing of SASL mechanism messages and
+		the "outcome of authentication" messages.  TLS/SA saves
+		a round trip when the last authentication message is
+		sent by the server, in which case the outcome of
+		authentication message is sent in the same half round
+		trip as the last authentication message.</t>
+
+	    <t>SASL mechanism negotiation in TLS/SA is done as described
+		in <xref target='mech_nego'/>.  SASL mechanisms which
+		are not SASL/GS2 mechanisms MUST NOT be used.  Channel
+		binding to TLS is REQUIRED.</t>
+
+	    <section title="TLS/SA Exchanges">
+
+		<t>A client wishing to optimize a SASL/GS2 mechanism
+		    MUST: a) negotiate a SASL mechanism to use using the
+		    method described in <xref target='mech_nego'/>, b)
+		    use channel binding from SASL authentication to the
+		    TLS channel, c) begin the SASL mechanism
+		    authentication message exchange
+		    immediately after the client's Finished message as
+		    application data without waiting for the server's
+		    Finished message.</t>
+
+		<t>The first SASL mechanism authentication message
+		    (always sent by the client in the case of SASL/GS2
+		    mechanisms) MUST be prefixed with, and in the
+		    following order:
+		    
+		    <list style='numbers'>
+
+			<t>the SASL name of the mechanism,
+			    NUL-terminated;</t>
+
+			<t>a NUL-terminated, comma-separated list of
+			    language tags <xref target='RFC4646'/>;</t>
+
+			<t>a four octet, network byte order binary
+			    message length.</t>
+			
+		    </list>
+
+		</t>
+		    
+		<t>Authentication messages MUST NOT be longer
+		    than 2^24 octets (i.e., the 8 most significant bits
+		    of the message length MUST be zeros); if SASL
+		    produces such messages then authentication MUST
+		    FAIL.</t>
+
+		<t>The server's "outcome of authentication exchange"
+		    message MUST consist of a UTF-8 string containing
+		    supplementary information prefixed with a network
+		    byte order four byte unsigned binary length of of
+		    that string, with the most significant bit of the
+		    length set to 1.  The next most significant bit MUST
+		    be 1 to indicate success, 0 to indicate failure.
+		    The supplementary information MUST NOT be longer
+		    than 2^16-1 bytes.  The supplementary information
+		    SHOULD be a human-readable message localized to a
+		    language selected from the client's language tags
+		    selected according to <xref target='RFC4647'/>, or
+		    to one of the server's choice if the client sent no
+		    language tags or the server did not support
+		    localizations to any of them.</t>
+
+		<t>Where empty messages are required by SASL the
+		    application should send a zero-valued length and an
+		    empty message.</t>
+
+		<t>If the last SASL mechanism authentication message is
+		    to be sent by the server then the server's outcome
+		    of authentication message MUST immediately follow
+		    the last mechanism message.  That is: there is no
+		    need for the client to send an empty message in
+		    response to the last mechanism message just to get
+		    the outcome of authentication message.  This saves
+		    another round trip.</t>
+
+		<t>If authentication fails then the client MAY retry
+		    authentication, and indicates this by sending four
+		    octets with all bits set, followed by the first SASL
+		    authentication message of the next exchange.
+		    Otherwise, the client MUST send four octets with all
+		    bits cleared prior to commencing the application
+		    protocol.  The server MAY abort the TLS connection
+		    on re-authentication.</t>
+
+		<t>If authentication succeeds then the application
+		    protocol takes over the TLS record protocol
+		    contents.</t>
+
+		<t>With a one round trip SASL/GS2 mechanism the protocol
+		    then looks like:</t>
+
+		<figure>
+		    <artwork>
+			<![CDATA[
+   Client                                               Server
+
+   ClientHello w/ sasl_sml_req 
+               early_start_req -------->
+                                                ServerHello w/
+                                               early_start_req
+                                                       SaslSML
+                                                  Certificate*
+                                            ServerKeyExchange*
+                                           CertificateRequest*
+                                <--------      ServerHelloDone
+   Certificate*
+   ClientKeyExchange
+   CertificateVerify*
+   [ChangeCipherSpec]
+   Finished
+   SASL auth message as data    -------->   
+                                            [ChangeCipherSpec]
+                                                      Finished
+                                             SASL auth message
+                                <--------      Outcome of SASL
+                                                authentication
+   Application Data             <------->     Application Data
+			]]>
+		    </artwork>
+		</figure>
+
+		<t>With a one and one half round trip mechanism the
+		    protocol looks like:</t>
+
+		<figure>
+		    <artwork>
+			<![CDATA[
+   Client                                               Server
+
+   ClientHello w/ sasl_sml_req 
+               early_start_req -------->
+                                                ServerHello w/
+                                               early_start_req
+                                                       SaslSML
+                                                  Certificate*
+                                            ServerKeyExchange*
+                                           CertificateRequest*
+                                <--------      ServerHelloDone
+   Certificate*
+   ClientKeyExchange
+   CertificateVerify*
+   [ChangeCipherSpec]
+   Finished
+   SASL auth message as data    -------->   
+                                            [ChangeCipherSpec]
+                                                      Finished
+                                <--------    SASL auth message
+   SASL auth message            -------->   
+                                <--------      Outcome of SASL
+                                                authentication
+   Application Data             <------->     Application Data
+			]]>
+		    </artwork>
+		</figure>
+
+		<t>And with a two round trip mechanism the protocol
+		    looks like:</t>
+
+		<figure>
+		    <artwork>
+			<![CDATA[
+   Client                                               Server
+
+   ClientHello w/ sasl_sml_req 
+               early_start_req -------->
+                                                ServerHello w/
+                                               early_start_req
+                                                       SaslSML
+                                                  Certificate*
+                                            ServerKeyExchange*
+                                           CertificateRequest*
+                                <--------      ServerHelloDone
+   Certificate*
+   ClientKeyExchange
+   CertificateVerify*
+   [ChangeCipherSpec]
+   Finished
+   SASL auth message as data    -------->   
+                                            [ChangeCipherSpec]
+                                                      Finished
+                                <--------    SASL auth message
+   SASL auth message            -------->   
+                                             SASL auth message
+                                <--------      Outcome of SASL
+                                                authentication
+   Application Data             <------->     Application Data
+			]]>
+		    </artwork>
+		</figure>
+
+		<t>The reader can figure out what the protocol looks
+		    like for SASL mechanisms with more than two
+		    round trips from the above..</t>
+
+		<section anchor='cbinding' title="Channel Binding">
+
+		    <t>Existing TLS channel binding types that are
+			suitable for use with SASL in this facility are:
+
+			<list style='symbols'>
+
+			    <t>tls-server-end-point <xref
+				    target='tls-server-end-point'/></t>
+
+			    <t>tls-unique <xref
+				    target='tls-unique'/></t>
+
+			</list>
+
+		    </t>
+
+		    <t>See the IANA channel binding type registry for
+			more information about these channel binding
+			types.  The channel binding type to use is to be
+			selected as described in <xref
+			    target='I-D.ietf-sasl-channel-bindings'/>.</t>
+
+		</section>
+
+	    </section>
+
+	</section>
+
+	<!--
+	<section title="Using this Extension with Existing Application Protocols">
+
+	    <t>[This section's sub-sections need to be separate I-Ds,
+		though each should be so small as to make that seem like
+		overkill.]</t>
+
+	    <t>In this section and its sub-sections we NORMATIVELY
+		describe how a number of existing TLS and SASL
+		application protocols are modified to make use of this
+		extension.</t>
+
+	</section>
+	-->
+
+	<section title="Non-SASL Optimizations of Existing Application Protocols">
+
+	    <t>In this section and its sub-sections we INFORMATIVELY how
+		a number of existing TLS application protocols might be
+		modified to take advantage of the application data
+		extension for optimization of the application
+		protocol.</t>
+
+	    <t>It is crucial that clients only use the app_hello
+		extension for operations that do not require that the
+		user already be authenticated (the server application
+		MUST reject such uses of app_hello) or that require
+		privacy protection.  There are no operations in IMAP and
+		POP3, for example, which are suitable for optimization
+		via app_hello, but there are for SMTP and LDAP.  That's
+		because IMAP and POP3 deal exclusively with user data,
+		while SMTP and LDAP have some operations or objects
+		which can be executed publicly and without user
+		authentication (see below).</t>
+
+	    <section title="LDAP">
+
+		<t>In the case of LDAP the app_hello extension can be
+		    used to send a single LDAP message, typically a
+		    search for the root DSE object.  If the server
+		    supports this extension then the app_hello
+		    handshake message can be used to return the result.
+		    If the server does not support this extension then
+		    the client can repeat its search after the TLS
+		    handshake is completed and the TLS record protocol
+		    begins to operate.</t>
+
+	    </section>
+
+	    <section title="SMTP">
+
+		<t>Clients may use the app_hello extension to send a
+		    EHLO SMTP command to the server, and the server may
+		    send the SMTP reply to it in a app_hello handshake
+		    message.</t>
+
+	    </section>
+
+	</section>
+
+	<section title="Impact on Concentrators">
+
+	    <t>This protocol is designed to have minimal impact on TLS
+		server-side proxies (a.k.a. concentrators).</t>
+
+	    <t>The minimal changes to make to TLS concentrators in order
+		to support this protocol are:
+
+		<list style='symbols'>
+
+		    <t>Add a configuration parameter through which the
+			administrator may list the SASL mechanisms
+			available to the application servers behind the
+			concentrator;</t>
+
+		    <t>Add a configuration parameter through which the
+			administrator may indicate whether the
+			application supports the 'generic-sasl' framing
+			defined in <xref target='generic-sasl'/>.</t>
+
+		    <t>Add support for sasl_sml_req and the
+			corresponding SaslSML message using the server
+			SASL mechanism list from the configuration
+			parameter mentioned in the previous item;</t>
+
+		    <t>Add support for early_start_req, which means that
+			the concentrator MUST NOT consider it an error
+			to receive TLS application data record messages
+			prior to sending the concentrator's Finished
+			message.</t>
+
+		</list>
+
+	    </t>
+
+	    <t>Implementors may also want to add support for unique
+		channel binding types, such as the 'tls-unique' channel
+		binding type.  This requires being able to communicate
+		to the application server the tls-unique channel binding
+		for each TLS connection, probably via an out of band
+		mechanism (though if the application protocol is HTTP
+		then perhaps the concentrator could use an HTTP request
+		header to do this).</t>
+
+	    <t>Implementors may also add a way to communicate
+		app_hello/AppHello messages to the application.</t>
+
+	</section>
+
+        <section title="IANA Considerations">
+
+	    <t>When this document is approved for the Standards-Track
+		the &lgt;TBD&gt; values above will be filled in and the
+		IANA TLS ExtensionType and HandshakeType registries will
+		have to be updated to reflect these assignments.  (These
+		registries require IETF Consensus and Standards action,
+		respectively.)</t>
+
+        </section>
+
+        <section title="Security Considerations">
+
+	    <t>The security considerations of <xref target='RFC4422'/>,
+		<xref target='I-D.ietf-sasl-channel-bindings'/>, <xref
+		    target="RFC5246"/> and <xref target="RFC5056"/>
+		apply, as do those of <xref target='RFC2743'/> when used
+		via the SASL/GS2 bridge <xref
+		    target='I-D.ietf-sasl-gs2'/>.</t>
+
+	    <t>The initial SASL authentication message is not protected
+		by the TLS client's Finished message, but it is
+		protected by the server's Finished message.  Channel
+		binding must be used in the optimized authentication
+		case.  Therefore the server can detect modifications to
+		the initial SASL authentication message to the best of
+		the selected SASL mechanism's ability, and the client,
+		as usual, can abort the TLS session if the server's
+		Finished message cannot be validation.</t>
+
+	    <t>The SASL mechanism negotiation is protected by the TLS
+		Finished messages.</t>
+
+        </section>
+
+    </middle>
+
+    <back>
+        <references
+	    title="Normative References">
+	    &rfc2119;&rfc5246;&rfc4422;&rfc5056;&sasl-channel-bindings;
+	    &gs2;&rfc4646;&rfc4647;
+	</references>
+	<references title="Informative References">
+	    &rfc2743;
+	    <reference anchor='tls-server-end-point'>
+		<front>
+		    <title>Registration of TLS server end-point channel
+			bindings</title>
+		    <author initials='L.' surname='Zhu' fullname='Larry Zhu'>
+			<organization abbrev='MSFT'>Microsoft</organization>
+		    </author>
+		    <date month='July' year='2008'/>
+		</front>
+		<format type='TXT'
+		    target='http://www.iana.org/assignments/channel-binding-types/tls-server-end-point'/>
+	    </reference>
+	    <reference anchor='tls-unique'>
+		<front>
+		    <title>Registration of TLS unique channel binding
+			(generic)</title>
+		    <author initials='L.' surname='Zhu' fullname='Larry Zhu'>
+			<organization abbrev='MSFT'>Microsoft</organization>
+		    </author>
+		    <date month='July' year='2008'/>
+		</front>
+		<format type='TXT'
+		    target='http://www.iana.org/assignments/channel-binding-types/tls-unique'/>
+	    </reference>
+	</references>
+    </back>
+
+</rfc>

@@ -1,0 +1,1927 @@
+<?xml version="1.0" encoding="iso-8859-1" ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<rfc category="std" ipr="full3978" docName="draft-ietf-shim6-failure-detection-13">
+<front>
+
+<title abbrev='Failure Detection Protocol'>Failure Detection and Locator
+Pair Exploration Protocol for IPv6 Multihoming</title>
+
+<author initials="J" surname="Arkko" fullname="Jari Arkko">
+<organization>Ericsson</organization>
+<address>
+<postal>
+<street/>
+<city>Jorvas</city> <code>02420</code>
+<country>Finland</country>
+</postal>
+<email>jari.arkko@ericsson.com</email>
+</address>
+</author>
+
+<author initials="I" surname="van Beijnum" fullname="Iljitsch van Beijnum">
+<organization>IMDEA Networks</organization>
+<address>
+<postal>
+<street>Avda. del Mar Mediterraneo, 22</street>
+<city>Leganes</city>
+<region>Madrid</region>
+<code>28918</code>
+<country>Spain</country>
+</postal>
+<email>iljitsch@muada.com</email>
+</address>
+</author> 
+
+<date month="June" year="2008" />
+
+<area>Internet</area>
+<workgroup>Network Working Group</workgroup>
+<keyword>I-D</keyword>
+<keyword>Internet Draft</keyword>
+
+<abstract>
+
+<t>
+This document specifies how the level 3 multihoming shim protocol
+(SHIM6) detects failures between two communicating hosts. It also
+specifies an exploration protocol for switching to another pair of
+interfaces and/or addresses between the same hosts if a failure occurs
+and an operational pair can be found.
+</t>
+
+</abstract>
+
+</front>
+<middle>
+
+<section title="Introduction">
+
+<t>The <xref target='I-D.ietf-shim6-proto'>SHIM6 protocol</xref>
+extends IPv6 to support multihoming.  It is an IP layer
+mechanism that hides multihoming from applications. A part of the
+SHIM6 solution involves detecting when a currently used pair of
+addresses (or interfaces) between two communication hosts has failed,
+and picking another pair when this occurs. We call the former failure
+detection, and the latter locator pair exploration.</t>
+
+<t>This document specifies the mechanisms and protocol messages to
+achieve both failure detection and locator pair exploration. This part
+of the SHIM6 protocol is called the REAchability Protocol (REAP).</t>
+
+<t>Failure detection is made as light weight as possible. Data traffic
+in both direction is observed, and in the case where there is no
+traffic because the communication is idle, failure detection is also
+idle and doesn't generate any packets. When data traffic is flowing in
+both directions, there is no need to send failure detection packets,
+either. Only when there is traffic in one direction, the failure
+detection mechanism generates keepalives in the other direction. As a
+result, whenever there is outgoing traffic and no incoming return
+traffic or keepalives, there must be failure, at which point the
+locator pair exploration is performed to find a working address pair
+for each direction.</t>
+
+<t>The document is structured as follows: <xref target='definitions' />
+defines a set of useful terms, <xref target='overview' /> gives an
+overview of REAP, and <xref target='formatsandbeh'/> specifies the
+message formats and behaviour in detail. <xref target='seccons'/>
+discusses the security considerations of REAP.</t>
+
+<t>In this specification, we consider an address to be synonymous with
+a locator. Other parts of the SHIM6 protocol ensure that the different
+locators used by a node actually belong together. That is, REAP is
+not responsible for ensuring that it ends up with a legitimate
+locator.</t>
+
+<t>REAP has been designed to be used with SHIM6, and is therefore
+tailored to an environment where it runs on hosts, uses widely varying
+types of paths and is unaware of application context. As a result,
+REAP attempts to be as self-configuring and unobtrusive as
+possible. In particular, it avoids sending any packets except where
+absolutely required and employs exponential back-off to avoid
+congestion. The downside is that it cannot offer the same granularity
+of detecting problems as mechanisms that have more application context
+and ability to negotiate or configure parameters. Future versions of
+this specification may consider extensions with such capabilities, for
+instance through inheriting some mechanisms from Bidirectional
+Forwarding Detection (BFD) protocol
+<xref target="I-D.ietf-bfd-base"/>.</t>
+
+</section>
+
+<section title='Requirements language'>
+
+   <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+    NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL"
+    in this document are to be interpreted as described in <xref
+    target='RFC2119' />.</t>
+
+</section>
+
+<!--
+
+<section anchor='related' title="Related Work">
+
+<t>In <xref target='RFC2960'>SCTP</xref>, transport addresses (IP
+address and port pairs) are exchanged during SCTP Association
+(i.e. connection) setup phase. In order to provide a failover
+mechanism between multihomed hosts, one of the peer's addresses is
+selected as the primary address by the application running on top of
+SCTP.  All data packets are sent to this address until there is a
+reason to choose another address, such as the failure of the primary
+address.</t>
+
+<t>SCTP also tests the reachability of the peer endpoint's
+addresses. This is done both via observing the data packets sent to
+the peer or via a periodic heartbeat when there is no data packets to
+send.  Each time data packet retransmission is initiated (or when a
+heartbeat is not answered within the estimated round-trip time) an
+error counter is incremented. When a configured error limit is
+reached, the particular destination address is marked as inactive.
+The reception of an acknowledgement or heartbeat response clears the
+counter. When retransmitting the endpoint attempts
+pick the most "divergent" source-destination pair from the original
+source-destination pair to which the packet was transmitted.  Rules
+for such selection are, however, left as implementation decisions in
+SCTP.</t>
+
+<t>SCTP does not define how local knowledge (such as information
+learned from the link layer) should be used. A mechanism, <xref
+target='I-D.ietf-tsvwg-addip-sctp'>dynamic address reconfiguration
+mechanism</xref>, is being developed to deal with dynamic changes to
+the set of available addresses.</t>
+
+<t>The <xref target='RFC4555'>MOBIKE protocol</xref> provides
+multihoming and mobility for VPN connections. Its failure detection
+and locator pair exploration is designed to work across mixed
+IPv4/IPv6 environments and NATs, as long as a path that allows
+bidirectional communication can be found.</t>
+
+<t>Existing mechanisms at lower layers or in IKEv2 are used to detect
+failures, and upon failure MOBIKE attempts to explore all combinations
+of addresses to find an operational pair. Such exploration is necessary
+when a problem affects both nodes. For instance, two nodes connected
+by two separate point-to-point links will be unable to switch to the
+other link if a failure occurs on the first one.  While both
+communicating hosts are aware of each others' addresses, only one end
+of the communication is in charge of deciding what address pair to
+use, however.</t>
+
+<t>The mobility and multihoming specification for the <xref
+target='I-D.ietf-hip-mm'>HIP protocol</xref> leaves the determination
+of when address updates are sent to a local policy, but suggests the
+use of local information and ICMP error messages.</t>
+
+<t>Network attachment procedures are also relevant for
+multihoming. The IPv6 and MIP6 working groups have standardized
+mechanisms to learn about networks that a node has attached to. Basic
+IPv6 Neighbor Discovery was, however, designed primarily for static
+situations. The fully dynamic detection procedure has turned out to be
+a relatively complex procedure for mobile hosts. Enhanced or optimized
+mechanisms are being designed in the DHC and DNA working groups <xref
+target='RFC4436'>DNAv4</xref>, <xref
+target='I-D.ietf-dna-cpl'>CPL</xref>, and <xref
+target='I-D.ietf-dna-protocol'>DNAv6</xref>.</t>
+
+<t>ICE <xref target='I-D.ietf-mmusic-ice'/>, STUN <xref
+target='RFC3489'/>, and TURN <xref
+target='I-D.rosenberg-midcom-turn'/> are also related mechanisms. They
+are primarily used for NAT detection and communication through NATs in
+IPv4 environment, for application such as as voice over IP. STUN uses
+a server in the Internet to discover the presence and type of NATs and
+the client's public IP addresses and ports. TURN makes it possible to
+receive incoming connections in hosts behind NATs. ICE makes use of
+these protocols in peer-to-peer cooperative fashion, allowing
+participants to discover, create and verify mutual connectivity, and
+then use this connectivity for multimedia streams. While these
+mechanisms are not designed for dynamic and failure situations, they
+have many of the same requirements for the exploration of
+connectivity, as well as the requirement to deal with middleboxes.</t>
+
+<t>Related work in the IPv6 area includes <xref target='RFC3484'>RFC
+3484</xref> which defines source and destination address selection
+rules for IPv6 in situations where multiple candidate address pairs
+exist. RFC 3484 considers only a static situation, however, and does
+not take into account the effect of failures.</t>
+
+<t>An earlier SHIM6 document <xref
+target='I-D.ietf-shim6-reach-detect'/> analyzed what kind of
+mechanisms can be used to detect whether the peer is still reachable
+at the currently used address. Two proposed mechanisms, Correspondent
+Unreachability Detection (CUD) and Forced Bidirectional Communication
+(FBD) were presented. CUD is based on getting upper layer positive
+feedback, and IPv6 NUD-like probing if there is no feedback. FBD is
+based on forcing bidirectional communication by adding keepalive
+messages when there is no other, payload traffic. FBD is the chosen
+mechanism in this document.</t>
+
+<t>Many other protocols, both standardized in the IETF and outside of
+the IETF make use of keepalives to track the liveness of a connection
+or session.</t>
+
+</section>
+
+-->
+
+<section anchor='definitions' title="Definitions">
+
+<t>This section defines terms useful for discussing failure
+detection and locator pair exploration.</t>
+
+<section anchor='aa' title="Available Addresses">
+
+<t>SHIM6 nodes need to be aware of what addresses they themselves
+have. If a node loses the address it is currently using for
+communications, another address must replace this address. And if a
+node loses an address that the node's peer knows about, the peer must
+be informed. Similarly, when a node acquires a new address it may
+generally wish the peer to know about it.</t>
+
+<t>Definition. Available address -
+an address is said to be available if all the following conditions
+are fulfilled:</t>
+
+<list style='symbols'>
+
+<t>The address has been assigned to an interface of the node.</t>
+
+<t>The valid lifetime of the prefix (<xref target='RFC4861'>RFC
+4861</xref> Section 4.6.2) associated with the address has not
+expired.</t>
+
+<t>The address is not tentative in the sense of <xref
+target='RFC4862'>RFC 4862</xref>. In other words, the address
+assignment is complete so that communications can be started.
+<vspace blankLines='1'/>
+
+Note that this explicitly allows an address to be optimistic
+in the sense of <xref target='RFC4429'>Optimistic DAD</xref>
+even though implementations may prefer using
+other addresses as long as there is an alternative.</t>
+
+<t>The address is a global unicast or unique local address <xref
+target='RFC4193'/>. That is, it is not an IPv6 site-local or link-local
+address.
+
+<vspace blankLines='1'/>
+With link-local addresses, the nodes would be unable to determine
+on which link the given address is usable.
+</t>
+
+<!-- IPv4 compatibility note: If this protocol were defined to
+handle IPv4, then RFC 1918 addresses would also need to be allowed. -->
+
+<t>The address and interface is acceptable for use according to a
+local policy.</t>
+
+</list>
+
+<t>Available addresses are discovered and monitored through mechanisms
+outside the scope of SHIM6. SHIM6 implementations MUST be able to
+employ information provided by IPv6 <xref target='RFC4861'>Neighbor
+Discovery</xref>, <xref target='RFC4862'>Address
+Autoconfiguration</xref>, and <xref target='RFC3315'>DHCP</xref> (when
+DHCP is implemented). This information includes the availability of a
+new address and status changes of existing addresses (such as when an
+address becomes invalid).</t>
+
+<!-- IPv4 compatibility note: If IPv4 was supported in this protocol,
+then also mechanisms defined in <xref target='RFC4436'/>
+would need to be supported. -->
+
+</section>
+
+<section anchor='loa' title="Locally Operational Addresses">
+
+<t>Two different granularity levels are needed for failure
+detection. The coarser granularity is for individual addresses:
+</t>
+
+<t>Definition. Locally Operational Address - an available address is
+said to be locally operational when its use is known to be possible
+locally: the interface is up, a default router (if needed) suitable
+for this address is known to be reachable, and no other local
+information points to the address being unusable.</t>
+
+<t>Locally operational addresses are discovered and monitored through
+mechanisms outside the SHIM6 protocol. SHIM6 implementations MUST be
+able to employ information provided from <xref
+target='RFC4861'>Neighbor Unreachability
+Detection</xref>. Implementations MAY also employ additional, link
+layer specific mechanisms.</t>
+
+<!-- IPv4 compatibility note: In IPv4, mechanisms such as those defined
+in <xref target='RFC4436'/> could be used. -->
+
+<list>
+<t>Note 1: A part of the problem in ensuring that an address
+is operational is making sure that after a change in link
+layer connectivity we are still connected to the same IP subnet.
+Mechanisms such as <xref target='I-D.ietf-dna-cpl'>DNA CPL</xref> or
+<xref target='I-D.ietf-dna-protocol'>DNAv6</xref> can be used
+to ensure this.</t>
+
+<t>Note 2: In theory, it would also be possible for hosts to learn
+about routing failures for a particular selected source prefix, if
+only suitable protocols for this purpose existed. Some proposals in
+this space have been made, see, for instance <xref
+target='I-D.bagnulo-shim6-addr-selection'/> and <xref
+target='I-D.huitema-multi6-addr-selection'/>, but none have been
+standardized to date.</t>
+
+</list>
+
+</section>
+
+<section anchor='oap' title='Operational Address Pairs'>
+
+<t>The existence of locally operational addresses are not, however, a
+guarantee that communications can be established with the peer.  A
+failure in the routing infrastructure can prevent packets
+from reaching their destination. For this reason we need the
+definition of a second level of granularity, for pairs of
+addresses:</t>
+
+<t>Definition. Bidirectionally operational address pair - a pair of
+locally operational addresses are said to be an operational address
+pair when bidirectional connectivity can be shown between the
+addresses. That is, a packet sent with one of the addresses in the
+source field and the other in the destination field reaches the
+destination, and vice versa.</t>
+
+<t>Unfortunately, there are scenarios where bidirectionally
+operational address pairs do not exist. For instance, ingress filtering or
+network failures may result in one address pair being operational in
+one direction while another one is operational from the other
+direction. The following definition captures this general situation:</t>
+
+<t>Definition. Unidirectionally operational address pair - a pair of locally operational
+addresses are said to be an unidirectionally operational address pair when
+packets sent with the first address as the source and the second address
+as the destination reaches the destination.</t>
+
+<t>SHIM6 implementations MUST support the discovery of operational
+address pairs through the use of explicit reachability tests and
+Forced Bidirectional Communication (FBD), described later in this
+specification.  Future extensions of SHIM6 may specify additional
+mechanisms. Some ideas of such mechanisms are listed below, but not fully
+specified in this document:</t>
+
+<list style='symbols'>
+
+<t>Positive feedback from upper layer protocols. For instance, TCP can
+indicate to the IP layer that it is making progress. This is similar
+to how IPv6 Neighbor Unreachability Detection can in some cases be
+avoided when upper layers provide information about bidirectional
+connectivity <xref target='RFC4861'/>.
+
+<vspace blankLines='1'/>
+In the case of unidirectional connectivity, the upper layer protocol
+responses come back using another address pair, but show that the
+messages sent using the first address pair have been received.</t>
+
+<t>Negative feedback from upper layer protocols. It is conceivable
+that upper layer protocols give an indication of a problem to the
+multihoming layer. For instance, TCP could indicate that there's
+either congestion or lack of connectivity in the path because it is
+not getting ACKs.</t>
+
+<t>ICMP error messages. Given the ease of spoofing ICMP messages, one
+should be careful to not trust these blindly, however. One approach would be
+to use ICMP error messages only as a hint to perform an explicit
+reachability test or move an address pair to a lower place in the list
+of address pairs to be probed, but not as a reason to disrupt ongoing
+communications without other indications of problems. The situation
+may be different when certain verifications of the ICMP messages are
+being performed, as explained by Gont in <xref
+target='I-D.ietf-tcpm-icmp-attacks'/>. These verifications can ensure
+that (practically) only on-path attackers can spoof the messages.</t>
+
+</list>
+
+</section>
+
+<section anchor='pap' title='Primary Address Pair'>
+
+<t>The primary address pair consists of the addresses that upper
+layer protocols use in their interaction with the SHIM6 layer.
+Use of the primary address pair means that the communication is
+compatible with regular non-SHIM6 communication and no context
+ID needs to be present.</t>
+
+</section>
+
+<section anchor='cap' title='Current Address Pair'>
+
+<t>SHIM6 needs to avoid sending packets which belong to the same
+transport connection concurrently over multiple paths. This is because
+congestion control in commonly used transport protocols is based upon
+a notion of a single path. While routing can introduce path changes as
+well and transport protocols have means to deal with this, frequent
+changes will cause problems. Effective congestion control over
+multiple paths is considered a research topic at the time this
+specification is written. SHIM6 does not attempt to employ multiple
+paths simultaneously.</t>
+
+<list style="empty"><t>Note: SCTP and future multipath transport
+protocols are likely to require interaction with SHIM6, at least
+to ensure that they do not employ SHIM6 unexpectedly.</t></list>
+
+<t>For these reasons it is necessary to choose a particular pair of
+addresses as the current address pair which is used until problems
+occur, at least for the same session.</t>
+
+<list style='empty'>
+<t>It is theoretically possible to support multiple current address
+pairs for different transport sessions or SHIM6 contexts. However,
+this is not supported in this version of the SHIM6 protocol.</t>
+
+</list>
+
+<t>A current address pair need not be operational at all times. If
+there is no traffic to send, we may not know if the primary address
+pair is operational. Nevertheless, it makes sense to assume that the
+address pair that worked previously continues to be operational
+for new communications as well.</t>
+
+</section>
+
+</section>
+
+<section anchor='overview' title="Protocol Overview">
+
+<t>This section discusses the design of the reachability detection and
+full reachability exploration mechanisms, and gives on overview of the
+REAP protocol.</t>
+
+<t>Exploring the full set of communication options between two hosts
+that both have two or more addresses is an expensive operation as the
+number of combinations to be explored increases very quickly with the
+number of addresses. For instance, with two addresses on both sides,
+there are four possible address pairs. Since we can't assume that
+reachability in one direction automatically means reachability for the
+complement pair in the other direction, the total number of two-way
+combinations is eight. (Combinations = nA * nB * 2.)</t>
+
+<t>An important observation in multihoming is that failures are
+relatively infrequent, so that an operational pair that worked a few
+seconds ago is very likely to be still operational. So it makes sense
+to have a light-weight protocol that confirms existing reachability,
+and only invoke heavier exploration when a there is a suspected
+failure.</t>
+
+<section anchor='reach' title='Failure Detection'>
+
+<t>Failure detection consists of three parts: tracking local
+information, tracking remote peer status, and finally verifying
+reachability. Tracking local information consists of using, for
+instance, reachability information about the local router as an
+input. Nodes SHOULD employ techniques listed in <xref target='aa'/>
+and <xref target='loa'/> to track the local situation. It is also
+necessary to track remote address information from the peer.  For
+instance, if the peer's currently used address is no longer in use,
+a mechanism to relay that information is needed. The Update Request
+message in the SHIM6 protocol is used for this purpose <xref
+target='I-D.ietf-shim6-proto'/>. Finally, when the local and remote
+information indicates that communication should be possible and there
+are upper layer packets to be sent, reachability verification is
+necessary to ensure that the peers actually have an operational
+address pair.</t>
+
+<t>A technique called Forced Bidirectional Detection (FBD, originally
+defined in an earlier SHIM6 document <xref
+target='I-D.ietf-shim6-reach-detect'/>) is employed
+for the reachability verification. Reachability for the currently used
+address pair in a SHIM6 context is determined by making sure that
+whenever there is data traffic in one direction, there is also traffic
+in the other direction. This can be data traffic as well, but also
+transport layer acknowledgments or a REAP reachability keepalive if
+there is no other traffic. This way, it is no longer possible to have
+traffic in only one direction, so whenever there is data traffic going
+out, but there are no return packets, there must be a failure, so the
+full exploration mechanism is started.</t>
+
+<t>A more detailed description of the current pair reachability
+evaluation mechanism:</t>
+
+<list style='numbers'>
+
+<t>To avoid the other side from concluding there is a reachability
+   failure, it's necessary for a host implementing the failure
+   detection mechanism to generate periodic keepalives when there is
+   no other traffic.  <vspace blankLines='1'/>
+
+   FBD works by generating REAP keepalives if the node is receiving
+   packets from its peer but not sending any of its own. The
+   keepalives are sent at certain intervals so that the other side
+   knows there is a reachability problem when it doesn't receive any
+   incoming packets for its Send Timeout period.  The host 
+   communicates its Send Timeout value to the peer as an Keepalive
+   Timeout Option (section 5.3) in the I2, I2bis, R2, or UPDATE 
+   messages.  The peer then maps this value to its Keepalive 
+   Timeout value.<vspace blankLines='1'/>
+
+   The interval after which keepalives are sent is named Keepalive
+   Interval. The RECOMMENDED approach is sending keepalives at
+   one-half to one-third of the Keepalive Timeout interval, so that
+   multiple keepalives are generated and have time to reach the
+   correspondent before it times out.</t>
+
+<t>Whenever outgoing data packets are generated, a timer is started to
+   reflect the requirement that the peer should generate return
+   traffic from data packets.  The timeout value is set to the 
+   value of Send Timeout.
+
+   <vspace blankLines='1'/>
+   For the purposes of this specification, "data packet" refers
+   to any packet that is part of a SHIM6 context, including both
+   upper layer protocol packets and SHIM6 protocol messages except
+   those defined in this specification.</t>
+
+<t>Whenever incoming data packets are received, the timer associated
+   with the return traffic from the peer is stopped, and another timer
+   is started to reflect the requirement for this node to generate
+   return traffic. This timeout value is set to the
+   value of Keepalive Timeout.
+
+   <vspace blankLines='1'/> These two timers are mutually
+   exclusive. In other words, either the node is expecting
+   to see traffic from the peer based on the traffic that the
+   node sent earlier or the node is expecting to respond to
+   the peer based on the traffic that the peer sent earlier
+   (or the node is in an idle state).</t>
+
+<t>The reception of a REAP keepalive packet leads to stopping
+   the timer associated with the return traffic from the peer.</t>
+
+<t>Keepalive Interval seconds after the last data packet has been
+   received for a context, and if no other packet has been sent within
+   this context since the data packet has been received, a REAP
+   keepalive packet is generated for the context in question and
+   transmitted to the correspondent. A host may send the keepalive
+   sooner than Keepalive Interval seconds if implementation
+   considerations warrant this, but should take care to avoid sending
+   keepalives at an excessive rate.  REAP keepalive packets SHOULD
+   continue to be sent at the Keepalive Interval until either a data
+   packet in the SHIM6 context has been received from the peer or the
+   Keepalive Timeout expires.  Keepalives are not sent at all if data
+   was sent within the keep-alive interval. A recommended value range
+   for Keepalive Interval is specified in <xref
+   target="protconst"/>. The actual value SHOULD be randomized in
+   order to prevent synchronization.</t>
+
+<t>Send Timeout seconds after the transmission of a data packet with no
+   return traffic on this context, a full reachability exploration is
+   started.</t>
+
+</list>
+
+<t><xref target='protconst'/> provides some suggested
+defaults for these timeout values.  Experience from the
+deployment of the SHIM6 protocol is needed in order to
+determine what values are most suitable.</t>
+
+</section>
+
+<section anchor='explore' title="Full Reachability Exploration">
+
+<t>As explained in previous sections, the currently used address pair
+may become invalid either through one of the addresses being becoming
+unavailable or nonoperational, or the pair itself being declared
+nonoperational. An exploration process attempts to find another
+operational pair so that communications can resume.</t>
+
+<t>What makes this process hard is the requirement to support
+unidirectionally operational address pairs. It is insufficient to
+probe address pairs by a simple request - response protocol. Instead,
+the party that first detects the problem starts a process where it
+tries each of the different address pairs in turn by sending a message
+to its peer. These messages carry information about the state of
+connectivity between the peers, such as whether the sender has seen
+any traffic from the peer recently. When the peer receives a message
+that indicates a problem, it assists the process by starting its own
+parallel exploration to the other direction, again sending information about
+the recently received payload traffic or signaling messages.</t>
+
+<t>Specifically, when A decides that it needs to explore for an
+alternative address pair to B, it will initiate a set of Probe
+messages, in sequence, until it gets an Probe message from B
+indicating that (a) B has received one of A's messages and, obviously,
+(b) that B's Probe message gets back to A. B uses the same algorithm,
+but starts the process from the reception of the first Probe message
+from A.</t>
+
+<t>Upon changing to a new address pair, the network path traversed most
+likely has changed, so that the ULP SHOULD be informed. This can be a signal
+for the ULP to adapt due to the change in path so that, for example,
+TCP could initiate a slow start procedure, although it's likely
+that the circumstances that led to the selection of a new path already
+caused enough packet loss to trigger slow start.</t>
+
+<!-- Similarly, one can also envision that applications would be able to
+tell the IP or transport layer that the current connection is
+unsatisfactory and an exploration for a better one would be
+desirable. This would require an inter-layer communication mechanism to
+be developed, however. In any case, this is another issue that we treat
+as being outside the scope of pure address exploration. -->
+
+<t>REAP is designed to support failure recovery even in the case of
+having only unidirectionally operational address pairs. However, due
+to security concerns discussed in <xref target='seccons'/>, the
+exploration process can typically be run only for a session that has
+already been established. Specifically, while REAP would in theory be
+capable of exploration even during connection establishment, its use
+within the SHIM6 protocol does not allow this.</t>
+
+<!-- REAP does not support IPv4, but could be extended to do so. We
+have noted IPv4 compatibility issues where they exist.-->
+
+</section>
+
+<section anchor='order' title='Exploration Order'>
+
+<t>The exploration process assumes an ability to choose address pairs
+for testing. An overview of the choosing process used by REAP is as
+follows:
+
+<list style="symbols">
+
+<t>As an input to start the process, the node has knowledge of its own
+addresses and has been told via SHIM6 protocol messages what the
+addresses of the peer are. A
+list of possible pairs of addresses can be constructed
+by combining the two pieces of information.</t>
+
+<t>By employing standard IPv6 address selection rules, the list is
+pruned by removing combinations that are inappropriate, such as
+attempting to use a link local address when contacting a peer that
+uses a global unicast address.</t>
+
+<t>Similarly, standard IPv6 address selection rules provide a basic
+priority order for the pairs.</t>
+
+<t>Local preferences may be applied for some additional tuning of the
+order in the list.  The mechanisms for local preference settings are
+not specified, but can involve, for instance, configuration that sets
+the preference for using one interface over another.</t>
+
+<t>As a result, the node has a prioritized list of address pairs to
+try.  However, the list may still be long, as there may be a
+combinatorial explosion when there are many addresses on both sides.
+REAP employs these pairs sequentially, however, and uses a back-off
+procedure is to avoid a "signaling storm". This ensures that the
+exploration process is relatively conservative or "safe". The tradeoff
+is that fnding a working path may take time if there are many
+addresses on both sides.</t>
+
+</list></t>
+
+<t>In more detail, the process is as follows. Nodes first consult
+the <xref target='RFC3484'>RFC 3484 default address selection
+rules</xref> to determine what combinations of addresses are allowed
+from a local point of view, as this reduces the search space. RFC 3484
+also provides a priority ordering among different address pairs,
+making the search possibly faster. (Additional mechanisms may be
+defined in the future for arriving at an initial ordering of address
+pairs before testing starts
+<xref target='I-D.ietf-shim6-locator-pair-selection'/>.)  Nodes may
+also use local information, such as known quality of service
+parameters or interface types to determine what addresses are
+preferred over others, and try pairs containing such addresses
+first. The SHIM6 protocol also carries preference information in its
+messages.</t>
+
+
+<!-- Discussion note: The preferences may either be learned dynamically or
+be configured. It is believed, however, that dynamic learning based purely
+on the multihoming protocol is too hard and not the task this layer should do.
+Solutions where multiple protocols share their information in a common
+pool of locators could provide this information from transport protocols,
+however. -->
+
+<!-- IPv4 compatibility note: As has been noted in the context of MOBIKE, the existence
+of NATs can require that peers continuously monitor the operational
+status of address pairs, as otherwise NAT state related to a
+particular communication is lost, and the peer on the outer side of
+the NAT can no longer reach the peer inside the NAT. -->
+
+<t>Out of the set of possible candidate address pairs, nodes SHOULD
+attempt to test through all of them until an operational pair is
+found, and retrying the process as is necessary. However, all nodes
+MUST perform this process sequentially and with exponential
+back-off. This sequential process is necessary in order to avoid a
+"signaling storm" when an outage occurs (particularly for a complete
+site). However, it also limits the number of addresses that can in
+practice be used for multihoming, considering that transport and
+application layer protocols will fail if the switch to a new address
+pair takes too long.</t>
+
+<t><xref target='protconst'/> suggests default values for the timers
+associated with the exploration process. The value Initial Probe
+Timeout (0.5 seconds) specifies the interval between initial attempts
+to send probes; Number of Initial Probes (4) specifies how many
+initial probes can be sent before the exponential backoff procedure
+needs to be employed. This process increases the time between every
+probe if there is no response. Typically, each increase doubles the
+time but this specification does not mandate a particular
+increase.</t>
+
+<list style="empty"><t>Note: The rationale for sending four packets at
+a fixed rate before the exponential backoff is employed is to avoid
+having to send these packets excessively fast. Without this, having
+0.5 seconds between the third and fourth probe means that the time
+between the first and second probe would have to be 0.125 seconds,
+which gives very little time for a reply to the first packet to
+arrive. Also, this means that the first four packets are sent within
+0.875 seconds rather than 2 seconds, increasing the potential for
+congestion if a large number of shim contexts need to send probes at
+the same time after a failure.</t> </list>
+
+<t>Finally, Max Probe Timeout (60 seconds) specifies a limit beyond
+which the probe interval may not grow. If the exploration process
+reaches this interval, it will continue sending at this rate until a
+suitable response is triggered or the SHIM6 context is garbage
+collected, because upper layer protocols using the SHIM6 context in
+question are no longer attempting to send packets. Reaching the Max
+Probe Timeout may also serve as a hint to the garbage collection
+process that the context is no longer usable.</t>
+
+</section>
+
+</section>
+
+<section anchor='formatsandbeh' title='Protocol Definition'>
+
+<section anchor='keepalive' title="Keepalive Message">
+
+<t>The format of the keepalive message is as
+follows:</t>
+
+<figure>
+<artwork>
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|  Next Header  |  Hdr Ext Len  |0|  Type = 66  |  Reserved1  |0|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|            Checksum           |R|                             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                             |
+|                    Receiver Context Tag                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           Reserved2                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                            Options                            +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork>
+</figure>
+
+<list style='hanging'>
+
+<t hangText='Next Header, Hdr Ext Len, 0, 0, Checksum'><vspace blankLines='1'/>
+These are as specified in
+Section 5.3 of the <xref target='I-D.ietf-shim6-proto'>SHIM6 protocol
+description</xref>.</t>
+
+<t hangText='Type'><vspace blankLines='1'/> This field identifies the
+Keepalive message and MUST be set to 66 (Keepalive).</t>
+
+<t hangText='Reserved1'><vspace blankLines='1'/>
+This is a 7-bit field reserved for future use. It is set to zero on
+transmit, and MUST be ignored on receipt.</t>
+
+<t hangText='R'><vspace blankLines='1'/>
+This is a 1-bit field reserved for future use. It is set to zero on
+transmit, and MUST be ignored on receipt.</t>
+
+<t hangText='Receiver Context Tag'><vspace blankLines='1'/>
+This is a 47-bit field for the Context Tag the receiver has
+allocated for the context.</t>
+
+<t hangText='Reserved2'><vspace blankLines='1'/>
+This is a 32-bit field reserved for future use. It is set to zero on
+transmit, and MUST be ignored on receipt.</t>
+
+<t hangText='Options'><vspace blankLines='1'/> This MAY contain one or
+more SHIM6 options.The inclusion of the latter options is not
+necessary, however, as there are currently no defined options that are
+useful in a Keepalive message. These options are provided only for
+future extensibility reasons.</t>
+
+</list>
+
+<t>A valid message conforms to the format above, has a Receiver
+Context Tag that matches to context known by the receiver, is valid
+shim control message as defined in Section 12.2 of the <xref
+target='I-D.ietf-shim6-proto'>SHIM6 protocol description</xref>, and
+its shim context state is ESTABLISHED. The receiver processes a valid
+message by inspecting its options, and executing any actions specified
+for such options.</t>
+
+<!-- Discussion: It may appear prudent to include
+additional fields that would provide at least a basic level of
+security, but since data packets also indicate ongoing reachability,
+just as keepalives, and those packets don't have such fields, there
+is little or no reason to include them in a keepalive. -->
+
+<t>The processing rules for this message are the given in more
+detail in <xref target='sm'/>.</t>
+
+</section>
+
+<section anchor='probe' title="Probe Message">
+
+<t>This message performs REAP exploration. Its format is as
+follows:</t>
+
+<figure>
+<artwork>
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|  Next Header  |  Hdr Ext Len  |0|  Type = 67  |   Reserved  |0|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|            Checksum           |R|                             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                             |
+|                    Receiver Context Tag                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| Precvd| Psent |Sta|                 Reserved2                 |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                      First probe sent                         +
+|                                                               |
++                      Source address                           +
+|                                                               |
++                                                               +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                      First probe sent                         +
+|                                                               |
++                      Destination address                      +
+|                                                               |
++                                                               +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                      First probe nonce                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                      First probe data                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/                                                               /
+/                      Nth probe sent                           /
+|                                                               |
++                      Source address                           +
+|                                                               |
++                                                               +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                      Nth probe sent                           +
+|                                                               |
++                      Destination address                      +
+|                                                               |
++                                                               +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                      Nth probe nonce                          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                      Nth probe data                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                      First probe received                     +
+|                                                               |
++                      Source address                           +
+|                                                               |
++                                                               +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                      First probe received                     +
+|                                                               |
++                      Destination address                      +
+|                                                               |
++                                                               +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                      First probe nonce                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                      First probe data                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                      Nth probe received                       +
+|                                                               |
++                      Source address                           +
+|                                                               |
++                                                               +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                      Nth probe received                       +
+|                                                               |
++                      Destination address                      +
+|                                                               |
++                                                               +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                      Nth probe nonce                          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                      Nth probe data                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                          Options                              +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                          Options                              +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork>
+</figure>
+
+<list style='hanging'>
+
+<t hangText='Next Header, Hdr Ext Len, 0, 0, Checksum'><vspace blankLines='1'/>
+These are as specified in
+Section 5.3 of the <xref target='I-D.ietf-shim6-proto'>SHIM6 protocol
+description</xref>.</t>
+
+<t hangText='Type'><vspace blankLines='1'/> This field identifies the
+Probe message and MUST be set to 67 (Probe).</t>
+
+<t hangText='Reserved'><vspace blankLines='1'/>
+This is a 7-bit field reserved for future use. It is set to zero on
+transmit, and MUST be ignored on receipt.</t>
+
+<t hangText='R'><vspace blankLines='1'/>
+This is a 1-bit field reserved for future use. It is set to zero on
+transmit, and MUST be ignored on receipt.</t>
+
+<t hangText='Receiver Context Tag'><vspace blankLines='1'/>
+This is a 47-bit field for the Context Tag the receiver has
+allocated for the context.</t>
+
+<t hangText='Psent'><vspace blankLines='1'/>
+
+This is a 4-bit field that indicates the number of sent probes included
+in this probe message. The first set of probe fields pertains to the
+current message and MUST be present, so the minimum value for this field
+is 1. Additional sent probe fields are copies of the same fields sent in
+(recent) earlier probes and may be included or omitted as per any logic
+employed by the implementation.</t>
+
+<t hangText='Precvd'><vspace blankLines='1'/>
+
+
+This is a 4-bit field that indicates the number of received probes
+included in this probe message. Received probe fields are copies of
+the same fields in earlier received probes that arrived since the last
+transition to state Exploring. When a sender is
+in state InboundOk it MUST include copies of the fields of at least
+one of the inbound probes. A sender MAY include additional sets of
+these received probe fields in any state as per any logic employed by
+the implementation.
+
+<vspace blankLines='1'/>
+
+The fields probe source, probe destination, probe nonce and
+probe data may be repeated, depending on the value of Psent and
+Preceived.</t>
+
+<t hangText='Sta (State)'><vspace blankLines='1'/>
+
+This 2-bit State field is used to inform the peer about
+the state of the sender. It has three legal values:
+
+<vspace blankLines='1'/>
+0 (Operational) implies that the sender both (a) believes
+it has no problem communicating and (b) believes that
+the recipient also has no problem communicating.
+
+<vspace blankLines='1'/>
+1 (Exploring) implies that the sender has
+a problem communicating with the recipient, e.g., it
+has not seen any traffic from the recipient even
+when it expected some.
+
+<vspace blankLines='1'/> 2 (InboundOk) implies that the sender
+believes it has no problem communicating, i.e., it at least sees
+packets from the recipient, but that the recipient either has a problem or
+has not yet confirmed to the sender that the problem has been solved.
+</t>
+
+<t hangText='Reserved2'><vspace blankLines='1'/>
+
+MUST be set to 0 upon transmission and MUST be ignored upon
+reception.</t>
+
+<t hangText='Probe source'><vspace blankLines='1'/>
+
+This 128-bit field contains the source IPv6 address used to send the
+probe.</t>
+
+<t hangText='Probe destination'><vspace blankLines='1'/>
+
+This 128-bit field contains the destination IPv6 address used to send
+the probe.</t>
+
+<t hangText='Probe nonce'><vspace blankLines='1'/>
+
+This is a 32-bit field that is initialized by the sender with a value
+that allows it to determine which sent probes a received probe
+correlates with. It is highly RECOMMENDED that the nonce field
+is at least moderately hard to guess so that even on-path attackers
+can't deduce the next nonce value that will be used.  This
+value SHOULD be generated using a random number generator that is
+known to have good randomness properties as outlined in <xref
+target='RFC4086'>RFC 4086</xref>.</t>
+
+<t hangText='Probe data'><vspace blankLines='1'/>
+
+This is a 32-bit field with no fixed meaning. The probe data field
+is copied back with no changes. Future flags may define a use for this
+field.
+</t>
+
+<!-- Discussion: One potential use of this field relates to
+communicating delays between reception of a probe and transmission of
+a reply to it. -->
+
+<t hangText='Options'><vspace blankLines='1'/>
+For future extensions.</t>
+
+</list>
+
+<!-- IPv4 compatibility note: If IPv4 and NATs would need to be
+supported, then it might be necessary to indicate what addresses and
+port numbers were used in the received payload packets. -->
+
+</section>
+
+<section title='Keepalive Timeout Option Format'>
+ 
+<t>Either side of a SHIM6 context can notify the peer of the value
+that it would prefer the peer to use as its Keepalive Timeout value.
+If the host is using a non-default Send Timeout value, it SHOULD
+communicate this value as a Keepalive Timeout value to the peer in the
+below option.  This option MAY be sent in the I2, I2bis, R2, or UPDATE
+messages.  The option SHOULD only need to be sent once in a given
+shim6 association.  If a host receives this option it SHOULD update
+its Keepalive Timeout value for the correspondent.</t>
+
+<figure>
+<artwork> 
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|           Type = 10         |0|        Length  = 4            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
++           Reserved            |      Keepalive Timeout        | 
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork>
+</figure>
+
+<t>Fields:</t>
+
+<list style='hanging'>
+
+<t hangText='Type'><vspace blankLines='1'/>
+This field identifies the option and MUST be set to 10
+(Keepalive Timeout).</t>
+
+<t hangText='Length'><vspace blankLines='1'/>
+This field MUST be set as specified in Section 5.14 of the
+<xref target='I-D.ietf-shim6-proto'>SHIM6 protocol
+description</xref>. That is, it is set to 4.</t>
+
+<t hangText='Reserved'><vspace blankLines='1'/>
+16-bit field reserved for future use.  Set to zero
+upon transmit and MUST be ignored upon receipt.</t>
+ 
+<t hangText='Keepalive Timeout'><vspace blankLines='1'/>
+Value in seconds corresponding to suggested
+Keepalive Timeout value for the peer.</t>
+
+</list>
+ 
+</section>
+
+</section>
+
+<section anchor='sm' title="Behaviour">
+
+<t>The required behaviour of REAP nodes is specified below in the form
+of a state machine. The externally observable behaviour of an
+implementation MUST conform to this state machine, but there is no
+requirement that the implementation actually employs a state
+machine. Intermixed with the following description we also
+provide a state machine description in a tabular form. That form
+is only informational, however.</t>
+
+<t>On a given context with a given peer, the node can be in one of
+three states: Operational, Exploring, or InboundOK. In the
+Operational state the underlying address pairs are assumed to be
+operational. In the Exploring state this node has observed a problem
+and has currently not seen any traffic from the peer. Finally, in the
+InboundOK state this node sees traffic from the peer, but peer may
+not yet see any traffic from this node so that the exploration process
+needs to continue.</t>
+
+<t>The node maintains also the Send timer (Send Timeout seconds) and
+Keepalive timer (Keepalive Timeout seconds). The Send timer reflects
+the requirement that when this node sends a payload packet there
+should be some return traffic (either payload packets or Keepalive
+messages) within Send Timeout seconds. The Keepalive timer reflects
+the requirement that when this node receives a payload packet there
+should a similar response towards the peer. The Keepalive timer is
+only used within the Operational state, and the Send timer in the
+Operational and InboundOK states. No timer is running in the
+Exploring state. As explained in <xref target='reach'/>, the
+two timers are mutually exclusive. That is, either the Keepalive
+timer is running or the Send timer is running (or no timer is
+running).</t>
+
+<t>Note that <xref target='sketch'/> gives some examples
+of typical protocol runs to illustrate the behaviour.</t>
+
+<section anchor='incpayload' title='Incoming payload packet'>
+
+<t>Upon the reception of a payload packet in the Operational state,
+the node starts the Keepalive timer if it is not yet running, and
+stops the Send timer if it was running.</t>
+
+<t>If the node is in the Exploring state it transitions to
+the InboundOK state, sends a Probe message, and starts the
+Send timer. It fills the Psent and corresponding Probe
+source address, Probe destination address, Probe nonce, and
+Probe data fields with information about recent Probe
+messages that have not yet been reported as seen by the
+peer. It also fills the Precvd and corresponding Probe
+source address, Probe destination address, Probe nonce, and
+Probe data fields with information about recent Probe
+messages it has seen from the peer. When sending a Probe
+message, the State field MUST be set to a value that matches
+the conceptual state of the sender after sending the Probe.
+In this case the node therefore sets the Sta field to 2
+(InboundOk). The IP source and and destination addresses
+for sending the Probe message are selected as discussed
+in <xref target='order'/>.</t>
+
+<t>In the InboundOK state the node stops the Send timer if it
+was running, but does not do anything else.</t>
+
+<t>The reception of SHIM6 control messages other than the
+Keepalive and Probe messages are treated similarly with
+payload packets.</t>
+
+<t>While the Keepalive timer is running, the node SHOULD send
+Keepalive messages to the peer with an interval of Keepalive Interval
+seconds. Conceptually, a separate timer is used to distinguish between
+the interval between Keepalive messages and the overall Keepalive
+Timeout interval. However, this separate timer is not modelled in the
+tabular or graphical state machines. When sent, the Keepalive message
+is constructed as described in <xref target='keepalive'/>. It is sent
+using the current address pair.</t>
+
+<figure>
+<artwork><![CDATA[
+  Operational            Exploring                InboundOk
+  -------------------------------------------------------------
+  STOP Send;             SEND Probe InboundOk;    STOP Send
+  START Keepalive        START Send;
+                         GOTO InboundOk
+]]></artwork>
+</figure>
+
+</section>
+
+<section title='Outgoing payload packet'>
+
+<t>Upon sending a payload packet in the Operational state, the node
+stops the Keepalive timer if it was running and starts the Send timer
+if it was not running. In the Exploring state there is no effect, and
+in the InboundOK state the node simply starts the Send timer if it
+was not yet running.  (The sending of SHIM6 control messages is again
+treated similarly here.)</t>
+
+<figure>
+<artwork><![CDATA[
+  Operational              Exploring              InboundOk
+  -----------------------------------------------------------
+  START Send;              -                      START Send
+  STOP Keepalive
+]]></artwork>
+</figure>
+
+</section>
+
+<section title='Keepalive timeout'>
+
+<t>Upon a timeout on the Keepalive timer, the node sends one last
+Keepalive message.  This can only happen in the Operational state.</t>
+
+<t>The Keepalive message is constructed as described in
+<xref target='keepalive'/>. It is sent using the current
+address pair.</t>
+
+<figure>
+<artwork><![CDATA[
+  Operational              Exploring              InboundOk
+  -----------------------------------------------------------
+  SEND Keepalive           -                      -
+]]></artwork>
+</figure>
+
+</section>
+
+<section title='Send timeout'>
+
+<t>Upon a timeout on the Send timer, the node enters the Exploring
+state and sends a Probe message. The Probe message is constructed as explained
+in <xref target='incpayload'/>, except that the Sta field
+is set to 1 (Exploring).</t>
+
+<figure>
+<artwork><![CDATA[
+  Operational              Exploring              InboundOk
+  -----------------------------------------------------------
+  SEND Probe Exploring;    -                      SEND Probe Exploring;
+  GOTO Exploring                                  GOTO Exploring
+]]></artwork>
+</figure>
+
+</section>
+
+<section title='Retransmission'>
+
+<t>While in the Exploring state the node keeps retransmitting its
+Probe messages to different (or same) addresses as defined in <xref
+target='order'/>. A similar process is employed in the InboundOk
+state, except that upon such retransmission the Send timer is started
+if it was not running already.</t>
+
+<t>The Probe messages are constructed as explained in <xref
+target='incpayload'/>, except that the Sta field is set to 1
+(Exploring) or 2 (InboundOk), depending on which state the
+sender is in.</t>
+
+<figure>
+<artwork><![CDATA[
+  Operational             Exploring              InboundOk
+  ----------------------------------------------------------
+  -                       SEND Probe Exploring   SEND Probe InboundOk
+                                                 START Send
+]]></artwork>
+</figure>
+
+</section>
+
+<section title='Reception of the Keepalive message'>
+
+<t>Upon the reception of a Keepalive message in the Operational state,
+the node stops the Send timer, if it was running. If the node is in
+the Exploring state it transitions to the InboundOK state, sends a
+Probe message, and starts the Send timer. The Probe message is constructed as explained
+in <xref target='incpayload'/>.</t>
+
+<t>In the InboundOK state the Send timer is stopped, if it
+was running.</t>
+
+<figure>
+<artwork><![CDATA[
+  Operational            Exploring                InboundOk
+  -----------------------------------------------------------
+  STOP Send              SEND Probe InboundOk;    STOP Send
+                         START Send;
+                         GOTO InboundOk
+]]></artwork>
+</figure>
+
+</section>
+
+<section title='Reception of the Probe message State=Exploring'>
+
+<t>Upon receiving a Probe with State set to Exploring, the
+node enters the InboundOK state, sends a Probe as described
+in <xref target='incpayload'/>, stops the Keepalive timer if
+it was running, and restarts the Send timer.</t>
+
+<figure>
+<artwork><![CDATA[
+  Operational             Exploring               InboundOk
+  -----------------------------------------------------------
+  SEND Probe InboundOk;   SEND Probe InboundOk;   SEND Probe
+  STOP Keepalive;         START Send;                  InboundOk;
+  RESTART Send;           GOTO InboundOk          RESTART Send
+  GOTO InboundOk
+]]></artwork>
+</figure>
+
+</section>
+
+<section title='Reception of the Probe message State=InboundOk'>
+
+<t>Upon the reception of a Probe message with State set to InboundOk,
+the node sends a Probe message, restarts the Send timer, stops the
+Keepalive timer if it was running, and transitions to the Operational
+state. New current address pair is chosen for the connection, based on
+the reports of received probes in the message that we just
+received. If no received probes have been reported, the current
+address pair is unchanged.</t>
+
+<t>The Probe message is constructed as explained
+in <xref target='incpayload'/>, except that the Sta field
+is set to 0 (Operational).</t>
+
+<figure>
+<artwork><![CDATA[
+  Operational             Exploring               InboundOk
+  -------------------------------------------------------------
+  SEND Probe Operational; SEND Probe Operational; SEND Probe
+  RESTART Send;           RESTART Send;                Operational;
+  STOP Keepalive          GOTO Operational        RESTART Send;
+                                                  GOTO Operational
+]]></artwork>
+</figure>
+
+</section>
+
+<section title='Reception of the Probe message State=Operational'>
+
+<t>Upon the reception of a Probe message with State set to
+Operational, the node stops the Send timer if it was running, starts
+the Keepalive timer if it was not yet running, and transitions to the
+Operational state. The Probe message is constructed as explained
+in <xref target='incpayload'/>, except that the Sta field
+is set to 0 (Operational).</t>
+
+<list style='empty'><t>Note: This terminates the exploration process
+when both parties are happy and know that their peer is happy as
+well.</t></list>
+
+<figure>
+<artwork><![CDATA[
+  Operational              Exploring              InboundOk
+  -----------------------------------------------------------
+  STOP Send                STOP Send;             STOP Send;
+  START Keepalive          START Keepalive        START Keepalive
+                           GOTO Operational       GOTO Operational
+]]></artwork>
+</figure>
+
+<t>The reachability detection and exploration process has no effect on
+payload communications until a new operational address pairs have actually
+been confirmed. Prior to that the payload packets continue to be sent
+to the previously used addresses.</t>
+
+</section>
+
+<section title="Graphical Representation of the State Machine">
+
+<t>In the PDF version of this specification, an informational drawing
+illustrates the state machine. Where the text and the drawing differ,
+the text takes precedence.</t>
+
+<figure>
+<artwork src='reap-newsm.png'
+         alt='[state machine]'>
+</artwork>
+</figure>
+
+</section>
+</section>
+
+<section anchor='protconst' title='Protocol Constants'>
+
+<t>The following protocol constants are defined:</t>
+
+<figure>
+<artwork>
+Send Timeout                        15 seconds
+Keepalive Interval                   X seconds, where X is
+                                       one third to one half of
+                                       the Keepalive Timeout value
+                                       (see Section 4.1)
+Initial Probe Timeout              0.5 seconds
+Number of Initial Probes             4 probes
+Max Probe Timeout                   60 seconds
+</artwork>
+</figure>
+
+<t>Alternate values of the Send Timeout may be selected by a host and
+communicated to the peer in the Keepalive Timeout Option.  A very
+small value of Send Timeout may affect the ability to exchange
+keepalives over a path that has a long roundtrip delay. Similarly, it
+may cause SHIM6 to react to temporary failures more often than
+necessary. As a result, it is RECOMMENDED that an alternate Send
+Timeout value not be under 10 seconds. Choosing a higher value than
+the one recommended above is also possible, but there is a
+relationship between Send Timeout and the ability of REAP to discover
+and correct errors in the communication path. In any case, in order
+for SHIM6 to be useful, it should detect and repair communication
+problems far before upper layers give up. For this reason, it is
+RECOMMENDED that Send Timeout be at most 100 seconds (default TCP R2
+timeout <xref target="RFC1122"/>).</t>
+
+<list style="empty"><t>Note that it is not expected that the Send
+Timeout or other values need to be estimated based on experienced
+roundtrip times. Signaling exchanges are performed based on
+exponential backoff. The keepalive processes send packets only in
+the relatively rare condition that all traffic is
+unidirectional. Finally, because Send Timeout is far greater than usual
+roundtrip times, it merely divides the traffic into periods that SHIM6
+looks at to decide whether to act.</t></list>
+
+</section>
+
+<section anchor='seccons' title='Security Considerations'>
+
+<t>Attackers may spoof various indications from lower layers and the
+network in an effort to confuse the peers about which addresses are or
+are not operational. For example, attackers may spoof ICMP error messages
+in an effort to cause the parties to move their traffic elsewhere or
+even to disconnect. Attackers may also spoof information related to
+network attachments, router discovery, and address assignments in an
+effort to make the parties believe they have Internet connectivity
+when in reality they do not.</t>
+
+<t>This may cause use of non-preferred addresses or even denial-of-
+service.</t>
+
+<t>This protocol does not provide any protection of its own for
+indications from other parts of the protocol stack. Unprotected
+indications SHOULD NOT be taken as a proof of connectivity
+problems. However, REAP has weak resistance against incorrect
+information even from unprotected indications in the sense that it
+performs its own tests prior to picking a new address pair. Denial-of-
+service vulnerabilities remain, however, as do vulnerabilities against
+on path attackers.</t>
+
+<t>Some aspects of these vulnerabilities can be mitigated through the
+use of techniques specific to the other parts of the stack, such as
+properly dealing with ICMP errors <xref
+target='I-D.ietf-tcpm-icmp-attacks'/>, link layer security, or the use
+of <xref target='RFC3971'>SEND</xref> to protect IPv6 Router and
+Neighbor Discovery.</t>
+
+<t>Other parts of the SHIM6 protocol ensure that the set of addresses
+we are switching between actually belong together. REAP itself
+provides no such assurances. Similarly, REAP provides some protection
+against third party flooding attacks <xref target='AURA02'/>; when
+REAP is run its Probe nonces can be used as a return routability check
+that the claimed address is indeed willing to receive
+traffic. However, this needs to be complemented with another mechanism
+to ensure that the claimed address is also the correct host. SHIM6
+does this by performing binding of all operations to context tags.</t>
+
+<t>The keepalive mechanism in this specification is vulnerable to
+spoofing. On path-attackers that can see a SHIM6 context tag can
+send spoofed Keepalive messages once per Send Timeout interval, to
+prevent two SHIM6 nodes from sending Keepalives themselves. This
+vulnerability is only relevant to nodes involved in a one-way
+communication. The result of the attack is that the nodes enter the
+exploration phase needlessly, but they should be able to confirm
+connectivity unless, of course, the attacker is able to prevent the
+exploration phase from completing. Off-path attackers may not be
+able to generate spoofed results, given that the context tags
+are 47-bit random numbers.</t>
+
+<t>To protect against spoofed keepalive packets, a host implementing
+both shim6 and IPsec MAY ignore incoming REAP keepalives if it has
+good reason to assume that the other side will be sending
+IPsec-protected return traffic. I.e., if a host is sending TCP data,
+it can reasonably expect to receive TCP ACKs in return. If no
+IPsec-protected ACKs come back but unprotected keepalives do, this
+could be the result from an attacker trying to hide broken
+connectivity.</t>
+
+<t>To protect against spoofed keepalive packets, a host implementing
+both shim6 and IPsec MAY ignore incoming REAP keepalives if it has
+good reason to assume that the other side will be sending
+IPsec-protected return traffic. I.e., if a host is sending TCP data,
+it can reasonably expect to receive TCP ACKs in return. If no
+IPsec-protected ACKs come back but unprotected keepalives do, this
+could be the result from an attacker trying to hide broken
+connectivity.</t>
+
+<t>The exploration phase is vulnerable to attackers that are on the
+path. Off-path attackers would find it hard to guess either the
+context tag or the correct probe identifiers. Given that IPsec
+operates above the shim layer, it is not possible to protect the
+exploration phase against on-path attackers. This is similar to the
+ability to protect other Shim6 control exchanges. There are mechanisms
+in place to prevent the redirection of communications to wrong
+addresses, but on-path attackers can cause denial-of-service, move
+communications to less-preferred address pairs, and so on.</t>
+
+<t>Finally, the exploration itself can cause a number of packets to be
+sent. As a result it may be used as a tool for packet amplification in
+flooding attacks. In order to prevent this it is required that the
+protocol employing REAP has built-in mechanisms to prevent this. For
+instance, in SHIM6 contexts are created only after a relatively large
+number of packets has been exchanged, a cost which reduces the
+attractiveness of using SHIM6 and REAP for amplification attacks.
+However, such protections are typically not present at connection
+establishment time. When exploration would be needed for connection
+establishment to succeed, its usage would result in an amplification
+vulnerability. As a result, SHIM6 does not support the use of REAP in
+connection establishment stage.</t>
+
+</section>
+
+<section title='Operational Considerations'>
+
+<t>When there are no failures, the failure detection mechanism (and
+SHIM6 in general) are light-weight: keepalives are not sent when a
+SHIM6 context is idle or when there is traffic in both directions. So
+in normal TCP or TCP-like operation, there would only be one or two
+keepalives when a session transitions from active to idle.</t>
+ 
+<t>Only when there are failures, there is significant failure
+detection traffic, and then especially in the case where a link goes
+down that is shared by many active sessions and by multiple
+hosts. When this happens, one keepalive is sent and then a series of
+probes. This happens per active (traffic generating) context, which
+will all timeout within 10 seconds after the failure. This makes the
+peak traffic that SHIM6 generates after a failure around one packet
+per second per context. Presumably, the sessions that run over those
+contexts were sending at least that much traffic and most likely more,
+but if the backup path is significantly lower bandwidth than the
+failed path, this could lead to temporary congestion.</t>
+
+<list style='empty'>
+
+<t>However, note that in the case of multihoming using BGP, if the
+failover is fast enough that TCP doesn't go into slow start, the full
+data traffic that flows over the failed path is switched over to the
+backup path, and if this backup path is of a lower capacity, there
+will be even more congestion in that case.</t>
+
+</list>
+
+<t>Although the failure detection probing does not perform congestion
+control as such, the exponential backoff makes sure that the number of
+packets sent quickly goes down and eventually reaches one per context
+per minute, which should be sufficiently conservative even on the
+lowest bandwidth links.</t>
+
+<t><xref target='protconst'/> specifies a number of protocol
+parameters. Possible tuning of these parameters and others that are
+not mandated in this specification may affect these properties.
+It is expected that further revisions of this specification
+provide additional information after sufficient deployment
+experience has been obtained from different environments.</t>
+
+<t>Implementations may provide means to monitor their performance and
+send alarms about problems. Their standardization is, however, subject
+of future specifications. In general, SHIM6 is most applicable for
+small sites and hosts, and it is expected that monitoring requirements
+on such deployments are relatively modest. In any case, where the host
+is associated with a management system, it is RECOMMENDED that
+detected failures and failover events are reported via asynchronous
+notifications to the management system. Similarly, where logging
+mechanisms are available on the host, these events should be recorded
+in event logs.</t>
+
+<t>SHIM6 uses the same header for both signaling and the encapsulation
+of data packets after a rehoming event. This way, fate is shared
+between the two types of packets, so the situation where reachability
+probes or keepalives can be transmitted successfully, but data packets
+can not, is largely avoided: either all SHIM6 packets make it through,
+so SHIM6 functions as intended, or none do, and no SHIM6 state is
+negotiated. Even in the situation where some packets make it through
+and other do not, SHIM6 will generally either work as intended or
+provide a service that is no worse than in the absense of SHIM6, apart
+from the possible generation a a small amount of signaling
+traffic.</t>
+
+<t>Sometimes data packets and possibly data packets encapsulated in
+the SHIM6 header do not make it through, but signaling and keepalives
+do. This situation can occur when there is a path MTU discovery black
+hole on one of the paths. If only large packets are sent at some
+point, then reachability exploration will be turned on and REAP will
+likely select another path, which may or may not be affected by the
+PMTUD black hole.</t>
+
+
+</section>
+
+<section title='IANA Considerations'>
+
+<t>No IANA actions are required. The number assignments necessary for
+the messages defined in this document appear together with all the
+other IANA assignments in the main SHIM6 specification <xref
+target='I-D.ietf-shim6-proto'/>.</t>
+
+</section>
+
+</middle>
+<back>
+
+<references title="Normative References">
+      <?rfc include="reference.RFC.2119.xml"?>
+      <?rfc include="reference.RFC.3315.xml"?>
+      <?rfc include="reference.RFC.3484.xml"?>
+      <?rfc include="reference.RFC.4086.xml"?>
+      <?rfc include="reference.RFC.4193.xml"?>
+      <?rfc include="reference.RFC.4429.xml"?>
+      <?rfc include="reference.RFC.4861.xml"?>
+      <?rfc include="reference.RFC.4862.xml"?>
+</references>
+
+<references title="Informative References">
+      <?rfc include="reference.RFC.1122.xml"?>
+      <?rfc include="reference.RFC.4960.xml"?>
+      <!-- <?rfc include="reference.RFC.3489.xml"?> -->
+      <?rfc include="reference.RFC.3971.xml"?>
+      <!-- <?rfc include="reference.RFC.4436.xml"?> -->
+      <!-- <?rfc include="reference.RFC.4555.xml"?> -->
+      <?rfc include="reference.I-D.ietf-dna-cpl.xml"?>
+      <?rfc include="reference.I-D.ietf-dna-protocol.xml"?>
+      <?rfc include="reference.I-D.ietf-hip-mm.xml"?>
+      <!-- <?rfc include="reference.I-D.ietf-mmusic-ice.xml"?> -->
+      <?rfc include="reference.I-D.ietf-shim6-locator-pair-selection"?>
+      <?rfc include="reference.I-D.ietf-shim6-proto.xml"?>
+      <?rfc include="reference.I-D.ietf-shim6-reach-detect.xml"?>
+      <?rfc include="reference.I-D.ietf-tcpm-icmp-attacks.xml"?>
+      <!-- <?rfc include="reference.I-D.ietf-tsvwg-addip-sctp.xml"?> -->
+      <?rfc include="reference.I-D.bagnulo-shim6-addr-selection.xml"?>
+      <?rfc include="reference.I-D.huitema-multi6-addr-selection.xml"?>
+      <!-- <?rfc include="reference.I-D.rosenberg-midcom-turn.xml"?> -->
+      <?rfc include="reference.AURA.xml"?>
+      <?rfc include="reference.I-D.ietf-bfd-base"?>
+</references>
+
+<section anchor='sketch' title='Example Protocol Runs'>
+
+<t>This appendix has examples of REAP protocol runs in typical
+scenarios. We start with the simplest scenario of two hosts,
+A and B, that have a SHIM6 connection with each other but
+are not currently sending any data. As neither side sends
+anything, they also do not expect anything back, so there
+are no messages at all:</t>
+
+<figure>
+<artwork><![CDATA[
+            EXAMPLE 1: No communications
+
+ Peer A                                        Peer B
+   |                                             |
+   |                                             |
+   |                                             |
+   |                                             |
+   |                                             |
+   |                                             |
+   |                                             |
+   |                                             |
+]]></artwork>
+</figure>
+
+<t>Our second example involves an active connection with
+bidirectional payload packet flows. Here the reception
+of data from the peer is taken as an indication of
+reachability, so again there are no extra packes:</t>
+
+<figure>
+<artwork><![CDATA[
+       EXAMPLE 2: Bidirectional communications
+
+ Peer A                                        Peer B
+   |                                             |
+   |              payload packet                 |
+   |-------------------------------------------->|
+   |                                             |
+   |              payload packet                 |
+   |<--------------------------------------------|
+   |                                             |
+   |              payload packet                 |
+   |-------------------------------------------->|
+   |                                             |
+   |                                             |
+]]></artwork>
+</figure>
+
+<t>The third example is the first one that involves an actual REAP
+message. Here the hosts communicate in just one direction, so REAP
+messages are needed to indicate to the peer that sends payload packets
+that its packets are getting through:</t>
+
+<figure>
+<artwork><![CDATA[
+      EXAMPLE 3: Unidirectional communications
+
+ Peer A                                        Peer B
+   |                                             |
+   |              payload packet                 |
+   |-------------------------------------------->|
+   |                                             |
+   |              payload packet                 |
+   |-------------------------------------------->|
+   |                                             |
+   |              payload packet                 |
+   |-------------------------------------------->|
+   |                                             |
+   |              Keepalive id=p                 |
+   |<--------------------------------------------|
+   |                                             |
+   |              payload packet                 |
+   |-------------------------------------------->|
+   |                                             |
+   |                                             |
+]]></artwork>
+</figure>
+
+<t>The next example involves a failure scenario. Here A has addresses
+A and B has addresses B1 and B2. The currently used address pairs are
+(A, B1) and (B1, A). All connections via B1 become broken, which leads
+to an exploration process:</t>
+
+<figure>
+<artwork><![CDATA[
+           EXAMPLE 4: Failure scenario
+
+ Peer A                                        Peer B
+   |                                             |
+State:                                           | State:
+Operational                                      | Operational
+   |            (A,B1) payload packet            |
+   |-------------------------------------------->|
+   |                                             |
+   |            (B1,A) payload packet            |
+   |<--------------------------------------------| At time T1
+   |                                             | path A<->B1
+   |            (A,B1) payload packet            | becomes
+   |----------------------------------------/    | broken
+   |                                             |
+   |           ( B1,A) payload packet            |
+   |   /-----------------------------------------|
+   |                                             |
+   |            (A,B1) payload packet            |
+   |----------------------------------------/    |
+   |                                             |
+   |            (B1,A) payload packet            |
+   |   /-----------------------------------------|
+   |                                             |
+   |            (A,B1) payload packet            |
+   |----------------------------------------/    |
+   |                                             |
+   |                                             | Send Timeout
+   |                                             | seconds after
+   |                                             | T1, B happens to
+   |                                             | see the problem
+   |             (B1,A) Probe id=p,              | first and sends a
+   |                          state=exploring    | complaint that
+   |   /-----------------------------------------| it is not rec-
+   |                                             | eiving anything
+   |                                             | State:
+   |                                             | Exploring
+   |                                             |
+   |             (B2,A) Probe id=q,              |
+   |                          state=exploring    | But its lost,
+   |<--------------------------------------------| retransmission
+   |                                             | uses another pair
+A realizes                                       |
+that it needs                                    |
+to start the                                     |
+exploration. It                                  |
+picks B2 as the                                  |
+most likely candidate,                           |
+as it appeared in the                            |
+Probe                                            |
+State: InboundOk                                 |
+   |                                             |
+   |       (A, B2) Probe id=r,                   |
+   |                     state=inboundok,        |
+   |                     received probe q        | This one gets
+   |-------------------------------------------->| through.
+   |                                             | State:
+   |                                             | Operational
+   |                                             |
+   |                                             |
+   |       (B2,A) Probe id=s,                    |
+   |                    state=operational,       | B now knows
+   |                    received probe r         | that A has no
+   |<--------------------------------------------| problem to receive
+   |                                             | its packets
+State: Operational                               |
+   |                                             |
+   |            (A,B2) payload packet            |
+   |-------------------------------------------->| Payload packets
+   |                                             | flow again
+   |            (B2,A) payload packet            |
+   |<--------------------------------------------|
+]]></artwork>
+</figure>
+
+<t>The next example shows when the failure for the current locator
+pair is in the other direction only. A has addresses A1 and A2, and B
+has addresses B1 and B2. The current communication is between A1 and
+B1, but A's packets no longer reach B using this pair.</t>
+
+<figure>
+<artwork><![CDATA[
+           EXAMPLE 5: One-way failure
+
+ Peer A                                        Peer B
+   |                                             |
+State:                                           | State:
+Operational                                      | Operational
+   |                                             |
+   |           (A1,B1) payload packet            |
+   |-------------------------------------------->|
+   |                                             |
+   |           (B1,A1) payload packet            |
+   |<--------------------------------------------|
+   |                                             |
+   |           (A1,B1) payload packet            | At time T1
+   |----------------------------------------/    | path A1->B1
+   |                                             | becomes
+   |                                             | broken
+   |           (B1,A1) payload packet            |
+   |<--------------------------------------------|
+   |                                             |
+   |           (A1,B1) payload packet            |
+   |----------------------------------------/    |
+   |                                             |
+   |           (B1,A1) payload packet            |
+   |<--------------------------------------------|
+   |                                             |
+   |           (A1,B1) payload packet            |
+   |----------------------------------------/    |
+   |                                             |
+   |                                             | Send Timeout
+   |                                             | seconds after
+   |                                             | T1, B notices
+   |                                             | the problem and
+   |          (B1,A1) Probe id=p,                | sends a com-
+   |                        state=exploring      | plaint that
+   |<--------------------------------------------| it is not rec-
+   |                                             | eiving anything
+A responds                                       | State: Exploring
+State: InboundOk                                 |
+   |                                             |
+   |      (A1, B1) Probe id=q,                   |
+   |                     state=inboundok,        |
+   |                     received probe p        |
+   |----------------------------------------/    | But A's response
+   |                                             | is lost
+   |         (B2,A2) Probe id=r,                 |
+   |                       state=exploring       | Next try different
+   |<--------------------------------------------| locator pair
+   |                                             |
+   |     (A2, B2) Probe id=s,                    |
+   |                    state=inboundok,         |
+   |                    received probes p, r     | This one gets
+   |-------------------------------------------->| through
+   |                                             | State: Operational
+   |                                             |
+   |                                             | B now knows
+   |                                             | that A has no
+   |      (B2,A2) Probe id=t,                    | problem to receive
+   |                    state=operational,       | its packets, and
+   |                    received probe s         | that A's probe
+   |<--------------------------------------------| gets to B. It
+   |                                             | sends a
+State: Operational                               | confirmation to A
+   |                                             |
+   |           (A2,B2) payload packet            |
+   |-------------------------------------------->| Payload packets
+   |                                             | flow again
+   |           (B1,A1) payload packet            |
+   |<--------------------------------------------|
+]]></artwork>
+</figure>
+
+</section>
+
+<section title="Contributors">
+
+   <t>This draft attempts to summarize the thoughts and unpublished
+   contributions of many people, including the MULTI6 WG design team
+   members Marcelo Bagnulo Braun, Erik Nordmark, Geoff Huston, Kurtis
+   Lindqvist, Margaret Wasserman, and Jukka Ylitalo, the MOBIKE WG
+   contributors Pasi Eronen, Tero Kivinen, Francis Dupont, Spencer
+   Dawkins, and James Kempf, and HIP WG contributors such as Pekka
+   Nikander.  This draft is also in debt to work done in the context
+   of <xref target='RFC4960'>SCTP</xref> and <xref
+   target='I-D.ietf-hip-mm'>HIP multihoming and mobility
+   extension</xref>.</t>
+
+</section>
+
+<section title="Acknowledgements">
+
+  <t>The authors would also like to thank Christian Huitema, Pekka
+  Savola, John Loughney, Sam Xia, Hannes Tschofenig, Sebastian Barre,
+  Thomas Henderson, Matthijs Mekking, Deguang Le, Eric Gray, Dan
+  Romascanu, Stephen Kent, Alberto Garcia, Bernard Aboba, Lars Eggert,
+  Dave Ward, and Tim Polk for interesting discussions in this problem
+  space, and for review of this specification.</t>
+
+</section>
+
+</back>
+</rfc>

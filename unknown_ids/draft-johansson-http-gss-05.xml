@@ -1,0 +1,548 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+
+<rfc category="std" ipr="trust200902" docName="draft-johansson-http-gss-05">
+	<front>
+		<title abbrev="http-gss">GSSAPI authentication for HTTP</title>
+		<author surname="Johansson" fullname="Leif Johansson">
+			<organization abbrev="SU">
+				Stockholm university
+			</organization>
+			<address>
+				<email>leifj@it.su.se</email>
+				<uri>http://www.su.se/</uri>
+			</address>
+		</author>
+		<date month="March" year="2009" />
+		<abstract>
+			<t>
+				This document specifies a template extension to the HTTP
+				Negotiate authentication mechanism defined in RFC4559
+				which supports mutual authentication, fast session-based
+				re-authentication and channel bindings. An IANA registry
+				for such GSS-API HTTP authentication mechanisms is defined.
+			</t>
+		</abstract>
+	</front>
+
+	<middle>
+		<section title="Terminology">
+			<t>
+				The keywords "MUST", "MUST NOT", "REQUIRED", "SHOULD",
+				"SHOULD NOT" and "MAY" that appear in this document are
+				to be interpreted as described in
+				<xref target="RFC2119" />
+			</t>
+		</section>
+
+		<section title="Introduction and motivation">
+			<t>
+				<xref target="RFC4559" />
+				describes an authentication mechanism based on SPNEGO
+				for HTTP. This mechanism suffers from a couple of
+				drawbacks, notably:
+				<list>
+					<t>
+						Only supports single-round-trip GSS-API
+						mechanisms due to lack of support for proxies.
+					</t>
+					<t>
+						Lack of channel bindings to the underlying HTTPS
+						connection which makes in unsuitable for
+						deployment in situations where proxies exists.
+					</t>
+					<t>
+						Lack of session-based re-authentication (compare
+						with TLS).
+					</t>
+				</list>
+				This document is intended to solve these problems by
+				introducing a new authentication mechanism called 'GSS'.
+				This mechanism is a proper extension of Negotiate but
+				since Negotiate is already widely deployed this
+				mechanism was given a separate name.
+			</t>
+		</section>
+
+		<section title="HTTP GSS Authentication Mechanism">
+			<t>
+				The GSS mechanism is an authentication mechanism for
+				<xref target="RFC2616" />
+				based on a multi-roundrip handshake using base64-encoded
+				GSS-API
+				<xref target="RFC2743" />
+				tokens encoded in the WWW-Authenticate Response Header
+				and the Authorization Request Header. An important
+				difference from
+				<xref target="RFC4559" />
+				is that multiple round trips are supported which means
+				that the server can be authenticated to the client (aka
+				mutual authentication). This document specifies a template
+				authentication mechanism with an associated IANA registry
+				which provides input parameters to the HTTP authentication
+				mechanism describe below.
+			</t>
+
+			<section title="GSS Token Header Syntax">
+				<t>
+					Both the Authorization and the WWW-Authenticate
+					headers use the same syntax throughout the handshake
+					(cf below for details on the protocol flow)
+					specified by this Augmented BNF following
+					<xref target="RFC2617" /> and <xref target="RFC2616" />:
+					<figure>
+						<artwork>
+  challenge                = auth-scheme-name 1*SP 1#auth-param
+  auth-scheme-name         = token
+  auth-param               = ( auth-data-value | 
+                               auth-param-type "=" auth-param-value )
+  auth-param-value         = ( token | quoted-string )
+  auth-param-type          = ( "auth-data" | "context-identifier" )
+  auth-data-value          = 1*(UPALPHA|DIGIT)  ;base64-encoded
+  context-identifier-value = 1*(UPALPHA|DIGIT)  ;base64-encoded
+    			</artwork>
+					</figure>
+					The auth-param types defined by this specification
+					(auth-data and context-identifier) both have
+					auth-param-value which contain base64 encoded data.
+					Note that both the auth-data and context-identifier
+					auth-param may be absent. The semantics of these
+					parameters will be explained below. Each
+					auth-param-type MUST NOT occur more than once in a
+					single challenge.
+				</t>
+				<t>
+					The auth-scheme-name token is the name of the mechanism
+					and is supplied in the IANA registry template described
+					below.
+				</t>
+				<t>
+					For reasons of backwards compatibility with <xref target="RFC4559"/> 
+					two forms of the auth-param are allowed - one version based on 
+					attribute-parameter pairs and one where only GSS-API data is sent.
+				</t>
+			</section>
+
+			<section title="Naming and Transport">
+				<t>
+					The GSS name of the server is
+					"HTTP@&lt;hostname&gt;[:port]" where the :port part
+					is absent if the port == 80 or if the port == 443.
+				</t>
+				<t>
+					This mechanism SHOULD be used together with an HTTP
+					transport providing session protection and
+					encryption such as
+					<xref target="RFC2817" />
+					or
+					<xref target="RFC2818" />
+					. Session protection is a requirement for fast
+					re-authentication described below.
+				</t>
+				<t>
+					Like
+					<xref target="RFC4559" />
+					the mechanism described in this specification is
+					based on mapping the GSS-API protocol to HTTP
+					requests and responses where the GSS-API tokens are
+					sent in the Authorization and WWW-Authentication
+					headers. Unlike
+					<xref target="RFC4559" />
+					the entire handshake need not take place using a
+					single TCP connection or a single HTTP/1.1 session.
+					Instead opaque identifiers in the GSS challenge
+					option field are optionally used together with
+					channel bindings to provide a way to share a
+					security context over several HTTP connections. This
+					mechanism also serves as a way to let the client do
+					a fast re-authentication to the server.
+				</t>
+			</section>
+
+			<section title="Protocol Flow">
+				<section title="Intiating authentication">
+
+					<t>
+						Normally the server initiates an authentication
+						handshake when the client attempts to access a
+						protected resource. The exception is when the
+						client knows that it is accessing a protected
+						resource and that the server supports the GSS
+						mechanism, for instance when fast
+						re-authentication is attempted by the client (cf
+						below). In both cases the GSS-API negotiation is
+						initiated by the client - i.e if the server
+						initiates the authentication it is only to
+						inform the client that authentication is
+						required. The client SHOULD request mutual
+						authentication from the GSS-API layer.
+					</t>
+
+					<t>
+						Note that the first request by the client to a
+						protected resource will also serve to let the
+						client and server establish channel bindings in
+						the sense of <xref target="RFC5056"/>
+						using the 'tls-server-end-point' CB type which 
+						means that this first request is not in general 
+						"wasted" even in the case when the client has
+						no prior knowledge about the server or is attempting 
+						fast re-authentication.
+					</t>
+
+					<t>
+						If the client tries to access a protected
+						resource the server may return a code 401
+						response with an WWW-Authenticate header
+						containing a list of authentication challenges
+						allowing the client to choose among different
+						authentication mechanisms supported by the
+						server. If the server supports the
+						mechanism specified by the auth-scheme-name 
+						the server returns a challenge with
+						only the auth-scheme-name part and no
+						parameters along with any other challenges for
+						mechanisms supported by the server. This first
+						request also allows the client and server to
+						establish channel-bindings.
+					</t>
+
+				</section>
+
+				<section title="The authentication phase">
+					<t>
+						In each case below when GSS-API tokens resulting
+						from calls into the GSS-API layer are sent from
+						the server to the client or vice-versa, the
+						token is encoded using base64 and sent as the
+						"auth-data" parameter value of the Authorization
+						and WWW-Authenticate headers respectively.
+					</t>
+
+					<t>
+						A client initiates the authentication phase by
+						sending the token resulting from the first call
+						to gss_init_security_context to the server.
+					</t>
+
+					<t>
+						Upon receipt of token (i.e a request with an
+						accompanying Authenticate header with non-empty
+						"auth-data" parameter value), the server MUST
+						return the token resulting from a call to
+						gss_accept_security_context in a code 401
+						response, unless the call to
+						gss_accept_security_context fails in which case
+						a code 403 response is returned.
+					</t>
+
+					<t>
+						If the underlying transport provides session
+						protection (eg HTTPS) and if channel-bindings
+						are in place (cf below) then the server MAY
+						include a unique identifier of the security
+						context beeing negotiated (or having been
+						negotiated in the case of the last transaction)
+						in the "context-identifier" parameter value. The
+						server MUST uniquely associate this identifier
+						with the client and the security context.
+					</t>
+
+					<t>
+						Upon receipt of a code 401 response from the
+						server when the WWW-Authenticate header contains
+						a non-empty "auth-data" parameter value, the
+						client MUST return the token resulting from a
+						call to gss_initiate_security_context to the
+						server in a new request to the same resource. If
+						the call fails the client MUST close the
+						connection. If a "context-identifier" parameter
+						value is present in the response from the server
+						the client MUST include this in the ensuing request as
+						the "context-identifier" parameter value. If the
+						"context-identifier" parameter value is not
+						present in the response from the server the
+						client MUST use the same HTTP/1.1 connection for
+						the entier handshake. If the client breaks the
+						HTTP/1.1 connection the server MUST invalidate
+						the security context unless a context identifier
+						was sent to the client and returned to the
+						server.
+					</t>
+
+					<t>
+						A client may close the connection both as the
+						result of using the context-identifier to spread
+						the authentication over several underlying
+						connections or as the result of a failed call to
+						gss_initiate_security_context. This might at
+						first seem like a problem but the GSS-API layer
+						combined with proper handling of the context
+						identifier will ensure that handling of these
+						cases are disambiguated at the server.
+					</t>
+
+					<t>
+						The client and server continues the handshake
+						until either an error occurs (in which case a
+						403 is returned to the client or the client
+						closes the connection depending on where the
+						error happens) or the GSS-API layer has
+						successfully completed the negotiation in which
+						case the server sends a normal response to the
+						client. If the last call to
+						gss_accept_sec_context on the server resulted in
+						a non-empty token the server MUST include this
+						in a WWW-Authenticate header in the response to
+						the client regardless of the return code which
+						is beeing sent to the client. If the underlying
+						transport provides session protection (eg HTTPS)
+						and if channel-bindings are in place (cf below)
+						then the server MAY include a
+						"context-identifier" parameter value uniquely
+						identifying the established security context.
+						The server MAY decide to limit the validity of
+						the established context and MAY choose not to
+						consider references to the context after a
+						certain amount of time (cf below).
+					</t>
+
+					<t>
+						If the client receives a normal response with an
+						non-empty "auth-data" parameter value the client
+						MUST call gss_initiate_sec_context with this
+						token as input to complete the authentication
+						handshake. If the final response contains a
+						"context-identifier" parameter value the client
+						may cache it and use it to provide fast
+						re-authentication by including it in a
+						Authorization header with auth-scheme-name and
+						empty "auth-data" parameter value.
+					</t>
+				</section>
+				<section title="The authorization phase">
+					<t>
+						Authorization failures can occur even if the
+						client is successfully authenticated to the
+						server. In this case the server will send a 403
+						response to the client even though the GSS-API
+						handshake has succeeded. It is important to let
+						the client and server finish the authentication
+						handshake even if the client is not authorized
+						to access the resource. Therefore the client
+						MUST call gss_initiate_sec_context with any
+						GSS-API token returned to the client, even if
+						the token was sent along with a 403 response.
+					</t>
+					
+					<t>
+						During authorization the server MAY use the
+						GSS-API name associated with the established 
+						security context for authorization decisions
+						and should provide a string representation of
+						the GSS-API name as the REMOTE_USER meta-variable
+						and the auth-scheme-name as the AUTH_TYPE meta-variable 
+						if the Common Gateway Interface (CGI) is provided by 
+						the server.
+					</t>
+
+				</section>
+
+				<section title="Fast Renegotiation">
+
+					<t>
+						Upon receipt of a request containing an
+						Authorization header with the auth-scheme-name,
+						an empty auth-data and the context-identifier
+						parameter value, the server MUST verify that the
+						identifier references a valid security context.
+						If the security context is missing or invalid
+						the server MUST return a 401 response prompting
+						the client to re-negotiate the security context.
+						If the identifier references a valid security
+						context the server MUST process the request as
+						if the client had just completed the full
+						authentication handshake.
+					</t>
+
+					<t>
+						When this process is completed the client is
+						authenticated to the server and possibly
+						(depending on the way the GSS-API layer was
+						called and which GSS-mechanism was used) the
+						server is authenticated to the client.
+					</t>
+					
+					<t>
+						The use of fast regegotiation is optional and
+						clients and servers MUST NOT assume that this
+						feature is supported. 
+					</t>
+				</section>
+			</section>
+		</section>
+		
+		<section title="Examples">
+			<t>TODO</t>
+		</section>
+
+		<section title="Implementation Notes">
+			<t>
+				The context-identifier could be produced by exporting
+				the security context through gss_export_sec_context
+				which requires that the GSS-API implementation supports
+				exporting unfinished contexts.
+			</t>
+		</section>
+
+		<section title="Security Considerations">
+			<t>
+				Should channel-bindings be absent, the protocol is
+				subject to a MITM attack unless the authentication is
+				between a client and a server with no proxies in between
+				and each request is sent over the same HTTP/1.1
+				connection.
+			</t>
+			<t>
+				If fast re-authentication is used together with GSS-API
+				credentials delegation the server will need to associate
+				forwarded credentials with the negotiated security
+				context. This presents a challenge for server
+				implementors since it must be guarateed that security
+				states and their associated credentials must be
+				separated from each other.
+			</t>
+		</section>
+
+		<section title="Notes & TODO">
+			<t>
+				Examples
+			</t>
+		</section>
+		
+		<section title="IANA Considerations">
+			<t>
+				IANA will create a new registry for HTTP authentication mechanisms
+				based on this document. The purpose of the registry is to bind the
+				HTTP authentication mechanism name (auth-scheme-name in the syntax
+				above) to the GSS-API mechanism OID. Such HTTP authentication 
+				mechanisms will be called GSS-API HTTP authentication mechanisms.
+			</t>
+			<t>
+				Names for GSS-API HTTP authentication mechanisms must follow the
+				token syntax of section 2.2 of <xref target="RFC2616" />.
+			</t>
+			<t>
+				The procedure detailed in the section below is to be used for 
+				registration of a value naming a specific GSS-API HTTP authentication
+				mechanism.
+			</t>
+			<section title="Registration Procedure">
+				<t>
+					Registration of a new GSS-API HTTP authentication mechanism requires
+					expert review as defined in BCP 26 <xref target="RFC2434"/>. Registration
+					of a GSS-API HTTP authentication mechanism is requested by filling in
+					the following template:
+					<list>
+						<t>Subject: Registration of GSS-API HTTP authentication mechanism X</t>
+						<t>GSS-API HTTP authentication mechanism name:</t>
+						<t>GSS-API mechanism OID:</t>
+						<t>Description or Published Specification:</t>
+						<t>State management: (one of INTERNAL or EXTERNAL)</t>
+						<t>Intended usage: (one of COMMON, LIMITED USE, OBSOLETE)</t>
+						<t>Person and email address to contact for further information:</t>
+						<t>Change manager name and email address:</t>
+						<t>Expert reviewer name and contact information: (leave blank)</t>
+						<t>Note: (Any other information deemed relevant)</t>
+					</list>
+					and sending it via electronic mail to &lt;gss-http@ietf.org&gt; (a public mailing
+					list) and carbon copying (cc:) IANA at &lt;iana@iana.org&gt;. After allowing new
+					fewer than 2 weeks for community input on the mailing list to be determined,
+					an expert will determine the appropriateness of the registration request
+					and either approve or disapprove the request with notice to the requester,
+					the mailing list and IANA.
+				</t>
+				<t>
+					If the registration was approved the expert adds her name to the submitted
+					registration.
+				</t>
+				<t>
+					The expert is responsible for making sure that GSS-API authentication scheme
+					names are unique among all HTTP authentication mechanism names and represent 
+					an appropriate name for the underlying GSS-API mechanism.
+				</t>
+				<t>
+					 Authors are encouraged to pursue community review by posting the technical 
+					 specification as an Internet-Draft and soliciting comment by posting to 
+					 appropriate IETF mailing lists.
+				</t>
+			</section>
+			
+			<section title="Change Control">
+				<t>
+					Once a GSS-API HTTP authentication mechanism has been published by IANA, the
+					author may request a change to its definition. The change request follows the 
+					same procedure as the registration request. The change manager is part of the
+					registration template and controls who may request changes to the registration.
+					Passing control of a registration is also accomplished by submitting a change 
+					request.
+				</t>
+				<t>
+					The IESG may also reassign control and responsibility for GSS-API HTTP authentication
+					mechanism registrations. This is expected to happen when the author of a registration
+					has died, has moved out of contact, or is otherwise unable to make changes to
+					the registered mechanism(s)s. Furthermore the IESG is the owner of all GSS-API
+					HTTP authentication mechanisms that correspond to specifications on the IETF 
+					standards track.
+				</t>
+			</section>
+		</section>
+		
+		<section title="Changes">
+			<section title="00 to 01">
+		    	<t>
+		    		Changed from ABNF to Augmented BNF to align with <xref target="RFC2616" />.
+		    	</t>
+		    </section>
+		    <section title="02 to 03">
+		    	<t>
+		    		Added reference to rfc 5056.
+		    	</t>
+		    	<t>
+		    		Reference to tls-server-end-point channel binding mechanism.
+		    	</t>
+		    </section>
+		    <section title="03 to 04">
+		    	<t>
+		    		Generalized to IANA-controlled registry of authentication mechanisms. Wrote
+		    		IANA considerations section. Generalized the ABNF to cover old Negotiate 
+		    		case which can now be turned into an IANA registration covered by this specification.
+		    	</t>
+		    </section>
+		</section>
+	</middle>
+
+	<back>
+		<references title="Normative References">
+			<?rfc include='reference.RFC.2119.xml'?>
+			<?rfc include='reference.RFC.2616.xml'?>
+			<?rfc include='reference.RFC.2617.xml'?>
+			<?rfc include='reference.RFC.2817.xml'?>
+			<?rfc include='reference.RFC.2818.xml'?>
+			<!-- <?rfc include='reference.RFC.4234.xml'?> -->
+			<?rfc include='reference.RFC.2743.xml'?>
+			<?rfc include='reference.RFC.5056.xml'?>
+            <?rfc include='reference.RFC.2434.xml'?>
+		</references>
+		<references title="Informative References">
+			<?rfc include='reference.RFC.4559.xml'?>
+			<!-- <?rfc include='reference.RFC.3875.xml'?> --> 
+		</references>
+	</back>
+</rfc>

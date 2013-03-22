@@ -1,0 +1,504 @@
+<?xml version = '1.0'?>
+<?rfc rfcedstyle='yes'?>
+<?rfc rfcprocack='yes'?>
+<?rfc toc='yes'?>
+<!DOCTYPE rfc SYSTEM "/home/swinter/packages/linux/xml2rfc-current/rfc2629.dtd">
+<rfc ipr='full3978' docName='draft-ietf-radext-radsec-00' category='exp'>
+  <front>
+    <title abbrev="RadSec (RADIUS over TCP/TLS)" >TLS encryption for RADIUS over TCP (RadSec)</title>
+    <author fullname="Stefan Winter" initials="S." surname="Winter" >
+	<organization abbrev="RESTENA" >
+		  Fondation RESTENA
+	</organization>
+	<address>
+		<postal>
+			<street>6, rue Richard Coudenhove-Kalergi</street>
+			<city>Luxembourg</city>
+			<code>1359</code>
+			<country>LUXEMBOURG</country>
+		</postal>
+		<phone>+352 424409 1</phone>
+		<facsimile>+352 422473</facsimile>
+		<email>stefan.winter@restena.lu</email>
+		<uri>http://www.restena.lu.</uri>
+	</address>
+    </author>
+    <author fullname="Mike McCauley" initials="M." surname="McCauley" >
+	    <organization abbrev="OSC" >
+		    Open Systems Consultants
+	    </organization>
+	    <address>
+		    <postal>
+			    <street>9 Bulbul Place</street>
+			    <city>Currumbin Waters</city>
+			    <code>QLD 4223</code>
+			    <country>AUSTRALIA</country>
+		    </postal>
+		    <phone>+61 7 5598 7474</phone>
+		    <facsimile>+61 7 5598 7070</facsimile>
+		    <email>mikem@open.com.au</email>
+		    <uri>http://www.open.com.au.</uri>
+	    </address>
+    </author>
+    <author fullname="Stig Venaas" initials="S." surname="Venaas" >
+	<organization abbrev="UNINETT" >
+		  UNINETT
+	</organization>
+	<address>
+		<postal>
+			<street>Abels gate 5 – Teknobyen</street>
+			<city>Trondheim</city>
+			<code>7465</code>
+			<country>NORWAY</country>
+		</postal>
+		<phone>+47 73 55 79 00</phone>
+		<facsimile>+47 73 55 79 01</facsimile>
+		<email>stig.venaas@uninett.no</email>
+		<uri>http://www.uninett.no.</uri>
+	</address>
+    </author>
+    <date day="17" month="June" year="2008" />
+    <area>Operations and Management Area</area>
+    <workgroup>RADIUS Extensions Working Group</workgroup>
+    <keyword>RADIUS</keyword>
+    <keyword>AAA</keyword>
+    <keyword>Security</keyword>
+    <keyword>Reliability</keyword>
+    <abstract>
+	    <t>This document specifies security on the transport layer (TLS) for the RADIUS protocol <xref target="RFC2865" /> when transmitted over TCP <xref target="draft-ietf-radext-radius-tcp" />. This enables dynamic trust relationships between RADIUS servers.</t>
+    </abstract>
+  </front>
+  <middle>
+    <section title="Introduction" anchor="intro">
+	    <t>The RADIUS protocol <xref target="RFC2865" /> is a widely deployed authentication and authorisation protocol. The supplementary RADIUS Accounting specification <xref target="RFC2866" /> also provides accounting mechanisms, thus delivering a full AAA solution. However, RADIUS is experiencing several shortcomings, such as its dependency on the unreliable transport protocol UDP and the lack of security for large parts of its packet payload.</t>
+	    <t>Several enhancements have been proposed to overcome RADIUS' limitations. An IETF Standards Track protocol, Diameter <xref target="RFC3588" />, has been designed to provide an AAA protocol that should deprecate RADIUS. However, given that current implementations of Diameter are either not freely accessible, or do not provide the flexibility of current RADIUS deployments, or both, an intermediate solution that is based on RADIUS but provides mechanisms to overcome many of its drawbacks has been implemented by several vendors. These implementations are interoperable and deployed in a world-wide wireless roaming infrastructure. The protocol is called RadSec. This document describes version 2 of the RadSec protocol. Version 1 of RadSec is defined in the RadSec whitepaper <xref target="radsec-whitepaper"/>. The two currently existing implementations of RadSec version 2 are described in <xref target="radiator"/> and <xref target="radsecproxy"/>.</t>
+	    <t>The main focus of RadSec is to provide a means to secure the communication between RADIUS/TCP peers on the transport layer. The most important use of RadSec lies in roaming environments where RADIUS packets need to be transferred through different administrative domains and untrusted, potentially hostile networks. An example for a world-wide roaming environment that uses RadSec to secure communication is "eduroam", see <xref target="eduroam"/>.
+	    </t>
+	    <t>
+	    The new features in RadSec obsolete the use of IP addresses and shared secrets to identify other peers and thus allow the dynamic establishment of connections to peers that are not previously configured. The definition of lookup mechanisms is out of scope of this document, but an implementation of a DNS NAPTR lookup based mechanism exists and is described as an example lookup mechanism in <xref target="naptr"/>.
+	    </t>
+	    <t>Transitioning from a plain RADIUS infrastructure to a RadSec infrastructure is very easy, since the RADIUS packet payload is identical in both protocols. Enabling RadSec can be done on a per-server basis. Unlike in Diameter, the learning curve for a new protocol does not exist, which makes it almost trivial for an experienced RADIUS server administrator to switch to a RadSec-secured transport for RADIUS packets.
+	    </t>
+	    <t>The security layer does not require any new assignments of codepoints for the RADIUS protocol. No new attributes are defined and no new packet codes are used.
+	    </t>
+	    <section title="Requirements Language" anchor="terminology">
+		<t>In this document, several words are used to signify the requirements of the specification.  The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target="RFC2119" />.</t>
+	    </section>
+    </section>
+    <section title="Transport Layer Security" anchor="TLS">
+	    <section title="Operation" anchor="TLS-ops">
+	    	<t>Once the TCP connection between two RadSec nodes is established, a TLS session is established. At least TLSv1.1 <xref target="RFC4346" /> is used. Both nodes either mutually present a X.509 certificate which is verified according to <xref target="RFC5280" /> or use a shared key authentication for TLS which needs to be pre-configured out-of-band prior to the connection attempt.</t>
+		<t>The list of Certification Authorities that a node which acts as a server is willing to accept SHOULD be sent during the Certificate Request message in the CertificateRequest struct (section 7.4.4 of <xref target="RFC4346" />). Rationale: If a RadSec node acts as a client and is in possession of multiple certificates from different CAs (i.e. is part of multiple roaming consortia) and dynamic discovery is used, and the dynamic discovery mechanism does not provide sufficient meta information to identify the server's roaming consortium, then it is necessary to signal which consortium it is connecting to.</t>
+		<t>The list of Certification Authorities that a node which acts as a client is willing to accept can not be signaled within the TLS 1.1 handshake. This makes it impossible to select the right certificate if a RadSec node which is acting as a server for multiple roaming consortia (in possession of multiple certificates from different CAs) is contacted by a client. This situation is likely to change in TLS 1.2, according to <xref target="draft-tls-12" />. "Trusted CA Indication" as in <xref target="draft-tls-12" />, section 6, SHOULD be used.</t>
+		<t>When using X.509 certificate validation, peer validation always includes a check on whether the DNS name or the IP address of the server that is contacted matches its certificate. When a RadSec peer establishes a new connection (acts as a client) to another peer, the following rules of precedence are used during validation:
+			<list style="symbols">
+				<t>If the client expects a certain fully qualified domain name (FQDN) and the presented certificate contains both at least one instance of the subjectAltName field with type dNSName and a Common Name, then the certificate is considered a match if any one of those subjectAltName fields matches the expected FQDN. The Common Name field is not evaluated in this case.</t>
+				<t>If the client expects a certain fully qualified domain name (FQDN) and the presented certificate does not contain any subjectAltName field with type dNSName, then the certificate is considered a match if the Common Name field matches the expected FQDN.</t>
+				<t>If the client expects a certain IP address and the presented certificate contains both at least one instance of the subjectAltName field with type iPAddr and a Common Name, then the certificate is considered a match if any one of those subjectAltName fields matches the expected IP address. The Common Name field is not evaluated in this case.</t>
+				<t>If the client expects a certain IP address and the presented certificate does not contain any subjectAltName field with type iPAddr, then the certificate is considered a match if the Common Name field matches the expected IP address.</t>
+			</list>
+			Further restrictions on the certificate MAY be verified, depending on the trust fabric of the peering agreement.
+		</t>
+		<t>
+			
+		</t>
+		<t>
+			If dynamic peer resolution is used, the above verification steps MAY not be sufficient to ensure that a connecting peer is authorised to perform user authentications. In these cases, the trust fabric SHOULD NOT depend on untrusted peer resolution methods like DNS to identify and authorise nodes. Instead, the operators of the RadSec infrastructure SHOULD define their own trust model and apply this model to the certificates after they have passed the standard validity checks above. Current RadSec implementations offer varying degrees of versatility for defining criteria which certificates to accept.</t>
+		<t>NOTE WELL: None of the current implementations provide configuration options for using TLS with pre-shared keys. However, the underlying libraries support it, so support for that should be implementable easily.</t>
+	    	<t>After the TLS session is established, RADIUS packet payloads are exchanged over the encrypted TLS tunnel. In plain RADIUS, the packet size can be determined by evaluating the size of the datagram that arrived. Due to the stream nature of TCP and TLS, this does not hold true for RadSec packet exchange. Instead, packet boundaries of RADIUS packets that arrive in the stream are calculated by evaluating the packet's Length field. Special care MUST be taken on the packet sender side that the value of the Length field is indeed correct before sending it over the TLS tunnel, because incorrect packet lengths can no longer be detected by a differing datagram boundary.</t>
+    	    </section>
+	    <section title="Ciphersuites and Compression Negotiation">
+		<t>RadSec implementations need not necessarily support all TLS ciphersuites listed in <xref target="RFC4346"/>. Not all TLS ciphersuites are supported by available TLS tool kits and licenses may be required in some cases. The existing implementations of RadSec use OpenSSL as cryptographic backend, which supports all of the ciphersuites listed in the rules below:</t>
+		<t>To ensure interoperability, RadSec clients and servers MUST support the TLS <xref target="RFC4346"/> mandatory-to-implement ciphersuite: TLS_RSA_WITH_3DES_EDE_CBC_SHA.</t>
+		<t>In addition, RadSec servers SHOULD support and be able to negotiate all of the following TLS ciphersuites:
+		   <list style="symbols">
+			<t>TLS_RSA_WITH_RC4_128_MD5</t>
+			<t>TLS_RSA_WITH_RC4_128_SHA</t>
+			<t>TLS_RSA_WITH_AES_128_CBC_SHA</t>
+		   </list>
+		In addition, RadSec clients SHOULD support the following TLS ciphersuites <xref target="RFC3268"/>:
+		   <list style="symbols">
+			   <t>TLS_RSA_WITH_AES_128_CBC_SHA</t>
+			   <t>TLS_RSA_WITH_RC4_128_SHA</t>
+		   </list>
+		Since TLS supports ciphersuite negotiation, peers completing the TLS negotiation will also have selected a ciphersuite, which includes encryption and hashing methods.</t>
+		<t>TLS also supports compression as well as ciphersuite negotiation. During the RadSec conversation the client and server MAY negotiate compression. However, a peer MUST continue the conversation even if the other peer rejects compression.</t>
+	    </section>
+	    <section title="RADIUS Shared Secret Usage in RadSec" anchor="TLS-sharedsecret">
+		<t>Within RADIUS <xref target="RFC2865"/>, a shared secret is used for hiding of attributes such as User-Password, as well as in computation of the Response Authenticator.  In RADIUS accounting <xref target="RFC2866"/>, the shared secret is used in computation of both the Request Authenticator and the Response Authenticator.</t>
+		<t>Since in RADIUS a shared secret is used to provide confidentiality as well as integrity protection and authentication, the use of TLS ciphers which encrypt the stream payload in RadSec can provide security services sufficient to substitute for RADIUS application-layer security. Therefore, where TLS ciphers that provide encryption are used, it will not be necessary to configure a RADIUS shared secret.</t>
+		<t>Then, the secret shared between two RadSec peers MAY not be configured. In this case, the shared secret defaults to "radsec" (without the quotes). However, if the RadSec nodes negotiated a TLS cipher that provides integrity assurance only, the connection MUST be configured with a non-default RADIUS shared secret.</t>
+	    </section>
+    </section>
+    <section title="Comparison of Diameter vs. RadSec" anchor="whynotdiameter">
+	    <t>The feature set in the Diameter Base Protocol is almost a superset of the features present in RadSec. Sophisticated mechanisms for keepalive, reliable transmission and payload security exist. The reason for specifying a short-term intermediate solution as opposed to using Diameter at the moment are the lack of suitable, publicly available and versatile implementations.</t>
+	    <t>Typically, RADIUS servers do not only support the RADIUS protocol itself, but also provide interfaces to a wide variety of backends (credential stores) to actually verify a user's credentials. In highly heterogeneous environments like eduroam, where a lot of different backends are in use by the participating home servers (OpenLDAP, Novell eDirectory, ActiveDirectory, SQL databases or plain text files, just to name a few), such versatility is a requirement. Current Diameter server implementations focus on the validation of a small set of EAP methods (mostly EAP-SIM and EAP-TLS) and consequently on a small set of backends to verify these credentials.</t>
+	    <t>A further requirement in environments like eduroam is affordability. Public institutions like schools and universities often face tight budgets, and so an open source implementation of Diameter would be desirable (just as FreeRADIUS is for the RADIUS protocol). Unfortunately, the few Open Source Software implementations of the Diameter protocol like OpenDiameter <xref target="opendiameter"/> or JDiameter <xref target="jdiameter"/> only provide a set of libraries, but no server at all.</t>
+	    <t>Diameter's ability to resolve peers dynamically is limited to using either SLPv2 or DNS, whereas RadSec allows arbitrary peer resolution mechanisms. This greater amount of flexibility can pay off in many roaming federations. In eduroam's case, a central SAML-based meta data repository ("eduGAIN-MDS") is in place which is able to provide peer addresses. Using RadSec it is possible to resolve a peer's address through such a meta data system, whereas with Diameter it is not possible to use this repository natively.</t>
+    </section>
+    <section title="Diameter Compatibility" anchor="compat">
+	    <t>Since RadSec is only a new transport profile for RADIUS, compatibility of RadSec - Diameter vs. RADIUS - Diameter is identical. The considerations regarding payload size in <xref target="draft-ietf-radext-radius-tcp" /> apply.</t>
+    </section>
+    <section title="Security Considerations" anchor="security">
+	    <t>The computational resources to establish a TLS tunnel are significantly higher than simply sending mostly unencrypted UDP datagrams. Therefore, clients connecting to a RadSec node will more easily create high load conditions and a malicious client might create a Denial-of-Service attack more easily.</t>
+	    <t>In the case of dynamic peer discovery, a RadSec node needs to be able to accept connections from a large, not previously known, group of hosts, possibly the whole internet. In this case, the server's RadSec port can not be protected from unauthorised connection attempts with measures on the network layer, i.e. access lists and firewalls. This opens more attack vectors for Distributed Denial of Service attacks, just like any other service that is supposed to serve arbitrary clients (like for example web servers).
+	    </t>
+	    <t>Some TLS ciphersuites only provide integrity validation of their payload, and provide no encryption. When such ciphersuites are negotiated in a RadSec TLS handshake, the only means of protecting sensitive payload contents is the RADIUS shared secret. If the RADIUS shared secret is set to the default "radsec" and a non-encrypting TLS ciphersuite is used, implementations should either forbid transmitting payload over this connection completely or at least issue a warning to whatever logging destination is configured by the administrator.</t>
+    </section>
+    <section title="IANA Considerations" anchor="iana">
+	    <t>This document has no actions for IANA. The TCP port 2083 was already previously assigned by IANA for RadSec. The Status-Server packet was already assigned by IANA for <xref target="RFC2865" />.</t>
+    </section>
+    <section title="Acknowledgements" anchor="acks">
+	    <t>RadSec version 1 was first implemented by Open Systems Consultants, Currumbin Waters, Australia, for their &quot;Radiator&quot; RADIUS server product.</t>
+	    <t>Funding and input for the development of this Internet Draft was provided by the European Commission co-funded project "GEANT2" <xref target="geant2" /> and further feedback was provided by the TERENA Task Force Mobility <xref target="terena" />.</t>
+    </section>
+  </middle>
+  <back>
+    <references title="Informative References">
+	    <reference anchor="RFC2119">
+		    <front>
+			    <title>Key words for use in RFCs to Indicate Requirement Levels</title>
+			    <author initials="S." surname="Bradner" fullname="Scott Bradner">
+				    <organization abbrev="Harvard">Harvard University</organization>
+			    </author>
+			    <date month="March" year="1997"/>
+		    </front>
+		    <seriesInfo name="RFC" value="2119" />
+		    <format type="TXT" />
+	    </reference>
+    </references>	
+    <references title="Normative References">
+<!--	    <reference anchor="RFC2607">
+		    <front>
+			    <title>Proxy Chaining and Policy Implementation in Roaming</title>
+			    <author initials="B." surname="Aboba" fullname="Bernard Aboba">
+				    <organization abbrev="Microsoft">Microsoft Corporation</organization>
+			    </author>
+			    <author initials="J. R." surname="Vollbrecht" fullname="John R. Vollbrecht">
+				    <organization abbrev="Merit">Merit Network, Inc.</organization>
+			    </author>
+			    <date month="June" year="1999"/>
+		    </front>
+		    <seriesInfo name="RFC" value="2607" />
+		    <format type="TXT" />
+	    </reference>-->
+	    <reference anchor="RFC2865">
+		    <front>
+			    <title>Remote Authentication Dial In User Service (RADIUS)</title>
+			    <author initials="C." surname="Rigney" fullname="Carl Rigney">
+				    <organization abbrev="Livingston">Livingston Enterprises</organization>
+			    </author>
+			    <author initials="A. C." surname="Rubens" fullname="Alan C. Rubens">
+				    <organization abbrev="Merit">Merit Network, Inc.</organization>
+			    </author>
+			    <author initials="W. A." surname="Simpson" fullname="William Allen Simpson">
+				    <organization abbrev="CSCS">Computer Systems Consulting Services</organization>
+			    </author>
+			    <author initials="S." surname="Willens" fullname="Steve Willens">
+				    <organization abbrev="Livingston">Livingston Entersprises</organization>
+			    </author>
+			    <date month="June" year="2000"/>
+		    </front>
+		    <seriesInfo name="RFC" value="2865" />
+		    <format type="TXT" />
+	    </reference>
+	    <reference anchor="RFC2866">
+		    <front>
+			    <title>RADIUS Accounting</title>
+			    <author initials="C." surname="Rigney" fullname="Carl Rigney">
+				    <organization abbrev="Livingston">Livingston Enterprises</organization>
+			    </author>
+			    <date month="June" year="2000"/>
+		    </front>
+		    <seriesInfo name="RFC" value="2866" />
+		    <format type="TXT" />
+	    </reference>
+	    <reference anchor="RFC3268">
+		    <front>
+			    <title>Advanced Encryption Standard (AES) Ciphersuites for Transport Layer Security (TLS)</title>
+			    <author initials="P." surname="Chown" fullname="Pete Chown">
+				    <organization abbrev="Skygate">Skygate Technology Ltd.</organization>
+			    </author>
+			    <date month="June" year="2002" />
+		    </front>
+		    <seriesInfo name="RFC" value="3268" />
+		    <format type="TXT" />
+	    </reference>
+	    <reference anchor="RFC5280">
+		    <front>
+			    <title>Internet X.509 Public Key Infrastructure Certificate and Certificate Revocation List (CRL) Profile</title>
+			    <author initials="D." surname="Cooper" fullname="David Cooper">
+				    <organization abbrev="NIST">National Institute of Standards and Technology</organization>
+			    </author>
+			    <author initials="S." surname="Santesson" fullname="Stefan Santesson">
+				    <organization abbrev="Microsoft">Microsoft</organization>
+			    </author>
+			    <author initials="S." surname="Farrell" fullname="Stephen Farrell">
+				    <organization abbrev="DSG">Distributed Systems Group</organization>
+			    </author>
+			    <author initials="S." surname="Boeyen" fullname="Sharon Boeyen">
+				    <organization abbrev="Entrust">Entrust</organization>
+			    </author>
+			    <author initials="R." surname="Housley" fullname="Russell Housley">
+				    <organization abbrev="Vigil">Vigil Security, LLC</organization>
+			    </author>
+			    <author initials="T." surname="Polk" fullname="Tim Polk">
+				    <organization abbrev="NIST">National Institute of Standards and Technology</organization>
+			    </author>
+			    <date month="May" year="2008"/>
+		    </front>
+		    <seriesInfo name="RFC" value="5280" />
+		    <format type="TXT" />
+	    </reference>
+	    <!--i<reference anchor="RFC3539">
+		    <front>
+			    <title>Authentication, Authorization and Accounting (AAA) Transport Profile</title>
+			    <author initials="B." surname="Aboba" fullname="Bernard Aboba">
+				    <organization abbrev="Microsoft">Microsoft Corporation</organization>
+			    </author>
+			    <author initials="J." surname="Wood" fullname="Jonathan Wood">
+				    <organization abbrev="Sun">Sun Microsystems, Inc.</organization>
+			    </author>
+			    <date month="June" year="2003"/>
+		    </front>
+		    <seriesInfo name="RFC" value="3539" />
+		    <format type="TXT" />
+	    </reference> -->
+	    <!--<reference anchor="RFC5176">
+		    <front>
+			    <title>Dynamic Authorization Extensions to Remote Authentication Dial In User Service (RADIUS)</title>
+			    <author initials="M." surname="Chiba" fullname="Murtaza Chiba">
+				    <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+			    </author>
+			    <author initials="G." surname="Dommety" fullname="Gopal Dommety">
+				    <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+			    </author>
+			    <author initials="M." surname="Eklund" fullname="Mark Eklund">
+				    <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+			    </author>
+			    <author initials="D." surname="Mitton" fullname="David Mitton">
+				    <organization abbrev="Circular">Circular Logic UnLtd.</organization>
+			    </author>
+			    <author initials="B." surname="Aboba" fullname="Bernard Aboba">
+				    <organization abbrev="Microsoft">Microsoft Corporation</organization>
+			    </author>
+			    <date month="January" year="2008"/>
+		    </front>
+		    <seriesInfo name="RFC" value="5176" />
+		    <format type="TXT" />
+	    </reference> -->
+	    <reference anchor="RFC3588">
+		    <front>
+			    <title>Diameter Base Protocol</title>
+			    <author initials="P." surname="Calhoun" fullname="Pat R. Calhoun">
+				    <organization abbrev="Airespace">Airespace, Inc.</organization>
+			    </author>
+			    <author initials="J." surname="Laughney" fullname="John Laughney">
+				    <organization abbrev="Nokia">Nokia Research Center</organization>
+			    </author>
+			    <author initials="J." surname="Arkko" fullname="Jari Arkko">
+				    <organization abbrev="Ericsson">Ericsson</organization>
+			    </author>
+			    <author initials="E." surname="Guttman" fullname="Erik Guttman">
+				    <organization abbrev="Sun">Sun Micro Systems, Inc.</organization>
+			    </author>
+			    <author initials="G." surname="Zorn" fullname="Glen Zorn">
+				    <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+			    </author>
+			    <date month="September" year="2003"/>
+		    </front>
+		    <seriesInfo name="RFC" value="3588" />
+		    <format type="TXT" />
+	    </reference>
+	    <reference anchor="RFC4346">
+		    <front>
+			    <title>The Transport Layer Security (TLS) Protocol Version 1.1</title>
+			    <author initials="T." surname="Dierks" fullname="Tim Dierks">
+				    <organization abbrev="Independent">Independent</organization>
+			    </author>
+			    <author initials="E." surname="Rescorla" fullname="Eric Rescorla">
+				    <organization abbrev="RTFM">RTFM, Inc.</organization>
+			    </author>
+			    <date month="April" year="2006"/>
+		    </front>
+		    <seriesInfo name="RFC" value="4346" />
+		    <format type="TXT" />
+	    </reference>
+<!--	    <reference anchor="RFC4513">
+		    <front>
+			    <title>Lightweight Directory Access Protocol (LDAP): Authentication Methods and Security Mechanisms</title>
+			    <author initials="R." surname="Harrison" fullname="Roger Harrison">
+				    <organization abbrev="Novell">Novell, Inc.</organization>
+			    </author>
+			    <date month="June" year="2006"/>
+		    </front>
+		    <seriesInfo name="RFC" value="4513" />
+		    <format type="TXT" />
+	    </reference> -->
+	    <!--<reference anchor="draft-status-server" target="http://www.ietf.org/internet-drafts/draft-dekok-radius-status-server-01.txt">
+		    <front>
+			    <title>Use of Status-Server Packets in RADIUS</title>
+			    <author initials="A." surname="DeKok" fullname="Alan DeKok">
+				    <organization abbrev="FreeRADIUS">The FreeRADIUS Server Project</organization>
+			    </author>
+			    <date month="February" year="2007"/>
+		    </front>
+		    <format type="TXT" target="http://www.ietf.org/internet-drafts/draft-dekok-radius-status-server-01.txt"/>
+	    </reference>-->
+	    <reference anchor="draft-tls-12" target="http://www.ietf.org/internet-drafts/draft-ietf-tls-rfc4366-bis-02.txt">
+		    <front>
+			    <title>Transport Layer Security (TLS) Extensions: Extension Definitions</title>
+			    <author initials="D." surname="Eastlake 3rd" fullname="Donald Eastlake 3rd">
+				    <organization abbrev="Motorola">Motorola Laboratories</organization>
+			    </author>
+			    <date month="February" year="2008"/>
+		    </front>
+		    <format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-tls-rfc4366-bis-02.txt"/>
+	    </reference>
+	    <reference anchor="draft-ietf-radext-radius-tcp" target="http://www.ietf.org/internet-drafts/draft-ietf-radext-radius-tcp-00.txt">
+		    <front>
+			    <title>Reliable Transport Profile for RADIUS</title>
+			    <author initials="S." surname="Winter" fullname="Stefan Winter">
+				    <organization abbrev="RESTENA">RESTENA</organization>
+			    </author>
+			    <date month="July" year="2008"/>
+		    </front>
+		    <format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-radext-radius-tcp-00.txt"/>
+	    </reference>
+	    <reference anchor="radsec-whitepaper" target="http://www.open.com.au/radiator/radsec-whitepaper.pdf">
+		    <front>
+			    <title>RadSec - a secure, reliable RADIUS Protocol</title>
+			    <author>
+				    <organization abbrev="OSC">Open System Consultants</organization>
+			    </author>
+			    <date month="May" year="2005"/>
+		    </front>
+		    <format type="TXT" target="http://www.open.com.au/radiator/radsec-whitepaper.pdf"/>
+	    </reference>
+	    <reference anchor="radiator-manual" target="http://www.open.com.au/radiator/ref.html">
+		    <front>
+			    <title>Radiator Radius Server - Installation and Reference Manual</title>
+			    <author>
+				    <organization abbrev="OSC">Open System Consultants</organization>
+			    </author>
+			    <date year="2006"/>
+		    </front>
+		    <format type="TXT" target="http://www.open.com.au/radiator/ref.html"/>
+	    </reference>
+	    <reference anchor="opendiameter" target="http://www.opendiameter.org/">
+		    <front>
+			    <title>Open Diameter</title>
+			    <author>
+				    <organization abbrev="ODP">Open Diameter Project</organization>
+			    </author>
+			    <date year="2006"/>
+		    </front>
+		    <format type="TXT" target="http://www.opendiameter.org/"/>
+	    </reference>
+	    <reference anchor="jdiameter" target="https://jdiameter.dev.java.net/">
+		    <front>
+			    <title>JDiameter Project Homepage</title>
+			    <author initials="E." surname="Svenson" fullname="Erik Svenson">
+				    <organization/>
+			    </author>
+			    <date year="2006"/>
+		    </front>
+		    <format type="TXT" target="https://jdiameter.dev.java.net/"/>
+	    </reference>
+	    <reference anchor="radsecproxy-impl" target="http://software.uninett.no/radsecproxy/">
+		    <front>
+			    <title>radsecproxy Project Homepage</title>
+			    <author initials="S." surname="Venaas" fullname="Stig Venaas">
+				    <organization abbrev="UNINETT">UNINETT</organization>
+			    </author>
+			    <date year="2007"/>
+		    </front>
+		    <format type="TXT" target="http://software.uninett.no/radsecproxy/"/>
+	    </reference>
+	    <reference anchor="eduroam" target="http://www.eduroam.org/">
+		    <front>
+			    <title>eduroam Homepage</title>
+			    <author>
+				    <organization abbrev="TERENA">Trans-European Research and Education Networking Association</organization>
+			    </author>
+			    <date year="2007"/>
+		    </front>
+		    <format type="TXT" target="http://www.eduroam.org/"/>
+	    </reference>
+    	    <reference anchor="geant2" target="http://www.geant2.net/">
+		    <front>
+			    <title>European Commission Information Society and Media: GEANT2</title>
+			    <author>
+				    <organization abbrev="Dante">Delivery of Advanced Network Technology to Europe</organization>
+			    </author>
+			    <date year="2008"/>
+		    </front>
+		    <format type="TXT" target="http://www.geant2.net/"/>
+	    </reference>
+	    <reference anchor="terena" target="http://www.terena.org/">
+		    <front>
+			    <title>Trans-European Research and Education Networking Association</title>
+			    <author>
+				    <organization abbrev="TERENA">TERENA</organization>
+			    </author>
+			    <date year="2008"/>
+		    </front>
+		    <format type="TXT" target="http://www.terena.org/"/>
+	    </reference>
+    </references>
+    <section title="DNS NAPTR Peer Discovery" anchor="naptr"><t>The following text is quoted from the file goodies/dnsroam.cfg in the Radiator distribution; further documentation of the &lt;AuthBy DNSROAM&gt; feature in Radiator can be found at <xref target="radiator-manual" />. It describes an algorithm to retrieve the RadSec route information from the global DNS using NAPTR and SRV records. The input of the algorithm is the realm part of the user name.</t>
+	    <t>The following algorithm is used to discover a target server from a Realm using DNS:
+		<list style="numbers">
+		    <t>Look for NAPTR records for the Realm.</t>
+		    <t>For each NAPTR found record, examine the Service field and use that to determine the transport protocol and TLS requirements for the server. The Service field starts with 'AAA' for insecure and 'AAAS' for TLS secured. The Service field contains '+RADSECS' for RadSec over SCTP, '+RADSECT' for RadSec over TCP or '+RADIUS' for RADIUS protocol over UDP. The most common Service field you will see will be 'AAAS+RADSECT' for TLS secured RadSec over TCP.</t>
+		    <t><list style="letters">
+				    <t>If the NAPTR has the 'S' flag, look for SRV records for the name. For each SRV record found, note the Port number and then look for A and AAAA records corresponding to the name in the SRV record.</t>
+		    		    <t>If the NAPTR has the 'A' flag, look for a A and AAAA records for the name.</t>
+			    </list></t>
+		    <t>If no NAPTR records are found, look for A and AAAA records based directly on the realm name. For example, if the realm is 'examplerealm.edu', it looks for records such as '_radsec._tcp.examplerealm.edu', '_radsec._sctp.examplerealm.edu' and '_radius._udp.examplerealm.edu',</t>
+		    <t>All A and AAAA records found are ordered according to their Order and Preference fields. The most preferable server address is used as the target server address, along with any other server attributes discovered from DNS. If no SRV record was found for the address, the DNSROAM configured Port is used.</t>
+	       </list>
+	    For example, if the User-Name realm was 'examplerealm.edu', and DNS contained the following records:
+	    <list style="empty">
+		    <t>examplerealm.edu. IN NAPTR 50 50 "s" "AAAS+RADSECT" "" _radsec._tcp.examplerealm.edu.</t>
+		    <t>_radsec._tcp.examplerealm.edu. IN SRV 0 10 2083 radsec.examplerealm.edu.</t>
+		    <t>radsec.examplerealm.edu.  IN AAAA 2001::202:44ff:fe0a:f704</t>
+	    </list>
+		    Then the target selected would be a RadSec server on port 2083 at IPv6 address 2001::202:44ff:fe0a:f704. The connection would be made over TCP/IP, and TLS encryption would be used. This complete specification of the realm is the most flexible and is recommended.</t>
+    </section>
+    <section title="Implementation Overview: Radiator" anchor="radiator">
+	    <t>Radiator implements the RadSec protocol for proxying requests with the &lt;Authby RADSEC&gt; and &lt;ServerRADSEC&gt; clauses in the Radiator configuration file.</t>
+	    <t>The &lt;AuthBy RADSEC&gt; clause defines a RadSec client, and causes Radiator to send RADIUS requests to the configured RadSec server using the RadSec protocol.</t>
+	    <t>The &lt;ServerRADSEC&gt; clause defines a RadSec server, and causes Radiator to listen on the configured port and address(es) for connections from &lt;Authby RADSEC&gt; clients. When an &lt;Authby RADSEC&gt; client connects to a &lt;ServerRADSEC&gt; server, the client sends RADIUS requests through the stream to the server. The server then services the request in the same was as if the request had been received from a conventional UDP RADIUS client.</t>
+	    <t>Radiator is compliant to version 2 of RadSec if the following options are used:
+	    	<list style="empty">
+			<t>&lt;AuthBy RADSEC&gt;
+				<list style="symbols">
+					<t>Protocol tcp</t>
+					<t>UseTLS</t>
+					<t>TLS_CertificateFile</t>
+				</list>
+			</t>
+			<t>&lt;ServerRADSEC&gt;
+				<list style="symbols">
+					<t>Protocol tcp</t>
+					<t>UseTLS</t>
+					<t>TLS_RequireClientCert</t>
+				</list>
+			</t>
+		</list>
+		As of Radiator 3.15, the default shared secret for RadSec connections is "mysecret" (without quotes). The implementation uses TCP keepalive socket options, but does not send Status-Server packets. Once established, TLS connections are kept open throughout the server instance lifetime.
+	    </t>
+    </section>
+    <section title="Implementation Overview: radsecproxy" anchor="radsecproxy">
+	    <t>The RADIUS proxy named radsecproxy was written in order to allow use of RadSec in current RADIUS deployments. This is a generic proxy that supports any number and combination of clients and servers, supporting RADIUS over UDP and RadSec. The main idea is that it can be used on the same host as a non-RadSec client or server to ensure RadSec is used on the wire, however as a generic proxy it can be used in other circumstances as well.</t>
+	    <t>The configuration file consists of client and server clauses, where there is one such clause for each client or server. In such a clause one specifies either "type tls" or "type udp" for RadSec or UDP transport. For RadSec the default shared secret "mysecret" (without quotes), the same as Radiator, is used. A secret may be specified by putting say "secret somesharedsecret" inside a client or server clause.</t>
+	    <t>In order to use TLS for clients and/or servers, one must also specify where to locate CA certificates, as well as certificate and key for the client or server. This is done in a TLS clause. There may be one or several TLS clauses. A client or server clause may reference a particular TLS clause, or just use a default one. One use for multiple TLS clauses may be to present one certificate to clients and another to servers.</t>
+	    <t>If any RadSec (TLS) clients are configured, the proxy will at startup listen on port 2083, as assigned by IANA for the OSC RadSec implementation. An alternative port may be specified. When a client connects, the client certificate will be verified, including checking that the configured FQDN or IP address matches what is in the certificate. Requests coming from a RadSec client are treated exactly like requests from UDP clients.
+	    </t>
+	    <t>The proxy will at startup try to establish a TLS connection to each (if any) of the configured RadSec (TLS) servers. If it fails to connect to a server, it will retry regularly. There is some back-off where it will retry quickly at first, and with longer intervals later. If a connection to a server goes down it will also start retrying regularly. When setting up the TLS connection, the server certificate will be verified, including checking that the configured FQDN or IP address matches what is in the certificate. Requests are sent to a RadSec server just like they would to a UDP server.</t>
+	    <t>The proxy supports Status-Server messages. They are only sent to a server if enabled for that particular server. Status-Server requests are always responded to.</t>
+	    <t>This RadSec implementation has been successfully tested together with Radiator. It is a freely available open-source implementation. For source code and documentation, see <xref target="radsecproxy-impl" />.</t>
+</section>
+  </back>
+</rfc>

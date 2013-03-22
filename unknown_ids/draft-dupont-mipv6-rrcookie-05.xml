@@ -1,0 +1,343 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+
+<?rfc toc="no" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+
+<rfc ipr="full3978" category="exp"
+  docName="draft-dupont-mipv6-rrcookie-05.txt">
+    <front>
+        <title abbrev="CoA Test Cookie">
+            Care-of Address Test for MIPv6 using a State Cookie
+        </title>
+
+        <author initials="F." surname="Dupont" fullname="Francis Dupont">
+            <organization>ISC</organization>
+            <address>
+                <email>Francis.Dupont@fdupont.fr</email>
+            </address>
+        </author>
+        <author initials="J-M." surname="Combes"
+	    fullname="Jean-Michel Combes">
+	    <organization>Orange Labs/France Telecom R&amp;D</organization>
+	    <address>
+		<postal>
+		    <street>38 rue du General Leclerc</street>
+		    <city>92794 Issy-les-Moulineaux Cedex 9</city>
+		    <country>France</country>
+		</postal>
+		<email>jeanmichel.combes@gmail.com</email>
+	    </address>
+        </author>
+
+	<date month="November" year="2007" />
+
+<!--    <workgroup>MIP6 Working Group</workgroup> -->
+
+        <abstract>
+            <t>
+            This document defines a procedure which performs a
+            "care-of address test" using a state cookie for
+            routing optimization in Mobile IPv6 not protected
+            by the routing routability procedure, i.e., protected
+            by some alternative mechanisms like pre-shared secret or
+            pre-established IPsec security associations.
+            </t>
+        </abstract>
+    </front>
+
+    <middle>
+    <section anchor="intro" title="Introduction">
+    <t> 
+    The Mobile IPv6 specifications <xref target="RFC3775" /> defines
+    a default protection for routing optimization, the routing
+    routability procedure, which includes an explicit "care-of
+    address test". Alternative protection mechanisms like pre-shared
+    secret <xref target="RFC4449" /> or pre-established IPsec
+    security associations <xref target="CNIPsec" /> are more
+    efficient and secure but require in some cases a care-of
+    address test to avoid a "3rd party bombing" vulnerability.
+    </t>
+    <t>
+    This document proposes a care-of address test procedure at
+    the initiative of the correspondent node using a state
+    cookie as in SCTP <xref target="RFC4960" /> or IKEv2 <xref
+    target="RFC4306" />.
+    </t>
+    </section>
+
+    <section anchor="term" title="Keywords">
+    <t>
+    The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+    "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+    document are to be interpreted as described in
+    <xref target="RFC2119" />.
+    </t>
+    </section>
+
+    <section anchor="main" title="A signaling extension for a care-of
+    address test using a state cookie">
+
+     <section anchor="app" title="Applicability">
+     <t>     
+     The care-of address test procedure defined by this document
+     MAY be used in order to check whether the
+     mobile node can really receive packets sent to the care-of address
+     of a new binding update. It SHOULD NOT be used for entry deletion,
+     i.e., when the care-of address is the home address. It MUST be used
+     for real alternate care-of address, i.e., when the address carried
+     by an alternate care-of address option is not the source address
+     of the IP header nor the home address of the mobile node (following
+     the recommendation of <xref target="bombing" />).
+     </t>
+     </section>
+
+     <section anchor="proto" title="Protocol">
+     <t>
+     The procedure is based on the state cookie idea of SCTP 
+     <xref target="RFC4960" /> which can be found again in IKEv2
+     <xref target="RFC4306" />. The binding update is
+     in a first time (1) rejected by a binding acknowledgment with a
+     transient error or a
+     new dedicated status, and a cookie option sent to the tested care-of
+     address. Upon the reception (2) of this binding acknowledgment,
+     the mobile node retransmits (3) the binding update with the exact
+     received cookie placed in a cookie option. When the correspondent
+     node receives (4) the augmented binding update, it can check by
+     recomputing the cookie and comparing it to the cookie option data that
+     the binding update is from the same mobile node and for the same
+     care-of address (so it can infer the mobile node is reachable at
+     this care-of address, i.e., a "care-of address test" has been
+     successfully performed).
+     </t>
+     <t>
+     The cookie MUST reflect the mobile node identity or the binding
+     cache entry or an equivalent, and MUST reflect the tested care-of
+     address. It MUST NOT be easy to infer by the mobile node, including
+     with the knowledge of previous cookies from the same node.
+     </t>
+     <t>
+     The last point is what to do waiting the retransmitted and augmented
+     binding update. Possibilities are:
+     <list style="symbols">
+       <t>apply the binding update with the new care-of address. It
+       defeats the purpose of the care-of address test so it SHOULD NOT
+       be done, and it MUST NOT be done for a real alternate care-of
+       address.</t>
+       <t>keep the previous care-of address. As it is not possible to know
+       whether the previous care-of address is still usable, i.e., whether
+       the mobile node is still reachable at this previous care-of
+       address, the default policy SHOULD NOT be to keep the previous
+       care-of address. The correspondent node MAY keep the previous
+       care-of address in special cases where this is known to be
+       the best solution.</t>
+       <t>temporarily disable the binding cache entry, i.e., by using
+       the home address for communication to the mobile node until
+       another binding update is received. This SHOULD be the default
+       policy.</t>
+     </list>
+     </t>
+     </section>
+
+     <section anchor="mn" title="Mobile Node Requirement">
+     <t>
+     There is only one requirement for mobile nodes: a mobile node
+     MUST include in retries a copy of the cookie option carried by
+     a binding acknowledgment signaling a transient error (examples
+     of such a transient error is of course the new status or a
+     sequence number out of window).
+     </t>
+     </section>
+
+     <section anchor="cookie" title="Cookie Generation Example">
+     <t>
+     This method assumes a global secret key is available and
+     uses in sequence:
+     <list style="symbols">
+       <t>a 16 bit timestamp of when the cookie is created</t>
+       <t>the tested care-of address</t>
+       <t>the truncated HMAC <xref target="RFC2104" />,
+       keyed by a secret key, of the preceding two fields,
+       the home address and the correspondent address.</t>
+     </list>   
+     The secret key SHOULD be random or pseudo-random and SHOULD be
+     changed reasonably frequently. The timestamp MAY be used to
+     determine which key was used. The HMAC has to be truncated in
+     order to keep the cookie option length less than the maximum,
+     the higher 96 bits of the HMAC should be enough.
+     </t>
+     </section>
+    </section>
+
+    <section anchor="acks" title="Acknowledgments">
+    <t>
+    This document was extracted from <xref target="CNIPsec" /> because
+    what it provides is needed by any alternative to the return
+    routability procedure which has no built-in care-of address test.
+    </t>
+    </section>
+
+    <section anchor="seccons" title="Security Considerations">
+    <t>
+    Without a test of the care-of address or an other way to trust it,
+    the care-of address presented by the mobile
+    node can be a fake one and offers a 3rd party bombing attack.
+    </t>
+    <t>
+    Binding updates and acknowledgments are validated using an
+    alternative protection mechanisms so they can't be injected
+    by third parties. The cookie sub-option is small enough to make
+    this procedure a poor candidate for a third party bombing mechanism.
+    </t>
+    </section>
+
+    <section anchor="iana" title="IANA Considerations">
+    <t>
+    This document requires:
+    <list style="symbols">
+     <t>a new status for binding acknowledgment.</t>
+     <t>a new option for mobility messages used in binding update
+     and acknowledgment messages.</t>
+    </list>
+    </t>
+    </section>
+    </middle>
+
+    <back>
+    <references title="Normative References">
+        <reference anchor="RFC2119">
+	    <front>
+	        <title>
+		    Key words for use in RFCs to Indicate Requirement Levels
+		</title>
+		<author initials="S." surname="Bradner">
+                    <organization />
+                </author>
+		<date month="March" year="1997" />
+	    </front>
+	    <seriesInfo name="RFC" value="2119" />
+	    <seriesInfo name="BCP" value="14" />
+            <format type="TXT"
+                target="http://www.ietf.org/rfc/rfc2119.txt" />
+	</reference>
+
+        <reference anchor="RFC3775">
+	    <front>
+	        <title>Mobility Support in IPv6</title>
+		<author initials="D." surname="Johnson">
+                    <organization />
+                </author>
+		<author initials="C." surname="Perkins">
+                    <organization />
+                </author>
+		<author initials="J." surname="Arkko">
+                    <organization />
+                </author>
+		<date month="June" year="2004" />
+	    </front>
+	    <seriesInfo name="RFC" value="3775" />
+            <format type="TXT"
+                target="http://www.ietf.org/rfc/rfc3775.txt" />
+	</reference>
+
+	<reference anchor="RFC2104">
+	    <front>
+		<title>HMAC: Keyed-Hashing for Message Authentication
+                </title>
+                <author initials="H." surname="Krawczyk">
+		    <organization />
+		</author>
+		<author initials="M." surname="Bellare">
+		    <organization />
+		</author>
+		<author initials="R." surname="Canetti">
+		    <organization />
+		</author>
+		<date month="March" year="1997" />
+	    </front>
+	    <seriesInfo name="RFC" value="2104" />
+	    <format type="TXT"
+		target="http://www.ietf.org/rfc/rfc2104.txt" />
+	</reference>
+    </references>
+
+    <references title="Informative References">
+	<reference anchor="RFC4449">
+	    <front>
+		<title>
+		    Securing Mobile IPv6 Route Optimization Using a
+		    Static Shared Key
+		</title>
+		<author initials="C." surname="Perkins">
+                    <organization />
+                </author>
+		<date month="June" year="2006" />
+	    </front>
+	    <seriesInfo name="RFC" value="4449" />
+	    <format type="TXT"
+		target="http://www.ietf.org/rfc/rfc4449.txt" />
+	</reference>
+
+	<reference anchor="CNIPsec">
+	    <front>
+		<title>Using IPsec between Mobile and Correspondent IPv6 Nodes
+		</title>
+	        <author initials="F." surname="Dupont">
+	            <organization />
+	        </author>
+	        <author initials="J-M." surname="Combes">
+	            <organization />
+	        </author>
+		<date month="November" year="2007" />
+	    </front>
+	    <seriesInfo name="Internet-Draft"
+		value="draft-ietf-mip6-cn-ipsec-06.txt" />
+	    <format type="TXT"
+		target="http://www.ietf.org/internet-drafts/draft-ietf-mip6-cn-ipsec-06.txt" />
+	</reference>
+
+        <reference anchor="RFC4960">
+	    <front>
+	        <title>Stream Control Transmission Protocol</title>
+		<author initials="R." surname="Stewart"role="editor">
+                    <organization />
+                </author>
+		<date month="September" year="2007" />
+	    </front>
+	    <seriesInfo name="RFC" value="4960" />
+            <format type="TXT"
+                target="http://www.ietf.org/rfc/rfc4960.txt" />
+	</reference>
+
+        <reference anchor="RFC4306">
+            <front>
+                <title>Internet Key Exchange (IKEv2) Protocol</title>
+                <author initials="C." surname="Kaufman" role="editor">
+                    <organization />
+                </author>
+                <date month="December" year="2005" />
+            </front>
+	    <seriesInfo name="RFC" value="4306" />
+            <format type="TXT"
+                target="http://www.ietf.org/ref/rfc4306.txt" />
+        </reference>
+
+	<reference anchor="bombing">
+	    <front>
+		<title>A note about 3rd party bombing in Mobile IPv6</title>
+	        <author initials="F." surname="Dupont">
+	            <organization />
+	        </author>
+		<date month="January" year="2007" />
+	    </front>
+	    <seriesInfo name="Internet-Draft"
+		value="draft-dupont-mipv6-3bombing-05.txt" />
+	    <format type="TXT"
+		target="http://www.ietf.org/internet-drafts/draft-dupont-mipv6-3bombing-05.txt" />
+	</reference>
+    </references>
+    </back>
+</rfc>

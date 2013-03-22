@@ -1,0 +1,2437 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes" ?>
+<?rfc compact="yes"?>
+<rfc obsoletes="" updates="" category="std" ipr="full3978" 
+docName="draft-garcia-martinez-sendmib-00">
+<front>
+<title abbrev="SEND MIB">
+Management Information Base for the SEcure Neighbor Discovery (SEND) protocol
+</title>
+<author initials="A." surname="Garcia-Martinez" fullname="Alberto Garcia-Martinez">
+<organization abbrev="UC3M">
+Universidad Carlos III de Madrid
+</organization>
+<address>
+<postal>
+<street>Av. Universidad 30</street>
+<city>Leganes</city>
+<region>Madrid</region>
+<code>28911</code>
+<country>SPAIN</country>                                        
+</postal>
+<phone>34 91 6249500</phone>
+<email>alberto@it.uc3m.es</email>
+<uri>http://www.it.uc3m.es</uri>
+</address>
+</author>
+
+<date year="2008"/>
+
+<abstract>
+
+<t>This memo defines a portion of the Management Information Base (MIB) for managing the SEND (SEcure Neighbor Discovery) Protocol.</t>
+</abstract>
+</front>
+
+<middle>
+
+<section title="The Internet-Standard Management Framework">
+<t> For a detailed overview of the documents that describe the current
+Internet-Standard Management Framework, please refer to section 7 of
+RFC 3410 <xref target="RFC3410"></xref>.
+Managed objects are accessed via a virtual information store, termed
+the Management Information Base or MIB. MIB objects are generally
+accessed through the Simple Network Management Protocol (SNMP).
+
+Objects in the MIB are defined using the mechanisms defined in the
+Structure of Management Information (SMI). This memo specifies a MIB
+module that is compliant to the SMIv2, which is described in STD 58,
+RFC 2578 <xref target="RFC2578"></xref>, STD 58, RFC 2579 <xref target="RFC2579"></xref> and STD 58, RFC 2580 
+<xref target="RFC2580"></xref>.
+</t>
+
+</section>
+
+<section title="Overview"> 
+
+<t>This document defines the SEND-MIB, the portion of the Management Information Base (MIB) to be used for managing the SEcure Neighbor Discovery (SEND) <xref target="RFC3971"></xref> protocol. SEND specifies security mechanisms to protect the Neighbor Discovery (ND) Protocol <xref target="RFC4861"></xref>, <xref target="RFC4862"></xref>, so it is IPv6-specific. To protect the ND protocol, it relies on</t>
+<list style='symbols'>
+<t>Certification Paths, anchored on trusted parties, which can be used to certify the authority of the routers. Certification Paths are exchanged 
+among routers and hosts by means of two new ICMP messages, the Certification Path Solicitation message and the Certification Path Advertisement 
+message.</t>
+<t>Cryptographically Generated Addresses (CGAs) <xref target="RFC3972"></xref>, IPv6 addresses that can be used to prove address ownership</t>
+<t>RSA Signature options, that protect ND messages by using keying material related to Certification Paths or CGAs.</t>
+</list>
+
+<t>The SEND-MIB provides means to monitor and configure most of the elements related with SEND operation in hosts. In particular, it allows managing:</t>
+<list style='symbols'>
+<t>SEND operational status. The sendInterfaceOperTable indicates if there exists the configuration required by SEND to operate on each interface (trust anchors, local CGA).</t> 
+<t>Authority attestation and verification. The sendRsaWithCgaAuthorization object manages the inclusion of CGA in messages sent by the node to attest 
+its authority. /* I should understand this much more – see the description of the object in the object description*/ The following objets are related 
+to authority verification management in the receiver. The sendCpaRequireIPAddressExt object manages if received Certification Path Advertisements must 
+contain an 'addressesOrRanges' element to be processed. sendCgaVerificationMinbits and sendCgaVerificationMaxbits specify respectively the minimum and 
+maximum number of bits that a key of a received CGA must have to be used by SEND. The sendRsaVerificationMethod set of discrete objects indicate, for 
+each ND message type, the method through which the authority of the remote node is determined (Certification Path and/or CGA).</t> 
+<t>Timestamp verification. The parameters that control the verification of the Timestamp option to provide anti-reply protection are managed through the discrete objects sendTimestampDelta, sendTimestampFuzz, sendTimestampDrift.</t>
+<t>Cryptographic information repository. Two tables store the cryptographic information specifically required by SEND, after it has been validated.</t>
+	<list style='symbols'>
+	<t>The sendTrustAnchorTable stores the trust anchors configured in the node. Read-create access to the objects of this table enables the use of network 
+	management protocols to create and modify them.</t>
+	<t>The sendRemoteCertTable stores the certificates received in Certification Path Advertisement messages.
+	A RowPointer column enables the implementation of a linked list in order to reflect the dependencies of the certificates forming a Certification Path. 
+	Additionally, the first entry of a Certification Path points to the anchor to which its valiation depends on.</t>
+	</list>
+	<list>
+	<t>Information about local and remote CGA addresses is available in a non-SEND specific table defined in the CGA-MIB <xref target="CGA-MIB"></xref>.</t>
+	</list>
+<t>Compatibility with non-SEND devices. The sendCompatibilityStatus object allows disabling the protection of the ND messages generated in the node 
+for compatibility purposes. The sendInterfaceNonSendCompatTable manages the acceptance of unsecured ND messages for each
+interface. Interfaces are identified using the IfIndex type defined in <xref target="RFC2863"></xref>. If unsecured ND messages are accepted, 
+it should be useful to know which of the information received is secured. To do so, several tables show the Security status of ND related information. 
+Three tables augment existing RFC 4282 tables to indicate whether the information related to an address prefix, a default router, or an association between an IP address and a physical address, has been secured by SEND. These tables are sendIpAddressPrefixSecuredTable, sendIpDefaultRouterSecuredTable, sendIpNetToPhysicalSecuredTable. An additional table is created, as an extension to the inetCidrRouteTable <xref target="RFC4292"></xref> to indicate if the addition or modification of entries of this table due to Redirect messages has been secured by SEND or not.
+Finally, sendIgnoreUnsecuredDadFirstTentative controls DAD operation in links with non-SEND devices.</t>
+
+
+/* moved security status to compatibility. The reason is as follows: ipAddressPrefix, ipNetToPhysicalTable indicate whether the origin or last update of the entry was ND. 4292:inetCidrRouteTable indicates whether the origin or last update was a Redirect. Therefore if SEND is enabled, and non compatibility with non-SEND devices completely disabled, all entries generated through ND are SEND-secured. Therefore, knowing if they are secured or not is only relevant for "compatible" configurations. 
+The only doubt is for ipDefaultRouter related information. In this case, there is no column indicating the origin of the entry. Then, and only in this case, it could be relevant to distinguish, for a pure-SEND node, if the information was originated by SEND (and secured) or not. I guess the best should be to add a new column to ipDefaultRouter in the next revision of the MIB */
+
+<t>SEND statistics. The statistics include accounting for ND discovery secured and unsecured messages, and the number of certification messages per each 
+interface. Interfaces are identified using the IfIndex type defined in <xref target="RFC2863"></xref>.</t>
+</list>
+
+
+
+<t>The SEND-MIB does not aim to manage SEND operation in routers, except for configurations that may be common for both routers and hosts. In this sense, the approach 
+taken for this document follows the one taken in the definition of the IP-MIB <xref target="RFC4293"></xref>, that did not provide objects to manage 
+the generation of Router Advertisement messages, and in particular, it did not provide means to manage prefix options. In a similar way, the SEND-MIB 
+does not provide means to manage the generation of Certification Path Advertisement, or the securitye configuration of Router Advertisement messages, along with the certificate material in the routers. These configuration capabilities are left for future specifications.</t>
+
+
+</section>
+
+<section title="Definitions"> 
+
+<t>SEND-MIB DEFINITIONS ::= BEGIN</t>
+
+<t>IMPORTS</t>
+<figure>
+<artwork>
+   MODULE-IDENTITY, OBJECT-TYPE, 
+   Unsigned32, mib-2, TimeTicks,
+   Integer32, Counter32                            FROM SNMPv2-SMI
+   TEXTUAL-CONVENTION, TestAndIncr,
+   RowStatus, StorageType, RowPointer		   FROM SNMPv2-TC
+   MODULE-COMPLIANCE, OBJECT-GROUP                 FROM SNMPv2-CONF
+   InterfaceIndex                                  FROM IF-MIB
+   inetCidrRouteDestType, inetCidrRouteDest, 
+   inetCidrRoutePfxLen, inetCidrRoutePolicy,
+   inetCidrRouteNextHopType, 
+   inetCidrRouteNextHop 			   FROM IP-FORWARD-MIB
+   ipAddressPrefixEntry, ipDefaultRouterEntry,
+   ipNetToPhysicalEntry                            FROM IP-MIB;
+</artwork>
+</figure>
+
+<t>sendMIB MODULE-IDENTITY</t>
+<list hangIndent='4'>
+<t>LAST-UPDATED "200807040000Z"</t>
+<t>ORGANIZATION "IETF CSI (Cga & Send Maintenance) Working Group"</t>
+<t>CONTACT-INFO</t> 
+
+
+<list hangIndent='7'>
+        <t>"Editor:</t>
+        <t></t>
+        <t>Alberto Garcia-Martinez</t>
+        <t>U. Carlos III de Madrid</t>
+        <t>Avenida Universidad, 30</t>
+        <t>Leganes, Madrid 28911</t>
+        <t>Spain</t>
+        <t>Email: alberto.garcia@uc3m.es</t>
+        <t></t>
+        <t>CSI Working Group: cga-ext@ietf.org"</t>
+</list>
+
+<t>DESCRIPTION</t>
+<list hangIndent='7'>
+        <t>"The MIB module for managing the SEND protocol.</t>
+        <t></t>
+        <t> Copyright (C) The IETF Trust (2008). This version of this MIB module is part of RFC yyyy; see the RFC itself for full legal notices."</t>
+</list>
+<figure><artwork>
+       -- RFC Ed.: replace yyyy with actual RFC number & remove this 
+       -- note
+</artwork></figure>
+<t>REVISION "200807040000Z"</t>
+<t>DESCRIPTION</t>
+<list hangIndent='7'>
+        <t>"Initial version, published as RFC yyyy."</t>
+	<figure><artwork>
+              -- RFC Ed.: replace yyyy with actual RFC number & remove 
+              -- this note
+	</artwork></figure>
+</list>
+<t>::= { mib-2 XXX }</t>
+</list>
+<figure><artwork>
+       -- RFC Ed.: replace XXX with actual number assigned by IANA & 
+       -- remove this note
+</artwork></figure>
+
+
+
+<figure><artwork>
+--
+-- The textual conventions we define and use in this MIB.
+--
+</artwork></figure>
+
+<t>SendRsaVerificationMethod ::= TEXTUAL-CONVENTION</t>
+<list hangIndent='4'>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"Acceptable authorization methods to validate the RSA signature option of a received NDP message.</t>
+        <t>In the trustAnchor(1) method, the option is verified according to the keying information resulting from a Certification Path rooted in a trust anchor known by both sender and receiver. The sender may claim additional authorization through the use of CGAs, but this is neither required nor verified.</t>
+        <t>In the cga(2) method, the CGA property of the sender's address is verified.  The sender may claim additional authority through a trust anchor, but this is neither required nor verified.</t>
+        <t>In the trustAnchorAndCga(3) method, both the trust anchor and the CGA verification are required.</t>
+        <t>Finally, with the trustAnchorOrCga(4) method, either the trust anchor or the CGA verification is required."</t>
+        </list>
+/* routers do not process Router Alert from other routers, so trust anchors are not considered. For routers, only the CGA processing makes sense.
+Note: I should better understand how both trust anchor and cga verification occurs  */
+        <t>REFERENCE    "RFC 3971 : section 5.2.3"</t>
+        <t>SYNTAX       INTEGER {</t>
+        <list hangIndent='4'>
+                <t>trustAnchor(1),</t>
+                <t>cga(2),</t>
+                <t>trustAnchorAndCga(3),</t>
+                <t>trustAnchorOrCga(4)</t>
+        </list>
+<t>}</t>
+</list>
+
+
+<t>SendCertificateIndex ::= TEXTUAL-CONVENTION</t>
+        <list hangIndent='4'>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"A unique value, greater than zero, for each certificate within a table containing anchor or certificates.</t> 
+                <t>The management station MUST select a pseudo-random number 
+		to use as the index.  In the event that this index was already in use and an 'inconsistentValue' was returned in
+                response to the management protocol set operation, the
+                management station SHOULD select a new pseudo-random
+                number and retry the operation.</t>
+		/* reference for pseudo-random indexes in RowStatus ::= TEXTUAL-CONVENTION, RFC 2579 */
+		<t>The value for each certificate must remain constant at least from one re-initialization of the entity's network management system to the next re-initialization."</t>
+                </list>
+        <t>SYNTAX       Unsigned32 (1..4294967295)</t>
+</list>
+
+<t>SendX509ASN1DEREncodedRouterAuthCert ::= TEXTUAL-CONVENTION</t>
+        <list hangIndent='4'>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"A Router Authorization Certificate, i.e. an X.509v3 certificate as defined in RFC 3280 <xref target="RFC3280"></xref>. SHOULD contain at least one instance of the X.509 extension for IP addresses as defined in <xref target="RFC3279"></xref>.  The certificate is encoded as an ASN.1 DER object."</t>
+                </list>
+        <t>REFERENCE    "RFC 3971: 6.3.1"</t>
+        <t>SYNTAX       OCTET STRING (SIZE (0..4096))</t>
+</list>
+/* definition copied from rfc 4131 – the description is adapted.
+In relation with Certificates: It is not specified in RFC 3971 how the information of the certificates is encoded in order to be transported. References such as 4325 (and my own guess) suggest that it should be DER encoded. 
+An anchor is a certificate (self signed… as the example of 6.3.1)
+In relation with trust anchors: Moreover, note that the anchor is not transported using the protocol, so it could be stored in any other way. But I assume that DER encoding is a natural way.
+RFC 4325: The certificate file MUST contain either a single Distinguished Encoding Rules (DER) [X.690] encoded certificate (indicated by the .cer file extension) or a collection of
+   certificates (indicated by the .p7c file extension)
+
+On the other hand, DOCOMO’s send implementation uses OpenSSL libraries, that store the information in .pem files. "PEM format is simply base64 encoded data surrounded by header lines" – man pem(3)
+*/
+
+
+<t>SendSecurityStatus ::= TEXTUAL-CONVENTION</t>
+        <list hangIndent='4'>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"A value that specifies whether the information associated to the entry in which an object of this type is defined has been secured by SEND or not."</t>
+        </list>
+        <t>SYNTAX       INTEGER {</t>
+        <list hangIndent='4'>
+        <t>sendSecured(1),</t>
+        <t>sendNotSecured(2)</t>
+        </list>
+<t>}</t>
+</list>
+
+
+<t>send       OBJECT IDENTIFIER ::= { sendMIB 1 }</t>
+
+
+<figure><artwork>
+--
+-- Operational status of SEND
+--
+
+</artwork></figure>
+
+<t>sendInterfaceOperTable OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SEQUENCE OF SendInterfaceOperEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION </t>
+                <list hangIndent='7'>
+                <t>"This table contains the operational status of SEND in a per-interface basis, indicating if there exists the configuration required
+		by SEND to operate on each interface. The minimum configuration for a host is at least one valid anchor for the system in the sendTrustAnchorTable, and 
+		a CGA configured as a local address for each interface (appearing in the cgaLocalTable of the CGA-MIB <xref target="CGA-MIB"></xref>). When this configuration exists, SEND 
+		is considered to be operational on the considered interface, and the corresponding entry of the sendInterfaceOperTable
+		is marked as sendOperational(1). Otherwise, the interface appears as configurationRequired(2), and SEND operation is not possible for that interface.</t>
+		<t>Note that the particular behavior regarding SEND processing for sent and received messages for interfaces in an sendOperational(1) state is further
+		refined by the objects controlling compatibility with non-SEND devices, i.e. sendCompatibilityStatus, sendInterfaceNonSendCompatTable and sendIgnoreUnsecuredDadFirstTentative. 
+		If this objects controlling compatibility are not implemented, full SEND operation is assumed (the interface always protects ND messages, and messages received that are unsecured are discarded.</t>
+		<t>In the same way, the behavior of the interfaces marked as configurationRequires(2) also depends on the values of the objects of the compatibility group. In particular,
+		if this group is not implemented, or if the sendCompatibilityStatus has the value of sendSecuredMsgs(1), or if the entry corresponding to this interface
+		in the sendInterfaceNonSendCompatTable is set to acceptOnlySecured(2), then ND operation in the considered interface cannot proceed."</t>
+                </list>
+                /* object name similar to RFC4293:ipv4InterfaceTable: "The table containing per-interface IPv4-specific information" */
+        <t>::= { send 1 }</t>
+</list>
+
+
+<t>sendInterfaceOperEntry OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendInterfaceOperEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"Operational status of SEND in a given interface."</t>
+                </list>
+        <t>INDEX        { sendInterfaceOperIfIndex }</t>
+        <t>::= { sendInterfaceOperTable 1 }</t>
+</list>
+
+<t>SendInterfaceOperEntry ::= SEQUENCE {</t>
+	<list hangIndent='8'>
+        <t>sendInterfaceOperIfIndex            InterfaceIndex,</t>
+        <t>sendInterfaceOperStatus    INTEGER</t>
+	</list>
+	<list hangIndent='4'>
+	<t>}</t>
+	</list>
+
+<t>sendInterfaceOperIfIndex OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       InterfaceIndex</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The index value that uniquely identifies the interface to
+            which this entry is applicable.  The interface identified by
+            a particular value of this index is the same interface as
+            identified by the same value of the IF-MIB's ifIndex."</t>
+            </list>
+            /* object description similar to RFC4293:ipv4InterfaceTable: "The table containing per-interface IPv4-specific information" */
+        <t>::= { sendInterfaceOperEntry 1 }</t>
+</list>
+
+
+<t>sendInterfaceOperStatus OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       INTEGER {</t>
+                <list hangIndent='4'>
+                <t>sendOperational(1),</t>
+                <t>configurationRequired(2) }</t>
+                </list>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"This object indicates the operational status of the SEND subsystem. If the value is sendOperational(1), the parameters required 
+		by SEND to operate are properly configures. If the value is configurationRequired(2), some configuration is missing for SEND to operate."</t>
+                </list>
+/* DON’T THINK READ ACCESS GENERATE ANY SECURITY ISSUES. */
+        <t>::= { sendInterfaceOperEntry 2 }</t>
+</list>
+
+<figure><artwork>
+--
+-- Authority verification
+--
+</artwork></figure>
+
+<t>sendRsaWithCgaAuthorization OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       INTEGER {</t>
+                <list hangIndent='4'>
+                <t>used (1),</t>
+                <t>cgaNotUsed (2) }</t>
+                </list>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"This object indicates whether the sender includes a CGA option in ND messages containing RSA signature options.</t>
+                <t>If SEND is enabled, hosts MUST have this object set to cgaUsed, so set commands writing a cgaNotUsed value in a host MUST fail.</t> 
+                <t>In SEND enabled routers it may contain either cgaUsed or cgaNotUsed.</t>
+
+                <t>The object can only contain a cgaUsed value if a valid CGA associated to the interface exists."</t>
+                </list>
+/* THIS IS NOT CLEAR ENOUGH FOR ME – I assume that the RSA signature has something to do with the CGA key – in a router in which there could be both CGAs and keys assigned by another authority… are these keys different or the same? If they are different, which is used? */
+/* says it can be per interface or per node – I select per node: in my opinion, not very interesting to put it per interface; says in the future could be per prefix. With the current specification of SEND, I assume a host always have this on; a router may have or not */
+/* SEC_CON: changing the value of the object sendRSAWithCgaAuthorization in a router from cgaNotUsed to cgaUsed may result in a lower protection for the node if the CGA authorization method is weakest than the Certification Path one. Note that a valid CGA for the considered interface must exist
+DON’T THINK READ ACCESS GENERATE ANY SECURITY ISSUES. */
+        <t>REFERENCE    "RFC 3971 : section 5.2.3"</t>
+        <t>::= { send 2 }</t>
+</list>
+
+
+<t>sendCpaRequireIPAddressExt OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       INTEGER {</t>
+        <list hangIndent='4'>
+                <t>requiredAddressOrRange (1),</t> 
+                <t>notRequiredAddressOrRange (2) }</t>
+        </list>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"This object determines whether the X.509 certificates received in a Certification Path Advertisement message are required to contain at least one addressesOrRanges element to be processed. 
+		If the value of sendRequireIPAddressExt is requiredAddressOrRange, certificates not containing this element are discarded. 
+		If the value of the object is notRequiredAddressOrRange, these certificates are accepted by the node for further processing.</t>
+                <t>This object enables the use of limited certificate implementations."</t>
+                </list>
+/* it is not specified whether this configuration should be handled in a per-interface basis, or as a system wide knob -> I finally chose system wide */
+/* SEC_CON: Processing x.509 certificates that do not containing addressesOrRanges elements enables the propagation of unauthorized prefixes by the legitimate administrator of a site to which a public/private key pair has been delegated by a Certification Path method. 
+DON’T THINK READ ACCESS GENERATE ANY SECURITY ISSUES.
+*/
+        <t>REFERENCE    "RFC 3971 : section 6.3.1"</t>
+        <t>DEFVAL       { requiredAddressOrRange }</t>
+        <t>::= { send 3 }</t>
+</list>
+
+<t>sendCgaVerificationMinbits OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Integer32 (384 .. 65536)</t>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"Minimum acceptable key length for public keys used in the verification of remote CGA. The minimum RSA key length required for SEND is 384 bits <xref target="RFC3972"></xref>."</t>
+                </list>
+/* I’ve not found references about the best way of representing the length of a key. RADIUS-MIB don’t consider anything about keys. */
+/* SEC_CON: reducing the value of the sendCgaVerificationMinbits object may facilitate the key generation process for an attacker trying to impersonate a legitimate CGA of a third party by brute force. Short key length can also make the host to consider as secure communications that were established with hosts with keys so short that could be factorized. 
+Read access to this object by an unauthorized node can provide information about the minimum key length to use in a brute force attack to a CGA.
+*/
+        <t>REFERENCE    "RFC 3971 : section 5.1.3"</t>
+        <t>DEFVAL       { 1024 }</t>
+        <t>::= { send 4 }</t>
+</list>
+
+<t>sendCgaVerificationMaxbits OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Integer32 (384 .. 65536)</t>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"Maximum acceptable key length for public keys used in the verification of remote CGA. The value of this object can limit the amount of computation needed when verifying packets. The minimum RSA key length required for SEND is 384 bits <xref target="RFC3972"></xref>."</t>
+                </list>
+/* implementation of this object is a MAY */
+/* SEC_CON: Low values of the sendCgaVerificationMaxbits object can result in a DOS attack because it forces rejecting CGAs that are of reasonable lenght.
+On the other hand, setting too high values defeat the purpose of this object.
+DON’T THINK READ ACCESS CAN GENERATE ANY THREAT*/
+        <t>REFERENCE    "RFC 3971 : section 5.1.3"</t>
+        <t>DEFVAL       { 2048 }</t>
+        <t>::= { send 5 }</t>
+</list>
+
+<figure><artwork>
+--
+-- objects related with the authorization method used for verifying 
+-- RSA signature options for each NDP message type
+--
+</artwork></figure>
+
+<t>sendRsaVerificationMethodNS OBJECT-TYPE</t>
+<list hangIndent='4'>
+        <t>SYNTAX       SendRsaVerificationMethod</t>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"This object indicates the method through which the authority of the remote node is determined in the Neighbor Solicitation messages received.</t> 
+		<t>It affects to all interfaces of the node."</t>
+                </list>
+/* It is specifically required to be configured per message type. It is not required to be configured per link. */
+        <t>REFERENCE    "RFC 3971 : section 5.2.3"</t>
+        <t>::= { send 6 }</t>
+</list>
+
+<t>sendRsaVerificationMethodNA OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendRsaVerificationMethod</t>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"This object indicates the method through which the authority of the remote node is determined in the Neighbor Advertisement messages received.</t> 
+		<t> It affects to all interfaces of the node."</t>
+                </list>
+        <t>REFERENCE    "RFC 3971 : section 5.2.3"</t>
+        <t>::= { send 7 }</t>
+</list>
+
+<t>sendRsaVerificationMethodRS OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendRsaVerificationMethod</t>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+                <list hangIndent='7'>
+                <t>DESCRIPTION</t>
+                <t>"This object indicates the method through which the authority of the remote node is determined in the Router Solicitation messages received.</t> 
+		<t>It affects to all interfaces of the node."</t>
+                </list>
+        <t>REFERENCE    "RFC 3971 : section 5.2.3"</t>
+        <t>::= { send 8 }</t>
+</list>
+
+<t>sendRsaVerificationMethodRA OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendRsaVerificationMethod</t>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"This object indicates the method through which the authority of the remote node is determined in the Router Advertisement messages received.</t> 
+		<t>It affects to all interfaces of the node."</t>
+                </list>
+        <t>REFERENCE    "RFC 3971 : section 5.2.3"</t>
+        <t>::= { send 9 }</t>
+</list>
+
+<t>sendRsaVerificationMethodRedirect OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendRsaVerificationMethod</t>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"This object indicates the method through which the authority of the remote node is determined in the Redirect messages received.</t> 
+		<t>It affects to all interfaces of the node."</t>
+                </list>
+        <t>REFERENCE    "RFC 3971 : section 5.2.3"</t>
+        <t>::= { send 10 }</t>
+</list>
+/* SEC_CON with ALL of these objects. The modification of the authorization method used for validating any of the messages of the ND protocol by an attacker, through illegitimate modification of the sendRsaVerificationMethodNS, sendRsaVerificationMethodNA, sendRsaVerificationMethodRS, sendRsaVerificationMethodRA, and sendRsaVerificationMethodRedirect can result in a DOS attack. The DOS attack occurs when the node is configured to require a type of authorization that it is not being used by the party generating the message. 
+Additionally, variation of any of these objects may result in a lower protection if the method is changed from trustAnchorAndCga to the weakest authorization method, although any of the methods used by the generator of the message should provide enough protection. 
+DON’T THINK READ ACCESS GENERATE ANY SECURITY ISSUES.*/
+
+<figure><artwork>
+--
+-- objects associated to timestamp verification management
+--
+</artwork></figure>
+
+<t>sendTimestampDelta OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Unsigned32</t>
+        <t>UNITS        "seconds"</t>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+           <t>"The maximum difference in absolute value between the timestamp included in a Neighbor Discovery message and the reception time of the message, measured in seconds with the local clock. It corresponds to the variable TIMESTAMP_DELTA defined in RFC 3971."</t>
+           </list>
+/* SEC_CON: Incrementing the value of the objects sendTimestampDelta sendTimeFuzz, and sendTimestampDrift extends the vulnerability window for reply attacks. Section 9.2.5 of <xref target="RFC3971"></xref> discusses the impact of this action.
+On the other hand, setting low values to these three objects may result in a DOS attack, since valid SEND messages could be discarded by too tight validation constraints. */
+/* inspired in RFC 4293:ipReasmTimeout */
+        <t>REFERENCE    "RFC 3971 : section 5.3.4.2, RFC 3971 : section 10.2"</t>
+        <t>DEFVAL       { 300 }</t>
+        <t>::= { send 11 }</t>
+</list>
+
+<t>sendTimestampFuzz OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       TimeTicks</t>
+        <t>UNITS        "milliseconds"</t>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+           <t>"Time in milliseconds, used to check each time a new SEND message is received that the following inequality holds:</t>
+           <t>TSnew + sendTimestampFuzz > TSlast + (RDnew - RDlast) x (1 - sendTimestamDrift) - sendTimestampFuzz</t>
+
+           <t>With</t>
+           <t>TSnew: timestamp of the newly received SEND message</t>
+           <t>TSlast: timestamp of the previously received SEND message</t>
+           <t>RDnew: reception time of the newly received SEND message</t>
+           <t>RDlast: reception time of the previously received SEND message.</t>
+
+           <t>This object corresponds to the variable TIMESTAMP_FUZZ defined in RFC 3971."</t>
+           </list>
+/* inspired in RFC 4293:ipReasmTimeout */
+/* since DEFVAL is set to 1 second, I consider milliseconds to be a good unit for this object */
+        <t>REFERENCE    "RFC 3971 : 5.3.4.2, RFC 3971 : section 10.2"</t>
+        <t>DEFVAL       { 100 }</t>
+        <t>::= { send 12 }</t>
+</list>
+
+
+<t>sendTimestampDrift OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Integer32 (0..10000)</t>
+        <t>UNITS        "0.01 Percentage"</t>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+        <t>"The maximum clock drift allowed when validating the timestamp of a received Neighbor Discovery message, measured in parts per 10000 (or 0.01 percentage). It corresponds to the variable TIMESTAMP_DRIFT defined in RFC 3971."</t>
+        </list>
+        <t>REFERENCE    "RFC 3971 : 5.3.4.2, RFC 3971 : section 10.2"</t>
+        <t>DEFVAL       { 100 }</t>
+        /* reference: a cisco definition using percentages. I assume it is required some fine granularity around 1 percent */
+        <t>::= { send 13 }</t>
+</list>
+
+<figure><artwork>
+
+--
+-- Cryptographic information repository
+--
+</artwork></figure>
+
+<figure><artwork>
+--
+-- table of trust anchors known by a node
+--
+</artwork></figure>
+
+/* I could say that either a node or a router… but at the end, routers do not even need to have its own anchors – they just don’t care, because they do not need to validate anything about it */
+
+<t>sendTrustAnchorSpinLock OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       TestAndIncr</t>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+           <t>"An advisory lock used to allow cooperating SNMP managers to coordinate their use of the set operation in creating or
+            modifying rows within the sendTrustAnchorTable table.</t>
+
+            <t>In order to use this lock to coordinate the use of set
+            operations, managers should first retrieve
+            sendTrustAnchorSpinLock. They should then determine the
+            appropriate row to create or modify, selecting a pseudo-random number for the sendTrustAnchorIndex. Finally, they should
+            issue the appropriate set command including the retrieved
+            value of sendTrustAnchorSpinLock. If another manager has
+            altered the table in the meantime, then the value of
+            sendTrustAnchorSpinLock will have changed and the creation
+            will fail as it will be specifying an incorrect value for
+            sendTrustAnchorSpinLock. It is suggested, but not
+            required, that the sendTrustAnchorSpinLock be the first var
+            bind for each set of objects representing a 'row' in a PDU."</t>
+            </list>
+    <t>::= { send 14 }</t>
+    </list>
+/* reference ipv6RouterAdvertSpinLock */
+
+
+<t>sendTrustAnchorTable OBJECT-TYPE</t> 
+        <list hangIndent='4'>
+        <t>SYNTAX       SEQUENCE OF SendTrustAnchorEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The list of allowed trust anchors that are used for validating the authority of the Certification Path of a remote node.</t> 
+                <t>Entries can be created to configure new anchors. Anchor entries can also be deleted.</t> 
+                <t>Invalid certificates (with incorrect syntax) MUST NOT appear as an entry in the sendTrustAnchorTable. A managed element MUST check for the validity of the information provided for the creation of a new row, and if inconsistency is determined, the management protocol set operation MUST fail with an error of `inconsistentValue`.</t>
+                <t>Note that the removal of entries in this table results in the deletion of all the certificates belonging to Certification Paths rooted in this anchor.</t> 
+		<t>If SEND has been enabled in a host, it should have at least one anchor. Therefore, the last entry in the table can 
+		only be deleted if the sendEnableStatus object value is set to sendDisabled."</t>
+                </list>
+/*SEC_CON: The addition of an entry in the anchor table by an unauthorized party can be used to enable all kind of attacks for which SEND provides protection, with the aggravating circumstance that the node may consider that the information is secured. 
+The deletion of a valid entry in the anchor table by an attacker can result in DOS, since the node does not consider validly secured information as legitimate. 
+Read-only access should be implemented in nodes willing to prevent these attacks.
+Read access does not seem to have any serious security concerns. */
+/* A trust anchor seems to be, according to the example at 6.3.1, a (RFC 3280) "the trust anchor is provided in the form of a self-signed certificate", i.e. it is a certificate 
+Ref: 5.2.3
+I ignore in the structure this part, for the sake of simplicity: Ref 6.5: A trust anchor configuration consists of the following items:
+   o  A public key signature algorithm and associated public key, which
+      may optionally include parameters.
+   o  A name as described in Section 6.4.3.
+   o  An optional public key identifier.
+   o  An optional list of address ranges for which the trust anchor is
+      authorized. */
+      <t>REFERENCE "RFC 3971 : 6.5"</t>
+      <t>::= { send 15 }</t>
+</list>
+
+/* I don't know if an anchor need to be checked against revocation lists. If so, maybe it should have a OperationalStatus in which a 'provisional' state should be included */
+<t>sendTrustAnchorEntry OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendTrustAnchorEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The certificate corresponding to an anchor."</t>
+                /* I allow the modification of the Cert part, once an entry has being created, because may be a certificate could substitute another certificate, so the Index may remain unchanged although the certificate ("the content" may change). */ 
+                </list>
+        <t>INDEX        { sendTrustAnchorIndex }</t>
+        <t>::= { sendTrustAnchorTable 1 }</t>
+</list>
+
+<t>SendTrustAnchorEntry ::= SEQUENCE {</t>
+        <list hangIndent='8'>
+        <t>sendTrustAnchorIndex         SendCertificateIndex,</t>
+        <t>sendTrustAnchorCert          SendX509ASN1DEREncodedRouterAuthCert,</t>
+	<t>sendTrustAnchorAdminStatus	INTEGER,</t>
+	<t>sendTrustAnchorOperStatus	INTEGER,</t>
+        <t>sendTrustAnchorRowStatus     RowStatus,</t>
+        <t>sendTrustAnchorStorageType   StorageType</t>
+        </list>
+        <list hangIndent='4'>
+        <t>}</t>
+</list>
+
+
+<t>sendTrustAnchorIndex OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendCertificateIndex</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"A unique value, greater than zero, for each trust anchor.  The management station MUST select a pseudo-random number 
+		to use as the index.  In the event that this index was already in use and an 'inconsistentValue' was returned in
+                response to the management protocol set operation, the
+                management station SHOULD select a new pseudo-random
+                number and retry the operation.</t>
+                <t>The value of the sendTrustAnchorIndex for each trust anchor
+                must remain constant at least from one re-initialization of
+                the entity's network management system to the next re-
+                initialization."</t>
+                </list>
+/* the certificate itself is not a practical index. Inspired from the interface index of rfc 2863*/
+/* reference for pseudo-random indexes in RowStatus ::= TEXTUAL-CONVENTION, RFC 2579 */
+        <t>::= { sendTrustAnchorEntry 1 }</t>
+</list>
+
+<t>sendTrustAnchorCert OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendX509ASN1DEREncodedRouterAuthCert</t>
+        <t>MAX-ACCESS   read-create</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"Variable-length field containing the trust anchor certificate information."</t>
+                </list>
+        <t>::= { sendTrustAnchorEntry 2 }</t>
+</list>
+
+<t>sendTrustAnchorAdminStatus OBJECT-TYPE</t>
+        <list hangIndent='4'>
+	<t>SYNTAX       INTEGER {</t>
+        <list hangIndent='4'>
+                <t>enabled(1),</t> 
+                <t>disabled(2) }</t>
+        </list>
+        <t>MAX-ACCESS   read-create</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The desired state of the trust anchor of this entry. When set to enabled(1), the administrator requires 
+		the trust anchor to be available for validating the authority of Certification Paths. Conversely, when set to
+		disabled, the administrator requires the anchor not to be available for validating the authority of Certification Paths."</t>
+                </list>
+	<t>DEFVAL 	{ disabled }</t>
+        <t>::= { sendTrustAnchorEntry 3 }</t>
+</list>
+
+
+<t>sendTrustAnchorOperStatus OBJECT-TYPE</t>
+        <list hangIndent='4'>
+	<t>SYNTAX       INTEGER {</t>
+        <list hangIndent='4'>
+                <t>validAndEnabled(1),</t> 
+                <t>disabled(2) }</t>
+		/* maybe a provisional state, if anchors need, as certificates, to check a Certificate Revocation List */
+        </list>
+        <t>MAX-ACCESS   read-only</t>	/* you write in the AdministrativeStatus to try to change the OperationalStatus */
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The current operational state of the anchor trust. The value validAndEnabled(1) indicates that this entry is both valid 
+		(i.e. with correct syntax for the trust anchor certificate) and operational (i.e. avaliable for validating the authority of a certificate).
+		The value disabled(2) indicates that the entry is not operational (i.e. it is not available for validating the authority of a certificate)."</t>
+		</list>
+        <t>::= { sendTrustAnchorEntry 4}</t>
+</list>
+
+
+<t>sendTrustAnchorRowStatus OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       RowStatus</t>
+        <t>MAX-ACCESS   read-create</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+           <t>"The status of this conceptual row.</t>
+
+            <t>The value of this object has no effect on
+            whether other objects in this conceptual row can be
+            modified.</t>
+
+            <t>A conceptual row can not be made active until the sendTrustAnchorIndex and sendTrustAnchorCert have been set to a valid value."</t>
+        </list>
+    <t>::= { sendTrustAnchorEntry 5 }</t>
+</list>
+
+
+<t>sendTrustAnchorStorageType OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       StorageType</t>
+        <t>MAX-ACCESS   read-create</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+           <t>"The storage type for this conceptual row.  If this object
+            has a value of 'permanent', then no other objects are
+            required to be able to be modified."</t>
+        </list>
+    <t>DEFVAL { volatile }</t>
+    <t>::= { sendTrustAnchorEntry 6 }</t>
+</list>
+/* similar to the ipAddress case */
+/* justification for this style for the object definition: RFC 4181 section 4.6.4 */
+
+<figure><artwork>
+--
+-- table of the certificates that constitute a Certification Path
+-- received from a remote router
+-- 
+</artwork></figure>
+
+<t>sendRemoteCertTable OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SEQUENCE OF SendRemoteCertEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION </t>
+                <list hangIndent='7'>
+                <t>"A list of standard Public Key Certificates (PKC, in the sense of <xref target="RFC3280"></xref>). Each certificate belongs to a Certification Path received from a remote router, i.e. either has been certified by a trust anchor or by a parent certificate. Certificates being certified by a trust anchor certificate contain a RowPointer element that points to the parent entry in the sendTrustAnchorTable (note that there MAY be multiple certificates issued by a single trust anchor). Certificates being signed by another certificate in the table contain a RowPointer element that points to the parent certificate in this table, to reflect the dependencies of the certificates forming a Certification Path.</t> 
+                <t>The agent populates the entries in this table with the information being received from Certification Path Advertisement messages. Only verified certificates, i.e. certificates verified to the trust anchor or to a certificate that has been verified earlier (i.e. that validly belongs to a Certification Path), are included in the table.</t>
+                <t>Entries in this table can be removed as a result of the normal operation of SEND. Additionally, the deletion of an anchor on which a Certification
+		Path is rooted must result in the deletion of all the certificates of the Certification Path.</t>
+		<t>In the period since the certificate has been verified to the time at which it is possible to check the information obtained from the Certificate Revocation List, the sendRemoteCertStatus object indicates that the certificate is provisional(1).</t>
+                <t>The node can delete entries if the periodic Certificate Revocation List check fails (either in the provisional or in the valid states). In this case, all certificates depending on the revoked one MUST be deleted."</t>
+                </list>
+                /* SEC_CON: The sendRemoteCertTable is accessible as read-only. 
+Don’t think are issues with this – only the disclosure of public addresses, and the relationship with the routers… */
+
+/* Defined as read-only: like the RFC4293:ipAddressTable and RFC4293:ipDefaultRouterTable. */
+        <t>REFERENCE    "RFC 3971 : 6.4.2, RFC 3971 : 6.4.6"</t>
+        <t>::= { send 16 }</t>
+</list>
+
+
+<t>sendRemoteCertEntry OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendRemoteCertEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='4'>
+                <t>"Information related with a particular certificate"</t>
+                </list>
+        <t>INDEX        { sendRemoteCertIndex }</t>
+        <t>::= { sendRemoteCertTable 1 }</t>
+</list>
+
+<t>SendRemoteCertEntry ::= SEQUENCE {</t>
+        <list hangIndent='8'>
+        <t>sendRemoteCertIndex                  SendCertificateIndex,</t>
+        <t>sendRemoteCertCert                   SendX509ASN1DEREncodedRouterAuthCert,</t>
+        <t>sendRemoteCertAnchor                 RowPointer,</t>
+        <t>sendRemoteCertParentCertificate      RowPointer,</t>
+        <t>sendRemoteCertStatus INTEGER</t>
+        </list>
+        <list hangIndent='4'>
+<t>}</t>
+</list>
+
+
+<t>sendRemoteCertIndex OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendCertificateIndex</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+		<t>"A unique value, greater than zero, for each certificate.  The management station MUST select a pseudo-random number 
+		to use as the index.  In the event that this index was already in use and an 'inconsistentValue' was returned in
+                response to the management protocol set operation, the
+                management station SHOULD select a new pseudo-random
+                number and retry the operation.</t>
+                <t>The value of the sendTrustAnchorIndex for each certificate
+                must remain constant at least from one re-initialization of
+                the entity's network management system to the next re-
+                initialization."</t>
+        </list>
+/* the certificate itself is not a practical index. Inspired from the interface index of rfc 2863*/
+        <t>::= { sendRemoteCertEntry 1 }</t>
+</list>
+
+/* THIS IS USELESS !!! 
+sendRemoteCertAddress OBJECT-TYPE
+        SYNTAX Ipv6Address
+        DESCRIPTION 
+        "The source address (link local unicast) of the received Certification Path Advertisement message that contained this certificate. Note that this address is not sufficient for the unique identification of the routers, because a router may use multiple addresses. Consequently, certificates belonging to the same Certificate Path may have different values for this object"
+-       */
+
+
+<t>sendRemoteCertCert OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendX509ASN1DEREncodedRouterAuthCert</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"Variable-length field containing the certificate information."</t>
+                </list>
+<t>::= { sendRemoteCertEntry 2 }</t>
+</list>
+
+<t>sendRemoteCertAnchor OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       RowPointer</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t> 
+                <list hangIndent='4'>
+                <t>"For the first certificate of a Certification Path, this object points to the row of the sendTrustAnchorTable of the anchor that certifies this certificate. 
+		For certificates other than the first of a Certification Path it contains a value of { 0 0 }."</t>
+                </list>
+<t>::= { sendRemoteCertEntry 3 }</t>
+</list>
+
+<t>sendRemoteCertParentCertificate OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       RowPointer</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION </t>
+                <list hangIndent='7'>
+                <t>"For the first certificate of a Certification Path, this object contains a value of { 0 0 }
+		For certificates other than the first of a Certification Path, the object points to the parent certificate entry."</t>
+                </list>
+        <t>::= { sendRemoteCertEntry 4 }</t>
+</list>
+
+
+
+<t>sendRemoteCertStatus OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       INTEGER {</t>
+                <list hangIndent='4'>
+                <t>provisional(1),</t>
+                <t>valid(2)</t>
+                </list>
+        <t>}</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The status of the certificate.</t> 
+		<t>A certificate can be used in a provisional(1) state if a Certificate Revocation List check has not been performed due to the lack 
+		of connection to internet. After validating the certificate in the CRL, the certificate status is changed to valid(2). Note that if subsequent checks to the CRL result in invalidation of the certificate, the certificate is removed from the table, so no state is required for this case."</t>
+                </list>
+/* Note that CRLs do not necessarily have lifetimes associated, so we don’t include lifetime associated to the certificate. To show this, in RFC 3280, TBSCertList type, we see that there is a "thisUpdate" of type "Time" that is compulsory for TBSCertList objects… and a "nextUpdate" of type Time that is OPTIONAL. 
+I assume that the host retrieve the CRL periodically, and the list maybe updated or not - maybe this time could be included as an object – similar to ipDefaultRouterLifetime… although for the CRL object, I don’t know how long it could be. For now, I don’t define it */
+        <t>REFERENCE    "RFC 3971 : section 6.3.1"</t>
+        <t>::= { sendRemoteCertEntry 5 }</t>
+</list>
+
+/* in previous versions (1.4.1) I defined a column to point to the router to which the certificate was referring to – because the public key of the router was certified by the current certificate. I no longer do this because
+-       there exist an augmentation of the ipDefaultRouter info that indicates if a router is secured or not
+-       Don’t think it is necessary to know which router is using which key. And if it were needed, may be the place will be the augmentation of the ipDefaultRouter table. Don’t see the need for matching certificates and routers
+-       Several routers may use the same key, in which case this mechanism is a problem
+*/
+
+<figure><artwork>
+--
+-- compatibility with non-SEND devices
+--
+</artwork></figure>
+
+/* In my opinion, the following object should be REMOVED. It is here to comply with the requirement at RFC 3971, section 8 that
+"A SEND node MAY also have a configuration option whereby it disables
+   the use of SEND completely, even for the messages it sends itself."
+Don't think this is useful: non-SEND devices can interpret secured messages - it says this in RFC 3971. 
+And the ability to accept or not unsecured messages (this is very interesting) is controlled in the sendInterfaceNonSendCompatTable.
+So I don't see the point of this object. */
+
+<t>sendCompatibilityStatus OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       INTEGER {</t>
+                <list hangIndent='4'>
+		<t>sendSecuredMsgs(1),</t>
+                <t>sendAndReceiveUnsecuredMsgs(2) }</t>
+                </list>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"This object partially controls the security of ND messages send or accepted by a node, in a system-wide basis.
+		The sendInterfaceNonSendCompatTable table complements the configuration capabilities for the SEND security behavior.</t>
+		<t>If the value of the sendAdminStatus is set to sendSecuredMsgs(1), the administrator requires the system to protect all messaged sent with SEND. 
+		The behavior on the reception of unsecured messages for each interface is determined in the sendInterfaceNonSendCompatTable, in a configuration 
+		that is specific for each interface.</t>
+		
+		<t>If the value of the sendAdminStatus is set to sendAndReceiveUnsecuredMsgs, the administrator requires all interfaces of the system to 
+		send unsecured ND messages and accept unsecured messages from all nodes. In this case it is not relevant the value of the sendInterfaceNonSendCompatTable.
+		This configuration can be used to ease transition from unsecured to secured environments</t> 
+		<t>Note that the behavior of SEND depends also on the value of the entry corresponding to the same interface in the sendInterfaceOperTable. If the interface
+		does not have the configuration required by SEND to operate, setting the sendCompatibilityStatus object to sendSecuredMsgs(1) will result in the inability of the interface to 
+		process ND messages.</t>
+		<t>If this object is implemented in a MIB, the sendInterfaceNonSendCompatTable must also exist on it."</t>
+/* Note that the SEND protocol is available (although may be not active) because of the own existence of the MIB. 
+Reference for name: 4293:ipv4InterfaceEnableStatus */
+/*SEC_CON: Write access from an unauthorized party to disable SEND operation can be used to enable all kind of attacks for which SEND provides protection. Note that some of the attacks can also be performed by creating new entries in the RFC4292::ipNetToPhysicalTable, in which the information relating remote IP addresses and link-layer addresses is stored. On the other hand, the RFC4292::ipAddressPrefixTable and RFC4292::defaultRouterTable were not exposed to these attacks due to the restriction of read-only access.
+Unauthorized read access to this object may make evident to an attacker that the node accepts unsecured information. However, this information does not seem to provide great advantage considering that the attacker can direct unsecured messages to the node without knowing if it accepts them or not.*/
+                </list>
+        <t>REFERENCE    "RFC 3971 : section 8, RFC 3971 : 6.5"</t>
+        <t>DEFVAL       { sendSecuredMsgs }</t>
+        <t>::= { send 17 }</t>
+</list>	
+
+<t></t>
+<t>sendInterfaceNonSendCompatTable OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SEQUENCE OF SendInterfaceNonSendCompatEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION </t>
+                <list hangIndent='7'>
+                <t>"This table contains per-interface specific SEND security configuration to manage the acceptance on each interface of unsecured messages."</t>
+                </list>
+                /* object name similar to RFC4293:ipv4InterfaceTable: "The table containing per-interface IPv4-specific information" */
+        <t>::= { send 18 }</t>
+</list>
+
+
+<t>sendInterfaceNonSendCompatEntry OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendInterfaceNonSendCompatEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"Configuration for accepting or not unsecured messages in a specific interface."</t>
+                </list>
+        <t>INDEX        { sendInterfaceNonSendCompatIfIndex }</t>
+        <t>::= { sendInterfaceNonSendCompatTable 1 }</t>
+</list>
+
+<t>SendInterfaceNonSendCompatEntry ::= SEQUENCE {</t>
+<list hangIndent='8'>
+        <t>sendInterfaceNonSendCompatIfIndex            InterfaceIndex,</t>
+        <t>sendInterfaceNonSendCompatAcceptUnsecured    INTEGER</t>
+</list>
+<list hangIndent='4'>
+<t>}</t>
+</list>
+
+
+<t>sendInterfaceNonSendCompatIfIndex OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       InterfaceIndex</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The index value that uniquely identifies the interface to
+            which this entry is applicable.  The interface identified by
+            a particular value of this index is the same interface as
+            identified by the same value of the IF-MIB's ifIndex."</t>
+            </list>
+            /* object description similar to RFC4293:ipv4InterfaceTable: "The table containing per-interface IPv4-specific information" */
+        <t>::= { sendInterfaceNonSendCompatEntry 1 }</t>
+</list>
+
+
+<t>sendInterfaceNonSendCompatAcceptUnsecured OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       INTEGER {</t>
+                <list hangIndent='4'>
+                <t>acceptSecuredAndUnsecured(1),</t>
+                <t>acceptOnlySecured(2)</t>
+                </list>
+        <t>}</t>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"This columnar object indicates whether the node accepts or not unsecured messages in a given link. 
+		When its value is acceptSecuredAndUnsecured(1), both secured and unsecured messages are processed, while when its value is 
+		acceptOnlySecured(2) unsecured messages are ignored.</t>
+                <t>The acceptance of unsecured messages is allowed to ease transition from unsecured to secured links.</t>
+		<t>Note that the behavior of SEND depends also on the value of the entry corresponding to the same interface in the sendInterfaceOperTable. If the interface
+		does not have the configuration required by SEND to operate, setting the sendInterfaceNonSendCompatAcceptUnsecured object to acceptOnlySecured(2) will result in the inability of the interface to 
+		process ND messages."</t>
+/*SEC_CON: Write access from an unauthorized party to disable SEND validation in a link can be used to enable all kind of attacks for which SEND provides protection. 
+Unauthorized read access to this object may make evident to an attacker that the node accepts unsecured information in a given link. However, this information does not seem to provide great advantage considering that the attacker can direct unsecured messages to the node without knowing if it accepts them or not.*/
+                </list>
+        <t>REFERENCE    "RFC 3971 : section 8"</t>
+        <t> DEFVAL       { acceptOnlySecured }</t>
+        <t>::= { sendInterfaceNonSendCompatEntry 2 }</t>
+</list>
+
+
+<figure><artwork>
+   --
+   -- Compatibility with non-SEND devices: security status of ND related
+   -- information
+   --
+</artwork></figure>
+
+<figure><artwork>
+   --
+   -- Augmentation of tables at RFC 4293 to indicate whether the 
+   -- information included in an entry in the
+   -- ipAddressPrefixTable, ipDefaultRouterTable, ipNetToPhysicalTable and
+   -- part of the information of inetCidrRouteTable has been secured or not
+   --
+   
+   -- augmentation of IP-MIB:ipAddressPrefixTable
+</artwork></figure>
+
+/* Neighbor Cache, Prefix List, Default Router must have a secured/unsecured flag that indicates whether the message that caused the creation or last update of the entry was secured or insecured. Ref 8. */
+/* note that a secured router can propagate unsecured prefixes. Ref 7.3*/
+
+
+
+
+<t>sendIpAddressPrefixSecuredTable  OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SEQUENCE OF SendIpAddressPrefixSecuredEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"A table that contains one column indicating if each entry in the ipAddressPrefixTable (RFC 4293) is secured or not. An entry in the 
+		ipAddressPrefixTable is secured if the last message of the Router Advertisement message that caused the creation or last update of the entry was secured. An entry in ipAddressPrefixEntry is unsecured otherwise. This table contains one row for every address prefix entry on the node.  This table augments the basic address prefix information of the ipAddressPrefixEntry in the IP-MIB.</t>
+		<t>If an entry in the ipAddressPrefixTable is deleted, the corresponding entry in the sendIpAddressPrefixSecuredTable must be deleted.</t>
+                <t></t>
+		<t>This table SHOULD only exist in the managed node if the value of the sendInterfaceNonSendCompatAcceptUnsecured columnar object
+		is acceptSecuredAndUnsecured(1) for at least one of the interfaces. Otherwise, all the interfaces accept only secured ND messages."</t>
+                </list>
+/* definition inspired in t11vfVirtualSwitchTable from RFC 4747 */
+        <t>REFERENCE    "RFC 3971: section 8, ipAddressPrefixEntry is defined in the IP-MIB <xref target="RFC4293"></xref>."</t>
+        <t>::= { send 20 }</t>
+</list>
+/* SEC_CON: The objects defined in the send*SecuredTable_s are defined as read-only objects. The impact of accessing to these information is considered to be low */
+
+
+<t>sendIpAddressPrefixSecuredEntry OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendIpAddressPrefixSecuredEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+           <t>"An entry of the sendIpAddressSecuredTable.  Each row is for an address prefix.</t>
+
+            <t>This table augments the ipAddressPrefixTable, i.e., every entry
+            in this table has a one-to-one correspondence with an
+            entry in the ipAddressPrefixTable."</t>
+            </list>
+/* It could be said that the information contained in this entry could be included in the future in the IP-MIB… but it is just compatibility stuff, that should no longer be required in the long term. I don’t suggest its inclusion in the IP-MIB */
+        <t>AUGMENTS     { ipAddressPrefixEntry}</t>
+        <t>::= { sendIpAddressPrefixSecuredTable  1 }</t>
+</list>
+
+<t>SendIpAddressPrefixSecuredEntry ::= SEQUENCE {</t>
+        <list hangIndent='8'>
+        <t>sendIpAddressPrefixSecuredStatus     SendSecurityStatus</t>
+        </list>
+<list hangIndent='4'>
+<t>}</t>
+</list>
+
+<t>sendIpAddressPrefixSecuredStatus OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendSecurityStatus</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The value of this object indicates if its corresponding entry in the ipAddressPrefixTable is secured (if the last Router Advertisement message that caused the creation or last update of the entry was secured by SEND) or not."</t>
+                </list>
+/* This is naturally read-only – as a result of being generated by the reception of the ND messages (it is not only because ipAddressPrefix objects are read-only).
+For setting the object to sendSecured, two conditions must hold: (1) the Certification Path associated to the router sending the RA must contain the address range of the prefix and (2) the RSA option must be validated with the public key associated to the Certification Path. */
+<t>::= { sendIpAddressPrefixSecuredEntry 1 }</t>
+</list>
+
+<figure><artwork>
+
+-- augmentation of IP-MIB:ipDefaulRouterTable
+</artwork></figure>
+
+<t>sendIpDefaultRouterSecuredTable  OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SEQUENCE OF SendIpDefaultRouterSecuredEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+           <t>"A table that contains one column indicating if each entry in the ipDefaultRouterTable (RFC 4293) is secured or not. An entry in ipDefaultRouterTable is secured if the last message of the Router Advertisement message that caused the creation or last update of the entry was secured. An entry in ipDefaultRouterEntry is unsecured otherwise. This table contains one row for every address prefix entry on the node.  This table augments the basic address prefix information of the ipDefaultRouterEntry in the IP-MIB.</t>
+	   <t>If an entry in the ipDefaultRouterTable is deleted, the corresponding entry in the sendIpDefaultRouterSecuredTable must be deleted.</t>
+	   <t></t>
+		<t>This table SHOULD only exist in the managed node if the value of the sendInterfaceNonSendCompatAcceptUnsecured columnar object
+		is acceptSecuredAndUnsecured(1) for at least one of the interfaces. Otherwise, all the interfaces accept only secured ND messages."</t>
+           </list>
+        /* definition inspired in t11vfVirtualSwitchTable from RFC 4747 */
+       <t>REFERENCE     "RFC 3971 : section 8</t>
+       <t>          ipDefaultRouterEntry is defined in the IP-MIB <xref target="RFC4293"></xref>."</t>
+       <t>::= { send 21 }</t>
+</list>
+/* Neighbor Cache, Prefix List, Default Router must have a secured/unsecured flag that indicates whether the message that caused the creation or last update of the entry was secured or insecured. Ref 8. */
+
+<t>sendIpDefaultRouterSecuredEntry OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendIpDefaultRouterSecuredEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+           <t>"An entry of the sendIpDefaultRouterSecuredTable.  Each row is for a default router.</t>
+           <t>This table augments the ipDefaultRouterTable, i.e., every entry in this table has a one-to-one correspondence with an entry in the ipDefaultRouterTable."</t>
+           </list>
+           /* It could be said that the information contained in this entry could be included in the future in the IP-MIB… but it is just compatibility stuff, that should no longer be required in the long term. I don’t suggest its inclusion in the IP-MIB */
+        <t>AUGMENTS     { ipDefaultRouterEntry}</t>
+<t>::= { sendIpDefaultRouterSecuredTable  1}</t>
+</list>
+
+<t>SendIpDefaultRouterSecuredEntry ::= SEQUENCE {</t>
+        <list hangIndent='8'>
+        <t>sendIpDefaultRouterSecuredStatus SendSecurityStatus</t>
+        </list>
+<list hangIndent='4'>
+<t>}</t>
+</list>
+
+<t>sendIpDefaultRouterSecuredStatus OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendSecurityStatus</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The value of this object indicates if its corresponding entry in the ipDefaultRouterTable is secured (if the last Router Advertisement message that caused the creation or last update of the entry was secured by SEND) or not."</t>
+                </list>
+/* This is naturally read-only – as a result of being generated by the reception of the ND messages (it is not only because ipDefaultRouter is read-only).
+For setting the object to sendSecured, the RSA option of the Router Advertisement must be validated with the public key associated to the Certification Path. */
+<t>::= { sendIpDefaultRouterSecuredEntry 1 }</t>
+</list>
+
+<t></t>
+<t>-- augmentation of neighbor cache, i.e. IP-MIB:ipNetToPhysicalTable</t>
+
+<t>sendIpNetToPhysicalSecuredTable  OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SEQUENCE OF SendIpNetToPhysicalSecuredEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+           <t>"A table that contains one column indicating if each entry in the ipNetToPhysicalTable (RFC 4293) is secured or not. An entry in ipNetToPhysicalTable is secured if the last Neighbor Advertisement message that caused the creation or last update of the entry was secured. An entry in ipNetToPhysicalEntry is unsecured otherwise. This table contains one row for every address prefix entry on the node.  This table augments the basic address prefix information of the ipNetToPhysicalEntry in the IP-MIB.</t>
+           <t>If an entry in the ipNetToPhysicalTable is deleted, the corresponding entry in the sendIpNetToPhysicalSecuredTable must be deleted.</t>
+	   <t></t>
+		<t>This table SHOULD only exist in the managed node if the value of the sendInterfaceNonSendCompatAcceptUnsecured columnar object
+		is acceptSecuredAndUnsecured(1) for at least one of the interfaces. Otherwise, all the interfaces accept only secured ND messages."</t>
+        </list>
+           /* definition inspired in t11vfVirtualSwitchTable from RFC 4747 */
+/* not sure if Redirect can create entries in the ipNetToPhysicalTable. However, even if Redirect can create them, and the redirect is secured, it is not clear to me if this should be reflected in this status if the real peer has not sent a NA */
+       <t>REFERENCE     "RFC 3971 : section 8</t>
+                  <t>ipNetToPhysicalEntry is defined in the IP-MIB <xref target="RFC4293"></xref>."</t>
+       <t>::= { send 22 }</t>
+</list>
+/* Neighbor Cache, Prefix List, Default Router must have a secured/unsecured flag that indicates whether the message that caused the creation or last update of the entry was secured or insecured. Ref 8. */
+
+
+<t>sendIpNetToPhysicalSecuredEntry OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendIpNetToPhysicalSecuredEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+           <t>"An entry of the sendIpNetToPhysicalSecuredTable.  Each row is for a neighbor.</t>
+           <t>This table augments the ipNetToPhysicalTable, i.e., every entry in this table has a one-to-one correspondence with an entry in the ipNetToPhysicalTable."</t>
+           </list>
+           /* It could be said that the information contained in this entry could be included in the future in the IP-MIB… but it is just compatibility stuff, that should no longer be required in the long term. I don’t suggest its inclusion in the IP-MIB */
+        <t>AUGMENTS     { ipNetToPhysicalEntry }</t>
+<t>::= { sendIpNetToPhysicalSecuredTable  1 }</t>
+</list>
+
+
+<t>SendIpNetToPhysicalSecuredEntry ::= SEQUENCE {</t>
+        <list hangIndent='8'>
+        <t>sendIpNetToPhysicalSecuredStatus SendSecurityStatus</t>
+        </list>
+<list hangIndent='4'>
+<t>}</t>
+</list>
+
+
+<t>sendIpNetToPhysicalSecuredStatus OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendSecurityStatus</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The value of this object indicates if its corresponding entry in the ipNetToPhysicalTable is secured (if the last ND message that caused the creation or last update of the entry was secured by SEND)."</t>
+                </list>
+                /* This is naturally read-only – as a result of being generated by the reception of the ND messages (it is not only because ipNetToPhysicalTable is read-only).
+For setting the object to sendSecured, the RSA option of the Neighbor Advertisement (see above why I’m not considering Redirect) must be validated with the public key associated to the Certification Path. */
+<t>::= { sendIpNetToPhysicalSecuredEntry 1 }</t>
+</list>
+
+<t></t>
+<t>-- Extension of IP-FORWARDING-MIB:inetCidrRouteTable</t>
+
+
+/* I don’t use an AUGMENT here because not all objects are applicable. I use RFC 4181 comment:    - If objects external to the row are present in the INDEX clause,
+       then the conceptual row's DESCRIPTION clause MUST specify how
+       those objects are used in identifying instances of its columnar
+       objects, and in particular MUST specify for which values of those
+       index objects the conceptual row may exist. */
+
+<t>sendInetCidrRouteSecuredTable  OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SEQUENCE OF SendInetCidrRouteSecuredEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"A table that contains one column to indicate if an inetCidrRouteTable (RFC 4292) entry that has been created or modified due to a Redirect message is secured. Entries for sendInetCidrRouteSecuredTable are only populated for index values equal to the ones of the entries of the inetCidrRouteTable that has been created or last modified by the reception of a Redirect message. These entries in the inetCidrRouteTable must have a inetCidrRouteType value of local(4), indicating that the next hop is the final destination. Therefore, not all entries in the inetCidrRouteTable may have a corresponding entry in this table.</t>
+		<t>If an entry in the inetCidrRouteTable is deleted, the corresponding entry in the sendInetCidrRouteSecuredTable must be deleted.</t>
+		<t></t>
+		<t>This table SHOULD only exist in the managed node if the value of the sendInterfaceNonSendCompatAcceptUnsecured columnar object
+		is acceptSecuredAndUnsecured(1) for at least one of the interfaces. Otherwise, all the interfaces accept only secured ND messages."</t>
+           </list>
+           /* definition inspired in t11vfVirtualSwitchTable from RFC 4747 */
+/* not sure if Redirect can also create entries in the ipNetToPhysicalTable. However, even if Redirect can create them, and the redirect is secured, it is not clear to me if this should be reflected in this status if the real peer has not sent a NA */
+        <t>REFERENCE    "ipNetToPhysicalEntry is defined in the IP-FORWARD-MIB <xref target="RFC4292"></xref>."</t>
+       <t>::= { send 23 }</t>
+</list>
+
+<t>sendInetCidrRouteSecuredEntry OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendInetCidrRouteSecuredEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An entry of the sendInetCidrRouteSecuredTable.  This table extends the inetCidrRouteTable, i.e., every entry in this table has a one-to-one correspondence with an entry in the inetCidrRouteTable."</t>
+                </list>
+                /* It could be said that the information contained in this entry could be included in the future in the IP-MIB… but it is just compatibility stuff, that should no longer be required in the long term. I don’t suggest its inclusion in the IP-MIB */
+/* the values of the INDEX are IMPORTed from IP-FORWARD-MIB */
+        <t>INDEX        { inetCidrRouteDestType, inetCidrRouteDest,</t>
+                <list hangIndent='16'>
+                <t>inetCidrRoutePfxLen, inetCidrRoutePolicy, inetCidrRouteNextHopType, inetCidrRouteNextHop }</t>
+                </list>
+     <t>::= { sendInetCidrRouteSecuredTable  1 }</t>
+</list>
+
+<t>SendInetCidrRouteSecuredEntry ::= SEQUENCE {</t>
+        <list hangIndent='8'>
+        <t>sendInetCidrRouteSecuredStatus  SendSecurityStatus</t>
+        </list>
+<list hangIndent='8'>
+<t>}</t>
+</list>
+
+
+<t>sendInetCidrRouteSecuredStatus OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendSecurityStatus</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The value of this object indicates if its corresponding entry in the inetCidrRouteTable is secured (if the last Redirect message that caused the creation or last update of the entry was secured by SEND)."</t>
+                </list>
+/* does not need spin lock because it is not read-create.
+This is naturally read-only – as a result of being generated by the reception of the ND messages (it is not only because ipNetToPhysicalTable is read-only).
+For setting the object to sendSecured, the RSA option of the Redirect must be validated with the public key associated to the Certification Path associated to any router. */
+        <t>::= { sendInetCidrRouteSecuredEntry 1 }</t>
+</list>
+
+
+/* I don’t extend the ipAddressEntry table.
+ipAddressEntry (remember that this table is for ADDRESSES THAT ARE LOCAL to the node); although DAD is applied to these addresses (ipAddressStatus reflects its state regarding to DAD, with states such as tentative(7) and duplicated(8), I don’t feel that it is worth to incorporate this information into the table. If SEND is active, unsecured messages can make an address to be identified as duplicated in the first tentative; in the second and third tentatives, only SEND-secured messages are taken into account to determine if the address is duplicated – so unsecured messages MUST not generate a change of the ipAddressStatus objects. 
+At the end, when the address is marked as duplicated it should not be used, regardless of if the messages generating this state were secured or not. */
+
+<t></t>
+<t>sendIgnoreUnsecuredDadFirstTentative OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       INTEGER {</t>
+                <list hangIndent='4'>
+                <t>acceptUnsecuredDadFirstTentative(1),</t>
+                <t>ignoreUnsecuredDadFirstTentative(2)</t>
+                </list>
+        <t>}</t>
+        <t>MAX-ACCESS   read-write</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"For all the interfaces of the node for which secure operation is required, this object specifies whether the node accepts or ignores 
+		unsecured advertisements received when performing Duplicate Address Detection for the first CGA tentative address. 
+		sendIgnoreUnsecuredDadFirstTentative can be configured to ignoreUnsecuredDadFirstTentative(2) as a recovery mechanisms for cases in which attacks against the first address become common. Note that for the second and third tentative addresses, only secured advertisements are considered."</t>
+                </list>
+                /*stated as MAY configuration option*/
+/* SEC_CON: As RFC 3971, section 9.2.3 states, if the node state is maliciously changed to ignore unsecured Neighbor Advertisements when DAD is being performed, a potential address collision between a SEND node and a non-SEND node may occur. The probability and effects of such an address collision are discussed in <xref target="RFC3972"></xref>. On the other side, if the node is maliciously changed to accept unsecured Neighbor Advertisements as response to DAD, a node controlled by an attacker can force the generation of a second CGA even if no real collision occurred in the network. Since DAD for the second CGA generated will only process secured responses, regardless the state of this object, this change only impacts in performance.
+DON’T THINK READ ACCESS CAN GENERATE ANY relevant THREAT */
+        <t>REFERENCE    "RFC 3971 : section 8"</t>
+        <t>DEFVAL       { acceptUnsecuredDadFirstTentative }</t>
+        <t>::= { send 24 }</t>
+</list>
+
+
+<figure><artwork>
+
+--
+-- SEND statistics
+--
+</artwork></figure>
+
+<t>sendStatsTable OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SEQUENCE OF SendStatsEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"Statistics related to Neighbor Discovery and SEND operation. Statistics are provided in  a per-interface basis to allow better 
+		insight about in which links attacks are occurring."</t>
+                </list>
+        <t>::= { send 25 }</t>
+</list>
+
+<t>sendStatsEntry OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       SendStatsEntry</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t> 
+                <list hangIndent='4'>
+                <t>"A conceptual row in the sendStatsTable."</t>
+                </list>
+        <t>INDEX        { sendStatsIfIndex }</t>
+        <t>::= { sendStatsTable 1 }</t>
+</list>
+
+<t>/* objects at RFC 4293:icmpStatsTable are defined as Counter32. It seems enough considering the number of messages expected. */</t>
+<t>SendStatsEntry ::= SEQUENCE {</t>
+        <list hangIndent='8'>
+        <t>sendStatsIfIndex                     InterfaceIndex,</t>
+        <t>sendStatsInNDMsgs                    Counter32,</t>
+        <t>sendStatsInNDSecuredValidMsgs        Counter32,</t>
+        <t>sendStatsInNDSecuredInvalidMsgs      Counter32,</t>
+        <t>sendStatsInNDUnsecuredMsgs           Counter32,</t>
+        <t>sendStatsInNDErrors                  Counter32,</t>
+        <t>sendStatsInCertMsgs                  Counter32,</t>
+        <t>sendStatsInCertVerifiedMsgs          Counter32,</t>
+        <t>sendStatsInCertFailedMsgs            Counter32,</t>
+        <t>sendStatsInCertErrors                Counter32,</t>
+        <t>sendStatsOutNDMsgs                   Counter32,</t>
+        <t>sendStatsOutNDSecuredMsgs            Counter32,</t>
+        <t>sendStatsOutNDSecuredErrors          Counter32,</t>
+        <t>sendStatsOutCertMsgs                 Counter32,</t>
+        <t>sendStatsOutCertErrors               Counter32</t>
+        </list>
+<list hangIndent='4'>
+<t>}</t>
+</list>
+
+<t>sendStatsIfIndex OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       InterfaceIndex</t>
+        <t>MAX-ACCESS   not-accessible</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+        <t>"The index value that uniquely identifies the interface to
+            which this entry is applicable.  The interface identified by
+            a particular value of this index is the same interface as
+            identified by the same value of the IF-MIB's ifIndex."</t>
+        </list>
+/* object description similar to RFC4293:ipv4InterfaceTable: "The table containing per-interface IPv4-specific information" */
+        <t>::= { sendStatsEntry 1 }</t>
+</list>
+
+<t>sendStatsInNDMsgs OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Counter32</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+           <t>"The total number of ND messages (Neighbor Solicitation, Neighbor Advertisement, Router Solicitation, Router Advertisements and Redirects) that the entity received.</t> 
+           <t>Note that this counter includes all the messages counted by sendStatsInNDErrors."</t>
+           </list> 
+    <t>::= { sendStatsEntry 2 }</t>
+</list>
+
+<t>sendStatsInNDSecuredValidMsgs OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Counter32</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+           <t>"The total number of ND messages that were both secured and successfully validated according to the rules specified in RFC 3971. 
+	   Note that many requirements are involved: the messages included the SEND security information appropriate to its type, the receiver must have 
+	   SEND enabled in the link (with the required configuration), the authorization method must fit to the type of options received so that the minimum options required to be considered as secure are validated, the receiver must have the appropriate keying information to validate the options, and finally, the verification is successful.</t>
+           <t>To be considered as secured, Neighbor Solicitation and Advertisement messages must include at least a valid CGA option. Neighbor Solicitation, Neighbor Advertisement, Router Advertisement, Redirect and Router Solicitation with source addresses different to the unspecified address, must include at least a valid RSA Signature option. Supersets of these combinations (e.g. a Router Advertisement containing both a RSA Signature option and a CGA option) are considered secured if the processing performed by the node, according to the authorization methods configured, is successful for all the authorization options."</t>
+           </list>
+        <t>REFERENCE    "RFC 3971 : 5.1.2, RFC 3971 : 5.2.2"</t>
+        <t>::= { sendStatsEntry 3 }</t>
+</list>
+
+<t>sendStatsInNDSecuredInvalidMsgs OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Counter32</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+           <t>"The total number of ND messages that contained any kind of SEND security information, 
+	   but were not successfully validated according to the rules specified in RFC 3971.</t> 
+           <t>Note that these messages may be further processed by the node as unsecured messages, depending on the configuration of the node."</t>
+           </list>
+        <t>REFERENCE    "RFC 3971 : 5.1.2, RFC 3971 : 5.2.2"</t>
+        <t>::= { sendStatsEntry 4 }</t>
+</list>
+
+<t>sendStatsInNDUnsecuredMsgs OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Counter32</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The total number of ND messages received that did not contain any security information defined in SEND."</t>
+                </list>
+        <t>::= { sendStatsEntry 5 }</t>
+</list>
+        
+        
+<t>sendStatsInNDErrors OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Counter32</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+        <list hangIndent='7'>
+           <t>"The number of ND messages received that the entity received but determined as having ICMP-specific errors (bad ICMP checksums, bad length, bad format, etc.). Note that it does not include the messages counted by sendStatsInNDUnsecuredMsgs."</t>
+           </list>
+<t>::= { sendStatsEntry 6 }</t>
+</list>
+
+
+<t>sendStatsInCertMsgs  OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Counter32</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The number of Certification Path Solicitation and Certification Path Advertisement messages received by the entity."</t>
+                </list>
+        <t>::= { sendStatsEntry 7 }</t>
+</list>
+
+
+<t>sendStatsInCertVerifiedMsgs OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Counter32</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The number of Certification Path Advertisement messages received by a host that it could verify according to the verification procedure defined in section 6.3 of RFC 3971."</t>
+                </list>
+        <t>::= { sendStatsEntry 8 }</t>
+</list>
+
+
+<t>sendStatsInCertFailedMsgs OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Counter32</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The number of Certification Path Advertisement messages received by a host that it could not verify successfully, according to the verification procedure defined in section 6.3 of RFC 3971. It does not include messages counted by sendStatsInCertErrors."</t>
+                </list>
+        <t>REFERENCE    "RFC 3971 : section 6.3"</t>
+        <t>::= { sendStatsEntry 9 }</t>
+</list>
+
+
+<t>sendStatsInCertErrors OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Counter32</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The number of of Certification Path Solicitation and Certification Path Advertisement messages that the entity received but were determined as having ICMP-specific errors (bad ICMP checksums, bad length, bad format, etc.). Note that it does not include the messages counted by sendStatsInCertFailedMessages."</t>
+                </list>
+        <t>::= { sendStatsEntry 10 }</t>
+</list>
+
+<t>sendStatsOutNDMsgs OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Counter32</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The total number of ND messages that the entity attempted to send. Note that this counter includes all those counted by 
+		sendStatsOutNDSecuredErrors."</t>
+                </list>
+        <t>::= { sendStatsEntry 11 }</t>
+</list>
+
+
+<t>sendStatsOutNDSecuredMsgs OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Counter32</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The number of ND messages attempted to send by the entity that were secured. To be considered as secured, Neighbor Solicitation 
+		and Advertisement messages must include at least a valid CGA option. Neighbor Solicitation, Neighbor Advertisement, Router Advertisement, 
+		Redirect and Router Solicitation with source addresses different to the unspecified address, must include at least a valid RSA Signature 
+		option."</t>
+                </list>
+        <t>REFERENCE    "RFC 3971 : 5.1.2, RFC 3971 : 5.2.2"</t>
+        <t>::= { sendStatsEntry 12 }</t>
+</list>
+
+<t>sendStatsOutNDSecuredErrors OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX Counter32</t>
+        <t>MAX-ACCESS read-only</t>
+        <t>STATUS     current</t>
+        <t>DESCRIPTION</t>
+		<list hangIndent='7'>
+		<t>"The number of ND messages attempted to send by the entity, that were secured, that this entity did not send due to problems discovered within ICMP, such as a lack of  buffers.  This value should not include errors discovered
+                outside the ICMP layer, such as the inability of IP to route the resultant datagram.  In some implementations, there may be no types of error that contribute to this counter's value."</t>
+                </list>
+        /* inspired by icmpStatsOutErrors */
+        /* I’m not interested in ND messages not secured with errors */
+        <t>::= { sendStatsEntry 13 }</t>
+</list>
+
+<t>sendStatsOutCertMsgs OBJECT-TYPE</t>
+        <list hangIndent='7'>
+        <t>SYNTAX       Counter32</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The number of Certification Path Solicitation and Certification Path Advertisement messages attempted to send by the entity. Note that this counter includes all those counted by sendStatsOutCertErrors"</t>
+                </list>
+        <t>::= { sendStatsEntry 14 }</t>
+</list>
+
+<t>sendStatsOutCertErrors OBJECT-TYPE</t>
+        <list hangIndent='4'>
+        <t>SYNTAX       Counter32</t>
+        <t>MAX-ACCESS   read-only</t>
+        <t>STATUS       current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The number of Certification Path Solicitation and Certification Path Advertisement messages attempted to send by the entity that it did not send due to problems discovered within ICMP, such as a lack of buffers.  This value should not include errors discovered
+                outside the ICMP layer, such as the inability of IP to route the resultant datagram.  In some implementations, there may be no types of error that contribute to this counter's value."</t>
+                </list>
+<t>::= { sendStatsEntry 15 }</t>
+</list>
+
+<figure><artwork>
+
+
+--
+-- conformance information
+--
+</artwork></figure>
+
+<t>sendMIBConformance OBJECT IDENTIFIER ::= { sendMIB 2 }</t>
+<t></t>
+<t>sendMIBCompliances OBJECT IDENTIFIER ::= { sendMIBConformance 1 }</t>
+<t>sendMIBGroups      OBJECT IDENTIFIER ::= { sendMIBConformance 2 }</t>
+
+/* this follows the style of RFC 4292 */
+<t>-- compliance statement #1</t>
+<t>sendMIBCompatibleCompliance MODULE-COMPLIANCE</t>
+        <list hangIndent='4'>
+        <t>STATUS     current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"Compliance statement for an agent that supports compatible operation with non-SEND devices, and it is fully configurable
+		(read-create access for the sendTrustAnchorGroup, and read-write access for all writable objects)."</t>
+                </list>
+
+        <t>MODULE -- this module</t>
+        <t>MANDATORY-GROUPS {</t> 
+                        <list hangIndent='19'>
+                        <t>sendInterfaceOperStatusGroup, sendAuthorityGroup, sendTimestampGroup, sendTrustAnchorGroup, sendRemoteCertGroup, sendCompatibilityStatusGroup, sendInterfaceNonSendCompatGroup, sendIgnoreUnsecuredDadFirstTentativeGroup, sendIpAddressPrefixSecuredGroup, sendIpDefaultRouterSecuredGroup, sendIpNetToPhysicalSecuredGroup, sendInetCidrRouteSecuredGroup, sendStatsGroup }</t>
+                        </list>
+                        
+        <t>OBJECT        sendTrustAnchorRowStatus</t>
+        <t>SYNTAX        RowStatus { active(1), notInService (2) }</t>
+        <t>WRITE-SYNTAX  RowStatus { active(1), notInService (2),</t>
+                        <list hangIndent='19'>
+                        <t>createAndGo(4), destroy(6) }</t>
+                        </list>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"Support for createAndWait is not required."</t>
+                </list>
+        <t>::= { sendMIBCompliances 1 }</t>
+</list> /* compliance 1 */
+
+<t></t>
+<t>-- compliance statement #2</t>
+<t>sendMIBOnlySendCompliance MODULE-COMPLIANCE</t>
+        <list hangIndent='4'>
+        <t>STATUS     current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"Compliance statement for an agent that does not support compatible operation with non-SEND devices and it is fully configurable
+		(read-create access for the sendTrustAnchorGroup, and read-write access for all writable objects)."</t>
+                </list>
+
+        <t>MODULE -- this module</t>
+        <t>MANDATORY-GROUPS {</t>
+                <list hangIndent='19'>
+                <t>sendInterfaceOperStatusGroup, sendAuthorityGroup, sendTimestampGroup, sendTrustAnchorGroup, sendRemoteCertGroup, sendStatsGroup }</t>
+                </list>
+<t></t>
+        <t>OBJECT        sendTrustAnchorRowStatus</t>
+        <t>SYNTAX        RowStatus { active(1), notInService (2) }</t>
+        <t>WRITE-SYNTAX  RowStatus { active(1), notInService (2),</t>
+                        <list hangIndent='19'>
+                        <t>createAndGo(4), destroy(6) }</t>
+                        </list>
+        <t>DESCRIPTION</t>
+                <list hangIndent='19'>
+                <t>"Support for createAndWait is not required."</t>
+                </list>
+      <t>::= { sendMIBCompliances 2 }</t>
+</list> /* compliance 2 */
+      
+      
+<t></t>
+<t>-- compliance statement #3</t>
+<t>sendMIBCompatibleReadOnlyCompliance MODULE-COMPLIANCE</t>
+        <list hangIndent='4'>
+        <t>STATUS     current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"Compliance statement for an agent that supports compatible operation with non-SEND devices, but it is implemented without 
+		support for the creation of rows in the sendTrustAnchorGroup, and with read-only access for the remaining writable objects."</t>
+                </list>
+                
+        <t>MODULE  -- this module</t>
+<t></t>
+	<t>MANDATORY-GROUPS {</t>
+                <list hangIndent='19'>
+                <t>sendInterfaceOperStatusGroup, sendAuthorityGroup, sendTimestampGroup, sendTrustAnchorReadOnlyGroup, sendRemoteCertGroup, sendCompatibilityStatusGroup, sendInterfaceNonSendCompatGroup, sendIgnoreUnsecuredDadFirstTentativeGroup, sendIpAddressPrefixSecuredGroup, sendIpDefaultRouterSecuredGroup, sendIpNetToPhysicalSecuredGroup, sendInetCidrRouteSecuredGroup, sendStatsGroup }</t>
+                </list>
+/* stats group is mandatory on IP. Cryptographic material seems to be relevant for SEND operation. sendAuthority could also be included. Compatibility should be at the beginning, but in the long run may be not*/
+<t></t>
+<t></t>
+        <t>OBJECT sendRsaWithCgaAuthorization</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendCpaRequireIPAddressExt</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>         
+        <t>OBJECT sendCgaVerificationMinbits</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendCgaVerificationMaxbits</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendRsaVerificationMethodNS</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendRsaVerificationMethodNA</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendRsaVerificationMethodRS</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendRsaVerificationMethodRA</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendRsaVerificationMethodRedirect</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendTimestampDelta</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendTimestampFuzz</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendTimestampDrift</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT     sendTrustAnchorSpinLock</t>
+        <t>MIN-ACCESS not-accessible</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object.  However, if an agent provides write access to any of the other objects in the sendTrustAnchorGroup, it SHOULD provide write access to this object as well."</t>
+                </list>
+/* not needed sendTrustAnchorIndex, because it is not accessible */
+<t></t>
+        <t>OBJECT sendTrustAnchorCert</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendTrustAnchorAdminStatus</t> 
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write or create access to this object."</t>
+                </list>
+		
+<t></t>
+        <t>OBJECT sendTrustAnchorRowStatus</t> 
+        <t>SYNTAX     RowStatus { active(1) }</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write or create access to this object. In this case, the only value permitted is active(1)."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendTrustAnchorStorageType</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write or create access to this object. If an agent allows this object to be written or created, it is not required to allow this object to be set to readOnly, permanent, or nonVolatile."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendCompatibilityStatus</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendInterfaceNonSendCompatAcceptUnsecured</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendIgnoreUnsecuredDadFirstTentative</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+
+        <t>::= { sendMIBCompliances 3 }</t>
+</list> /* compliance 3 */
+
+<t></t>
+<t>-- compliance statement #4</t>
+<t>sendMIBOnlySendReadOnlyCompliance MODULE-COMPLIANCE</t>
+        <list hangIndent='4'>
+        <t>STATUS     current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"Compliance statement for an agent that supports compatible operation with non-SEND devices, but it is implemented without support for read-create (i.e., in read-only mode)."</t>
+                </list>
+<t></t>
+		<t>MODULE  -- this module</t>
+<t></t>
+        <t>MANDATORY-GROUPS { sendInterfaceOperStatusGroup, sendAuthorityGroup,</t>
+                <list hangIndent='19'>
+                <t>sendTimestampGroup, sendTrustAnchorReadOnlyGroup, sendRemoteCertGroup, sendStatsGroup }</t>
+                </list>
+/* stats group is mandatory on IP. Cryptographic material seems to be relevant for SEND operation. sendAuthority could also be included. Compatibility should be at the beginning, but in the long run may be not*/
+<t></t>
+<t></t>
+        <t>OBJECT sendRsaWithCgaAuthorization</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendCpaRequireIPAddressExt</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendCgaVerificationMinbits</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendCgaVerificationMaxbits</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendRsaVerificationMethodNS</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendRsaVerificationMethodNA</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendRsaVerificationMethodRS</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendRsaVerificationMethodRA</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendRsaVerificationMethodRedirect</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendTimestampDelta</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendTimestampFuzz</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendTimestampDrift</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT     sendTrustAnchorSpinLock</t>
+        <t>MIN-ACCESS not-accessible</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object.  However, if an agent provides write access to any of the other objects in the sendTrustAnchorGroup, it SHOULD provide write access to this object as well."</t>
+                </list>
+/* not needed sendTrustAnchorIndex, because it is not accessible */
+<t></t>
+<t>OBJECT sendTrustAnchorCert</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendTrustAnchorRowStatus</t> 
+        <t>SYNTAX     RowStatus { active(1) }</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write or create access to this object."</t>
+                </list>
+<t></t>
+        <t>OBJECT sendTrustAnchorStorageType</t>
+        <t>MIN-ACCESS read-only</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"An agent is not required to provide write or create access to this object. If an agent allows this object to be written or created, it is not required to allow this object to be set to readOnly, permanent, or nonVolatile."</t>
+                </list>
+<t></t>
+        <t>::= { sendMIBCompliances 4 }</t>
+
+</list> /* compliance 4 */
+
+
+
+<t>-- Units of conformance</t>
+<t></t>
+<t>sendInterfaceOperStatusGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS { sendInterfaceOperStatus }</t>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The group of objects that indicates if sufficient configuration exists to make SEND operational for each interface."</t>
+                </list>
+        <t>::= { sendMIBGroups 1 }</t>
+</list>
+	
+<t>sendAuthorityGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS {</t>
+                <list hangIndent='4'>
+                <t>sendRsaWithCgaAuthorization,</t>
+                <t>sendCpaRequireIPAddressExt,</t>
+                <t>sendCgaVerificationMinbits,</t>
+                <t>sendCgaVerificationMaxbits,</t>
+                <t>sendRsaVerificationMethodNS,</t>
+                <t>sendRsaVerificationMethodNA,</t>
+                <t>sendRsaVerificationMethodRS,</t>
+                <t>sendRsaVerificationMethodRA,</t>
+                <t>sendRsaVerificationMethodRedirect</t>
+                <t>}</t>
+        </list>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                        <list hangIndent='7'>
+                        <t>"Objects controlling SEND authority attestation and verification processes. These objects manage the authority information that is included in SENDpackets being sent, and the checks that are applied to incoming SENDauthority information."</t>
+                        </list>
+        <t>::= { sendMIBGroups 2 }</t>
+</list>
+
+<t>sendTimestampGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS {</t>
+                <list hangIndent='4'>
+                <t>sendTimestampDelta, sendTimestampFuzz, sendTimestampDrift</t>
+                <t>}</t>
+        </list>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The objects that control the verification of the Timestamp option to provide anti-reply protection"</t>
+                </list>
+        <t>::= { sendMIBGroups 3 }</t>
+</list>
+        
+<t>sendTrustAnchorGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS {</t>
+                <list hangIndent='4'>
+                <t>sendTrustAnchorSpinLock,</t> 
+                <t>sendTrustAnchorCert,</t>
+		<t>sendTrustAnchorAdminStatus,</t>
+		<t>sendTrustAnchorOperStatus,</t>
+                <t>sendTrustAnchorRowStatus,</t>
+                <t>sendTrustAnchorStorageType</t>
+                <t>}</t>
+        </list>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                        <list hangIndent='7'>
+                        <t>"The group of objects for managing the anchors that are used for validating the authority of the Certification Path of a remote node."</t>
+                        </list>
+        <t>::= { sendMIBGroups 4 }</t>
+</list>
+
+/* this is the same as the previous, without the AdminStatus - only the OperStatus makes sense in this case */
+<t>sendTrustAnchorReadOnlyGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS {</t>
+                <list hangIndent='4'>
+                <t>sendTrustAnchorSpinLock,</t> 
+                <t>sendTrustAnchorCert,</t>
+		<t>sendTrustAnchorAdminStatus,</t>
+		<t>sendTrustAnchorOperStatus,</t>
+                <t>sendTrustAnchorRowStatus,</t>
+                <t>sendTrustAnchorStorageType</t>
+                <t>}</t>
+        </list>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                        <list hangIndent='7'>
+                        <t>"The group of objects for managing the anchors that are used for validating the authority of the Certification Path of a remote node."</t>
+                        </list>
+        <t>::= { sendMIBGroups 5 }</t>
+</list>
+
+
+<t>sendRemoteCertGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS {</t>
+                <list hangIndent='4'>
+                <t>sendRemoteCertCert,</t>
+                <t>sendRemoteCertAnchor,</t>
+                <t>sendRemoteCertParentCertificate,</t>
+                <t>sendRemoteCertStatus</t>
+                <t>}</t>
+                </list>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The group of objects for storing the certificates that belong to a Certification Path received from a remote router."</t>
+                </list>
+        <t>::= { sendMIBGroups 6 }</t>
+</list>
+
+
+<t>sendCompatibilityStatusGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS { sendCompatibilityStatus }</t>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The group of objects to enable or disable SEND operation."</t>
+                </list>
+        <t>::= { sendMIBGroups 7 }</t>
+</list>
+
+<t>sendInterfaceNonSendCompatGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS { sendInterfaceNonSendCompatAcceptUnsecured }</t>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The group of objects to configure the acceptance of unsecured messages in a per-interface basis.</t>
+		<t>When this group is not deplyed, full SEND operation is assumed for the system (i.e. all the interfaces generate ND secured messages
+		and only process ND secured messages."</t>
+                </list>
+        <t>::= { sendMIBGroups 8 }</t>
+</list>
+
+<t>sendIgnoreUnsecuredDadFirstTentativeGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS { sendIgnoreUnsecuredDadFirstTentative }</t>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The group of objects to configure the acceptance of unsecured advertisements received when performing Duplicate Address Detection for the first CGA tentative address."</t>
+                </list>
+        <t>::= { sendMIBGroups 9 }</t>
+</list>
+
+<t>sendIpAddressPrefixSecuredGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS { sendIpAddressPrefixSecuredStatus }</t>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The group of objects that indicate if each entry in the ipAddressPrefixEntry (RFC 4293) is secured or not."</t>
+                </list>
+        <t>::= { sendMIBGroups 10 }</t>
+</list>
+
+<t>sendIpDefaultRouterSecuredGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS { sendIpDefaultRouterSecuredStatus }</t>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The group of objects that indicate if each entry in the ipDefaultRouterEntry (RFC 4293) is secured or not."</t>
+                </list>
+        <t>::= { sendMIBGroups 11 }</t>
+</list>
+
+<t>sendIpNetToPhysicalSecuredGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS { sendIpNetToPhysicalSecuredStatus }</t>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The group of objects that indicate if each entry in the ipNetToPhysicalTable (RFC 4293) is secured or not."</t>
+                </list>
+        <t>::= { sendMIBGroups 12 }</t>
+</list>
+
+<t>sendInetCidrRouteSecuredGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS { sendInetCidrRouteSecuredStatus }</t>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The group of objects that indicate if each entry in the inetCidrRouteTable (RFC 4292) entry that has been created or modified due to a Redirect message is secured or not."</t>
+                </list>
+        <t>::= { sendMIBGroups 13 }</t>
+</list>
+
+<t>sendStatsGroup OBJECT-GROUP</t>
+        <list hangIndent='4'>
+        <t>OBJECTS {</t>
+                <list hangIndent='4'>
+                <t>sendStatsInNDMsgs,</t>
+                <t>sendStatsInNDSecuredValidMsgs,</t>
+                <t>sendStatsInNDSecuredInvalidMsgs,</t>
+                <t>sendStatsInNDUnsecuredMsgs,</t>
+                <t>sendStatsInNDErrors,</t>
+                <t>sendStatsInCertMsgs,</t>
+                <t>sendStatsInCertVerifiedMsgs,</t>
+                <t>sendStatsInCertFailedMsgs,</t>
+                <t>sendStatsInCertErrors,</t>
+                <t>sendStatsOutNDMsgs,</t>
+                <t>sendStatsOutNDSecuredMsgs,</t>
+                <t>sendStatsOutNDSecuredErrors,</t>
+                <t>sendStatsOutCertMsgs,</t>
+                <t>sendStatsOutCertErrors</t>
+                <t>}</t>
+                </list>
+        <t>STATUS current</t>
+        <t>DESCRIPTION</t>
+                <list hangIndent='7'>
+                <t>"The group of statistics related to Neighbor Discovery and SEND operation."</t>
+                </list>
+        <t>::= { sendMIBGroups 14 }</t>
+</list>
+
+<t>END</t>
+
+
+</section>
+
+<section title="Security Considerations">
+
+<t>There are a number of management objects defined in this MIB module with a MAX-ACCESS clause of read-write and/or read-create.  Such objects may be considered sensitive or vulnerable in some network environments.  The support for SET operations in an unsecure environment without proper protection can have a negative effect on network operations.  These are the tables and objects and their sensitivity/vulnerability:</t>
+
+<t>Improper configuration of SEND can result in the complete inability to process ND messages (either protected or not). If there is not trust 
+anchor or a host does not have a CGA configured on each interface, in a way that the sendInterfaceOperTable is set to 'configurationRequired' 
+for some interfaces, some combinations of values of the sendCompatibilityStatus or sendInterfaceNonSendCompatAcceptUnsecured can make ND operation impossible, 
+even if unsecured messages are used. This occurs if the configuration requires the use of SEND either in sending (sendCompatibilityStatus has the value of 
+sendSecuredMsgs(1)) or receving (sendInterfaceNonSendCompatEntry for this interface is set to acceptOnlySecured(2)), but the 
+node has not the configuration required to operate in this way. Although this improper configuration is not a security hazard on itself, security concerns may 
+be raised by an attacker that both deletes relevant configuration of the node, so that it set the status of different interfaces to configurationRequired, and
+then it modifies the values of either the sendCompatibilityStatus object or sendInterfaceNonSendCompatEntry corresponding to the interface attacked in a 
+way that it disables not only SEND operation, but also the exchange of unsecured ND messages in a way that was not intended by the administrator.</t>
+<t>sendRSAWithCgaAuthorization. Changing the value of the object sendRSAWithCgaAuthorization in a router from cgaNotUsed to cgaUsed may result in a lower protection for the node if the CGA authorization method is weakest than the protection provided by the Certification Path. Note that a valid CGA for the considered interface must exist.</t>
+<t>sendCpaRequireIPAddressExt. When X.509 certificates that do not contain 'addressesOrRanges' elements are allowed to be processed in the node receiving the certificate, 
+by setting the sendCpaRequireIPAddressExt object to 'notRequiredAddressOrRange', it enables the propagation of unauthorized prefixes by the legitimate administrator of a site to which a public/private key pair has been delegated by a Certification Path method.</t>
+<t>sendCgaVerificationMinbits. Incrementing the value of the sendCgaVerificationMinbits object may result in a DOS attack, since some remote CGA would be
+unintendedly discarded because of being too short, if only secured ND messages are accepted by the node. Additionally, reducing the value of the sendCgaVerificationMinbits object may facilitate the key generation process for an attacker 
+trying to impersonate a legitimate CGA of a third party by brute force. Short key length can also make the host to consider as secure communications 
+that were established with hosts with keys so short that could be factorized.</t> 
+<t>sendCgaVerificationMaxbits. On one hand, low values of the sendCgaVerificationMaxbits object can result in discarding messages secured with a CGA larger than the 
+limit established in this object, resulting in a DOS attack. On the other hand, an attacker could set high values to defeat the purpose of this configurable parameter, 
+i.e. protect against the high resource consumption of resources in the receiver of a signed message.</t>
+<t>sendRsaVerificationMethodNS, sendRsaVerificationMethodNA, sendRsaVerificationMethodRS, sendRsaVerificationMethodRA and sendRsaVerificationMethodRedirect. The modification of the authorization method used for validating any of the messages of the ND protocol by an attacker, through illegitimate modification of the sendRsaVerificationMethodNS, sendRsaVerificationMethodNA, sendRsaVerificationMethodRS, sendRsaVerificationMethodRA, and sendRsaVerificationMethodRedirect can result in a DOS attack. The DOS attack occurs when the node is configured to require a type of authorization that it is not being used by the party generating the message. Additionally, variation of any of these objects may result in a lower protection if the method is changed from trustAnchorAndCga to the weakest authorization method, although any of the methods used by the generator of the message should provide enough protection.</t> 
+<t>sendTimestampDelta, sendTimeFuzz and sendTimestampDrift. Incrementing the value of the objects sendTimestampDelta, sendTimeFuzz and sendTimestampDrift extends the vulnerability window for reply attacks. Section 9.2.5 of <xref target="RFC3971"></xref> discusses the impact of this action. On the other hand, setting low values to these three objects may result in a DOS attack, since valid SEND messages could be discarded by too tight validation constraints.</t>
+<t>sendTrustAnchorTable. The addition of an entry in the anchor table by an unauthorized party can be used to enable all kind of attacks for which SEND provides protection, with the aggravating circumstance that the node may consider that the information is secured. The deletion of a valid entry in the anchor table by an attacker can result in DOS, since the node does not consider validly secured information as legitimate. Read-only access should be implemented in nodes willing to prevent these attacks.</t>
+<t>sendCompatibilityStatus. Write access from an unauthorized party to disable SEND operation can be used to enable all kind of attacks for which SEND 
+provides protection. Note that some of the attacks can also be performed by creating new entries in the RFC4292::ipNetToPhysicalTable, 
+in which the information relating remote IP addresses and link-layer addresses is stored. On the other hand, the RFC4292::ipAddressPrefixTable and 
+RFC4292::defaultRouterTable were not exposed to these attacks due to the restriction of read-only access.
+In addition, changing the value of the object to sendAndReceiveUnsecuredMsgs may results in DOS in a SEND-only deployment scenario, since the node 
+could not communicate with other nodes in the link that only accept secured ND messages.</t>
+<t>sendInterfaceNonSendCompatTable. Write access from an unauthorized party to disable SEND validation in a per-link basis can be used to enable all 
+kind of attacks for which SEND provides protection. Additionally, if the value of the object is unintendedly changed from acceptSecuredAndUnsecured to 
+acceptOnlySecured, the node will loose the communication with non-SEND devices in the link considered.</t>
+<t>sendIgnoreUnsecuredDadFirstTentative. As RFC 3971, section 9.2.3 states, if the node state is maliciously changed to ignore unsecured Neighbor Advertisements when DAD is being performed, a potential address collision between a SEND node and a non-SEND node may occur. The probability and effects of such an address collision are discussed in <xref target="RFC3972"></xref>. On the other side, if the node is maliciously changed to accept unsecured Neighbor Advertisements as response to DAD, a node controlled by an attacker can force the generation of a second CGA even if no real collision occurred in the network. Since DAD for the second CGA generated will only process secured responses, regardless the state of this object, this change only impacts in performance.</t>
+
+   <t>Some of the readable objects in this MIB module (i.e., objects with a
+   MAX-ACCESS other than not-accessible) may be considered sensitive or
+   vulnerable in some network environments.  It is thus important to
+   control even GET and/or NOTIFY access to these objects and possibly
+   to even encrypt the values of these objects when sending them over
+   the network via SNMP.  These are the tables and objects and their
+   sensitivity/vulnerability:</t>
+
+<t>sendCgaVerificationMinbits. Read access to this object by an unauthorized node can provide information about the minimum key length to use in a brute force attack to a CGA.</t>
+<t>Read access to objects that specify the authorization policy of the node could provide information to an attacker, although the attacker could gain the
+same information by directly performing the attacks enabled by the actual configuration of the system (for example, sending unsecured messages without knowing
+if the node accepts them or not in a given interface.</t>
+<t>SNMP versions prior to SNMPv3 did not include adequate security.
+   Even if the network itself is secure (for example by using IPsec),
+   even then, there is no control as to who on the secure network is
+   allowed to access and GET/SET (read/change/create/delete) the objects
+   in this MIB module.</t>
+
+   <t>It is RECOMMENDED that implementers consider the security features as
+   provided by the SNMPv3 framework (see <xref target="RFC3410"></xref>, section 8),
+   including full support for the SNMPv3 cryptographic mechanisms (for
+   authentication and privacy).</t>
+
+   <t>Further, deployment of SNMP versions prior to SNMPv3 is NOT
+   RECOMMENDED.  Instead, it is RECOMMENDED to deploy SNMPv3 and to
+   enable cryptographic security.  It is then a customer/operator
+   responsibility to ensure that the SNMP entity giving access to an
+   instance of this MIB module is properly configured to give access to
+   the objects only to those principals (users) that have legitimate
+   rights to indeed GET or SET (change/create/delete) them.</t>
+
+
+</section>
+
+<section title="IANA Considerations">
+/* the next is taken from rfc 4181:3.5.2 */
+
+<t>The MIB module in this document uses the following IANA-assigned OBJECT IDENTIFIER values recorded in the SMI Numbers registry:</t>
+<figure>
+        <artwork>
+
+      Descriptor        OBJECT IDENTIFIER value
+      ----------        -----------------------
+
+      send-MIB  	{ mib-2 XXX }
+
+</artwork>
+</figure>
+      
+<t>Editor's Note (to be removed prior to publication):  the IANA is
+      requested to assign a value for "XXX" under the 'mib-2' subtree
+      and to record the assignment in the SMI Numbers registry.  When
+      the assignment has been made, the RFC Editor is asked to replace
+      "XXX" (here and in the MIB module) with the assigned value and to
+      remove this note.</t>
+</section>
+
+</middle>
+
+<back>
+    <references title="Normative References">
+      <?rfc include="reference.RFC.2578"?>
+      <?rfc include="reference.RFC.2579"?>
+      <?rfc include="reference.RFC.2580"?>
+      <?rfc include="reference.RFC.2863"?>
+      <?rfc include="reference.RFC.3279"?>
+      <?rfc include="reference.RFC.3280"?>
+      <?rfc include="reference.RFC.3971"?>
+      <?rfc include="reference.RFC.4292"?>
+      <?rfc include="reference.RFC.4293"?>
+
+
+</references>
+    <references title="Informative References">
+      <?rfc include="reference.RFC.3410"?>
+      <?rfc include="reference.RFC.3972"?>
+      <?rfc include="reference.RFC.4861"?>
+      <?rfc include="reference.RFC.4862"?>
+      <reference anchor='CGA-MIB'>
+      	<front>
+		<author>Alberto Garcia-Martinez</author>
+		<title>Management Information Base for Cryptographically Generated Addresses (CGA)</title>
+		<date month='July' year='2008' />
+		<seriesInfo name='ID' value='2200' />
+	</front>
+   
+</reference>
+
+</references>
+</back>
+</rfc>
+
+/* Other comments:
+Sending CGA option: no additional configuration to the one of the CGA-MIB is required. CGA is configured according to CGA-MIB. The messages in which it appears are specified in 5.1.1. 
+Receiving CGA option: behavior is affected by un securedMessagesTreatment. Validation of CGA is the first step to validate a packet (if it fails, it stops; otherwise, continues checking RSA…).
+
+Sending RSA. The messages in which it appears are specified in 5.2.1. If several local public keys are available (because of several CGAs and/or several certificated keys), it could be required a way to specify which of them use – although this could be done in a complex ad-hoc way (an implementation may prefer always some kind of key over others…) {I consider this out of the scope of the MIB}.
+Reception of RSA option. It can affect to the secured/insecured nature of the data being affected – neighbor cache, prefix list…. 
+*/
+/* Sending timestamp and nonce. 5.3.3 states which packets should include a timestamp and which should include a nonce. Sender of nonces must check for the same nonce in the returning packet (but this is a per-packet state that it is not required to be managed at the MIB level)
+Reception of timestamp and nonces. Ref 5.3.4. As a result of the values of timestamp or nonces, the message can be treated as unsecured, silently discarded. A timestamp cache may exist to strengthen resistance to reply attacks (ref 5.3.4). 
+
+Certification Path Solicitation message. The "component" field indicates the component (certificate part of a Certification path) requested. The first request should have 65,535 (means all components); in case more solicitation messages have to be sent to complete a request (because of timeouts…), the component number is the following to the last received. The solicitation may include a Trust Anchor option (I personally suppose that this Trust Anchor option should be included – I don’t see a reason not to include it; I assume it appears as an option because there could be other future ways to do the same).
+Certification Path Advertisement. Many messages may result from a single Solicitation. Options of the message are Certificate (I assume that are in all messages) and Trust Anchor (assume really optional – maybe for the first message, not for the rest – and for errors, in case the router does not have any trust anchor ). Validated certificates are included in the remoteRouterCertificationPathTable. Nothing additional to configure for sending or receiving
+*/
+/*Timestamp checking (RFC 3971 : section 5.3.4.2)
+"Timestamp checking structure: each node SHOULD store the following information for each peer:
+- The receive time of the last received and accepted SEND message […]
+- the time stamp in the last received and accepted SEND message […]"
+This is difficult to implement with the structures derived from RFC 4293: each peer maybe a host or a router. But peer routers may appear both in the ipDefaultRouterTable (conceptually associated to the Router Advertisment message, if ND is used), and also in the ipNetToPhysicalTable (conceptually associated to the Neighbor Solicitation/Neighbor Advertisement messages, if ND is used), since NUD is also applied to them. The times and timestamps required for SEND should be the last ones for any ND message (either RA, NS, NA, Redirect…). It does not seem to be a single table in which this information would suit. 
+Another option would be to create a specific table to reflect this information. The table would have one entry per peer (regardless if they are routers or hosts). And it would only contain the time of the last received SEND message and its timestamp. It would be read-only, and the information shown not very valuable from a management perspective (although useful from the operational perspective). It does not seem to be worth the complexity to create this new table.
+
+*/
+
+/*General information
+{A trust anchor is a certificate of an entity that the host trusts to authorize routers to act as routers. Anchors are required to validate routers – CGAs are not enough. 
+CGAs are used for Neighbor Discovery.
+        Non-CGAs with certificates (requiring trust anchors…) are out of the scope.
+
+RSA signature is used for protecting RS, RA, NS and NA; the signature can be made with a key bound to a certificate, or to a key bound to a CGA. RSA signature contains a key hash to associate the signature with a key at the receiver
+        The key can be in the receiver in a certificate cache. Or it can be a CGA option with the message.
+}
+*/
+

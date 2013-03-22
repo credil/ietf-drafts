@@ -1,0 +1,921 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="no" ?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc sortrefs="no" ?>
+<?rfc colonspace='yes' ?>
+<?rfc comments='yes' ?>
+<?rfc inline='no' ?>
+
+<rfc docName="DOCNAME"
+     category="bcp" 
+     ipr="full3978" 
+>
+<front>
+
+<title abbrev="Domain Certs">
+Domain Certificates in the Session Initiation Protocol (SIP)</title>
+
+<author initials="V.K." surname="Gurbani" fullname="Vijay K. Gurbani">
+ <organization>Bell Laboratories, Alcatel-Lucent</organization>
+ <address>
+  <postal>
+   <street>2701 Lucent Lane</street>
+   <street>Room 9F-546</street>
+   <city>Lisle</city>
+   <region>IL</region>
+   <code>60532</code>
+   <country>USA</country>
+  </postal>
+  <phone>+1 630 224-0216</phone>
+  <email>vkg@alcatel-lucent.com</email>
+ </address>
+</author>
+
+
+<author initials= "S." surname="Lawrence" fullname="Scott Lawrence">
+  <organization>Bluesocket Inc.</organization>
+  <address>
+   <postal>
+    <street>10 North Ave.</street>
+    <city>Burlington</city> 
+    <region>MA</region> <code>01803</code>
+    <country>USA</country>
+   </postal>
+   <phone>+1 781 229 0533</phone>
+   <email>slawrence@bluesocket.com</email>
+  </address>
+</author>
+
+
+<author initials="A." surname="Jeffrey" fullname="Alan S.A. Jeffrey">
+ <organization>Bell Laboratories, Alcatel-Lucent</organization>
+ <address>
+  <postal>
+   <street>2701 Lucent Lane</street>
+   <street>Room 9F-534</street>
+   <city>Lisle</city>
+   <region>IL</region>
+   <code>60532</code>
+   <country>USA</country>
+  </postal>
+  <email>ajeffrey@alcatel-lucent.com</email>
+ </address>
+</author>
+
+<date year="2007"/>
+
+<area>Realtime Applications and Infrastructure</area>
+<workgroup>SIP WG</workgroup>
+<keyword>I-D</keyword>
+<keyword>Internet-Draft</keyword>
+
+<abstract>
+<t>This document describes how to interpret certain information in a 
+X.509 PKIX-compliant certificate used in a Transport Layer Security (TLS) 
+connection.  More specifically, it describes how to find the right
+identity for authentication in such certificates and how to use it for 
+mutual authentication.</t>
+</abstract> 
+
+</front>
+
+<middle>
+
+<section title="Terminology" >
+<section title="Key Words">
+<t>
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
+"SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be
+interpreted as described in <xref target="RFC2119">RFC 2119</xref>. </t>
+</section>
+
+</section>
+
+<section title="Introduction">
+
+<t>Transport Layer Security (TLS) <xref target="RFC2246"/> has started to
+appear in an increasing number of Session Initiation Protocol (SIP) <xref
+target="RFC3261"/> implementations.  In order to use the authentication
+capabilities of TLS, certificates as defined by the Internet X.509 Public
+Key Infrastructure <xref target="RFC3280">RFC 3280</xref> are required.</t>
+
+<t>Existing SIP specifications do no sufficiently specify how to use
+certificates for domain (as opposed to host) authentication.  This document
+provides guidance to ensure interoperability and uniform conventions for the 
+construction of SIP domain certificates.</t>
+
+<t>The discussion in this document is pertinent to an X.509 PKIX-compliant
+certificate used for a TLS connection; it may not apply to use of such
+certificates with S/MIME, for instance.  </t>
+
+</section> <!-- Introduction -->
+
+<section title="Problem statement" anchor="problem">
+
+<t>TLS uses X.509 Public Key Infrastructure <xref target="RFC3280"/> to
+bind an identity, or a set of identities, to the subject of a X.509
+certificate.  Accordingly, the recommendations of the SIP working group 
+have been to populate the X.509v3 subjectAltName extension with an
+identity.  However, this is under-specified in RFC 3261, which mentions 
+subjectAltName in conjunction with S/MIME only and not TLS.  The
+security properties of TLS and S/MIME as used in SIP are different:
+X.509 certificates used for S/MIME are generally used for end-to-end 
+authentication and encryption, thus they serve to bind the identity
+of a user to the certificate.  On the other hand, X.509 certificates 
+used for TLS serve to bind the identities of the per-hop domain sending 
+or receiving the SIP messages.</t>
+
+<t>While RFC3261 provides adequate guidance on the use of X.509
+certificates used for S/MIME, it is relatively silent on the use of
+such certificates for TLS.  The concept of what should be contained in a 
+site (or domain) certificate in RFC3261 is quoted below (Section 26.3.1):</t>
+
+<t><list style="empty">
+ <t>Proxy servers, redirect servers and registrars SHOULD possess a
+ site certificate whose subject corresponds to their canonical
+ hostname.</t>
+</list></t>
+
+<t>The lack of specifications leads to problems when attempting to interpret 
+the certificate contents for TLS connections in a uniform manner.</t>
+
+<t>This document shows how the certificates are to be used for mutual
+authentication when both the client and server possess appropriate
+certificates.  It also contains normative behavior for matching the 
+DNS query string with an identity stored in the X.509 certificate.
+Following the accepted practice of the time, legacy X.509 certificates 
+may store the identity in the Common Name (CN) field of the certificate
+<cref source="Stephen Kent">
+  PKIX standards made an exception for RFC 822 names in legacy
+  certificates, but not for DNS names or URIs!  There is a private
+  extension, developed by Netscape for representing a DNS name in a
+  certificate prior to the advent of SAN.  I think it's rather late to be
+  accomodating certificates that are not compliant with RFC 3280, a spec
+  that is 5 years old.
+</cref> 
+instead of the currently used Subject Alternative Names (subjectAltName) 
+extension.  Furthermore, it is permissible for a certificate to contain 
+multiple identifiers for the Subject via the subjectAltName extension.  As 
+such, this document specifies appropriate matching rules to encompass 
+various Subject identity representation options.  And finally, this 
+document also provides guidelines to service providers for assigning 
+certificates to SIP servers.</t>
+
+<t>The rest of this document is organized as follows: the next section
+provides an overview of the most primitive case of a client using DNS
+to access a SIP server and the resulting authentication steps.  
+<xref target='problem-mutual'/> looks at the reason why mutual inter-domain 
+authentication is desired in SIP, and the lack of normative text and 
+behavior in RFC3261 for doing so. <xref target='SIP-considerations' /> provides
+normative behavior on the SIP entities (user agent clients, user agent
+servers, registrars, redirect servers, and proxies) that need perform
+authentication based on X.509 certificates.   
+<xref target='sec-cons' /> includes the security considerations.</t>
+
+</section> <!-- problem -->
+
+<section title="SIP domain to host resolution" anchor="problem-drilldown">
+
+<t>Routing in SIP is performed by having the client execute 
+<xref target="RFC3263">RFC 3263</xref> procedures on a URI, called the 
+"Application Unique String (AUS) (c.f. Section 8 of <xref target="RFC3263">RFC 
+3263</xref>).  These procedures take as input a SIP AUS (the SIP domain) and 
+return an ordered set containing one or more IP addresses, and a port number 
+and transport corresponding to each IP address in the set (the "Expected 
+Output") by querying an Domain Name Service (DNS).  If the transport 
+indicates the use of TLS, then a TLS connection is opened to the server on a 
+specific IP address and port.  The server presents an X.509 certificate 
+to the client for verification as part of the initial TLS handshake.</t> 
+
+<t>The client should extract identifiers from the Subject and subjectAltName
+extension in the certificate (see <xref target='cert-subject' />) and compare 
+these values to the AUS.  If any identifier match is found, the server is 
+considered to be authenticated and subsequent signaling can now proceed 
+over the TLS connection.  Matching rules for X.509 certificates and the 
+normative behavior for clients is specified in <xref target="uac"/>.</t>
+
+<t>As an example: a request is to be routed to the SIP address
+"sips:alice@example.com".  This address requires a secure connection to the
+SIP domain "example.com", so that is the SIP AUS value.  Through a series
+of untrusted DNS manipulations, that AUS is mapped to a set of host
+addresses and transports, from which an address appropriate for use with
+TLS is selected.  A connection is established to that server, which
+presents a certificate asserting an identity of "sip:example.com".  Since the
+host portion of the SIP AUS matches the subject of the certificate, the 
+server is authenticated.</t>
+
+<t><list>
+ <t>SIPS borrows this behavior from HTTPS.  However, to be pedantic,
+ <xref target="RFC2818">RFC 2818 </xref> prefers that the identity 
+ be conveyed as a subjectAltName extension of type dNSName instead 
+ of the commonly used practice of conveying the identity in the CN 
+ field of the Subject field.  Similarly, this document RECOMMENDS
+ that the SIP identity be conveyed as a subjectAltName extension of
+ type uniformResourceIdentifier (c.f. <xref target="sp"/>, <xref 
+ target="cert-subject"/>).</t>
+ 
+ <t>A domain name in an X.509 certificates is properly interpreted
+ only as a sequence of octets to be compared to the URI used to reach the
+ host.  No inference should be made based on the DNS name hierarchy.</t>
+</list></t>
+
+</section> <!-- problem-drilldown -->
+
+<section title="The need for mutual interdomain authentication" 
+         anchor="problem-mutual">
+
+<t>Consider the SIP trapezoid shown in <xref target="sip-trapezoid"/>.</t>
+
+<figure anchor="sip-trapezoid" title="SIP Trapezoid">
+ <artwork><![CDATA[
+
+   proxyA.example.com ------------ proxyB.example.net
+          |                           |
+          |                           |
+          |                           |
+          |                         +---+
+        0---0                       |   |
+         /-\                        |___|
+        +---+                      /    /
+                                  +----+
+   alice@example.com          bob@example.net
+
+ ]]></artwork>
+</figure>
+
+<t>Assume that alice@example.com creates an INVITE for bob@example.net; her 
+user agent routes the request to some proxy in her domain, example.com.
+Suppose also that example.com is a large organization that 
+maintains several SIP proxies, and normal resolution rules cause her 
+INVITE to be sent to an outbound proxy proxyA.example.com, which then 
+uses <xref target="RFC3263">RFC 3263</xref> resolution and finds that 
+proxyB.example.net is a valid proxy for example.net that uses TLS.  
+proxyA.example.com requests a TLS connection to proxyB.example.net, and 
+each presents a certificate to authenticate that connection.
+
+ <list style="empty">
+  <t><xref target="RFC3261">RFC 3261</xref> section 26.3.2.2 
+  &quot;Interdomain Requests&quot; states that when a TLS connection is 
+  created between two proxies, each should authenticate the other by 
+  validating the certificates exchanged during the TLS handshake and by 
+  comparing the subject of those certificates to the expected domain name.
+  However, RFC3261 does not make any reference to using an identifier 
+  extracted specifically from the Subject field as opposed to the 
+  subjectAltName when comparing against the domain name.</t>
+ </list>
+</t>
+
+<t>The authentication problem for proxyA is straightforward - if
+we assume secure DNS, then proxyA already knows that proxyB is a valid
+proxy for the SIP domain example.net, so it only needs a valid certificate
+from proxyB that contains the fully qualified host name proxyB.example.net,
+or a SIP URI that asserts proxy B's authority over example.net domain, i.e.,
+a certificate that asserts the identity "sip:example.net".
+<cref source="(authors) and Stephen Kent">
+Actually, even if DNSSEC provides a trusted host name, it is sufficient for
+proxyB to have presented a certificate that contains a SIP identity for
+example.net, so authentication of just the proxyB hostname has little value
+since it would not be sufficient without DNSSEC.</cref>  Normative behavior 
+for proxyA is outlined in <xref target="uac"/>.</t>
+
+<t>The problem for proxyB is slightly more complex since it accepted the
+TLS request passively.  Thus, it does not possess an equivalent AUS
+that proxyA did; instead, it uses local policies to consider the client
+authenticated.  The normative behavior for servers is provided in
+<xref target="uas"/>.</t>
+
+
+
+</section> <!-- problem-mutual -->
+
+<section title="Guidelines for a service provider" anchor="sp">
+
+<t>When assigning certificates to proxy servers, registrars, and
+redirect servers, a service provider MUST ensure that the SIP AUS
+used to address the server is present as an identity in the
+subjectAltName field of the certificate.</t>
+
+<t>Service providers MAY continue the practice of using existing
+certificates for SIP usage with the identity conveyed in the Subject 
+field; however, such usage is NOT RECOMMENDED for new certificates, 
+which MUST contain the identity in the subjectAltName extension.</t>
+
+</section> <!-- sp -->
+
+<section title="Behavior of SIP entities" 
+         anchor="SIP-considerations">
+
+<t>This section normatively specifies the behavior of SIP entities
+when using X.509 certificates to determine an authenticated SIP domain
+identity.</t>
+
+<section title="Finding SIP Identities in a Certificate" anchor="cert-subject">
+
+<t>Procedures for constructing a certificate path and checking revocation
+status to determine the validity of a certificate are described in 
+<xref target="RFC3280">RFC 3280</xref>; implementations must follow checks 
+as prescribed therein.  This document adds additional rules for interpreting 
+an X.509 certificate for use in SIP.</t>
+
+<t><xref target="I-D.sip-eku">I-D.sip-eku</xref> describes the method 
+to validate any Extended Key Usage values found in the certificate for a 
+SIP domain.  Implementations MUST perform the checks prescribed by 
+that specification.</t>
+
+<t>Given an X.509 certificate that the above checks have found to be
+acceptable, the following describes how to determine what SIP identity or
+identities it contains.  Note that a single certificate MAY serve more than
+one purpose - that is, it MAY contain identities not valid for use in SIP,
+and/or MAY contain one or more identities that are valid for use in SIP.
+
+<list style='numbers'>
+
+<t>Examine the values in the subjectAltName field.  The contents of
+subjectAltName field and the constraints that may be imposed on them 
+are defined in Section 4.2.1.7 of <xref target="RFC3280">RFC 3280</xref>.  
+The subjectAltName field may not be present or it may contain one or
+more identities.  Each value in the subjectAltName has a type; the only types
+acceptable for encoding a SIP domain identity are:
+
+<list style="hanging">
+  <t hangText="URI">If the scheme of the URI value is 'sip' (URI scheme 
+  tokens are always case insensitive), and there is no userinfo component 
+  in the URI (there is no '@'), then the hostpart is a SIP domain identity.  
+  A URI value that does contain a userpart MUST NOT be used as a domain 
+  identity (such a certificate identifies an individual user, not a server 
+  for the domain).</t>
+
+  <t hangText="DNS">A domain name system identifier MAY be accepted as a SIP
+  domain identity.  An implementation MAY choose to accept a DNS name as a
+  domain identity, but only when no identity is found using the URI 
+  type above.</t>
+</list>
+</t>
+
+<t>If and only if the subjectAltName does not appear in the certificate, the
+client MAY examine the Subject Common Name (CN) field of the certificate.
+If a valid DNS name is found there, the implementation MAY use this value
+as a SIP domain identity.  The use of the CN value is allowed for backward
+compatibility, but is NOT RECOMMENDED.</t>
+
+</list>
+</t>
+
+<t>The above procedure yields a set containing zero or more 
+identities from the certificate.  A client uses these identities
+to authenticate a server (see <xref target="uac"/>) and a server uses 
+them to authenticate a client (see <xref target="uas"/>). </t>
+
+
+</section>
+
+<section title="Comparing SIP Identities" anchor="id-compare">
+
+<t>When comparing two values as SIP identities:
+
+<list style='empty'>
+
+<t>Implementations MUST compare only that part of each identifier (from the
+procedure defined in <xref target="cert-subject"/> that is a DNS name.  Any
+scheme or parameters extracted from an identifier MUST NOT be used in the
+comparison procedure described below.</t>
+
+<t>The values MUST be compared as DNS names, which means that the
+comparison is case insensitive.</t>
+
+<t>The match MUST be exact:
+<list>
+<t>A suffix match MUST NOT be considered a match.  For example,
+"foo.example.com" does not match "example.com".</t>
+<t>Any form of wildcard, such as a leading "." or "*.", MUST NOT be considered
+a match.  For example, "foo.example.com" does not match 
+".example.com" or "*.example.com".
+
+<cref source="(authors)">
+RFC 2818 (HTTP over TLS) allows the dNSName component to contain a 
+wildcard; e.g., "DNS:*.example.com".  RFC 3280, while not disallowing this 
+explicitly, leaves the interpretation of wildcards to the individual 
+specification.  RFC 3261 does not provide any guidelines on the presence 
+of wildcards in certificates.  The consensus from the working group 
+discussion leans in the favor of not using them in SIP.
+</cref>
+
+</t>
+
+
+</list>
+</t>
+</list>
+</t>
+</section>
+
+<section title="Client behavior" anchor="uac">
+
+<t>A client uses the SIP AUS (the SIP domain name) to query a (possibly
+untrusted) DNS to obtain a result set, which is a one or more SRV and A records
+identifying the server for the domain (see <xref
+target="problem-drilldown"/> for an overview.)</t>
+
+<t>The SIP server, when establishing a TLS connection, presents its
+certificate to the client for authentication.  The client MUST determine
+the SIP identities in the server certificate using the procedure in
+<xref target="cert-subject"/>.  Then, the client MUST compare the original
+SIP domain name (the AUS) used as input to the server location procedures
+<xref target="RFC3263"/> to the SIP domain identities obtained from the
+certificate.
+
+<list style='symbols'>
+<t>If there were no identities found in the server certificate, the server
+is not authenticated.</t>
+<t>If the AUS matches any SIP domain identity obtained from the certificate
+when compared as described in section <xref target='id-compare' />, the
+server is authenticated for the domain.</t>
+</list>
+</t>
+
+<t>If the server is not authenticated, the client MUST close the connection
+immediately.</t>
+
+</section> <!-- uac -->
+
+<section title="Server behavior" anchor="uas">
+
+<t>When a server accepts a TLS connection, it presents its own X.509
+certificate to the client.  To authenticate the client, the server asks the
+client for a certificate.  If the client possesses a certificate, it is
+presented to the server.  If the client does not present a certificate, it
+MUST NOT be considered authenticated.
+
+<list style="empty">
+  
+  <t>Whether or not to close a connection if the client cannot present a
+  certificate is a matter of local policy, and depends on the authentication
+  needs of the server for the connection.  Some currently deployed servers
+  use Digest authentication to authenticate individual requests on the
+  connection, and choose to treat the connection as authenticated by those
+  requests for some purposes (but see <xref target='digest-connection'/>).</t>
+  
+  <t>If the server requires client authentication for some local purpose,
+  then it MAY implement a policy of allowing the connection only if the
+  client is authenticated.  For example, if the server is an inbound proxy
+  that has peering relationships with the outbound proxies of other specific
+  domains, it might only allow connections authenticated as coming from
+  those domains.</t>
+</list>
+</t>
+
+<t>The server MUST obtain the set of SIP domain identities from the client
+certificate as described in <xref target='cert-subject'/>.
+Because the server accepted the TLS connection passively, unlike a
+client, it does not possess an AUS for comparison.  Nonetheless, server
+policies can use the authenticated SIP domain identity to make
+authorization decisions.</t>
+
+<t>For example, a very open policy could be to accept any X.509
+certificates and validate them using the procedures in RFC 3280; if they
+validate, the identity is accepted and logged.  Alternatively, the server
+could have a list of all SIP domain names is allowed to accept connections
+from; when a client presents its certificate, for each identity in the
+client certificate, the server searches for it in the list of acceptable
+domains to decide whether or not to accept the connection.  Other policies
+that make finer distinctions are possible.</t>
+
+<t>Note that the decision of whether or not the authenticated connection to
+the client is appropriate for use to route new requests to the client
+domain is independent of whether or not the connection is authenticated;
+the <xref target="I-D.connect-reuse">connect-reuse</xref> draft discusses
+this aspect in more detail.</t>
+
+</section> <!-- uas -->
+
+<section title="Proxy behavior" anchor="proxy">
+
+<t>A proxy MUST use the procedures defined for a User Agent Server (UAS) in <xref target='uas'
+/> when authenticating a connection from a client.</t> 
+
+<t>A proxy MUST use the procedures defined for a User Agent Client (UAC) in <xref
+target='uac' /> when requesting an authenticated connection to a UAS.</t>
+
+<t>If a proxy adds a Record-Route when forwarding a request with the
+expectation that the route is to use secure connections, it MUST insert
+into the Record-Route header a URI that corresponds to an identity for
+which it has a certificate; if it does not, then it will not be possible
+to create a secure connection using the value from the Record-Route as the
+AUS.</t> 
+
+</section> <!-- proxy -->
+
+<section title="Registrar behavior" anchor="registrar">
+
+<t>A SIP registrar, acting as a server, follows the normative behavior
+of <xref target="uas"/>.  When it accepts a TLS connection from the client,
+it present its certificate.  Depending on the registrar policies, it may
+challenge the client with HTTP Digest.</t>
+
+</section> <!-- registrar -->
+
+<section title="Redirect server behavior" anchor="redirect">
+
+<t>A SIP redirect server follows the normative behavior of
+<xref target="uas"/>.  It may accept a TLS connection from the client,
+present its certificate, and then challenge the client with HTTP Digest.</t>
+
+</section> <!-- redirect -->
+
+<section title="Virtual SIP Servers and Certificate Content"
+ anchor="virtual-servers">
+
+<t>The closest guidance in SIP today regarding certificates and
+virtual SIP servers occurs in SIP Identity (<xref target="RFC4474"/>,
+Section 13.4).  The quoted section states that, "...  certificates have 
+varying ways of describing their subjects, and may indeed have multiple 
+subjects, especially in the 'virtual hosting' cases where multiple domains 
+are managed by a single application." </t>
+
+<t>The above quote is incorrect, in that it implies that one certificate
+can have multiple subjectAltName (or Subject) fields, each corresponding to a
+discrete virtual server that represents a single domain; actually, a
+PKIX-compliant certificate has exactly one Subject field and at most one
+subjectAltName (the subjectAltName MAY contain multiple identifiers for
+the Subject).</t>
+
+<t>Since only one certificate is needed for multiple domains,
+the keying material management is straightforward, but such a certificate
+MUST be revoked if ANY identifier in the certificate is no longer
+associated with the holder of the private key for the certificate.</t>
+
+<t>The TLS extended client hello <xref target="RFC4366"/> allows a TLS 
+client to provide to the TLS server the name of the server to which a 
+connection is desired.  Thus, the server can present the correct certificate 
+to establish the TLS connection.</t> 
+
+</section> <!-- virtual-servers -->
+
+</section> <!-- SIP-considerations -->
+
+<section title="Security Considerations" anchor="sec-cons">
+
+<t>The goals of TLS (when used with X.509 certificates) include the 
+following security guarantees at the transport layer:
+
+<list style="hanging">
+
+<t hangText="Confidentiality:">packets tunneled through TLS can be read only
+  by the sender and receiver.</t>
+
+<t hangText="Integrity:">packets tunneled through TLS cannot be undetectably 
+  modified on the connection between the sender and receiver.</t>
+
+<t hangText="Authentication:">each principal is authenticated to the other as
+  possessing a private key for which a certificate has been issued.
+  Moreover, this certificate has not been revoked, and is verifiable by a
+  certificate chain leading to a (locally configured) trust anchor.</t>
+
+</list></t>
+
+<t>We expect appropriate processing of domain
+certificates to provide the following security guarantees at the
+application level:
+
+<list style="hanging">
+
+<t hangText="Confidentiality:">SIPS messages from alice@example.com to 
+  bob@example.edu can be read only by alice@example.com, bob@example.edu, and 
+  SIP proxies issued with domain certificates for example.com or 
+  example.edu.</t>
+
+<t hangText="Integrity:">SIPS messages from alice@example.com to 
+  bob@example.edu cannot be undetectably modified on the links between 
+  alice@example.com, bob@example.edu, and SIP proxies issued with domain 
+  certificates for example.com or example.edu.</t>
+
+<t hangText="Authentication:">alice@example.com and proxy.example.com 
+  are mutually authenticated; moreover proxy.example.com is authenticated to
+  alice@example.com as an authoritative proxy for domain example.com.
+  Similar mutual authentication guarantees are given between
+  proxy.example.com and proxy.example.edu and between proxy.example.edu
+  and bob@example.edu.  As a result, alice@example.com is transitively
+  mutually authenticated to bob@example.edu (assuming trust in the
+  authoritative proxies for example.com and example.edu).</t>
+
+</list></t>
+
+<section title='Connection authentication using Digest' 
+         anchor='digest-connection'>
+
+  <t>Digest authentication in SIP provides for authentication of the
+  message sender to the challenging UAS.  As commonly deployed, it provides
+  only very limited integrity protection of the authenticated message.
+  Many existing deployments have chosen to use the Digest authentication of
+  one or more messages on a particular connection as a way to authenticate
+  the connection itself - and by implication, authenticating other
+  (unchallenged) messages on that connection.  Some even choose to
+  similarly authenticate a UDP source address and port based on the Digest
+  authentication of a message received from that address and port.  This
+  use of Digest goes beyond the assurances it was designed to provide, and
+  is NOT RECOMMENDED.  Authentication of the domain at the other end of a
+  connection SHOULD be accomplished using TLS and the certificate
+  validation rules described by this specification instead.</t>
+
+</section> <!-- Connection authentication using Digest -->
+
+</section> <!-- Security Considerations -->
+
+<section title="IANA Considerations" anchor="iana-cons">
+
+<t>This memo does not contain any considerations for IANA.</t>
+
+</section> <!-- iana-cons -->
+
+<section title="Acknowledgments">
+
+<t>The following IETF contributors provided substantive input to this
+document: Jeroen van Bemmel, Michael Hammer, Cullen Jennings, Paul Kyzivat,
+Derek MacDonald, Dave Oran, Jon Peterson, Eric Rescorla, Jonathan
+Rosenberg, Russ Housley.  Special acknowledgement goes to Stephen Kent 
+for extensively reviewing draft versions and suggesting invaluable 
+feedback, edits, and comments.</t>
+
+</section>
+
+</middle>  
+
+<back>
+
+
+<references title= "Normative References" >
+
+<reference anchor="RFC2119">
+ <front>
+  <title>Key words for use in RFCs to Indicate Requirement Levels</title>
+  <author initials="S." surname="Bradner">
+    <organization/></author>
+  <date month="March" year="1997"/>
+ </front>
+ <seriesInfo name="RFC" value="2119"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc2119.txt"/>
+</reference>
+
+<reference anchor="RFC3261">
+ <front>
+  <title>SIP: Session Initiation Protocol</title>
+  <author initials="J." surname="Rosenberg">
+   <organization></organization>
+  </author>
+  <author initials="H." surname="Schulzrinne">
+   <organization></organization>
+  </author>
+  <author initials='G.' surname='Camarillo'>
+   <organization></organization>
+  </author>
+  <author initials='A.' surname='Johnston'>
+   <organization></organization>
+  </author>
+  <author initials='J.' surname='Peterson'>
+   <organization></organization>
+  </author>
+  <author initials='R.' surname='Sparks'>
+   <organization></organization>
+  </author>
+  <author initials='M.' surname='Handley'>
+   <organization></organization>
+  </author>
+  <author initials='E.' surname='Schooler'>
+   <organization></organization>
+  </author>
+  <date month="June"  year="2002"/>
+ </front>
+ <seriesInfo name="RFC" value="3261"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc3261.txt"/>
+</reference>
+
+<reference anchor="RFC2246">
+ <front>
+  <title>The TLS Protocol Version 1.0</title>
+  <author initials="T." surname="Dierks">
+   <organization></organization>
+  </author>
+  <author initials="C." surname="Allen">
+   <organization></organization>
+  </author>
+  <date month="January" year="1999"/>
+ </front>
+ <seriesInfo name="RFC" value="2246"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc2246.txt"/>
+</reference>
+
+<reference anchor="RFC3280">
+ <front>
+  <title>Internet X.509 Public Key Infrastructure Certificate and
+  Certificate Revocation List (CRL) Profile</title>
+  <author initials="R." surname="Housley">
+   <organization></organization>
+  </author>
+  <author initials="W." surname="Polk">
+   <organization></organization>
+  </author>
+  <author initials="W." surname="Ford">
+   <organization></organization>
+  </author>
+  <author initials="D." surname="Solo">
+   <organization></organization>
+  </author>
+  <date year='2002' month='April' />
+</front>
+ <seriesInfo name="RFC" value="3280"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc3280.txt"/>
+</reference>
+
+</references>
+
+<references title= "Informative References" >
+
+<reference anchor="RFC3263">
+ <front>
+  <title>Session Initiation Protocol (SIP): Location SIP Servers</title>
+  <author initials="J." surname="Rosenberg">
+   <organization></organization>
+  </author>
+  <author initials="H." surname="Schulzrinne">
+   <organization></organization>
+  </author>
+  <date month="June" year="2002"/>
+ </front>
+ <seriesInfo name="RFC" value="3263"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc3263.txt"/>
+</reference>
+
+<reference anchor="RFC2818">
+ <front>
+  <title>HTTP Over TLS</title>
+  <author initials="E." surname="Rescorla"><organization/></author>
+  <date month="May" year="2000"/>
+ </front>
+ <seriesInfo name="RFC" value="2818"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc2818.txt"/>
+</reference>
+
+<reference anchor="RFC4366">
+ <front>
+  <title>Transport Layer Security (TLS) Extensions</title>
+  <author initials="S." surname="Blake-Wilson"><organization/></author>
+  <author initials="M." surname="Nystrom"><organization/></author>
+  <author initials="D." surname="Hopwood"><organization/></author>
+  <author initials="J." surname="Mikkelsen"><organization/></author>
+  <author initials="T." surname="Wright"><organization/></author>
+  <date month="April" year="2006"/>
+ </front>
+ <seriesInfo name="RFC" value="4366"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc4366.txt"/>
+</reference>
+
+<reference anchor="RFC4474">
+ <front>
+  <title>Enhancements for Authenticated Identity Management in the Session
+         Initiation Protocol (SIP)</title>
+  <author initials="J." surname="Peterson"><organization/></author>
+  <author initials="C." surname="Jennings"><organization/></author>
+  <date month="August" year="2006"/>
+ </front>
+ <seriesInfo name="RFC" value="4474"/>
+ <format type="TXT"
+   target="http://www.ietf.org/rfc/rfc4474.txt"/>
+</reference>
+
+<reference anchor="I-D.sip-eku">
+  <front>
+    <title abbrev="SIP EKU">
+    Using Extended Key Usage (EKU) for Session Initiation Protocol (SIP)
+    X.509 Certificates</title>
+    <author initials= "S." surname="Lawrence" fullname="Scott Lawrence">
+      <organization>Bluesocket Inc.</organization>
+    </author>
+
+    <author initials="V.K." surname="Gurbani" fullname="Vijay K. Gurbani">
+      <organization>Bell Laboratories, Alcatel-Lucent</organization>
+    </author>
+
+    <date year="2007"/>
+
+    <area>Realtime Applications and Infrastructure</area>
+    <workgroup>SIP WG</workgroup>
+  </front>
+  <seriesInfo name="Internet-Draft" value="draft-ietf-sip-eku-00.txt"/>
+  <format type="TXT"
+          target=
+          "http://www.ietf.org/internet-drafts/draft-ietf-sip-eku-00.txt"/>
+</reference>
+
+<reference anchor="I-D.connect-reuse">
+ <front>
+  <title>Connection Reuse in the Session Initiation Protocol</title>
+  <author initials="R." surname="Mahy"><organization/></author>
+  <author initials="V." surname="Gurbani"><organization/></author>
+  <author initials="B." surname="Tate"><organization/></author>
+  <date month="October" year="2007"/>
+ </front>
+ <seriesInfo name="Internet-Draft" value="draft-ietf-sip-connect-reuse-08.txt"/>
+ <format type="TXT"
+   target=
+    "http://www.ietf.org/internet-drafts/draft-ietf-sip-connect-reuse-08.txt"/>
+</reference>
+
+</references>
+
+<!--
+<reference anchor="RFC3281">
+ <front>
+  <title>An Internet Attribute Certificate Profile for Authorization</title>
+  <author initials="S." surname="Farrell">
+   <organization></organization>
+  </author>
+  <author initials="R." surname="Housley">
+   <organization></organization>
+  </author>
+  <date month="April" year="2002"/>
+ </front>
+ <seriesInfo name="RFC" value="3281"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc3281.txt"/>
+</reference>
+
+<reference anchor="RFC3263">
+ <front>
+  <title>Session Initiation Protocol (SIP): Location SIP Servers</title>
+  <author initials="J." surname="Rosenberg">
+   <organization></organization>
+  </author>
+  <author initials="H." surname="Schulzrinne">
+   <organization></organization>
+  </author>
+  <date month="June" year="2002"/>
+ </front>
+ <seriesInfo name="RFC" value="3263"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc3263.txt"/>
+</reference>
+
+<reference anchor="RFC2616">
+ <front>
+  <title>HyperText Transfer Protocol - HTTP/1.1</title>
+  <author initials="R." surname="Fieldings"><organization/></author>
+  <author initials="J." surname="Gettys"><organization/></author>
+  <author initials="J." surname="Mogul"><organization/></author>
+  <author initials="H." surname="Frystyk"><organization/></author>
+  <author initials="L." surname="Masinter"><organization/></author>
+  <author initials="P." surname="Leach"><organization/></author>
+  <author initials="T." surname="Berners-Lee"><organization/></author>
+  <date month="June" year="1999"/>
+ </front>
+ <seriesInfo name="RFC" value="2616"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc2616.txt"/>
+</reference>
+
+<reference anchor="RFC2821">
+ <front>
+  <title>Simple Mail Transfer Protocol</title>
+  <author initials="J." surname="Klensin" role="editor"><organization/></author>
+  <date month="April" year="2001"/>
+ </front>
+ <seriesInfo name="RFC" value="2821"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc2821.txt"/>
+</reference>
+
+-->
+
+</back>
+</rfc>
+
+<!--  LocalWords:  xml UTF DOCTYPE rfc dtd stylesheet xsl href xslt toc symrefs
+ -->
+<!--  LocalWords:  iprnotified subcompact sortrefs colonspace inline docName WG
+ -->
+<!--  LocalWords:  DOCNAME bcp ipr abbrev Certs Gurbani fullname Vijay Alcatel
+ -->
+<!--  LocalWords:  vkg com Bluesocket ajeffrey Realtime workgroup PKIX xref TLS
+ -->
+<!--  LocalWords:  interoperability subjectAltName hostname DNS CN cref URIs IP
+ -->
+<!--  LocalWords:  Netscape accomodating drilldown AUS cert uac HTTPS dNSName
+ -->
+<!--  LocalWords:  uniformResourceIdentifier sp octets interdomain CDATA quot
+ -->
+<!--  LocalWords:  outbound proxyA proxyB DNSSEC uas eku hangText userinfo HTTP
+ -->
+<!--  LocalWords:  hostpart userpart wildcard wildcards SRV inbound edu UDP TXT
+ -->
+<!--  LocalWords:  undetectably IANA iana IETF Jeroen Bemmel Cullen Kyzivat CRL
+ -->
+<!--  LocalWords:  Oran Rescorla Housley acknowledgement RFCs Bradner Camarillo
+ -->
+<!--  LocalWords:  seriesInfo Schulzrinne Handley Dierks Nystrom Hopwood ietf
+ -->
+<!--  LocalWords:  Mikkelsen txt Mahy HyperText Fieldings Gettys Mogul Frystyk
+ -->
+<!--  LocalWords:  Masinter Berners Klensin
+ -->

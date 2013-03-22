@@ -1,0 +1,1423 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!-- $Id: draft-iab-dns-choices.xml 386 2008-03-04 16:48:16Z sra $ -->
+<?rfc compact="yes"?>
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<rfc category="info" docName="draft-iab-dns-choices-07" ipr="full3978">
+  <front>
+    <title abbrev="Design Choices When Expanding DNS">Design Choices When
+    Expanding DNS</title>
+
+    <author>
+      <organization abbrev="IAB">Internet Architecture Board</organization>
+
+      <address>
+        <email>iab@iab.org</email>
+      </address>
+    </author>
+
+    <author fullname="Patrik Faltstrom" initials="P." role="editor"
+            surname="Faltstrom">
+      <organization></organization>
+
+      <address>
+        <email>paf@cisco.com</email>
+      </address>
+    </author>
+
+    <author fullname="Rob Austein" initials="R." role="editor"
+            surname="Austein">
+      <organization></organization>
+
+      <address>
+        <email>sra@isc.org</email>
+      </address>
+    </author>
+
+    <author fullname="Peter Koch" initials="P." role="editor" surname="Koch">
+      <organization></organization>
+
+      <address>
+        <email>pk@denic.de</email>
+      </address>
+    </author>
+
+    <date day="11" month="August" year="2008" />
+
+    <keyword>DNS</keyword>
+
+    <keyword>Info</keyword>
+
+    <keyword>RFC</keyword>
+
+    <keyword>I-D</keyword>
+
+    <keyword>Internet-Draft</keyword>
+
+    <abstract>
+      <t>This note discusses how to extend the DNS with new data for a new
+      application. DNS extension discussions too often focus on reuse of the
+      TXT Resource Record Type. This document lists different mechanisms to
+      extend the DNS, and concludes that the use of a new DNS Resource Record
+      Type is the best solution.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section anchor="intro" title="Introduction">
+      <t>The DNS stores multiple categories of data. The two most commonly
+      used categories are infrastructure data for the DNS system itself (NS
+      and SOA Resource Records) and data which have to do with mappings
+      between domain names and IP addresses (A, AAAA and PTR Resource
+      Records). There are other categories as well, some of which are tied to
+      specific applications like email (MX Resource Records), while others are
+      generic Resource Record Types used to convey information for multiple
+      protocols (SRV and NAPTR Resource Records).</t>
+
+      <t>When storing data in the DNS for a new application, the goal must be
+      to store data in such a way that the application can query for the data
+      it wants, while minimizing both the impact on existing applications and
+      the amount of extra data transfered to the client. This implies that a
+      number of design choices have to be made, where the most important is to
+      ensure that a precise selection of what data to return must be made
+      already in the query. A query consists of the triple {Owner, Resource
+      Record Type, Resource Record Class}.</t>
+
+      <t>Historically, extending DNS to store application data tied to a
+      domain name has been done in different ways at different times. MX
+      Resource Records were created as a new Resource Record Type specifically
+      designed to support electronic mail. SRV records are a generic type
+      which use a prefixing scheme in combination with a base domain name.
+      NAPTR records add selection data inside the RDATA. It is clear that the
+      methods used to add new data types to the DNS have been inconsistent,
+      and the purpose of this document is to attempt to clarify the
+      implications of each of these methods, both for the applications that
+      use them and for the rest of the DNS.</t>
+
+      <t>This document talks extensively about use of DNS wildcards. Many
+      people might think use of wildcards is not something that happens today.
+      In reality though, wildcards are in use, especially for certain
+      application-specific data such as MX Resource Records. Because of this,
+      the choice has to be made with existence of wildcards in mind.</t>
+
+      <t>Another overall issue that must be taken into account is what the new
+      data in the DNS are to describe. In some cases they might be completely
+      new data. In other cases they might be metadata tied to data that
+      already exist in the DNS. An example of new data is key information for
+      SSH and data used for authenticating sender of email messages (metadata
+      tied to MX Resource Records). If the new data are tied to data that
+      already exist in the DNS, an analysis should be made as to whether
+      having (for example) address records and SSH key information in
+      different DNS zones is a problem or if it is a bonus, and if it is a
+      problem, whether the specification must require all of the related data
+      to be in the same zone. One specific difference between having the
+      records in the same zone or not has to do with maintenance of the
+      records. If they are in the same zone, the same maintainer (from a DNS
+      perspective) manages the two records. Specifically, they must be signed
+      with the same DNSSEC keys if DNSSEC is in use.</t>
+
+      <t>This document does not talk about what one should store in the DNS.
+      It also doesn't discuss whether DNS should be used for service
+      discovery, or whether DNS should be used for storage of data specific to
+      the service. In general, DNS is a protocol that, apart from holding
+      metadata that makes the DNS itself function (NS, SOA, DNSSEC Resource
+      Record Types, etc), only holds references to service locations (SRV,
+      NAPTR, A, AAAA Resource Record Types) -- though there are exceptions,
+      such as MX Resource Records.</t>
+    </section>
+
+    <section title="Background">
+      <t>See <xref target="RFC2929">RFC 2929</xref> for a brief summary of DNS
+      query structure. Readers interested in the full story should start with
+      the base DNS specification in <xref target="RFC1035">RFC 1035</xref>,
+      and continue with the various documents that update, clarify, and extend
+      the base specification.</t>
+
+      <t>When composing a DNS query, the parameters used by the protocol are a
+      triple: a DNS name, a DNS class, and a DNS Resource Record Type. Every
+      Resource Record matching a particular name, class and type is said to
+      belong to the same Resource Record Set (RRSet), and the whole RRSet is
+      always returned to the client that queries for it. Splitting an RRSet is
+      a protocol violation (sending a partial RRSet, not truncating the DNS
+      response), because it can result in coherency problems with the DNS
+      caching mechanism. See <xref target="RFC2181">RFC 2181 section 5</xref>
+      for more information.</t>
+
+      <t>Some discussions around extensions to the DNS include arguments
+      around MTU size. Note that most discussions about DNS and MTU size are
+      about the size of the whole DNS packet, not about the size of a single
+      RRSet.</t>
+
+      <t>Almost all DNS query traffic is carried over UDP, where a DNS message
+      must fit within a single UDP packet. DNS response messages are almost
+      always larger than DNS query messages, so message size issues are almost
+      always about responses, not queries. The base DNS specification limits
+      DNS messages over UDP to 512 octets; EDNS0 <xref
+      target="RFC2671"></xref> specifies a mechanism by which a client can
+      signal its willingness to receive larger responses, but deployment of
+      EDNS0 is not universal, in part because of firewalls that block
+      fragmented UDP packets or EDNS0. If a response message won't fit in a
+      single packet, the name server returns a truncated response, at which
+      point the client may retry using TCP. DNS queries over TCP are not
+      subject to this length limitation, but TCP imposes significantly higher
+      per-query overhead on name servers than UDP. It is also the case that
+      the policies in deployed firewalls far too often are such that it blocks
+      DNS over TCP, so using TCP might not in reality be an option. There are
+      also risks (although possibly small) that a change of routing while a
+      TCP flow is open creates problems when the DNS servers are deployed in
+      an anycast environment.</t>
+    </section>
+
+    <section title="Extension mechanisms">
+      <t>The DNS protocol is intended to be extensible to support new kinds of
+      data. This section examines the various ways in which this sort of
+      extension can be accomplished.</t>
+
+      <section anchor="add_subtype"
+               title="Place selectors inside the RDATA of existing Resource Record Types">
+        <t>For a given query name, one might choose to have a single RRSet
+        (all Resource Records sharing the same name, class and type) shared by
+        multiple applications, and have the different applications use
+        selectors within the Resource Record data (RDATA) to determine which
+        records are intended for which applications. This sort of selector
+        mechanism is usually referred to "subtyping", because it is in effect
+        creating an additional type subsystem within a single DNS Resource
+        Record Type.</t>
+
+        <t>Examples of subtyping include NAPTR Resource Records <xref
+        target="RFC3761"></xref> and the original DNSSEC KEY Resource Record
+        Type <xref target="RFC2535"></xref> (which was later updated by <xref
+        target="RFC3445">RFC 3445</xref>).</t>
+
+        <t>All DNS subtyping schemes share a common weakness: With subtyping
+        schemes it is impossible for a client to query for just the data it
+        wants. Instead, the client must fetch the entire RRSet, then select
+        the Resource Records in which it is interested. Furthermore, since
+        DNSSEC signatures operate on complete RRSets, the entire RRSet must be
+        re-signed if any Resource Record in it changes. As a result, each
+        application that uses a subtyped Resource Record incurs higher
+        overhead than any of the applications would have incurred had they not
+        been using a subtyping scheme. The fact the RRSet is always passed
+        around as an indivisible unit increases the risk the RRSet will not
+        fit in a UDP packet, which in turn increases the risk that the client
+        will have to retry the query with TCP, which substantially increases
+        the load on the name server. More precisely: having one query fail
+        over to TCP is not a big deal, but since the typical ratio of clients
+        to servers in today's deployed DNS is very high, having a substantial
+        number of DNS messages fail over to TCP may cause the queried name
+        servers to be overloaded by TCP overhead.</t>
+
+        <t>Because of the size limitations, using a subtyping scheme to list a
+        large number of services for a single domain name risks triggering
+        truncation and fallback to TCP, which may in turn force the zone
+        administrator to announce only a subset of available services.</t>
+      </section>
+
+      <section anchor="add_prefix" title="Add a prefix to the owner name">
+        <t>By adding an application-specific prefix to a domain name, we get a
+        different name/class/type triple, and therefore a different RRSet. One
+        problem with adding prefixes has to do with wildcards, especially if
+        one has records like</t>
+
+        <figure>
+          <artwork><![CDATA[
+*.example.com. IN MX 1 mail.example.com.
+]]></artwork>
+        </figure>
+
+        <t>and one wants records tied to those names. Suppose one creates the
+        prefix "_mail". One would then have to say something like</t>
+
+        <figure>
+          <artwork><![CDATA[
+_mail.*.example.com. IN X-FOO A B C D
+]]></artwork>
+        </figure>
+
+        <t>but DNS wildcards only work with the "*" as the leftmost token in
+        the domain name (see also <xref target="RFC4592">RFC 4592</xref>).</t>
+
+        <t>There have been proposals to deal with the problem that DNS
+        wild-cards are always terminal records. These proposals introduce an
+        additional set of trade-offs that would need to be taken into account
+        when assessing which extension mechanism to choose. Aspects of extra
+        response time needed to perform the extra queries, costs of
+        pre-calculation of possible answers, or the costs induced to the
+        system as a whole come to mind. At the time of writing none of these
+        proposals has been published as standards-track RFCs.</t>
+
+        <t>Even when a specific prefix is chosen, the data will still have to
+        be stored in some Resource Record Type. This Resource Record Type can
+        either be a new Resource Record Type or an existing Resource Record
+        Type that has an appropriate format to store the data. One also might
+        need some other selection mechanism, such as the ability to
+        distinguish between the records in an RRSet given they have the same
+        Resource Record Type. Because of this, one needs to both register a
+        unique prefix and define what Resource Record Type is to be used for
+        this specific service.</t>
+
+        <t>If the record has some relationship with another record in the
+        zone, the fact that the two records can be in different zones might
+        have implications on the trust the application has in the records. For
+        example:</t>
+
+        <figure>
+          <artwork><![CDATA[
+example.com.      IN MX    10 mail.example.com.
+_foo.example.com. IN X-BAR "metadata for the mail service"
+]]></artwork>
+        </figure>
+
+        <t>In this example, the two records might be in two different zones,
+        and as a result might be administered by two different organisations,
+        and signed by two different entities when using DNSSEC. For these two
+        reasons, using a prefix has recently become a very interesting
+        solution for many protocol designers. In some cases when using TXT
+        records (add reference to DKIM), in other cases when adding new
+        Resource Record Types (SRV).</t>
+      </section>
+
+      <section anchor="add_suffix" title="Add a suffix to the owner name">
+        <t>Adding a suffix to a domain name changes the name/class/type
+        triple, and therefore the RRSet. In this case, since the query name
+        can be set to exactly the data one wants the size of the RRSet is
+        minimized. The problem with adding a suffix is that it creates a
+        parallel tree within the IN class. Further, there is no technical
+        mechanism to ensure that the delegation for "example.com" and
+        "example.com._bar" are made to the same organization. Furthermore,
+        data associated with a single entity will now be stored in two
+        different zones, such as "example.com" and "example.com._bar", which,
+        depending on who controls "_bar", can create new synchronization and
+        update authorization issues.</t>
+
+        <t>One way of solving the administrative issues is by using the DNAME
+        Resource Record Type specified in <xref target="RFC2672">RFC
+        2672</xref>.</t>
+
+        <t>Even when using a different name, the data will still have to be
+        stored in some Resource Record Type that has an appropriate format to
+        store the data. This implies that one might have to mix the prefix
+        based selection mechanism with some other mechanism so that the right
+        Resource Record can be found out of many in a potential larger
+        RRSet.</t>
+
+        <t>In <xref target="RFC2163">RFC 2163</xref> an infix token is
+        inserted directly below the TLD, but the result is equivalent to
+        adding a suffix to the owner name (instead of creating a TLD one is
+        creating a second level domain).</t>
+      </section>
+
+      <section anchor="add_class" title="Add a new Class">
+        <t>DNS zones are class-specific in the sense that all the records in
+        that zone share the same class as the zone's SOA record and the
+        existence of a zone in one class does not guarantee the existence of
+        the zone in any other class. In practice, only the IN class has ever
+        seen widespread deployment, and the administrative overhead of
+        deploying an additional class would almost certainly be
+        prohibitive.</t>
+
+        <t>Nevertheless, one could in theory use the DNS class mechanism to
+        distinguish between different kinds of data. However, since the DNS
+        delegation tree (represented by NS Resource Records) is itself tied to
+        a specific class, attempting to resolve a query by crossing a class
+        boundary may produce unexpected results because there is no guarantee
+        that the name servers for the zone in the new class will be the same
+        as the name servers in the IN class. The MIT Hesiod system used a
+        scheme like this for storing data in the HS class, but only on a very
+        small scale (within a single institution), and with an administrative
+        fiat requiring that the delegation trees for the IN and HS trees be
+        identical. The use of the HS class for such storage of non-sensitive
+        data was over time replaced by use of LDAP.</t>
+
+        <t>Even when using a different class, the data will still have to be
+        stored in some Resource Record Type that has an appropriate format to
+        store the data. This implies that one might have to mix the prefix
+        based selection mechanism with some other mechanism so that the right
+        Resource Record can be found out of many in a potential larger
+        RRSet.</t>
+      </section>
+
+      <section anchor="add_type" title="Add a new Resource Record Type">
+        <t>When adding a new Resource Record Type to the system, entities in
+        four different roles have to be able to handle the new Type:</t>
+
+        <t><list style="numbers">
+            <t>There must be a way to insert the new Resource Records into the
+            zone of the Primary Master name server. For some server
+            implementations, the user interface only accepts Resource Record
+            Types which it understands (perhaps so that the implementation can
+            attempt to validate the data). Other implementations allow the
+            zone administrator to enter an integer for the Resource Record
+            Type code and the RDATA in Base64 or hexadecimal encoding (or even
+            as raw data). <xref target="RFC3597">RFC 3597</xref> specifies a
+            standard generic encoding for this purpose.</t>
+
+            <t>A slave authoritative name server must be able to do a zone
+            transfer, receive the data from some other authoritative name
+            server, and serve data from the zone even though the zone includes
+            records of unknown Types. Historically, some implementations have
+            had problems parsing stored copies of the zone file after
+            restarting, but those problems have not been seen for a few
+            years.</t>
+
+            <t>A caching resolver (most commonly a recursive name server) will
+            cache the records which are responses to queries. As mentioned in
+            <xref target="RFC3597">RFC 3597</xref>,there are various pitfalls
+            where a recursive name server might end up having problems.</t>
+
+            <t>The application must be able to get the RRSet with a new
+            Resource Record Type. The application itself may understand the
+            RDATA, but the resolver library might not. Support for a generic
+            interface for retrieving arbitrary DNS Resource Record Types has
+            been a requirement since 1989 (see <xref target="RFC1123">RFC
+            1123</xref> Section 6.1.4.2). Some stub resolver library
+            implementations neglect to provide this functionality and cannot
+            handle unknown Resource Record Types, but implementation of a new
+            stub resolver library is not particularly difficult, and open
+            source libraries that already provide this functionality are
+            available.</t>
+          </list></t>
+
+        <t>Historically, adding a new Resource Record Type has been very
+        problematic. Review process has been cumbersome, DNS servers have not
+        been able to handle new Resource Record Types, and firewalls have
+        dropped queries or responses with Resource Record Types that are
+        unknown to the firewall. This is for example one of the reasons the
+        ENUM standard reuses the NAPTR Resource Record, a decision that today
+        might have gone to creating a new resource record type instead.</t>
+
+        <t>Today, there is a requirement that DNS software handle unknown
+        Resource Record Types, and investigations have shown that software
+        that is deployed in general does support it. Also, the approval
+        process for new Resource Record Types has been updated so the effort
+        that is needed for various Resource Record Types is more
+        predictable.</t>
+      </section>
+    </section>
+
+    <section title="Zone boundaries are invisible to applications">
+      <t>Regardless of the possible choices above we have seen a number of
+      cases where the application made assumptions about the structure of the
+      namespace and the location where specific information resides. We take a
+      small sidestep to argue against such approaches.</t>
+
+      <t>The DNS namespace is a hierarchy, technically speaking. However, this
+      only refers to the way names are built from multiple labels. DNS
+      hierarchy neither follows nor implies administrative hierarchy. Because
+      of that, it cannot be assumed that data attached to a node in the DNS
+      tree is valid for the whole subtree. Technically, there are zone
+      boundaries partitioning the namespace, and administrative boundaries (or
+      policy boundaries) may even exist elsewhere.</t>
+
+      <t>The false assumption has lead to an approach called "tree climbing",
+      where a query that does not receive a positive response (either the
+      requested RRSet was missing or the name did not exist) is retried by
+      repeatedly stripping off the leftmost label (climbing towards the root)
+      until the root domain is reached. Sometimes these proposals try to avoid
+      the query for the root or the TLD level, but still this approach has
+      severe drawbacks:</t>
+
+      <t><list style="symbols">
+          <t>Technically, the DNS was built as a query - response tool without
+          any search capability <xref target="RFC3467"></xref>. Adding the
+          search mechanism imposes additional burden on the technical
+          infrastructure, in the worst case on TLD and root name servers.</t>
+
+          <t>For reasons similar to those outlined in <xref
+          target="RFC1535">RFC 1535</xref>, querying for information in a
+          domain outside the control of the intended entity may lead to
+          incorrect results and may also put security at risk. Finding the
+          exact policy boundary is impossible without an explicit marker which
+          does not exist at present. At best, software can detect zone
+          boundaries (e.g., by looking for SOA Resource Records), but some TLD
+          registries register names starting at the second level (e.g.,
+          CO.UK), and there are various other "registry" types at second,
+          third or other level domains that cannot be identified as such
+          without policy knowledge external to the DNS.</t>
+        </list></t>
+
+      <t>To restate, the zone boundary is purely a boundary that exists in the
+      DNS for administrative purposes, and applications should be careful not
+      to draw unwarranted conclusions from zone boundaries. A different way of
+      stating this is that the DNS does not support inheritance, e.g. a
+      wildcard MX RRSet for a TLD will not be valid for any subdomain of that
+      particular TLD.</t>
+    </section>
+
+    <section anchor="txt_evil"
+             title="Why adding a new Resource Record Type is the preferred solution">
+      <t>By now, the astute reader might be wondering what conclusions to draw
+      from the issues presented so far. We will now attempt to clear up the
+      reader's confusion by following the thought processes of a typical
+      application designer who wishes to store data in the DNS. We'll show how
+      such a designer almost inevitably hits upon the idea of just using a TXT
+      Resource Record, why this is a bad thing, and why a new Resource Record
+      Type should be allocated instead. And we'll also explain how the reuse
+      of an existing resource record, including TXT, can be made less
+      harmful.</t>
+
+      <t>The overall problem with most solutions has to do with two main
+      issues: <list style="symbols">
+          <t>No semantics to prevent collision with other use</t>
+
+          <t>Space considerations in the DNS message</t>
+        </list></t>
+
+      <t>A typical application designer is not interested in the DNS for its
+      own sake, but rather regards it as a distributed database in which
+      application data can be stored. As a result, the designer of a new
+      application is usually looking for the easiest way to add whatever new
+      data the application needs to the DNS in a way that naturally associates
+      the data with a DNS name.</t>
+
+      <t>As explained in <xref target="add_class"></xref>, using the DNS class
+      system as an extension mechanism is not really an option, and in fact
+      most users of the system don't even realize that the mechanism exists.
+      As a practical matter, therefore any extension is likely to be within
+      the IN class.</t>
+
+      <t>Adding a new Resource Record Type is the technically correct answer
+      from the DNS protocol standpoint (more on this below), but doing so
+      requires some DNS expertise, due to the issues listed in <xref
+      target="add_type"></xref>. Consequently, this option is often rejected.
+      Note that according to <xref target="RFC2929">RFC 2929</xref>, some
+      Types require IETF Consensus, while others only require a
+      specification.</t>
+
+      <t>There is a drawback to defining new RR types that is worth
+      mentioning. The RRTYPE is a 16 bit value and hence is a limited
+      resource. In order to prevent herding the registry has a review based
+      allocation policy <xref target="RFC2929"></xref>, however this may not
+      be sufficient if extension of the DNS by addition of new RR types takes
+      up significantly and the registry starts nearing completion. In that
+      case the trade-offs with respect to choosing an extension mechanism may
+      need to change.</t>
+
+      <t>The application designer is thus left with the prospect of reusing
+      some existing DNS Type within the IN class, but when the designer looks
+      at the existing Types, almost all of them have well-defined semantics,
+      none of which quite match the needs of the new application. This has not
+      completely prevented proposals from reusing existing Resource Record
+      Types in ways incompatible with their defined semantics, but it does
+      tend to steer application designers away from this approach.</t>
+
+      <t>For example, Resource Record Type 40 was registered for the SINK
+      Resource Record Type. This Resource Record Type was discussed in the
+      DNSIND working group of the IETF, and it was decided at the 46th IETF to
+      not move the I-D forward to become an RFC because of the risk of
+      encouraging application designers to use the SINK Resource Record Type
+      instead of registering a new Resource Record Type, which would result in
+      infeasibly large SINK RRsets.</t>
+
+      <t>Eliminating all of the above leaves the TXT Resource Record Type in
+      the IN class. The TXT RDATA format is free form text, and there are no
+      existing semantics to get in the way. Some attempts have been made, for
+      example in <xref target="I-D.cheshire-dnsext-dns-sd">
+      draft-cheshire-dnsext-dns-sd</xref>, to specify a structured format for
+      TXT Resource Record Types, but no such attempt has reached RFC status.
+      Furthermore, the TXT Resource Record can obviously just be used as a
+      bucket in which to carry around data to be used by some higher level
+      parser, perhaps in some human readable programming or markup language.
+      Thus, for many applications, TXT Resource Records are the "obvious"
+      choice. Unfortunately, this conclusion, while understandable, is also
+      wrong, for several reasons.</t>
+
+      <t>The first reason why TXT Resource Records are not well suited to such
+      use is precisely what makes them so attractive: the lack of pre-defined
+      common syntax or structure. As a result, each application that uses them
+      creates its own syntax/structure, and that makes it difficult to
+      reliably distinguish one application's record from others, and for its
+      parser to avoid problems when it encounters other TXT records.</t>
+
+      <t>Arguably, the TXT Resource Record is misnamed, and should have been
+      called the Local Container record, because a TXT Resource Record means
+      only what the data producer says it means. This is fine, so long as TXT
+      Resource Records are being used by human beings or by private agreement
+      between data producer and data consumer. However, it becomes a problem
+      once one starts using them for standardized protocols in which there is
+      no prior relationship between data producer and data consumer. If TXT
+      records are used without one of the naming modifications discussed
+      earlier (and in some cases even if one uses such naming mechanisms),
+      there is nothing to prevent collisions with some other incompatible use
+      of TXT Resource Records.</t>
+
+      <t>This is even worse than the general subtyping problem described in in
+      <xref target="add_subtype"></xref>, because TXT Resource Records don't
+      even have a standardized selector field in which to store the subtype.
+      <xref target="RFC1464">RFC 1464</xref> tried, but it was not a success.
+      At best a definition of a subtype is reduced to hoping that whatever
+      scheme one has come up with will not accidently conflict with somebody
+      else's subtyping scheme, and that it will not be possible to mis-parse
+      one application's use of TXT Resource Records as data intended for a
+      different application. Any attempt to impose a standardized format
+      within the TXT Resource Record format would be at least fifteen years
+      too late even if it were put into effect immediately; at best, one can
+      restrict the syntax that a particular application uses within a TXT
+      Resource Record and accept the risk that unrelated TXT Resource Record
+      uses will collide with it.</t>
+
+      <t>Using one of the naming modifications discussed in <xref
+      target="add_prefix"></xref> and <xref target="add_suffix"></xref> would
+      address the subtyping problem, (and have been used in combinations with
+      reuse of TXT record, such as for the dns/txt lookup mechanism in DKIM)
+      but each of these approaches brings in new problems of its own. The
+      prefix approach (that for example SRV Resource Records use) does not
+      work well with wildcards, which is a particular problem for mail-related
+      applications, since MX Resource Records are probably the most common use
+      of DNS wildcards. The suffix approach doesn't have wildcard issues, but,
+      as noted previously, it does have synchronization and update
+      authorization issues, since it works by creating a second subtree in a
+      different part of the global DNS name space.</t>
+
+      <t>The next reason why TXT Resource Records are not well suited to
+      protocol use has to do with the limited data space available in a DNS
+      message. As alluded to briefly in <xref target="add_subtype"></xref>,
+      typical DNS query traffic patterns involve a very large number of DNS
+      clients sending queries to a relatively small number of DNS servers.
+      Normal path MTU discovery schemes do little good here because, from the
+      server's perspective, there isn't enough repeat traffic from any one
+      client for it to be worth retaining state. UDP-based DNS is an
+      idempotent query, whereas TCP-based DNS requires the server to keep
+      state (in the form of TCP connection state, usually in the server's
+      kernel) and roughly triples the traffic load. Thus, there's a strong
+      incentive to keep DNS messages short enough to fit in a UDP datagram,
+      preferably a UDP datagram short enough not to require IP
+      fragmentation.</t>
+
+      <t>Subtyping schemes are therefore again problematic because they
+      produce larger Resource RRSets than necessary, but verbose text
+      encodings of data are also wasteful, since the data they hold can
+      usually be represented more compactly in a Resource Record designed
+      specifically to support the application's particular data needs. If the
+      data that need to be carried are so large that there is no way to make
+      them fit comfortably into the DNS regardless of encoding, it is probably
+      better to move the data somewhere else, and just use the DNS as a
+      pointer to the data, as with NAPTR.</t>
+    </section>
+
+    <section title="Conclusion and Recommendation">
+      <t>Given the problems detailed in <xref target="txt_evil"></xref>, it is
+      worth reexamining the oft-jumped-to conclusion that specifying a new
+      Resource Record Type is hard. Historically, this was indeed the case,
+      but recent surveys suggest that support for unknown Resource Record
+      Types <xref target="RFC3597"></xref> is now widespread, and because of
+      that the DNS infrastructure can handle new resource record types. The
+      lack of support for unknown Types is mostly an issue for relatively old
+      provision software and applications that would probably need to be
+      upgraded in any case as part of supporting a new feature (that require
+      the new Resource Record Type). One should also remember that deployed
+      DNS software today should support DNSSEC, and software recent enough to
+      do so will likely support both unknown Resource Record Types <xref
+      target="RFC3597"></xref> and EDNS0 <xref target="RFC2671"></xref>.</t>
+
+      <t>Of all the issues detailed in <xref target="add_type"></xref>,
+      provisioning the data is in some respects the most difficult. The
+      problems can be divided in two, the ability to manage the zone on the
+      master server, and the ability for secondary servers to do zone
+      transfers (AXFR or IXFR) with the new data. Investigations show that the
+      problem here is less difficult for the authoritative name servers
+      themselves than the front-end systems used to enter (and perhaps
+      validate) the data. Hand editing does not work well for maintenance of
+      large zones, so some sort of tool is necessary, and the tool may not be
+      tightly coupled to the name server implementation itself. Note, however,
+      that this provisioning problem exists to some degree with any new form
+      of data to be stored in the DNS, regardless of data format, Resource
+      Record type (even if TXT Resource Record Types are in use), or naming
+      scheme. Adapting front-end systems to support a new Resource Record Type
+      may be a bit more difficult than reusing an existing type, but this
+      appears to be a minor difference in degree rather than a difference in
+      kind.</t>
+
+      <t>Given the various issues described in this note, we believe that:
+      <list style="symbols">
+          <t>there is no magic solution which allows a completely painless
+          addition of new data to the DNS, but</t>
+
+          <t>on the whole, the best solution is still to use the DNS Resource
+          Record Type mechanism designed for precisely this purpose, and</t>
+
+          <t>of all the alternate solutions, the "obvious" approach of using
+          TXT Resource Records is almost certainly the worst.</t>
+        </list> This especially for the two reasons outlined above (lack of
+      semantics and its implications, and size leading to the need to use
+      TCP).</t>
+    </section>
+
+    <section title="Creating A New Resource Record Type">
+      <t>The process for creating a new Resource Record Type is specified in
+      <xref
+      target="I-D.ietf-dnsext-2929bis">draft-ietf-dnsext-2929bis</xref>.</t>
+    </section>
+
+    <section title="IANA Considerations">
+      <t>This document does not require any IANA actions.</t>
+    </section>
+
+    <section title="Security Considerations">
+      <t>DNS RRSets can be signed using DNSSEC. DNSSEC is almost certainly
+      necessary for any application mechanism that stores authorization data
+      in the DNS. DNSSEC signatures significantly increase the size of the
+      messages transported, and because of this, the DNS message size issues
+      discussed in <xref target="add_subtype"></xref> and <xref
+      target="txt_evil"></xref> are more serious than they might at first
+      appear.</t>
+
+      <t>Adding new Resource Record Types (as discussed in <xref
+      target="add_type"></xref>) can create two different kinds of problems.
+      In DNS software and in applications. In the DNS software, it might
+      conceivably trigger bugs and other bad behavior in software that is not
+      compliant with <xref target="RFC3597">RFC 3597</xref>, but most such DNS
+      software is old enough and insecure enough that it should be updated for
+      other reasons in any case. In applications and provisioning software,
+      the changes for the new features that need the new data in DNS can be
+      updated to understand the structure of the new data format (regardless
+      of whether a new Resource Record Type is used or some other mechanism is
+      chosen. Basic API support for retrieving arbitrary Resource Record Types
+      has been a requirement since 1989<xref target="RFC1123"></xref>.</t>
+
+      <t>Any new protocol that proposes to use the DNS to store data used to
+      make authorization decisions would be well advised not only to use
+      DNSSEC but also to encourage upgrades to DNS server software recent
+      enough not to be riddled with well-known exploitable bugs. Because of
+      this, support for new Resource Record Types will not be as hard as
+      people might think at first.</t>
+    </section>
+
+    <section title="Acknowledgements">
+      <t>This document has been created during a number of years, with input
+      from many people. The question on how to expand and use the DNS is
+      sensitive, and a document like this can not please everyone. The goal is
+      instead to describe the architecture and tradeoffs, and make some
+      recommendations about best practices.</t>
+
+      <t>People that have helped include: Dean Andersson, Loa Andersson, Mark
+      Andrews, John Angelmo, Roy Badami, Dan Bernstein, Alex Bligh, Nathaniel
+      Borenstein, Stephane Bortzmeyer, Brian Carpenter, Leslie Daigle, Elwyn
+      Davies, Mark Delany, Richard Draves, Martin Duerst, Donald Eastlake,
+      Robert Elz, Jim Fenton, Tony Finch, Jim Gilroy, Olafur Gudmundsson, Eric
+      Hall, Philip Hallam-Baker, Ted Hardie, Bob Hinden, Paul Hoffman, Geoff
+      Houston, Christian Huitema, Johan Ihren, John Klensin, Olaf Kolkman, Ben
+      Laurie, William Leibzon, John Levine, Edward Lewis, David MacQuigg,
+      Allison Manking, Bill Manning, Danny McPherson, David Meyer, Pekka
+      Nikander, Mans Nilsson, Masataka Ohta, Douglas Otis, Michael Patton,
+      Jonathan Rosenberg, Anders Rundgren, Miriam Sapiro, Carsten Strotmann,
+      Pekka Savola, Chip Sharp, James Snell, Dave Thaler, Michael Thomas, Paul
+      Vixie, Sam Weiler, Florian Weimer, Bert Wijnen, and Dan Wing.</t>
+
+      <t>Members of the IAB when this document was made available were: Loa
+      Andersson, Gonzalo Camarillo, Stuart Cheshire, Russ Housley, Olaf
+      Kolkman, Gregory Lebovitz, Barry Leiba, Kurtis Lindqvist, Andrew Malis,
+      Danny McPherson, David Oran, Dave Thaler, and Lixia Zhang.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <reference anchor="RFC1035">
+        <front>
+          <title abbrev="Domain Implementation and Specification">Domain names
+          - implementation and specification</title>
+
+          <author fullname="P. Mockapetris" initials="P."
+                  surname="Mockapetris">
+            <organization>USC/ISI</organization>
+
+            <address>
+              <postal>
+                <street>4676 Admiralty Way</street>
+
+                <city>Marina del Rey</city>
+
+                <region>CA</region>
+
+                <code>90291</code>
+
+                <country>US</country>
+              </postal>
+
+              <phone>+1 213 822 1511</phone>
+            </address>
+          </author>
+
+          <date day="1" month="November" year="1987" />
+        </front>
+
+        <seriesInfo name="STD" value="13" />
+
+        <seriesInfo name="RFC" value="1035" />
+
+        <format octets="125626"
+                target="ftp://ftp.isi.edu/in-notes/rfc1035.txt" type="TXT" />
+      </reference>
+
+      <reference anchor="RFC1464">
+        <front>
+          <title abbrev="Storing Arbitrary Attributes in DNS">Using the Domain
+          Name System To Store Arbitrary String Attributes</title>
+
+          <author fullname="Rich Rosenbaum" initials="R." surname="Rosenbaum">
+            <organization>Digital Equipment Corporation</organization>
+
+            <address>
+              <postal>
+                <street>550 King Street</street>
+
+                <street>LKG2-2/Z7</street>
+
+                <city>Littleton</city>
+
+                <region>MA</region>
+
+                <code>01460-1289</code>
+
+                <country>US</country>
+              </postal>
+
+              <phone>+1 508 486 5922</phone>
+
+              <email>rosenbaum@lkg.dec.com</email>
+            </address>
+          </author>
+
+          <date month="May" year="1993" />
+
+          <abstract>
+            <t>While the Domain Name System (DNS),is generally used to store
+            predefined types of information (e.g., addresses of hosts), it is
+            possible to use it to store information that has not been
+            previously classified.</t>
+
+            <t>This paper describes a simple means to associate arbitrary
+            string information (ASCII text) with attributes that have not been
+            defined by the DNS. It uses DNS TXT resource records to store the
+            information. It requires no change to current DNS
+            implementations.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="1464" />
+
+        <format octets="7953" target="ftp://ftp.isi.edu/in-notes/rfc1464.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC2535">
+        <front>
+          <title abbrev="DNS Security Extensions">Domain Name System Security
+          Extensions</title>
+
+          <author fullname="Donald E. Eastlake 3rd" initials="D."
+                  surname="Eastlake">
+            <organization>IBM</organization>
+
+            <address>
+              <postal>
+                <street>65 Shindegan Hill Road</street>
+
+                <street>RR #1</street>
+
+                <city>Carmel</city>
+
+                <region>NY</region>
+
+                <code>10512</code>
+
+                <country>US</country>
+              </postal>
+
+              <phone>+1 914 784 7913</phone>
+
+              <facsimile>+1 914 784 3833</facsimile>
+
+              <email>dee3@us.ibm.com</email>
+            </address>
+          </author>
+
+          <date month="March" year="1999" />
+
+          <abstract>
+            <t>Extensions to the Domain Name System (DNS) are described that
+            provide data integrity and authentication to security aware
+            resolvers and applications through the use of cryptographic
+            digital signatures. These digital signatures are included in
+            secured zones as resource records. Security can also be provided
+            through non-security aware DNS servers in some cases.</t>
+
+            <t>The extensions provide for the storage of authenticated public
+            keys in the DNS. This storage of keys can support general public
+            key distribution services as well as DNS security. The stored keys
+            enable security aware resolvers to learn the authenticating key of
+            zones in addition to those for which they are initially
+            configured. Keys associated with DNS names can be retrieved to
+            support other protocols. Provision is made for a variety of key
+            types and algorithms.</t>
+
+            <t>In addition, the security extensions provide for the optional
+            authentication of DNS protocol transactions and requests.</t>
+
+            <t>This document incorporates feedback on RFC 2065 from early
+            implementers and potential users.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="2535" />
+
+        <format octets="110958"
+                target="ftp://ftp.isi.edu/in-notes/rfc2535.txt" type="TXT" />
+      </reference>
+
+      <reference anchor="RFC2671">
+        <front>
+          <title>Extension Mechanisms for DNS (EDNS0)</title>
+
+          <author fullname="Paul Vixie" initials="P." surname="Vixie">
+            <organization>Internet Software Consortium</organization>
+
+            <address>
+              <postal>
+                <street>950 Charter Street</street>
+
+                <city>Redwood City</city>
+
+                <region>CA</region>
+
+                <code>94063</code>
+
+                <country>US</country>
+              </postal>
+
+              <phone>+1 650 779 7001</phone>
+
+              <email>vixie@isc.org</email>
+            </address>
+          </author>
+
+          <date month="August" year="1999" />
+
+          <abstract>
+            <t>The Domain Name System's wire protocol includes a number of
+            fixed fields whose range has been or soon will be exhausted and
+            does not allow clients to advertise their capabilities to servers.
+            This document describes backward compatible mechanisms for
+            allowing the protocol to grow.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="2671" />
+
+        <format octets="15257" target="ftp://ftp.isi.edu/in-notes/rfc2671.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC3597">
+        <front>
+          <title>Handling of Unknown DNS Resource Record (RR) Types</title>
+
+          <author fullname="A. Gustafsson" initials="A." surname="Gustafsson">
+            <organization></organization>
+          </author>
+
+          <date month="September" year="2003" />
+
+          <abstract>
+            <t>Extending the Domain Name System (DNS) with new Resource Record
+            (RR) types currently requires changes to name server software.
+            This document specifies the changes necessary to allow future DNS
+            implementations to handle new RR types transparently. [STANDARDS
+            TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3597" />
+
+        <format octets="17559" target="ftp://ftp.isi.edu/in-notes/rfc3597.txt"
+                type="TXT" />
+      </reference>
+    </references>
+
+    <references title="Informative References">
+      <reference anchor="I-D.ietf-dnsext-2929bis">
+        <front>
+          <title>Domain Name System (DNS) IANA Considerations</title>
+
+          <author fullname="Donald E. Eastlake 3rd" initials="D"
+                  surname="Eastlake 3rd">
+            <organization></organization>
+          </author>
+
+          <date month="August" year="2007" />
+
+          <abstract>
+            <t>Internet Assigned Number Authority (IANA) parameter assignment
+            considerations are specified for the allocation of Domain Name
+            System (DNS) resource record types, CLASSes, operation codes,
+            error codes, DNS protocol message header bits, and AFSDB resource
+            record subtypes.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="Internet-Draft"
+                    value="draft-cheshire-dnsext-dns-sd-03" />
+
+        <format target="http://tools.ietf.org/html/draft-cheshire-dnsext-dns-sd-04"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="I-D.cheshire-dnsext-dns-sd">
+        <front>
+          <title>DNS-Based Service Discovery</title>
+
+          <author fullname="Stuart Cheshire" initials="S" surname="Cheshire">
+            <organization></organization>
+          </author>
+
+          <author fullname="Marc Krochmal" initials="M" surname="Krochmal">
+            <organization></organization>
+          </author>
+
+          <date month="August" year="2006" />
+
+          <abstract>
+            <t>This document describes a convention for naming and structuring
+            DNS resource records. Given a type of service that a client is
+            looking for, and a domain in which the client is looking for that
+            service, this convention allows clients to discover a list of
+            named instances of that desired service, using only standard DNS
+            queries. In short, this is referred to as DNS-based Service
+            Discovery, or DNS-SD.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="Internet-Draft" value="draft-ietf-dnsext-2929bis-06" />
+
+        <format target="http://www.ietf.org/internet-drafts/draft-ietf-dnsext-2929bis-06.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC1535">
+        <front>
+          <title abbrev="DNS Software Enhancements">A Security Problem and
+          Proposed Correction With Widely Deployed DNS Software</title>
+
+          <author fullname="Ehud Gavron" initials="E." surname="Gavron">
+            <organization>ACES Research Inc.</organization>
+
+            <address>
+              <postal>
+                <street>PO Box 14546</street>
+
+                <city>Tucson</city>
+
+                <region>AZ</region>
+
+                <code>85711</code>
+
+                <country>US</country>
+              </postal>
+
+              <phone>+1 602 743 9841</phone>
+
+              <email>gavron@aces.com</email>
+            </address>
+          </author>
+
+          <date month="October" year="1993" />
+
+          <abstract>
+            <t>This document discusses a flaw in some of the currently
+            distributed name resolver clients. The flaw exposes a security
+            weakness related to the search heuristic invoked by these same
+            resolvers when users provide a partial domain name, and which is
+            easy to exploit (although not by the masses). This document points
+            out the flaw, a case in point, and a solution.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="1535" />
+
+        <format octets="9722" target="ftp://ftp.isi.edu/in-notes/rfc1535.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC1123">
+        <front>
+          <title>Requirements for Internet Hosts - Application and
+          Support</title>
+
+          <author fullname="Robert Braden" initials="R." surname="Braden">
+            <organization>University of Southern California (USC), Information
+            Sciences Institute</organization>
+
+            <address>
+              <postal>
+                <street>4676 Admiralty Way</street>
+
+                <city>Marina del Rey</city>
+
+                <region>CA</region>
+
+                <code>90292-6695</code>
+
+                <country>US</country>
+              </postal>
+
+              <phone>+1 213 822 1511</phone>
+
+              <email>Braden@ISI.EDU</email>
+            </address>
+          </author>
+
+          <date month="October" year="1989" />
+        </front>
+
+        <seriesInfo name="STD" value="3" />
+
+        <seriesInfo name="RFC" value="1123" />
+
+        <format octets="245503"
+                target="ftp://ftp.isi.edu/in-notes/rfc1123.txt" type="TXT" />
+      </reference>
+
+      <reference anchor="RFC2163">
+        <front>
+          <title abbrev="MIXER MCGAM">Using the Internet DNS to Distribute
+          MIXER Conformant Global Address Mapping (MCGAM)</title>
+
+          <author fullname="Claudio Allocchio" initials="C."
+                  surname="Allocchio">
+            <organization>Sincrotrone Trieste</organization>
+
+            <address>
+              <postal>
+                <street>SS 14 Km 163.5 Basovizza</street>
+
+                <city>Trieste</city>
+
+                <region></region>
+
+                <code>I 34012</code>
+
+                <country>IT</country>
+              </postal>
+
+              <phone>+39 40 3758523</phone>
+
+              <facsimile>+39 40 3758565</facsimile>
+
+              <email>Claudio.Allocchio@elettra.trieste.it</email>
+            </address>
+          </author>
+
+          <date month="January" year="1998" />
+
+          <abstract>
+            <t>This memo is the complete technical specification to store in
+            the Internet Domain Name System (DNS) the mapping information
+            (MCGAM) needed by MIXER conformant e-mail gateways and other tools
+            to map RFC822 domain names into X.400 O/R names and vice versa.
+            Mapping information can be managed in a distributed rather than a
+            centralised way. Organizations can publish their MIXER mapping or
+            preferred gateway routing information using just local resources
+            (their local DNS server), avoiding the need for a strong
+            coordination with any centralised organization. MIXER conformant
+            gateways and tools located on Internet hosts can retrieve the
+            mapping information querying the DNS instead of having fixed
+            tables which need to be centrally updated and distributed.</t>
+
+            <t>This memo obsoletes RFC1664. It includes the changes introduced
+            by MIXER specification with respect to RFC1327: the new 'gate1'
+            (O/R addresses to domain) table is fully supported. Full backward
+            compatibility with RFC1664 specification is mantained, too.</t>
+
+            <t>RFC1664 was a joint effort of IETF X400 operation working group
+            (x400ops) and TERENA (formely named "RARE") Mail and Messaging
+            working group (WG-MSG). This update was performed by the IETF
+            MIXER working group.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="2163" />
+
+        <format octets="58789" target="ftp://ftp.isi.edu/in-notes/rfc2163.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC2672">
+        <front>
+          <title>Non-Terminal DNS Name Redirection</title>
+
+          <author fullname="Matt Crawford" initials="M." surname="Crawford">
+            <organization>Fermilab MS 368</organization>
+
+            <address>
+              <postal>
+                <street>PO Box 500</street>
+
+                <city>Batavia</city>
+
+                <region>IL</region>
+
+                <code>60510</code>
+
+                <country>US</country>
+              </postal>
+
+              <phone>+1 630 840 3461</phone>
+
+              <email>crawdad@fnal.gov</email>
+            </address>
+          </author>
+
+          <date month="August" year="1999" />
+        </front>
+
+        <seriesInfo name="RFC" value="2672" />
+
+        <format octets="18321" target="ftp://ftp.isi.edu/in-notes/rfc2672.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC2929">
+        <front>
+          <title>Domain Name System (DNS) IANA Considerations</title>
+
+          <author fullname="D. Eastlake" initials="D." surname="Eastlake">
+            <organization></organization>
+          </author>
+
+          <author fullname="E. Brunner-Williams" initials="E."
+                  surname="Brunner-Williams">
+            <organization></organization>
+          </author>
+
+          <author fullname="B. Manning" initials="B." surname="Manning">
+            <organization></organization>
+          </author>
+
+          <date month="September" year="2000" />
+
+          <abstract>
+            <t>This document discusses the Internet Assigned Number Authority
+            (IANA) parameter assignment considerations given for the
+            allocation of Domain Name System (DNS) classes, Resource Record
+            (RR) types, operation codes, error codes, etc. This document
+            specifies an Internet Best Current Practices for the Internet
+            Community, and requests discussion and suggestions for
+            improvements.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="BCP" value="42" />
+
+        <seriesInfo name="RFC" value="2929" />
+
+        <format octets="22454" target="ftp://ftp.isi.edu/in-notes/rfc2929.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC3445">
+        <front>
+          <title>Limiting the Scope of the KEY Resource Record (RR)</title>
+
+          <author fullname="D. Massey" initials="D." surname="Massey">
+            <organization></organization>
+          </author>
+
+          <author fullname="S. Rose" initials="S." surname="Rose">
+            <organization></organization>
+          </author>
+
+          <date month="December" year="2002" />
+
+          <abstract>
+            <t>This document limits the Domain Name System (DNS) KEY Resource
+            Record (RR) to only keys used by the Domain Name System Security
+            Extensions (DNSSEC). The original KEY RR used sub-typing to store
+            both DNSSEC keys and arbitrary application keys. Storing both
+            DNSSEC and application keys with the same record type is a
+            mistake. This document removes application keys from the KEY
+            record by redefining the Protocol Octet field in the KEY RR Data.
+            As a result of removing application keys, all but one of the flags
+            in the KEY record become unnecessary and are redefined. Three
+            existing application key sub-types are changed to reserved, but
+            the format of the KEY record is not changed. This document updates
+            RFC 2535. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3445" />
+
+        <format octets="20947" target="ftp://ftp.isi.edu/in-notes/rfc3445.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC3467">
+        <front>
+          <title>Role of the Domain Name System (DNS)</title>
+
+          <author fullname="J. Klensin" initials="J." surname="Klensin">
+            <organization></organization>
+          </author>
+
+          <date month="February" year="2003" />
+
+          <abstract>
+            <t>This document reviews the original function and purpose of the
+            domain name system (DNS). It contrasts that history with some of
+            the purposes for which the DNS has recently been applied and some
+            of the newer demands being placed upon it or suggested for it. A
+            framework for an alternative to placing these additional stresses
+            on the DNS is then outlined. This document and that framework are
+            not a proposed solution, only a strong suggestion that the time
+            has come to begin thinking more broadly about the problems we are
+            encountering and possible approaches to solving them. This memo
+            provides information for the Internet community.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3467" />
+
+        <format octets="84570" target="ftp://ftp.isi.edu/in-notes/rfc3467.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC3761">
+        <front>
+          <title>The E.164 to Uniform Resource Identifiers (URI) Dynamic
+          Delegation Discovery System (DDDS) Application (ENUM)</title>
+
+          <author fullname="P. Faltstrom" initials="P." surname="Faltstrom">
+            <organization></organization>
+          </author>
+
+          <author fullname="M. Mealling" initials="M." surname="Mealling">
+            <organization></organization>
+          </author>
+
+          <date month="April" year="2004" />
+
+          <abstract>
+            <t>This document discusses the use of the Domain Name System (DNS)
+            for storage of E.164 numbers. More specifically, how DNS can be
+            used for identifying available services connected to one E.164
+            number. It specifically obsoletes RFC 2916 to bring it in line
+            with the Dynamic Delegation Discovery System (DDDS) Application
+            specification found in the document series specified in RFC 3401.
+            It is very important to note that it is impossible to read and
+            understand this document without reading the documents discussed
+            in RFC 3401. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3761" />
+
+        <format octets="41559" target="ftp://ftp.isi.edu/in-notes/rfc3761.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC4592">
+        <front>
+          <title>The Role of Wildcards in the Domain Name System</title>
+
+          <author fullname="E. Lewis" initials="E." surname="Lewis">
+            <organization></organization>
+          </author>
+
+          <date month="July" year="2006" />
+
+          <abstract>
+            <t>This is an update to the wildcard definition of RFC 1034. The
+            interaction with wildcards and CNAME is changed, an error
+            condition is removed, and the words defining some concepts central
+            to wildcards are changed. The overall goal is not to change
+            wildcards, but to refine the definition of RFC 1034. [STANDARDS
+            TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="4592" />
+
+        <format octets="43991" target="ftp://ftp.isi.edu/in-notes/rfc4592.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC2181">
+        <front>
+          <title abbrev="DNS Clarifications">Clarifications to the DNS
+          Specification</title>
+
+          <author fullname="Robert Elz" initials="R." surname="Elz">
+            <organization>Computer Science</organization>
+
+            <address>
+              <postal>
+                <street>Parkville</street>
+
+                <street>Victoria</street>
+
+                <street>3052</street>
+
+                <street>Australia.</street>
+              </postal>
+
+              <email>kre@munnari.OZ.AU</email>
+
+              <uri>e</uri>
+            </address>
+          </author>
+
+          <author fullname="Randy Bush" initials="R." surname="Bush">
+            <organization>RGnet, Inc.</organization>
+
+            <address>
+              <postal>
+                <street>5147 Crystal Springs Drive</street>
+
+                <street>Bainbridge Island</street>
+
+                <street>Washington</street>
+
+                <street>98110</street>
+
+                <street>United States.</street>
+
+                <country>NE</country>
+              </postal>
+
+              <email>randy@psg.com</email>
+            </address>
+          </author>
+
+          <date month="July" year="1997" />
+
+          <area>Applications</area>
+
+          <keyword>DNS</keyword>
+
+          <keyword>domain name system</keyword>
+        </front>
+
+        <seriesInfo name="RFC" value="2181" />
+
+        <format octets="36989" target="ftp://ftp.isi.edu/in-notes/rfc2181.txt"
+                type="TXT" />
+
+        <format octets="54106"
+                target="http://xml.resource.org/public/rfc/html/rfc2181.html"
+                type="HTML" />
+
+        <format octets="38795"
+                target="http://xml.resource.org/public/rfc/xml/rfc2181.xml"
+                type="XML" />
+      </reference>
+
+      <!-- Not referenced:
+            <xi:include href="reference.RFC.2434.xml"/>
+            <xi:include href="reference.RFC.2606.xml"/>
+            <xi:include href="reference.RFC.3232.xml"/>
+            <xi:include href="reference.RFC.3692.xml"/>
+	     -->
+    </references>
+  </back>
+</rfc>

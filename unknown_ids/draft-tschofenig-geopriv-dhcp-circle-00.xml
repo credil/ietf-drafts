@@ -1,0 +1,351 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="rfc2629.xslt" ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY RFC2119   PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+<!ENTITY I-D.ietf-geopriv-pdif-lo-profile PUBLIC "" "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-geopriv-pdif-lo-profile.xml">
+<!ENTITY RFC4119   PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4119.xml">
+<!ENTITY RFC3825   PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3825.xml">
+]>
+
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="no"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc toc="yes" ?>
+<rfc category="std" ipr="full3978" docName="draft-tschofenig-geopriv-dhcp-circle-00.txt">
+  <front>
+    <title abbrev="DHCP Location Area">Specifying a Circular Uncertainty Area Using DHCP</title>
+
+    <author initials="H." surname="Tschofenig" fullname="Hannes Tschofenig">
+      <organization>Nokia Siemens Networks</organization>
+      <address>
+        <postal>
+          <street>Otto-Hahn-Ring 6</street>
+          <city>Munich</city>
+          <region>Bavaria</region>
+          <code>81739</code>
+          <country>Germany</country>
+        </postal>
+        <phone>+49 89 636 40390</phone>
+        <email>Hannes.Tschofenig@nsn.com</email>
+        <uri>http://www.tschofenig.com</uri>
+      </address>
+    </author>
+
+    <author initials="J." surname="Winterbottom" fullname="James Winterbottom">
+      <organization>Andrew Corporation</organization>
+      <address>
+        <postal>
+          <street>PO Box U40</street>
+          <city>University of Wollongong</city>
+          <region>NSW</region>
+          <code>2500</code>
+          <country>AU</country>
+        </postal>
+        <email>james.winterbottom@andrew.com</email>
+      </address>
+    </author>
+
+    <date year="2008"/>
+    <area>RAI</area>
+    <workgroup>Geopriv</workgroup>
+    <keyword>Internet-Draft</keyword>
+    <abstract>
+      <t>This document specifies how a circular area representing the location of device can be
+        returned using DHCP. The document also shows how the data returned from DHCP can be encoded
+        into GML for using in a PIDF-LO in an unambiguous or contentious manner. </t>
+
+      <t>This document is a contribution to the ongoing discussion on RFC 3825; it represents one
+        possible solution to address the discussed issues. </t>
+
+    </abstract>
+  </front>
+
+
+  <middle>
+
+    <section anchor="intro" title="Introduction">
+
+      <t>Location provided by GPS device and like generally provide location information as a point
+        with a degree of uncertainty. This uncertainty is more often than not expressed as an offset
+        in metres from the central point, with the resulting location being a circle when expressed
+        in 2 dimensions, and a sphere when expressed in 3 dimensions. This memo presupposes that
+        locations have been measured, for example using a GPS, ahead of time and have subsequently
+        been stored in a wiremap database. Associations between end-devices and location can be done
+        using DHCP option 82 or other methods where appropriate. </t>
+      <t>This document omits an altitude representation based on the envisioned usage scenario.</t>
+    </section>
+
+    <section anchor="terminology" title="Terminology">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+        "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in
+          <xref target="RFC2119"/>. </t>
+    </section>
+
+    <section title="Details and Rationale">
+      <t>The intent of this specification is to provide a location to an end-device so that it can
+        easily represent it as circle in GML in accordance with PIDF-LO Profile <xref
+          target="I-D.ietf-geopriv-pdif-lo-profile"/>. PIDF-LO Profile relies on geoshape <xref
+          target="geoshape"/> requires all coordinates to be specified using WGS-84, consequently
+        the coordinates used in this memo are specified using WGS-84. </t>
+      <t>GML <xref target="gml"/> uses the ISO 19107 <xref target="ISO-19107"/> definition of a
+        point, and quotes this as being &quot;0-dimensional geometric primitive, representing a
+        position. NOTE The boundary of a point is the empty set.&quot; At some point however, it
+        becomes necessary to express the coordinates that make up the location in bits and bytes.
+        Since the intent is to use GML as the final representation, the encoding standards and
+        limitations expressed by GML are used. </t>
+      <t> GML is an XML language <xref target="xml"/> for expressing location information, and XML
+        defines mappings between its primative types and standard binary encodings. The GML point is
+        made up of XML (xsd) doubles, and an XML double is expressed as an IEEE 754-1985 <xref
+          target="IEEE-754-1985"/> double-precision floating point number. This means that a
+        latitude or longitude in GML is expressed as a 64 bit binary number, but in accordance with
+        the previous definition is interpretted as being zero dimensional, without area. </t>
+
+      <t>The binary encodings provided in this memo express latitude and longitude values as 64 bit
+        binary floating-point numbers, as defined in <xref target="IEEE-754-1985"/>. A radius is
+        defined as a positive offset to this in metres, and is expressed as an unsigned 16 bit
+        integer. This allows a circle with a radius in the order of 65.5km to be expressed without
+        difficulty, and for a point with no specified uncertainty to be provided where the radius is
+        set to zero. </t>
+
+      <section anchor="dhcpv4" title="DHCPv4 Option for a Circular Location">
+        <t>This section defines a DHCP for IPv4 (DHCPv4) option for the point with radius of
+          uncertainty. </t>
+        <figure title="DHCPv4 Option">
+          <artwork><![CDATA[
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|  LOC-CIRCLE   |    Length     |         Latitude              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Latitude continued                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|      Latitude Continued       |         Longitude             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Longitude continued                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|      Longitude Continued      |           Radius              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+]]></artwork>
+        </figure>
+
+        <t>
+          <list style="hanging">
+            <t hangText="LOC-CIRCLE:">The IANA assigned option number (TBD).</t>
+            <t hangText="Length:">The length of this option octets (18).</t>
+            <t hangText="Latitude:">8 octets representing the the latitude of the central point of a
+              circle, expressed as an <xref target="IEEE-754-1985"/> double.</t>
+            <t hangText="Longitude:">8 octets representing the the longitude of the central point of
+              a circle, expressed as an <xref target="IEEE-754-1985"/> double.</t>
+            <t hangText="Radius:"> a 16 bit unsigned integer expressing the radius of the circle in
+              metres.</t>
+          </list>
+        </t>
+      </section>
+
+      <section anchor="dhcpv6" title="DHCPv6 Option for a LIS Address">
+
+        <t>This section defines a DHCP for IPv6 (DHCPv6) option for the point with radius of
+          uncertainty. The DHCPv6 option for this parameter is similarly formatted to the DHCPv4
+          option. </t>
+
+        <figure title="DHCPv6 Option">
+          <artwork><![CDATA[
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|         LOC-CIRCLE            |           Length              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           Latitude                            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Latitude continued                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                          Longitude                            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Longitude continued                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|             Radius            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+]]></artwork>
+        </figure>
+
+        <t>
+          <list style="hanging">
+            <t hangText="LOC-CIRCLE:">The IANA assigned option number (TBD).</t>
+            <t hangText="Length:">The length of this option in octets (18).</t>
+            <t hangText="Latitude:">8 octets representing the the latitude of the central point of a
+              circle, expressed as an <xref target="IEEE-754-1985"/> double.</t>
+            <t hangText="Longitude:">8 octets representing the the longitude of the central point of
+              a circle, expressed as an <xref target="IEEE-754-1985"/> double.</t>
+            <t hangText="Radius:"> a 16 bit unsigned integer expressing the radius of the circle in
+              metres.</t>
+          </list>
+        </t>
+      </section>
+    </section>
+
+    <section title="Expressing the Circle in GML">
+      <t>PIDF-LO Profile <xref target="I-D.ietf-geopriv-pdif-lo-profile"/> describes how a circle is
+        expressed in GML and included in a PIDF-LO <xref target="RFC4119"/>. The latitude and
+        longitude components of this encoding form the central point of the circle. </t>
+      <t>
+        <figure anchor="fig3" title="Circle Representation">
+          <artwork><![CDATA[
+       _d^^^^^^^^^b_
+    .d''           ``b.
+  .p'             /   `q.
+ .d'    Radius-> /     `b.
+.d'             /       `b.
+::             /         ::
+::           C           ::
+::           ^           ::
+`p.          |          .q'
+ `p.      Centre      .q'
+  `b.                .d'
+    `q..          ..p'
+      ^q.........p^
+]]>
+          </artwork>
+        </figure>
+      </t>
+      <t>The XML for the resulting circle is shown in <xref target="fig4"/> (assuming the centre is
+        represented as 42.5463 -73.2512) and the radius is 5 meters. </t>
+      <t>
+        <figure anchor="fig4" title="Resulting XML and PIDF-LO">
+          <artwork><![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+<presence xmlns="urn:ietf:params:xml:ns:pidf"
+ xmlns:gp="urn:ietf:params:xml:ns:pidf:geopriv10"
+ xmlns:cl="urn:ietf:params:xml:ns:pidf:geopriv10:civicAddr"
+ xmlns:gs="http://www.opengis.net/pidflo/1.0"
+ xmlns:gml="http://www.opengis.net/gml"
+   entity="pres:circle@example.com">
+  <tuple id="sg89ab1">
+    <status>
+      <gp:geopriv>
+        <gp:location-info>
+          <gs:Circle srsName="urn:ogc:def:crs:EPSG::4326">
+               <gml:pos>
+                  42.5463 -73.2512
+               </gml:pos>
+               <gml:radius uom="urn:ogc:def:uom:EPSG::9001">
+                  5
+               </gml:radius>
+          </gs:Circle>
+        </gp:location-info>
+        <usage-rules/>
+        <method>DHCP</method>
+      </gp:geopriv>
+    </status>
+  </tuple>
+</presence>
+]]>
+          </artwork>
+        </figure>
+      </t>
+    </section>
+
+    <section anchor="security-considerations" title="Security Considerations">
+      <t>The security issues for this document are the same as for RFC3825 <xref target="RFC3825"
+      />.</t>
+    </section>
+
+    <section anchor="iana" title="IANA Considerations">
+      <t>There are no specific IANA considerations for this document. </t>
+    </section>
+
+    <section title="Acknowledgements">
+      <t>The authors contribute this document to the ongoing discussion in the GEOPRIV working
+        group. Still, the authors believe that it would be necessary to investigate the intended
+        deployment use cases more in order to evaluate what additional location shapes are likely to
+        be used and whether there is interest in using DHCP (or lower layer protocols developed by
+        the IEEE or TIA) for conveying location information or whether there is more interest to use
+        these protocols purely to discover a LIS and allow more flexibility with regard to the
+        supported location shapes. </t>
+    </section>
+
+  </middle>
+  <back>
+    <references title="Normative References"> &RFC2119; &I-D.ietf-geopriv-pdif-lo-profile;
+      &RFC4119; &RFC3825; <reference anchor="geoshape">
+        <front>
+          <title abbrev="Geo-Shape">GML 3.1.1 PIDF-LO Shape Application Schema for use by the
+            Internet Engineering Task Force (IETF)</title>
+          <author initials="M." surname="Thomson" fullname="Martin Thomson">
+            <organization>Andrew Corporation</organization>
+          </author>
+          <author initials="C." surname="Reed" fullname="Carl Reed, PhD.">
+            <organization>Open Geospatial Consortium Inc.</organization>
+          </author>
+          <date month="April" day="10" year="2007"/>
+        </front>
+        <seriesInfo name="Candidate OpenGIS Implementation Specification"
+          value="06-142r1, Version: 1.0"/>
+      </reference>
+      <reference anchor="ISO-19107">
+        <front>
+          <title abbrev="ISO-19107">Geographic information - Spatial Schema</title>
+          <author>
+            <organization>ISO</organization>
+          </author>
+          <date day="1" month="5" year="2003"/>
+        </front>
+        <seriesInfo name="ISO Standard" value="19107, First Edition"/>
+      </reference>
+      <reference anchor="gml" target="http://portal.opengeospatial.org/files/?artifact_id=4700">
+        <front>
+          <title>Geographic information - Geography Markup Language (GML)</title>
+
+          <author initials="S" surname="Cox" fullname="Simon Cox">
+            <organization/>
+          </author>
+          <author initials="P" surname="Daisey" fullname="Paul Daisey">
+            <organization/>
+          </author>
+          <author initials="R" surname="Lake" fullname="Ron Lake">
+            <organization/>
+          </author>
+          <author initials="C" surname="Portele" fullname="Clemens Portele">
+            <organization/>
+          </author>
+          <author initials="A" surname="Whiteside" fullname="Arliss Whiteside">
+            <organization/>
+          </author>
+          <date month="April" day="19" year="2004"/>
+          <abstract>
+            <t>Geography Markup Language is an XML grammar written in XML Schema for the modelling,
+              transport, and storage of geographic information. </t>
+          </abstract>
+        </front>
+        <seriesInfo name="OpenGIS" value="03-105r1"/>
+      </reference>
+      <reference anchor="xml" target="http://www.w3.org/TR/xmlschema-2/">
+        <front>
+          <title>XML Schema Part 2: Datatypes Second Edition</title>
+
+          <author>
+            <organization>W3C</organization>
+          </author>
+          <date month="October" day="28" year="2004"/>
+          <abstract>
+            <t>XML Schema: Datatypes is part 2 of the specification of the XML Schema language. It
+              defines facilities for defining datatypes to be used in XML Schemas as well as other
+              XML specifications. The datatype language, which is itself represented in XML 1.0,
+              provides a superset of the capabilities found in XML 1.0 document type definitions
+              (DTDs) for specifying datatypes on elements and attributes. </t>
+          </abstract>
+        </front>
+      </reference>
+      <reference anchor="IEEE-754-1985">
+        <front>
+          <title abbrev="IEEE-754-1985">754-1985 IEEE Standard for Binary Floating-Point Arithmetic</title>
+          <author>
+            <organization>IEEE</organization>
+          </author>
+          <date day="1" month="January" year="2003"/>
+        </front>
+      </reference>
+    </references>
+
+  </back>
+</rfc>

@@ -1,0 +1,293 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "D:/Program%20Files/XML%20Copy%20Editor/dtd/rfc2629.dtd" [
+  <!ENTITY rfc2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+  <!ENTITY rfc3345 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3345.xml'>
+  <!ENTITY rfc4271 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4271.xml'>
+  <!ENTITY rfc5004 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.5004.xml'>
+]>
+<rfc ipr="full3978" docName="draft-dickson-add-paths-ordered-00">
+<?rfc toc='yes'?>
+<front>
+    <Creation month="July" year="2008" day="7" />
+    <creation month="July" year="2008" day="7" />
+    <created month="July" year="2008" day="7" />
+
+    <title abbrev="BGP Additional Paths - Ordered">
+Enhanced BGP Capabilities for Exchanging Second-Best Paths
+</title>
+    <author initials="B.P." surname="Dickson" fullname="Brian Dickson">
+      <organization>
+Afilias Canada, Inc
+</organization>
+      <address>
+        <postal>
+          <street>
+4141 Yonge St,
+</street>
+          <street>
+Suite 204
+</street>
+          <city>
+North York
+</city>
+          <region>
+ON
+</region>
+          <code>
+M2P 2A8
+</code>
+          <country>
+Canada
+</country>
+        </postal>
+        <email>
+brian.peter.dickson@gmail.com
+</email>
+        <uri>
+www.afilias.info
+</uri>
+      </address>
+    </author>
+    <date month="July" year="2008"/>
+    <area>Routing</area>
+    <workgroup>idr</workgroup>
+    <keyword>
+IPv6
+</keyword>
+    <abstract>
+      <t>
+This Internet Draft describes an enhanced format for encoding prefix information, to permit multiple copies of a prefix with different paths to be announced and withdrawn.
+<vspace blankLines="1" />
+Prefix instances using the new format include both unique identifiers, and ordinals to control path selection.
+<vspace blankLines="1" />
+Withdrawal of prefixes requires a slight modification to disambiguate prefix instances.
+</t>
+    </abstract>
+    <note title="Author's Note">
+      <t>This Internet Draft is intended to result in this draft or a related draft(s) being placed on the Standards Track for idr.
+      <vspace blankLines="1" />
+      The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+      NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and
+      "OPTIONAL" in this document are to be interpreted as described in
+      <xref target="RFC2119" />.
+      <vspace blankLines="1"/>
+      Intended Status: Proposed Standard.
+</t>
+    </note>
+  </front>
+<middle>
+<section title="Background">
+<t>
+Even when all the best current practises are observed, operational problems may be experienced when running a BGP network.
+<vspace blankLines="1" />
+These include slow convergence due to "path-hunting" and <xref target="RFC3345">persistant oscillations</xref>.
+<vspace blankLines="1" />
+Standardization of MRAI timers helps path-hunting, and oscillations can be worked around with <xref target="RFC5004">RFC 5004</xref>.
+<vspace blankLines="1" />
+However, both of these RFCs identify the above issues as needing further work.
+</t>
+
+<section title="The Best Path Chaining and the Best Path Tree">
+<t>
+In a stable system of BGP speakers, for every given prefix, the selected best paths should form a spanning tree. At each node, the best path selected points further up the tree. The root of the tree is the destination, i.e. the originator of the prefix. The path from any leaf to the root forms a "chain" of best paths.
+<vspace blankLines="1" />
+There are any number of ways that path attributes may be modified over time, at arbitrary places in this tree. When this happens, individual segments of the tree may conceptually "stretch" or "shrink". These changes may have no effect on the overall set of choices of best path, or they may cause a cascade effect "below" that point in the tree, with nodes migrating to new locations in a new version of the tree.
+<vspace blankLines="1" />
+However, each node makes its choice of best path locally, and every time a node changes its selection of best path, that change is visible to its peers, and may in turn affect their own choice of best path.
+This propogation of changes is not instantaneous, and owing to the non-tree-like nature of the actual connectivity between nodes, can and does result in race conditions.
+<vspace blankLines="1" />
+Depending on connectivity, peering policy, and initial conditions, the behavior may border on that of systems best describe through chaos theory. The time to reach a stable state, while generally bounded, is often far from fast, not necessarily predictable, and not necessarily consistent.
+</t>
+</section> 
+<section title="The Withdrawal Problem">
+<t>
+Under normal circumstances, a change in attributes for a prefix will "flow" along the tree of best paths, without disrupting the structure of the tree itself signficantly. Even when a node selects a new best path (and thus re-attaches itself to the tree in a new location), it typically will continue to pass the new attributes along the branch of the tree for which it is the root.
+<vspace blankLines="1" />
+However, under certain circumstances, its choice of new best path, requires it to WITHDRAW the prefix from those peers, and effectively sever the branch. It is in the after-effects of this truncation that much of the path-hunting behavior gets triggered.
+<vspace blankLines="1" />
+When a withdrawal effectively severs a branch of the tree, all the nodes on the tree will need to find new paths to the root. The problem is, that it takes some time for them to learn this fact.
+<vspace blankLines="1" />
+In the mean time, the nodes in the severed branch may continue to use, and propogate, paths that are technically infeasible.
+<vspace blankLines="1" />
+The idea is to fast-track the flooding of the infeasibility of paths throughout all parts of the tree below a given link, so as to minimize the use of infeasible paths.
+</t>
+</section>
+<section title="The Uniqueness Property">
+<t>
+Currently, for each prefix, only one path for that prefix is ever announced from one peer to another (ignoring Route Reflectors).
+Because of this property, uniqueness, a withdrawal on a prefix does not require path information.
+This also means that a change of best path is accomplished via an update for a prefix with the new path information.
+<vspace blankLines="1" />
+If, however, more than one path for a given prefix were sent, then any attempt to withdraw a prefix+path would require some mechanism to distinguish between prefix instances.
+<vspace blankLines="1" />
+In an environment where multiple path announcments per prefix are possible, but only one "best" path per prefix is maintained, then two steps would be involved in changing the "best" path.
+In no particular order, that would be the withdrawal of the old prefix+path, and the announcement of the new prefix+path.
+</t>
+</section>
+</section>
+<section title="Proposed Changes">
+<t>
+What is being proposed is, maintaining the "best N" for each prefix, and sending all of these rather than just the "best" path.
+<vspace blankLines="1" />
+The supposition is that pruning all infeasible branches, while maintaining information on second-best paths, allows for fast removal of all best paths which are dependent on infeasible paths, and fast reconvergence with pre-computed alternate paths. It is expected that the second-best mechanism should act as a stop-gap until, but not actually replace, full BGP table walking to generate a new set of "top two" paths.
+</t>
+<section title="How to Identify a Path">
+<t>
+   As defined in [RFC4271], a path refers to the information reported in
+   the path attribute field of an UPDATE message.  As the procedures
+   specified in [RFC4271] allow only the advertisement of one path for a
+   particular address prefix, a path for an address prefix from a BGP
+   peer can be keyed on the address prefix.
+<vspace blankLines="1" />
+   In order for a BGP speaker to advertise multiple paths for the same
+   address prefix, a new identifier (termed "Path Identifier" hereafter)
+   needs to be introduced so that a particular path for an address
+   prefix can be identified by the combination of the address prefix and
+   the Path Identifier.
+<vspace blankLines="1" />
+   Depending on the application and the configuration of a particular
+   peer, the Path Identifier for a path can be an AS number, or a BGP
+   Identifier, or an opaque number, with which a path is associated by
+   the BGP speaker that advertises the path.
+</t>
+</section>
+<section title="Extended NLRI Encodings">
+<t>
+   In order to carry the Path Identifier in an UPDATE message, the
+   existing NLRI encodings specified in [RFC4271, RFC2858] are extended
+   as the following:
+<vspace blankLines="1" />
+<figure anchor="Extended NLRI Format - RFC 4271"><artwork>
+               +-----------------------------+
+               | Path Identifier (4 octets)  |
+               +-----------------------------+
+               | Path Ordinal (1 octet)      |
+               +-----------------------------+
+               | Length (1 octet)            |
+               +-----------------------------+
+               | Prefix (variable)           |
+               +-----------------------------+
+</artwork></figure>
+   and the NLRI encoding specified in [RFC3107] is extended as the
+   following:
+<vspace blankLines="1" />
+<figure anchor="Extended NLRI Format - RFC 3107"><artwork>
+               +-----------------------------+
+               | Path Identifier (4 octets)  |
+               +-----------------------------+
+               | Path Ordinal (1 octet)      |
+               +-----------------------------+
+               | Length (1 octet)            |
+               +-----------------------------+
+               | Label (3 octets)            |
+               +-----------------------------+
+                .........................
+               +-----------------------------+
+               | Prefix (variable)           |
+               +-----------------------------+
+
+</artwork></figure>
+Update messages are otherwise identical to existing format.
+If BGP capability ADD_PATHS_ORDERED has been negotiated, every Update MUST have the New Update Format.
+More than one instance of a given prefix, with distinct values of Path Attributes, MAY be sent between BGP speakers.
+<vspace blankLines="1" />
+At most N instances may be sent, where N is the value sent along with the ADD_PATHS_ORDERED capability.
+<vspace blankLines="1" />
+Two prefix paths are considered identical if they differ only in the value of the ordinal.
+An Update which contains a path which differs from the previous path with that value of UNIQ (identifier), will result in the path information for the prefix and UNIQ being modified.
+<vspace blankLines="1" />
+The Ordinal must be non-zero, but the rules governing values of Ordinal(s) used are specific to RFCs which refer to this document. For example, BGP Equal-Cost Multipath may allow two paths with the same Ordinal to be used. Similarly, BGP N-best Paths may require per-prefix Ordinals be unique.
+</t>
+</section>
+
+<section title="ADD_PATH_ORDERED Capability">
+<t>
+   The ADD_PATH_ORDERED Capability is a new BGP capability [RFC2842].  The
+   Capability Code for this capability is specified in the IANA
+   Considerations section of this document. The Capability Length field
+   of this capability is variable. The Capability Value field consists
+   of zero or more of the tuples &lt;AFI, SAFI, MOV&gt; as follows:
+<figure anchor="ADD_PATH_ORDERED"><artwork>
+               +------------------------------------------------+
+               | Address Family Identifier (2 octets)           |
+               +------------------------------------------------+
+               | Subsequent Address Family Identifier (1 octet) |
+               +------------------------------------------------+
+               | Maximum Ordinal Value (1 octet)                |
+               +------------------------------------------------+
+</artwork></figure>
+
+   The meaning and use of the fields are as follows:
+<list style="hanging">
+<t hangText="Address Family Identifier (AFI):">
+       
+
+          This field carries the identity of the Network Layer protocol
+          for which the BGP speaker intends to advertise multiple paths.
+          Presently defined values for this field are specified in
+          [IANA-AFI].
+</t>
+<t hangText="Subsequent Address Family Identifier (SAFI):">
+
+          This field provides additional information about the type of
+          the Network Layer Reachability Information carried in the
+          attribute. Presently defined values for this field are
+          specified in [IANA-SAFI].
+</t>
+<t hangText="Maximum Ordinal Value (MOV):">
+          This field specifies the maximum value the speaker will send in
+          the Ordinal field of any Update. It does not mean that that the
+          speaker will necessarily send any particular Ordinal value within
+          that range, nor that more than one Ordinal value will be used.
+          The value is an unsigned 8-bit value greater than zero.
+</t>
+</list>
+
+   When advertising the ADD_PATH_ORDERED Capability to a peer, a BGP speaker
+   conveys to the peer that the speaker is capable of receiving multiple
+   paths as well as the single path from the peer for address families
+   that the speaker supports.
+
+   When a tuple &lt;AFI, SAFI, MOV&gt; is included in the capability, it indicates
+   that the BGP speaker intends to advertise multiple paths for the
+   &lt;AFI, SAFI, MOV&gt;.  If the ADD-PATH Capability is also received from the
+   peer, the speaker would then follow the procedures for advertising
+   multiple paths to the peer for the specified &lt;AFI, SAFI, MOV&gt;.
+
+</t>
+</section>
+</section>
+
+<section title="Security Considerations">
+<t>
+No additional security considerations beyond those already present in BGP are introduced.
+</t>
+</section>
+<section title="IANA Considerations">
+<t>
+IANA will need to assign a new code point for BGP Capabilities for ADD_PATH_ORDERED.
+</t>
+</section>
+<section title="Acknowledgements">
+<t>
+The author wishes to acknowledge the helpful guidance of Joe Abley, Tony Li, and Yakhov Rehkter.
+The author thanks the following for feedback during the review and revision process: Joel M. Halpern, Tony Li.
+The author has based much of this document on an expired Internet Draft, "draft-walton-bgp-addp-paths-05", and has used substantial portions of that draft verbatim.
+The original authors of that draft were Daniel Walton, Alvaro Retana, and Enke Chen, of Cisco Systems.
+<vspace blankLines="1" />
+The author also wishes to acknowledge the insight gained from his Scottish Deerhound, Skylar, winning a Reserve Best-in-Show.
+(The selection method of "second best" comes from the Reserve system used at the group and best-in-show levels of dog shows).
+</t>
+</section>
+</middle>
+  <back>
+    <references title="Normative References">
+      &rfc3345;
+      &rfc4271;
+      &rfc5004;
+    </references>
+    <references title="Informative References">
+    &rfc2119;
+    </references>
+  </back>
+</rfc>

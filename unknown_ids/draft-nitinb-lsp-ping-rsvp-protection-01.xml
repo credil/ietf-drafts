@@ -1,0 +1,501 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<!DOCTYPE rfc SYSTEM "rfc3978.dtd" [
+<!ENTITY RFC2119 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+<!ENTITY RFC4379 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4379.xml">
+<!ENTITY P2MP-LSP-PING SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-mpls-p2mp-lsp-ping.xml">
+<!ENTITY RFC3209 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3209.xml">
+<!ENTITY RFC4090 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4090.xml">
+<!ENTITY RFC4875 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4875.xml">
+<!ENTITY REMOTE-LSP-PING SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-mpls-remote-lsp-ping.xml">
+]>
+<?rfc toc="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc compact="yes"?>
+<?rfc strict="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<rfc category="std" docName="draft-nitinb-lsp-ping-rsvp-protection-01"
+     ipr="full3978">
+  <front>
+    <title abbrev="LSP-Ping over RSVP protection paths">Mechanism for
+    performing LSP-Ping over RSVP protection paths</title>
+
+    <author fullname="Nitin Bahadur" initials="N.B." surname="Bahadur">
+      <organization>Juniper Networks, Inc.</organization>
+
+      <address>
+        <postal>
+          <street>1194 N. Mathilda Avenue</street>
+
+          <city>Sunnyvale</city>
+
+          <region>CA</region>
+
+          <code>94089</code>
+
+          <country>US</country>
+        </postal>
+
+        <phone>+1 408 745 2000</phone>
+
+        <email>nitinb@juniper.net</email>
+
+        <uri>www.juniper.net</uri>
+      </address>
+    </author>
+
+    <author fullname="Kireeti Kompella" initials="K.K." surname="Kompella">
+      <organization>Juniper Networks, Inc.</organization>
+
+      <address>
+        <postal>
+          <street>1194 N. Mathilda Avenue</street>
+
+          <city>Sunnyvale</city>
+
+          <region>CA</region>
+
+          <code>94089</code>
+
+          <country>US</country>
+        </postal>
+
+        <phone>+1 408 745 2000</phone>
+
+        <email>kireeti@juniper.net</email>
+
+        <uri>www.juniper.net</uri>
+      </address>
+    </author>
+
+    <author fullname="Kenji Kumaki" initials="K.K." surname="Kumaki">
+     <organization>KDDI R&D Laboratories Inc.</organization>
+       <address>
+        <postal>
+          <street>2-1-15 Ohara Fujimino</street>
+          <city>Saitama</city>
+          <code>356-8502</code>
+          <country>JAPAN</country>
+        </postal>  
+         <email>ke-kumaki@kddi.com</email>
+       </address>
+    </author> 
+
+    <date day="1" month="December" year="2008" />
+
+    <area>Routing</area>
+
+    <workgroup>Network Working Group</workgroup>
+
+    <keyword>Internet-Draft</keyword>
+
+    <keyword>MPLS OAM</keyword>
+
+    <keyword>lsp ping</keyword>
+
+    <abstract>
+      <t>This document describes methods for performing lsp ping over mpls
+      rsvp-te protection paths, when the protection paths are not in use.
+      Conventional LSP-Ping follows the same path as data traffic. In some
+      cases, it might be useful to follow the data path of protection paths
+      (detours and bypasses) to ensure that the those paths are fully
+      functional. This document describes enhancements to LSP-Ping to perform
+      ping over such paths.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section anchor="intro" title="Introduction">
+      <t>This document describes methods for performing lsp ping over MPLS
+      RSVP-TE protection paths, when the protection paths are not in use.
+      Convention LSP-ping <xref target="RFC4379"></xref> packets follow the
+      same path as data traffic and thus it validates the LSP control and
+      forwarding planes. For MPLS LSPs signaled using RSVP-TE <xref
+      target="RFC3209"></xref>, protection mechanisms have been defined in
+      <xref target="RFC4090"></xref> enable the re-direction of traffic onto
+      backup LSP tunnels in the event of a failure. Under normal operation, no
+      data traffic passes through the backup tunnels. So under normal
+      conditions, there is no way of verifying that when a failure will
+      happen, data will correctly take the backup tunnel and eventually reach
+      the LSP end point. This document defines enhancements to the LSP-Ping to
+      enable verification of end-to-end data path via the backup LSP tunnel
+      when the backup LSP tunnel is not in use.</t>
+
+      <section title="Conventions used in this document" toc="exclude">
+        <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+        "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+        document are to be interpreted as described in <xref
+        target="RFC2119"></xref>.</t>
+      </section>
+    </section>
+
+    <section anchor="motivation" title="Motivation" toc="default">
+      <t><xref target="RFC4090"></xref> describes mechanisms for performing
+      protection of RSVP-TE signaled MPLS tunnels. The protection can be a
+      one-to-one backup (detour) or a facility backup method (bypass) that
+      creates one or more bypass LSPs for protecting one or more LSPs. In
+      either case, the signaling is done in the control plane and protection
+      path is not used until there is a failure in the LSP path being
+      protected.</t>
+
+      <t>LSP-Ping <xref target="RFC4379"></xref> allows one to ping and trace
+      the path of a LSP. LSP-Ping can be used (without any new extensions) to
+      ping and trace the path of RSVP-TE protection paths. Thus, one can
+      monitor the health of protection paths. However, this monitoring of the
+      protection paths is done in isolation and not in combination with the
+      actual path(s) being protected. In other words, the protection path
+      might be UP, but on failure of the protected path, data traffic might
+      not make it to the protected LSP end-point. Some of the reasons for this
+      are as described below:</t>
+
+      <t><list style="numbers">
+          <t>Point of local repair (PLR) does not currently forward the
+          incoming LSP traffic onto the protection path</t>
+
+          <t>Actual forwarding failure with the protection path</t>
+
+          <t>Merge point (end of protection path) does not correctly merge the
+          traffic back to the LSP path</t>
+        </list></t>
+
+      <t>Thus, it is essential to have a mechanism to validate that the LSP
+      protection will actually work in case of a failure. This draft provides
+      extensions to LSP-Ping to allow the PLR to re-route the lsp-ping packets
+      via the protection path</t>
+    </section>
+
+    <section title="Exercising the protection path" toc="include">
+      <section anchor="transit-node-flag"
+               title="Transit node re-route indication" toc="include">
+        <t>To re-route an incoming packet via a protection path at a transit
+        node, we need to provide some indication to the transit node that it
+        should forward the lsp-ping echo request along the protection path.
+        This is done by adding a flag field in the Target FEC Stack sub-TLV
+        objects <xref target="RFC4379"></xref> for RSVP FECs.</t>
+
+        <section title="RSVP IPv4 LSP Target FEC Stack Sub-TLV">
+          <figure align="left" title="RSVP IPv4 LSP Target FEC Stack Sub-TLV">
+            <artwork><![CDATA[0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                 IPv4 tunnel end point address                 |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |          Must Be Zero       |P|     Tunnel ID                 |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                       Extended Tunnel ID                      |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                   IPv4 tunnel sender address                  |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |          Must Be Zero         |            LSP ID             |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+]]></artwork>
+          </figure>
+
+          <t>RSVP IPv4 LSP is a sub-TLV of Target FEC Stack TLV, defined in
+          <xref target="RFC4379"></xref>. The P-bit has been added to indicate
+          that the echo-request MUST be forwarded along a protection-path, if
+          one is available. If a node does not understand the P-bit, it MUST
+          return an error code of either" Malformed echo request received" or
+          "One or more of the TLVs was not understood" <xref
+          target="RFC4379"></xref>. If no protection-path is available, then
+          the node MUST return the error code defined in <xref
+          target="transit-node-error"></xref>.</t>
+        </section>
+
+        <section title="RSVP P2MP IPv4 Session Target FEC Stack Sub-TLV">
+          <figure align="left"
+                  title="RSVP P2MP IPv4 Session Target FEC Stack Sub-TLV">
+            <artwork><![CDATA[0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                           P2MP ID                             |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |          Must Be Zero       |P|     Tunnel ID                 |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                       Extended Tunnel ID                      |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                   IPv4 tunnel sender address                  |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |          Must Be Zero         |            LSP ID             |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+]]></artwork>
+          </figure>
+
+          <t>RSVP P2MP IPv4 Session is a sub-TLV of Target FEC Stack TLV,
+          defined in <xref target="I-D.ietf-mpls-p2mp-lsp-ping"></xref>. The
+          P-bit has been added to indicate that the echo-request MUST be
+          forwarded along a protection-path, if one is available. If a node
+          does not understand the P-bit, it MUST return an error code of
+          either" Malformed echo request received" or "One or more of the TLVs
+          was not understood" <xref target="RFC4379"></xref>. If no
+          protection-path is available, then the node MUST return the error
+          code defined in <xref target="transit-node-error"></xref>.</t>
+        </section>
+
+        <section title="RSVP IPv6 LSP Target FEC Stack Sub-TLV">
+          <figure title="RSVP IPv6 LSP Target FEC Stack Sub-TLV">
+            <artwork><![CDATA[       0                   1                   2                   3
+       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                 IPv6 tunnel end point address                 |
+      |                                                               |
+      |                                                               |
+      |                                                               |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |          Must Be Zero       |P|          Tunnel ID            |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                       Extended Tunnel ID                      |
+      |                                                               |
+      |                                                               |
+      |                                                               |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                   IPv6 tunnel sender address                  |
+      |                                                               |
+      |                                                               |
+      |                                                               |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |          Must Be Zero         |            LSP ID             |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+]]></artwork>
+          </figure>
+
+          <t>RSVP IPv4 LSP is a sub-TLV of Target FEC Stack TLV, defined in
+          <xref target="RFC4379"></xref>. The P-bit has been added to indicate
+          that the echo-request MUST be forwarded along a protection-path, if
+          one is available. If a node does not understand the P-bit, it MUST
+          return an error code of either" Malformed echo request received" or
+          "One or more of the TLVs was not understood" <xref
+          target="RFC4379"></xref>. If no protection-path is available, then
+          the node MUST return the error code defined in <xref
+          target="transit-node-error"></xref>.</t>
+        </section>
+
+        <section title="RSVP P2MP IPv6 Session Target FEC Stack Sub-TLV">
+          <figure title="RSVP P2MP IPv6 Session Target FEC Stack Sub-TLV">
+            <artwork><![CDATA[       0                   1                   2                   3
+       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                                                               |
+      |                           P2MP ID                             |
+      |                                                               |
+      |                                                               |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |          Must Be Zero       |P|          Tunnel ID            |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                       Extended Tunnel ID                      |
+      |                                                               |
+      |                                                               |
+      |                                                               |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                   IPv6 tunnel sender address                  |
+      |                                                               |
+      |                                                               |
+      |                                                               |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |          Must Be Zero         |            LSP ID             |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+]]></artwork>
+          </figure>
+
+          <t>RSVP P2MP IPv6 Session is a sub-TLV of Target FEC Stack TLV,
+          defined in <xref target="I-D.ietf-mpls-p2mp-lsp-ping"></xref>.The
+          P-bit has been added to indicate that the echo-request MUST be
+          forwarded along a protection-path, if one is available. If a node
+          does not understand the P-bit, it MUST return an error code of
+          either" Malformed echo request received" or "One or more of the TLVs
+          was not understood" <xref target="RFC4379"></xref>. If no
+          protection-path is available, then the node MUST return the error
+          code defined in <xref target="transit-node-error"></xref>.</t>
+        </section>
+      </section>
+
+      <section anchor="transit-node-error"
+               title="Transit node re-route error reporting">
+        <t>If a transit-node receives a echo request with an indication that
+        the request needs to traverse a protection path, but no protection
+        path is available, then the transit node should respond back with a
+        new return code as defined below:</t>
+
+        <figure>
+          <artwork><![CDATA[         
+          Value    Meaning
+          -----    -------
+           TBD     Protection path not available
+
+]]></artwork>
+        </figure>
+
+        <t>The Return Subcode for this Return Code MUST be set to zero and
+        MUST be ignored.</t>
+      </section>
+
+    </section>
+
+    <section title="Performing LSP Ping along a protection path">
+      <section title="Ingress node procedure">
+        <t>The RRO object sent upstream during the signaling of a MPLS RSVP-TE
+        LSP contains information regarding protection availability on the
+        downstream node. More specifically, <xref target="RFC4090"></xref>
+        specifies bits in the RSVP record-route object (RRO), which specify if
+        a transit node provides protection and if it provides node protection.
+        Given this, the ingress node of a RSVP-TE LSP knows the state of
+        protection along all hops of a LSP. Using this information, the
+        ingress MAY choose to perform LSP pings only via nodes where
+        protection is available. Attempting to perform lsp-ping via nodes
+        where no protection is available will not cause harm, except for
+        additional OAM load in the nodes.</t>
+      </section>
+
+      <section title="Transit node procedure">
+        <figure anchor="tunnel-fig" title="Protected RSVP path">
+          <artwork align="center"><![CDATA[
+Ingress                                       Egress
+   A           B          C           D           E
+    o -------- o -------- o --------- o --------- o
+                          |                      |
+                           \____________________/
+                                   Bypass
+
+
+]]></artwork>
+        </figure>
+
+        <t>In the above figure node C provides node protection. To perform a
+        lsp-ping along the protection path originating at node C, ingress A
+        MUST send a lsp-ping echo request message with TTL=2 and with the
+        P-bit set in the RSVP FEC stack sub-TLV, see <xref
+        target="transit-node-flag"></xref>. Due to TTL=2, the echo request
+        will expire at node C. The transit node C on receipt of such a request
+        SHOULD perform one of the following:</t>
+
+        <t><list style="numbers">
+            <t>If C does not understand the P-bit, C MAY respond back to A
+            with an error.</t>
+
+            <t>If C ignores the P-bit, then C MAY respond back to A with a
+            return code indicating that it is a transit node</t>
+
+            <t>If C understands the P-bit, then C SHOULD forward the lsp-ping
+            echo request along the bypass path.</t>
+          </list></t>
+
+        <t>When the lsp-ping echo request is forwarded along the protection
+        path, the following rules MUST be followed:</t>
+
+        <t>Node C MUST NOT forward the lsp-ping echo request along the regular
+        (non-protection) LSP path.</t>
+      </section>
+
+      <section title="Egress node procedure">
+        <t>When the echo request reaches the egress, the egress will either
+        identify it as a malformed packet (if it does not understand the P-bit
+        and enforces the Must-be-zero) or the egress will process the packet
+        as a regular lsp-ping echo request and respond back with an
+        appropriate return code.</t>
+
+        <t>In either case, a response from the egress indicates that the
+        packet indeed made it via the forwarding plane of the LSP's protection
+        path. An error message from the egress does not necessarily mean that
+        the packet was correctly forwarded to the egress. It only means that
+        the packet made it to the egress.</t>
+      </section>
+
+      <section title="P2MP Considerations">
+        <t><xref target="RFC4875"></xref> specifies P2MP extenions for RSVP-TE
+        and <xref target="I-D.ietf-mpls-p2mp-lsp-ping"></xref> specifies
+        extensions to lsp-ping for P2MP.</t>
+
+        <t>The procedures outlined above are sufficient for P2MP. Using an
+        appropriate MPLS TTL value (in the echo request) and P2MP Responder
+        Identifier TLV ( <xref target="I-D.ietf-mpls-p2mp-lsp-ping"></xref> ),
+        an ingress should be able to direct an echo request along a particular
+        protection path to a particular egress. A protection path in P2MP may
+        be protecting multiple egresses and for scalability considerations,
+        one should regulate the number of lsp-pings exercising the same
+        protection path.</t>
+      </section>
+
+      <section title="Multiple protection path consideration">
+        <t>A transit node MAY have multiple paths protecting a downstream link
+        or node. In such a case, which path the transit node chooses to
+        forward the packets is a dependent on the transit node. This document
+        does not make any requirements on the transit node to forward packets
+        along a specific path or provide information along which path the
+        packet was forwarded. In general, the transit node behavior for
+        lsp-ping echo request messaegs should mimic the behavior for data
+        packets in case there is a failure in the LSP path.</t>
+      </section>
+
+      <section title="Traceroute along protection path">
+        <t>At this time, it is not deemed necessary to provide any extensions
+        to support traceroute (starting at LSP ingress) that traverses the
+        protection path. Traceroute is a tool often used during network
+        trouble-shooting. During trouble-shooting, one could use lsp-ping
+        (with extensions specified in this draft) to detect/validate a failure
+        with the path. Once a failure has been detected, one could use
+        traceroute on the main LSP path and a traceroute on the protection
+        path to isolate the issue. Proxy lsp-ping <xref
+        target="I-D.ietf-mpls-remote-lsp-ping"></xref> could be used to
+        automate the network-troubleshooting by performing both the procedures
+        from the LSP ingress itself.</t>
+      </section>
+    </section>
+
+    <section title="Security Considerations">
+      <t>The draft does not introduce any new security considerations. Those
+      discussed in <xref target="RFC4379"></xref> are also applicable to this
+      document.</t>
+
+      <t>Tracing inside a bypass tunnel can be prevented by not propagating
+      the MPLS TTL into the outer tunnel (at the start of the outer
+      tunnel).</t>
+    </section>
+
+    <section title="IANA Considerations">
+      <t>A new Return Code is defined in <xref
+      target="transit-node-error"></xref>. IANA is requested to assign a new
+      Return Code value for the "Multi-Protocol Label Switching (MPLS) Label
+      Switched Paths (LSPs) Parameters" registry, "Return Codes" sub-registry
+      as follows using a Standards Action value.</t>
+
+      <figure>
+        <artwork><![CDATA[
+          Value    Meaning
+          -----    -------
+           TBD     Protection path not available
+
+]]></artwork>
+      </figure>
+    </section>
+
+    <section title="Acknowledgements">
+      <t>The authors would like to thank Vach Kompella for his suggestions on 
+         the subject.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      &RFC2119;
+
+      &RFC4379;
+
+      &P2MP-LSP-PING;
+    </references>
+
+    <references title="Informative References">
+      &RFC3209;
+
+      &RFC4090;
+
+      &RFC4875;
+
+      &REMOTE-LSP-PING;
+    </references>
+  </back>
+</rfc>

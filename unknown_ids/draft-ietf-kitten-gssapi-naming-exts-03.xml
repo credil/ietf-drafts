@@ -1,0 +1,809 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<?rfc tocindent="no" ?>
+<?rfc autobreaks="no" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+<rfc category="std" ipr="full3978" docName="draft-ietf-kitten-gssapi-naming-exts-03.txt">
+    <front>
+	<title abbrev="GSS-API Naming Extensions">GSS-API Naming Extensions</title>
+	<author initials='N.' surname="Williams" fullname='Nicolas
+	    Williams'>
+	    <organization abbrev="Sun">Sun Microsystems</organization>
+	    <address>
+		<postal>
+		    <street>5300 Riata Trace Ct</street>
+		    <city>Austin</city> <region>TX</region>
+		    <code>78727</code> <country>US</country>
+		</postal>
+		<email>Nicolas.Williams@sun.com</email>
+	    </address>
+    </author>
+    <author initials="L." surname="Johansson" fullname='Leif Johansson'>
+      <organization abbrev="Stockholm university">Stockholm university</organization>
+      <address>
+		<postal>
+		  <street>Avdelningen för IT och Media</street>
+		  <code>SE-106 91</code>
+		  <city>Stockholm</city>
+		</postal>
+		<email>leifj@it.su.se</email>
+		<uri>http://people.su.se/~leifj/</uri>
+      </address>
+    </author>
+    <date month="July" year="2008"/>
+	<area>Security</area>
+	<workgroup>KITTEN WORKING GROUP</workgroup>
+	<keyword>Internet-Draft</keyword>
+	<abstract><t>The Generic Security Services API (GSS-API)
+		provides a simple naming architecture that supports
+		name-based authorization.  This document introduces new
+	    APIs that extend the GSS-API naming model to support 
+	    name attribute transfer between GSS-API peers.</t>
+	</abstract>
+    </front>
+
+    <middle>
+	<section title="Conventions used in this document">
+            <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+            "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+            and "OPTIONAL" in this document are to be interpreted as
+            described in <xref target="RFC2119"/>.</t>
+        </section>
+
+        <section title="Introduction">
+	    <t>As described in <xref target='I-D.GSS-NAMING'/> the
+		GSS-API's naming architecture suffers from certain
+		limitations.  This document proposes concrete GSS-API
+		extensions as outlined in <xref
+		    target='I-D.GSS-NAMING'/>.</t>
+	    <t>A number of extensions to the GSS-API <xref
+		    target='RFC2743'/> and its C Bindings <xref
+		    target='RFC2744'/> are described
+		herein with the goal of making authorization
+		information, and other information that can be modeled
+		as "name attributes" available as such to applications.
+		For example, Kerberos V authorization data elements,
+		both, in their raw forms as well as mapped to more
+		useful value types, can be made available to GSS-API
+		applications through these interfaces.</t>
+	    <t>The model is that GSS names have attributes.  The
+		attributes of a name may be authenticated by the
+		credential whence the name comes, or may have been set
+		locally on a GSS name for the purpose of "asserting" the
+		attribute during credential acquisition or security
+		context exchange.  Name attributes' values are network
+		representations thereof (e.g., the actual value octets
+		of the contents of an X.509 certificate extension, for
+		example) and are intended to be useful for constructing
+		portable access control facilities.  Applications may
+		often require language- or platform-specific data types,
+		rather than network representations of name attributes,
+		so a function is provided to obtain objects of such
+		types associated with names and name attributes.</t>
+        </section>
+
+	<section title="Name Attribute Sources and Criticality">
+	    <t>A given GSS name object's name attributes may be
+		authenticated, mapped and/or critical. These flags 
+		are explained below.</t>
+		<t>An attribute is 'authenticated' iff there is a secure
+		association between the attribute (and its values) and 
+		the trusted source of the peer credential. Examples of
+		authenticated attributes are (any part of) the signed 
+		portion of an X.509 certificate or AD-KDCIssued 
+		authorization-data elements in Kerberos V Tickets. Note
+		that the fact that an attribute is authenticated does
+		not imply anything about the semantics of the attribute
+		nor that the trusted credential source authorized any
+		one semantic of the attribute. Such interpretations MAY
+		be the result of applying local policy to the attribute.</t>
+	    <t>That a given name's given attribute is 'mapped' means
+		that it was obtained through some mapping mechanism
+		applied to another attribute of the name that was not,
+		itself, mapped.  For example, such attributes as
+		platform-specific internal identifiers may sometimes be
+		mapped from other name attributes.</t>
+	    <t>Name attributes may be "critical," meaning that
+		applications that do not understand them MUST reject
+		security contexts where the peer has such unknown,
+		critical attributes.</t>
+		<t>[NOTE(leifj): The criticality flag seems to have limited 
+		applicability in practice. As written the security context 
+		should not be established unless all critically marked 
+		naming attributes are supported and understood. But what
+		happens if the peer doesn't understand naming extensions
+		at all. It seems more reasonable to state that name 
+		attribute extensions MUST only be used to as a basis for 
+		authorization decisions.]</t>
+		<t>[NOTE(leifj): The mapped flag also seems to have limited
+		applicability in practice - interpretation of the attribute
+		will be entierly up to the peer anyway which will need to
+		know much more about the attribute than the fact than its
+		value is derived.]</t>
+        </section>
+
+	<section title="Name Attributes/Values as ACL Subjects">
+	    <t>Some name attributes (e.g., numeric user or group
+		identifiers) may be useful as subjects of access
+		control list (ACL) entries, some may not (e.g., time of day
+		login restrictions).  The GSS_Inquire_name_attribute()
+		function indicates this.</t>
+	    <t>To facilitate the development of portable applications
+		that make use of name attributes to construct and
+		evaluate portable ACLs the GSS-API makes name attribute
+		values available in canonical network encodings
+		thereof.</t>
+	    <t>To facilitate the development of platform- or
+		language-specific applications that need access to
+		native types of representations of name attributes an
+		optional facility is provided, GSS_Map_name_to_any().</t>
+	</section>
+
+	<section title="Mapping Mechanism Facilities to Name Attributes">
+	    <t>[NOTE:  This entire section should probably be split into
+		one or more separate Internet-Drafts.  It is here in the
+		-00 of this I-D to help readers understand how to
+		mechanism-specific name attributes would be accessed
+		through these GSS-API extensions.]</t>
+	    <t>Kerberos V <xref
+		    target="I-D.ietf-krb-wg-kerberos-clarifications"/>
+		and the Simple Public-Key GSS-API Mechanism, SPKM <xref
+		    target="RFC2025"/>, both support the concept and
+		encoding of containers of "authorization-data" as
+		described in <xref
+		    target="I-D.ietf-krb-wg-kerberos-clarifications"/>.</t>
+	    <t>PKIX <xref target="RFC3280"/> supports a number of
+		authorization-data-like features, like Extended Key
+		Usage values (EKUs) and certificate extensions.</t>
+	    <t>The authorization data can be accessed through the
+		GSS-API name attributes facility defined herein.</t>
+	    <section title="Kerberos V and SPKM Authorization-Data">
+		<t>Authorization-data non-container elements asserted in
+		    Kerberos V AP-REQ Authenticators MUST be mapped into
+		    <spanx style="strong">asserted</spanx> GSS-API name
+		    attributes; if not contained in AD-IF-RELEVANT then
+		    they MUST be mapped into <spanx
+			style="strong">critical</spanx> GSS-API name
+		    attributes.  AD-AND-OR authorization-data elements
+		    MUST be mapped into a single <spanx
+			style="strong">critical</spanx> attribute,
+		    (TBD).</t>
+		<t>Authorization-data included in Kerberos V Tickets
+		    that is not contained in AD-KDCIssued (with valid
+		    signature) MUST be mapped into <spanx
+			style="strong">asserted</spanx> GSS-API name
+		    attributes.  Conversely, authorization-data elements
+		    in Kerberos V Tickets contained by AD-KDCIssued MUST
+		    be mapped into <spanx
+			style="strong">authenticated</spanx> GSS-API
+		    name attributes</t>
+		<t>
+		    As with authorization-data elements in
+		    Authenticators, authorization-data elements in
+		    Tickets not contained in AD-IF-RELEVANT are to be mapped
+		    to <spanx style="strong">critical</spanx> name
+		    attributes, and similarly with AD-AND-OR (see
+		    above).</t>
+		<t>The OIDs for authorization-data elements are to be
+		    the authorization-data element's 'ad-type' positive integer
+		    ID, relative to the base OID &lt;TBD&gt; Negative values
+		    are reserved for local experiments. [NOTE: what
+		    about negative ad-type's?  OID arcs are positive
+		    integers...  ad-type is an Int32, so clearly
+		    something can be done.]</t>
+	    </section>
+	    <!--
+	    <section title="Kerberos V Cross-Realm Transit Paths">
+		<t>[Add text on how to represent/encode/interpret krb5
+		    realm transit paths as name attribute values.  And
+		    text on PKINIT too...  Basically Ticket's
+		    'transited' field should be exposed as an
+		    authenticated name attribute, with some uncompressed
+		    encoding, possibly encompassing certificate
+		    validation paths of client certs used for PKINIT,
+		    with criticality determined by the presence of the
+		    transit-policy-checked flag.]</t>
+	    </section>
+	    -->
+	    <section title="PKIX Certificate Extensions">
+		<!-- <t>[NOTE:  In the Kerberos V authorization-data case we
+		    can tell when AD elements are "authenticated" and
+		    when the are asserted, but what about x.509
+		    certificate extensions?  Clearly KU, EKUs and
+		    subjectAltNames are authenticated in that no CA
+		    should sign a cert with, say, arbitrary
+		    subjectAltNames not understood by the CA, but, does
+		    that also apply to all other x.509 certificate
+		    extensions?  The answer may depend on actual CA
+		    operator practices...  At worst a new extension may
+		    be needed, like Kerberos V's AD-KDCIssued AD
+		    container element; at best this text can just say
+		    "all cert extensions MUST be represented as
+		    authenticated..." below.]</t> -->
+		<t>PKI certificate extensions MAY/SHOULD/MUST (see
+		    comment above) be represented as <spanx
+			style="strong">authenticated</spanx> GSS-API
+		    name attributes with the <spanx
+			style="emph">same</spanx> OIDs, and if they be
+		    marked critical in the certificate then they MUST be
+		    mapped as <spanx style="strong">critical</spanx>
+		    GSS-API name attributes.  SubjectAltNames and EKUs,
+		    specifically, MUST be represented as <spanx
+			style="strong">authenticated</spanx> GSS-API
+		    name attributes; see below.  Certificate extensions
+		    MUST be represented as GSS-API name attributes whose OIDs
+		    are the same as the extensions'</t>
+		<section title="PKIX EKUs">
+		    <t>Extended Key Usage extensions, specifically, MUST
+			be mapped as described above, except that GSS-API
+			name attributes for EKUs MUST have NULL values
+			(i.e., zero-length OCTET STRINGs).</t>
+		    <t>PKI certificate key usages (KUs, but not EKUs), MUST
+			NOT be represented as GSS-API name attributes.</t>
+		</section>
+		<section title="PKIX Certificate Alternative Names">
+		    <t>PKI certificate subjectAltNames MUST be mapped as
+			<spanx style="strong">authenticated</spanx>, <spanx
+			    style="strong">non-critical</spanx> GSS-API name
+			attributes.</t>
+		    <t>PKI certificate extensions MUST be represented as <spanx
+			    style="strong">authenticated</spanx> GSS-API
+			name attributes with the <spanx
+			    style="emph">same</spanx> OIDs, and if they be
+			marked critical in the certificate then they MUST be
+			mapped as <spanx style="strong">critical</spanx>
+			GSS-API name attributes.</t>
+		    <t>Extended Key Usage extensions, specifically, MUST
+			be mapped as described above, except that GSS-API
+			name attributes for EKUs MUST have NULL values
+			(i.e., zero-length OCTET STRINGs).</t>
+		</section>
+		<section title="Other PKIX Certificate Extensions and Attributes">
+		    <t>Any X.509 certificate extension not covered above SHOULD
+		    be represented as GSS-AOI name attributes with the OID of the
+		    X.509 extension and with OCTET STRING values containing the
+		    encoded value of the extension.</t>
+		</section>
+		<section title="SAML attribute assertions">
+			<t>
+				Attributes contained in SAML attribute assertions are
+				mapped to GSS-API name attributes with OIDs derived from
+				the SAML attributes:
+				<list>
+					<t>If the SAML attribute is an OID the same OID
+					is used.</t>
+					<t>If the SAML attribute is a URN or a URI then
+					the name MUST be mapped to a corresponding OID by
+					means of an IANA registry.</t>
+				</list>
+			</t>
+		</section>
+	    </section>
+	    <!--
+	    <section title="PKIX Certificate CA Paths and Trust Anchors">
+		<t>[Add text on how to represent/encode/interpret PKI
+		    certificate validation CA paths as name attribute
+		    values, much as with Kerberos V transited paths.]</t>
+	    </section> -->
+	</section>
+
+	<section title="GSS_Display_name_ext()">
+	    <t>Inputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>name NAME,</t>
+		    <t>display_as_name_type OBJECT IDENTIFIER</t>
+		</list>
+	    </t>
+	    <t>Outputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>major_status INTEGER,</t>
+		    <t>minor_status INTEGER,</t>
+		    <t>display_name STRING</t>
+		</list>
+	    </t>
+	    <t>Return major_status codes:
+		<list style='symbols'>
+		    <t>GSS_S_COMPLETE indicates no error.</t>
+		    <t>GSS_S_UNAVAILABLE indicates that the given name
+			could not be displayed using the syntax of the
+			given name type.</t>
+		    <t>GSS_S_FAILURE indicates a general error.</t>
+		</list>
+	    </t>
+	    <t>This function displays a given name using the given name
+		syntax, if possible.  This operation may require mapping
+		MNs to generic name syntaxes or generic name syntaxes to
+		mechanism-specific name syntaxes; such mappings may not
+		always be feasible and MAY be inexact or lossy,
+		therefore this function may fail.</t>
+	    <section title="C-Bindings">
+		<figure>
+		    <artwork><![CDATA[
+OM_uint32 GSS_Display_name_ext(
+  OM_uint32                     *minor_status,
+  gss_name_t                    name,
+  gss_OID                       display_as_name_type,
+  gss_buffer_t                  display_name
+);
+		    ]]></artwork>
+		</figure>
+	    </section>
+	</section>
+
+	<section title="GSS_Inquire_name()">
+	    <t>Inputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>name NAME</t>
+		</list>
+	    </t>
+	    <t>Outputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>major_status INTEGER,</t>
+		    <t>minor_status INTEGER,</t>
+		    <t>name_is_MN BOOLEAN,</t>
+		    <t>mn_mech OBJECT IDENTIFIER,</t>
+		    <t>asserted_attrs SET OF OBJECT IDENTIFIER,</t>
+		    <t>authenticated_attrs SET OF OBJECT IDENTIFIER,</t>
+		    <t>critical_attrs SET OF OBJECT IDENTIFIER,</t>
+		    <t>all_attrs SET OF OBJECT IDENTIFIER,</t>
+		    <!-- <t>[NOTE: Perhaps this function should also output
+			an indicator as to the provenance of the name,
+			of which, in the GSS-API, there are three:
+			imported, inquired from a credential, and a
+			peer's name inquired from a security
+			context.]</t> -->
+		</list>
+	    </t>
+	    <t>Return major_status codes:
+		<list style='symbols'>
+		    <t>GSS_S_COMPLETE indicates no error.</t>
+		    <t>GSS_S_FAILURE indicates a general error.</t>
+		</list>
+	    </t>
+	    <t>This function outputs the sets of attributes of a name,
+		that are authenticated, asserted or critical.  It also
+		indicates if a given NAME is an MN or not and, if it is,
+		what mechanism it's an MN of.</t>
+	    <section title="C-Bindings">
+		<figure>
+		    <artwork><![CDATA[
+OM_uint32 gss_inquire_name(
+  OM_uint32                     *minor_status,
+  gss_name_t                    name,
+  int                           name_is_MN,
+  gss_OID                       *MN_mech,
+  gss_OID_set                   *authenticated,
+  gss_OID_set                   *asserted,
+  gss_OID_set                   *critical,
+  gss_OID_set                   *all_attrs
+);
+		    ]]></artwork>
+		</figure>
+	    </section>
+	</section>
+
+	<section title="GSS_Get_name_attribute()">
+	    <t>Inputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>name NAME,</t>
+		    <t>attr OBJECT IDENTIFIER</t>
+		</list>
+	    </t>
+	    <t>Outputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>major_status INTEGER,</t>
+		    <t>minor_status INTEGER,</t>
+		    <t>authenticated BOOLEAN, -- TRUE iff authenticated 
+		    	by the trusted peer credential source.</t>
+		    <t>negative BOOLEAN,</t>
+		    <t>mapped BOOLEAN,</t>
+		    <t>critical BOOLEAN,</t>
+		    <t>values SET OF OCTET STRING,</t>
+		    <t>display_values SET OF STRING</t>
+		</list>
+	    </t>
+	    <t>Return major_status codes:
+		<list style='symbols'>
+		    <t>GSS_S_COMPLETE indicates no error.</t>
+		    <t>GSS_S_UNAVAILABLE indicates that the given
+			attribute OID is not known or set.</t>
+		    <t>GSS_S_FAILURE indicates a general error.</t>
+		</list>
+	    </t>
+	    <t>This function outputs the value(s) associated with a
+		given GSS name object for a given name attribute.</t>
+	    <t>NOTE:  This function relies on the GSS-API notion of
+		"SET OF" allowing for order preservation; this has
+		been discussed on the KITTEN WG mailing list and the
+		consensus seems to be that, indeed, that was always
+		the intention. It should be noted however that the
+		order presented does not always reflect an underlying
+		order of the mechanism specific source of the attribute
+		values.</t>
+	    <section title="C-Bindings">
+		<t>The C-bindings of GSS_Get_name_attribute() requires
+		    one function call per-attribute value, for
+		    multi-valued name attributes.  This is done by using
+		    a single gss_buffer_t for each value and an
+		    input/output integer parameter to distinguish
+		    initial and subsequent calls and to indicate when
+		    all values have been obtained.</t>
+		<t>The 'more' input/output parameter should point to an
+		    integer variable whose value, on first call to
+		    gss_name_attribute_get() MUST be -1, and whose
+		    value upon function call return will be non-zero to
+		    indicate that additional values remain, or zero to
+		    indicate that no values remain.  The caller should
+		    not modify this parameter after the initial call.</t>
+		<figure>
+		    <artwork><![CDATA[
+OM_uint32 gss_get_name_attribute(
+  OM_uint32                     *minor_status,
+  gss_name_t                    name,
+  gss_OID                       attr,
+  int                           *authenticated,
+  int                           *negative,
+  int                           *mapped,
+  int                           *critical,
+  gss_buffer_t                  value,
+  gss_buffer_t                  display_value,
+  int                           *more
+);
+		    ]]></artwork>
+		</figure>
+	    </section>
+	</section>
+
+	<section title="GSS_Set_name_attribute()">
+	    <t>Inputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>name NAME,</t>
+		    <t>critical BOOLEAN,</t>
+		    <t>negative BOOLEAN,</t>
+		    <t>attr OBJECT IDENTIFIER,</t>
+		    <t>values SET OF OCTET STRING</t>
+		</list>
+	    </t>
+	    <t>Outputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>major_status INTEGER,</t>
+		    <t>minor_status INTEGER</t>
+		</list>
+	    </t>
+	    <t>Return major_status codes:
+		<list style='symbols'>
+		    <t>GSS_S_COMPLETE indicates no error.</t>
+		    <t>GSS_S_UNAVAILABLE indicates that the given
+			attribute OID is not known or could not be
+			set.</t>
+		    <t>GSS_S_FAILURE indicates a general error.</t>
+		</list>
+	    </t>
+	    <t>NOTE:  This function relies on the GSS-API notion of
+		"SET OF" allowing for order preservation; this has
+		been discussed on the KITTEN WG mailing list and the
+		consensus seems to be that, indeed, that was always
+		the intention. It should be noted that underlying 
+		mechanisms may not respect the given order.</t>
+	    <section title="C-Bindings">
+		<t>The C-bindings of GSS_Set_name_attribute() requires
+		    one function call per-attribute value, for
+		    multi-valued name attributes -- each call adds one
+		    value.  To replace an attribute's every value delete
+		    the attribute's values first with
+		    GSS_Delete_name_attribute().</t>
+		<figure>
+		    <artwork><![CDATA[
+OM_uint32 gss_set_name_attribute(
+  OM_uint32                     *minor_status,
+  gss_name_t                    name,
+  int                           critical,
+  int                           negative,
+  gss_OID                       attr,
+  gss_buffer_t                  value
+);
+		    ]]></artwork>
+		</figure>
+	    </section>
+	</section>
+
+	<section title="GSS_Delete_name_attribute()">
+	    <t>Inputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>name NAME,</t>
+		    <t>attr OBJECT IDENTIFIER,</t>
+		</list>
+	    </t>
+	    <t>Outputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>major_status INTEGER,</t>
+		    <t>minor_status INTEGER</t>
+		</list>
+	    </t>
+	    <t>Return major_status codes:
+		<list style='symbols'>
+		    <t>GSS_S_COMPLETE indicates no error.</t>
+		    <t>GSS_S_UNAVAILABLE indicates that the given
+			attribute OID is not known.</t>
+			<t>GSS_S_UNAUTHORIZED indicates that a forbidden delete
+			operation was attempted eg deleting a negative attribute.</t>
+		    <t>GSS_S_FAILURE indicates a general error.</t>
+		</list>
+	    </t>
+	    <t>Deletion of negative authenticated attributes from NAME
+		objects MUST NOT be allowed and must result in a GSS_S_UNAUTHORIZED.</t>
+	    <section title="C-Bindings">
+		<figure>
+		    <artwork><![CDATA[
+OM_uint32 gss_delete_name_attribute(
+  OM_uint32                     *minor_status,
+  gss_name_t                    name,
+  gss_OID                       attr
+);
+		    ]]></artwork>
+		</figure>
+	    </section>
+	</section>
+
+	<section title="GSS_Export_name_composite()">
+	    <t>Inputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>name NAME</t>
+		</list>
+	    </t>
+	    <t>Outputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>major_status INTEGER,</t>
+		    <t>minor_status INTEGER,</t>
+		    <t>exp_composite_name OCTET STRING</t>
+		</list>
+	    </t>
+	    <t>Return major_status codes:
+		<list style='symbols'>
+		    <t>GSS_S_COMPLETE indicates no error.</t>
+		    <t>GSS_S_FAILURE indicates a general error.</t>
+		</list>
+	    </t>
+	    <t>This function outputs a token which can be imported with
+		GSS_Import_name(), using GSS_C_NT_COMPOSITE_EXPORT as
+		the name type and which preserves any name attribute
+		information associated with the input name (which
+		GSS_Export_name() may well not).  The token format is no
+		specified here as this facility is intended for
+		inter-process communication only; however, all such
+		tokens MUST start with a two-octet token ID, hex 04 02,
+		in network byte order.</t>
+	    <t>The OID for GSS_C_NT_COMPOSITE_EXPORT is &lt;TBD&gt;.</t>
+	    <section title="C-Bindings">
+		<figure>
+		    <artwork><![CDATA[
+OM_uint32 gss_export_name_composite(
+  OM_uint32                     *minor_status,
+  gss_name_t                    name,
+  gss_buffer_t                  exp_composite_name
+);
+		    ]]></artwork>
+		</figure>
+	    </section>
+	</section>
+
+	<section title="GSS_Map_name_to_any()">
+	    <t>Inputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>name NAME,</t>
+		    <t>authenticated BOOLEAN, -- if TRUE only authenticated attributes will be included</t>
+		    <t>type_id OBJECT IDENTIFIER</t>
+		</list>
+	    </t>
+	    <t>Outputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>major_status INTEGER,</t>
+		    <t>minor_status INTEGER,</t>
+		    <t>output ANY DEFINED BY type_id</t>
+		</list>
+	    </t>
+	    <t>Return major_status codes:
+		<list style='symbols'>
+		    <t>GSS_S_COMPLETE indicates no error.</t>
+		    <t>GSS_S_UNAVAILABLE indicates that the mapping or
+			conversion could not be done.  The minor status
+			code may provide additional information.</t>
+		    <t>GSS_S_FAILURE indicates a general error.  The
+			minor status code may provide additional
+			information.</t>
+		</list>
+	    </t>
+	    <t>Whereas name attribute's values are encoded in some
+		network representation applications often require
+		native, language- and/or platform-specific data types.
+		This function provides access to such types.</t>
+	    <section title="C-Bindings">
+		<figure>
+		    <artwork><![CDATA[
+typedef struct gss_any *gss_any_t;
+OM_uint32 gss_map_name_to_any(
+  OM_uint32                     *minor_status,
+  gss_name_t                    name,
+  int                           authenticated,
+  gss_OID                       type_id,
+  gss_any_t                     output
+);
+		    ]]></artwork>
+		</figure>
+		<t>Note the new C bindings type, gss_any_t.  We define
+		    it as a pointer to an incompletely declared
+		    struct.</t>
+	    </section>
+	</section>
+
+	<section title="GSS_Release_any_name_mapping()">
+	    <t>Inputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>name NAME,</t>
+		    <t>type_id OBJECT IDENTIFIER,</t>
+		    <t>input ANY DEFINED BY type_id</t>
+		</list>
+	    </t>
+	    <t>Outputs:
+		<vspace blankLines='1' />
+		<list style='symbols'>
+		    <t>major_status INTEGER,</t>
+		    <t>minor_status INTEGER,</t>
+		</list>
+	    </t>
+	    <t>Return major_status codes:
+		<list style='symbols'>
+		    <t>GSS_S_COMPLETE indicates no error.</t>
+		    <t>GSS_S_UNAVAILABLE indicates that the mapping or
+			conversion could not be done.  The minor status
+			code may provide additional information.</t>
+		    <t>GSS_S_FAILURE indicates a general error.  The
+			minor status code may provide additional
+			information.</t>
+		</list>
+	    </t>
+	    <t>This function releases, if possible, the objects of
+		language- and/or platform-specific types output by
+		GSS_Map_name_to_any().  If such types have native
+		release functions applications MAY use either those or
+		this function to release the given object.</t>
+	    <section title="C-Bindings">
+		<figure>
+		    <artwork><![CDATA[
+typedef struct gss_any *gss_any_t;
+OM_uint32 gss_release_any_name_mapping(
+  OM_uint32                     *minor_status,
+  gss_name_t                    name,
+  gss_OID                       type_id,
+  gss_any_t                     *input
+);
+		    ]]></artwork>
+		</figure>
+	    </section>
+	</section>
+
+        <section title="IANA Considerations">
+	    <t>This document creates a namespace of GSS-API name
+		attributes.  Attributes are named by OID, so no single
+		authority might be needed for allocation, however, in
+		the interest of providing the community with an
+		authority for name attribute OID allocation and a way to
+		find the existing set of name attributes, the IANA
+		should establish both, a single OID off of which name
+		attributes could be allocated, and a registry of known
+		GSS name attributes.</t>
+	    <t>GSS-API name attribute registry entries should contain
+		all the information that GSS_Inquire_name_attribute()
+		may return about the given name attributes and their
+		OIDs:
+		<list style='symbols'>
+		    <t>a name attribute OID (this is a unique key)</t>
+		    <t>a name attribute symbolic name, starting with
+			"GSS_C_NA_" (this is a unique key)</t>
+		    <t>a brief description, in English</t>
+		    <t>whether the attribute is useful as the subject of
+			access control list entries</t>
+		    <t>whether the attribute is useful as an indicator
+			of trust</t>
+		    <t>an optional normative reference to documentation
+			for the given name attribute</t>
+		</list>
+	    </t>
+	    <t>The allocation and registration policy should be first
+		come, first served.  Registry entries' OIDs need not be
+		based on the base OID given above.</t>
+	</section>
+
+   	<section title="Security Considerations">
+        <t>This document extends the GSS-API naming model to include support
+        for name attributes. The intention is that name attributes are to be 
+        used as a basis for (among other things) authorization decisions or 
+        application personalization for applications relying on GSS-API security 
+        contexts.</t>
+		<t>The security of the application may be critically dependent
+		on the security of the attributes. This document classifies attributes
+		as asserted or authenticated. Only authenticated attributes MUST be
+		used if the attribute has security implications for the application 
+		(eg authorization decisions) since asserted attributes may easily be 
+		controlled by the peer directly.</t>
+		<t>It is important to understand the meaning of 'authenticated' in this
+		setting. It does not mean that any semantic of the attribute is claimed
+		to be true. The only implication is that a trusted third party has 
+		asserted the attribute as opposed to the attribute being asserte by 
+		the peer itself. Any additional semantics is always the result of 
+		applying policy. For instance in a given deployment the mail attribute
+		of the subject may be authenticated and sourced from an email system 
+		where 'correct' values are kept. In another setting users may be allowed
+		to modify their mail addresses freely. In both cases the 'mail' attribute 
+		may be authenticated by virtue of being included in signed SAML attribute 
+		assertions or by other means authenticated by the underlying mechanism.</t>
+		<t>When the underlying security mechanism does not provide a permanent 
+		unique identity (eg anonymous kerberos) the GSS-API naming extensions may
+		be used to provide a replacement permanent unique identity attribute which
+		in this case may be unique for each relying party. This is analogous to
+		the Liberty Alliance targetedID attribute and has similar security 
+		implications.</t>
+        </section>
+    </middle>
+
+    <back>
+	<references title="Normative References">
+			<?rfc include='reference.RFC.0854.xml'?>
+			<?rfc include='reference.RFC.1035.xml'?>
+			<?rfc include='reference.RFC.2025.xml'?>
+			<?rfc include='reference.RFC.2119.xml'?>
+			<?rfc include='reference.RFC.2203.xml'?>
+			<?rfc include='reference.RFC.2478.xml'?>
+			<?rfc include='reference.RFC.2623.xml'?>
+			<?rfc include='reference.RFC.2743.xml'?>
+			<?rfc include='reference.RFC.2744.xml'?>
+			<?rfc include='reference.RFC.3008.xml'?>
+			<?rfc include='reference.RFC.3280.xml'?>
+			<?rfc include='reference.RFC.3530.xml'?>
+			<?rfc include='reference.I-D.ietf-krb-wg-kerberos-clarifications.xml'?>
+	    <reference anchor='I-D.GSS-NAMING'>
+		<front>
+		    <title>Desired Enhancements to GSSAPI Naming</title>
+
+		    <author initials='S' surname='Hartman' fullname='Sam Hartman'>
+			<organization />
+		    </author>
+
+		    <date month='February' day='20' year='2005' />
+
+		</front>
+
+		<seriesInfo name='Internet-Draft'
+		    value='draft-ietf-kitten-gss-naming-01.txt' />
+		<format type='TXT'
+		    target='http://www.ietf.org/internet-drafts/draft-ietf-kitten-gss-naming-01.txt' />
+	    </reference>
+	</references>
+    </back>
+
+</rfc>

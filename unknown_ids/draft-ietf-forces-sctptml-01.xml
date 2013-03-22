@@ -1,0 +1,950 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd"  [
+<!ENTITY % rfc2629 PUBLIC '' 
+'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2629.xml'>
+<!ENTITY % rfc3654 PUBLIC ''
+"http://xml.resource.org/public/rfc/bibxml/reference.RFC.3654.xml">
+<!ENTITY % rfc3746 PUBLIC ''
+'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3746.xml'>
+<!ENTITY % rfc3768 PUBLIC ''
+'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3768.xml'>
+<!ENTITY % rfc2434 PUBLIC '' 
+'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2434.xml'>
+<!ENTITY % rfc2960 PUBLIC '' 
+'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2960.xml'>
+<!ENTITY % rfc2246 PUBLIC '' 
+'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2246.xml'>
+<!ENTITY % rfc2401 PUBLIC '' 
+'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2401.xml'>
+
+]>
+
+<?rfc toc="yes"?>
+<?rfc tocompact="yes"?>
+<?rfc tocdepth="3"?>
+<?rfc tocindent="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc comments="yes"?>
+<?rfc inline="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<?rfc strict="no"?>
+
+<rfc ipr="full3978" docName="draft-ietf-forces-sctptml-01">
+
+  <front>
+	  <title abbrev="ForCES SCTP TML">
+		  SCTP based TML (Transport Mapping Layer) for ForCES protocol
+	  </title>
+
+    <author fullname="Jamal Hadi Salim" initials="J." surname="Hadi Salim">
+      <organization>ZNYX Networks</organization>
+	<address>
+	 <postal>
+		<city>Ottawa, Ontario</city>
+		<country>Canada</country>
+	</postal>
+	<email>hadi@znyx.com</email>
+	</address>
+
+   </author>
+ 
+   <author fullname="Kentaro Ogawa" initials="K." surname="Ogawa">
+      <organization>NTT Corporation</organization>
+	<address>
+	 <postal>
+                <street>3-9-11 Midori-cho</street>
+		<city>Musashino-shi, Tokyo</city>
+                <code>180-8585</code>
+		<country>Japan</country>
+	</postal>
+	<email>ogawa.kentaro@lab.ntt.co.jp</email>
+	</address>
+
+   </author>
+
+    <date day="14" month="July" year="2008" />
+    <area>Routing</area>
+<keyword>RFC</keyword>
+<keyword>Request for Comments</keyword>
+<keyword>I-D</keyword>
+<keyword>Internet-Draft</keyword>
+<keyword>ForCES</keyword>
+<keyword>TML</keyword>
+<keyword></keyword>
+
+
+<abstract>
+    <t>
+This document defines the SCTP based TML (Transport Mapping Layer) for 
+the ForCES protocol. It explains the rationale for choosing the 
+SCTP (Stream Control Transmission Protocol) <xref target="RFC2960"/> 
+and also describes how this TML addresses all 
+the requirements described in <xref target="RFC3654"/> 
+and the ForCES protocol <xref target="FE-PROTO"/> draft.   
+    </t>
+</abstract>
+
+  </front>
+
+  <middle>
+    <section title="Definitions">
+<t>
+		          
+The following definitions are taken from <xref target="RFC3654"/>and
+<xref target="RFC3746"/>:
+			     
+<t>
+ForCES Protocol -- 
+The protocol used at the Fp reference point in the ForCES 
+Framework in <xref target="RFC3746"/>.  
+</t>
+
+<t>
+ForCES Protocol Layer (ForCES PL) -- A layer in ForCES protocol 
+architecture that defines the ForCES protocol architecture
+and the state transfer mechanisms as defined in <xref target="FE-PROTO"/>.
+</t>
+							         
+<t>
+ForCES Protocol Transport Mapping Layer (ForCES TML) -- A layer in 
+ForCES protocol architecture that specifically addresses the 
+protocol message transportation issues, such as how the protocol 
+messages are mapped to different transport media (like TCP, IP, ATM, 
+Ethernet, etc), and how to achieve and implement reliability, 
+multicast, ordering, etc.  
+</t>
+
+</t>
+</section>
+
+<section title="Introduction">
+    <t>
+
+The ForCES (Forwarding and Control Element Separation) working group 
+in the IETF is defining the architecture and protocol for separation 
+of Control Elements(CE) and Forwarding Elements(FE) in Network Elements(NE)
+such as routers.  <xref target="RFC3654"/> and <xref target="RFC3746"/>	
+respectively define  architectural and protocol 
+requirements for the communication between CE and FE. The ForCES 
+protocol layer specification <xref target="FE-PROTO"/> describes the 
+protocol semantics and workings. The ForCES protocol layer operates
+on top of an inter-connect hiding layer known as the TML. The relationship
+is illustrated in <xref target="pltml_fig"/>.
+<t>
+This document defines the SCTP based TML for the ForCES 
+protocol layer. It also addresses all the requirements for the TML 
+including security, reliability, etc as defined in <xref target="FE-PROTO"/>. 
+</t>
+
+<t>
+XXXX: TBD - a reference to the correct document for a more complete list of
+terminology.
+</t>
+
+</t>
+</section>
+
+<section title="Protocol Framework Overview">
+<t>
+The reader is referred to the Framework document <xref target="RFC3746"/>, 
+and in particular sections 3 and 4, for an architectural overview and 
+explanation of where and how the ForCES protocol fits in.  
+</t>
+<t>
+There is some content overlap between the ForCES protocol draft 
+<xref target="FE-PROTO"/> and this section in order to provide clarity
+to the reader of this document. 
+</t>
+<t>
+The ForCES layout constitutes two pieces: the PL and TML layer. 
+ This is depicted in <xref target="pltml_fig"/>. 
+<figure anchor = "pltml_fig" title="Message exchange between CE and FE
+	    to establish an NE association">
+<preamble> </preamble>
+<artwork><![CDATA[
+
+    
+            +----------------------------------------------+
+            |                    CE PL                     | 
+            +----------------------------------------------+
+            |                    CE TML                    | 
+            +----------------------------------------------+
+                                   ^ 
+                                   | 
+                      ForCES       |   (i.e. Forces data + control 
+                      PL           |    packets ) 
+                      messages     | 
+                      over         | 
+                      specific     | 
+                      TML          | 
+                      encapsulation| 
+                      and          | 
+                      transport    | 
+                                   | 
+                                   v 
+            +-----------------------------------------------+ 
+            |                   FE TML                      | 
+            +-----------------------------------------------+ 
+            |                   FE PL                       | 
+            +-----------------------------------------------+ 
+
+   
+]]></artwork>
+
+</figure>
+
+   The PL layer is in charge of the ForCES protocol.  Its semantics and 
+   message layout are defined in <xref target="FE-PROTO"/>.  
+   The TML Layer is necessary to 
+   connect two ForCES PL layers as shown in <xref target="pltml_fig"/>. 
+    
+   <t>
+   Both the PL and TML are standardized by the IETF.  While only 
+   one PL is defined, different TMLs are expected to be 
+   standardized.  The TML at each of the peers (CE and FE) is 
+   expected to be of the same definition in order to inter-operate. 
+</t>
+    
+   <t>
+   When transmitting, the PL delivers its messages to the TML. 
+   The TML then delivers the PL message to the destination peer
+   TML(s) as defined by the addressing in the PL message. 
+   <t>
+   On reception of a message, the TML delivers the message to its 
+   destination PL layer(s) (as described in the ForCES header). 
+</t>
+</t>
+</t>
+    
+<section title="The PL">
+	    <t>
+   The PL is common to all implementations of ForCES and is 
+   standardized by the IETF <xref target="FE-PROTO"/>.  
+   The PL layer is responsible for 
+   associating an FE or CE to an NE. It is also responsible for 
+   tearing down such associations. An FE uses the PL layer to throw 
+   various subscribed-to events to the CE PL layer as well as respond 
+   to various status requests issued from the CE PL. The CE configures 
+   both the FE and associated LFBs attributes using the PL layer.  In 
+   addition the CE may send various requests to the FE to activate or 
+   deactivate it, reconfigure its HA parameterization, subscribe to 
+   specific events etc.   
+    </t>
+</section>
+<section title="The TML layer">
+	    <t>
+   The TML layer is responsible for transport of the PL 
+   layer messages. The TML provides the following services on behalf of
+   the ForCES protocol:
+   <list style = "numbers">
+	   <t>Reliability<vspace />
+		   As defined by RFC 3654, section 6 #6.
+	   </t>
+	   <t>Security<vspace />
+		   TML provides security services to the ForCES PL.
+		   The TML definition needs to define how the following
+		   are achieved:
+	   </t>
+	   <list style = "symbols">
+
+		   <t>Endpoint authentication of FE and CE</t>
+		   <t>Message authentication </t>
+		   <t>Confidentiality service<vspace />
+		   </t>
+
+	   </list>
+
+	   <t>Congestion Control <vspace />
+		   The congestion control mechanism defined by the TML should 
+		   prevent the FE from being overloaded by the CE.
+		   Additionally, the circumstances under which notification 
+		   is sent to the
+		   PL to notify it of congestion must be defined.
+	   </t>
+	   <t>Uni/multi/broadcast addressing/delivery, if any
+		   <vspace />
+		   If there is any mapping between PL and TML level 
+		   uni/multi/broadcast addressing
+		   it needs to be defined.
+	   </t>
+	   <t>Transport High Availability <vspace />
+		   It is expected that availability of transport links 
+		   is the TML's responsibility.  However, on config basis, 
+		   the PL layer may wish to
+		   participate in link failover schemes and therefore the
+		   TML must allow for this.
+		   <vspace />
+	   </t>
+	   <t>Encapsulations used<vspace />
+		   Different types of TMLs will encapsulate the PL messages 
+		   on different types of headers. The TML needs to specify 
+		   the encapsulation used.
+		   <vspace />
+	   </t>
+	   <t>Prioritization<vspace />
+
+		   The TML SHOULD will be able to handle up to 8
+		   priority levels needed by the PL and will provide 
+		   preferential treatment. <vspace />
+		   The TML needs to define how this is achieved.
+	   </t>
+	   <t>Protection against DoS attacks <vspace />
+		   As described in the Requirements RFC 3654, section 6
+	   </t>
+   </list>
+
+   It is expected more than one TML will 
+   be standardized.  The different TMLs each could implement things 
+   differently based on capabilities of underlying media and transport. 
+   However, since each TML is standardized, interoperability is 
+   guaranteed only as long as both endpoints support the same TML.  
+	    </t>
+   <section title ="TML Parameterization" anchor ="TMLp">
+	   <t>
+		   It is expected that it should be possible to use a 
+		   configuration reference
+		   point, such as the FEM or the CEM, to configure the TML.
+	   </t>
+	   <t>
+		   Some of the configured parameters may include:
+	   </t>
+	   <list style = "symbols">
+		   <t>PL ID</t>
+		   <t>Connection Type and associated data. For example if a 
+			   TML uses IP/TCP/UDP then parameters such as TCP 
+			   and UDP ports and IP addresses
+			   need to be configured.</t>
+		   <t>Number of transport connections </t>
+		   <t>Connection Capability, such as bandwidth, etc.</t>
+		   <t>Allowed/Supported Connection QoS policy (or 
+			   Congestion Control Policy)</t>
+	   </list>
+   </section>
+</section>
+
+<section title="The TML-PL interface" anchor="TMLAPIs">
+<t>
+<xref target="TML-API"/> defines an interface between the PL and the
+TML layers. The end goal of <xref target="TML-API"/> is to provide
+a consistent top edge semantics for all TMLs to adhere to.
+Conforming to such an interface makes it easy to plug in
+different TMLs over time. It also allows for simplified TML 
+parameterization requirement stated in <xref target="TMLp"/>.
+</t>
+<figure anchor = "pltml_api" title="The TML-PL interface">
+<preamble> </preamble>
+<artwork><![CDATA[
+
+               +----------------------+ 
+               |                      |
+               |       PL Layer       |
+               |                      |
+               +----------------------+ 
+                          ^
+                          |
+                          |   TML API
+                          |
+                          |
+                          V
+               +----------------------+ 
+               |                      |
+               |       TML Layer      |
+               |                      |
+               +----------------------+ 
+
+]]></artwork>
+
+</figure>
+<t>
+We are going to assume the existence of such an interface and not discuss 
+it further. The reader is encouraged to read <xref target="TML-API"/> as 
+a background.
+</t>
+<t>
+Editorial Note: There is some concern (and confusion) about defining
+APIs in ForCES. So at the moment the future of <xref target="TML-API"/>
+is unknown (unless these concerns are cleared).
+</t>
+
+</section>
+</section>
+
+
+<section title="SCTP TML overview">
+    <t>
+    </t>
+    <!--
+      <section title="Introduction to SCTP">
+      </section>
+      -->
+        <t>
+		SCTP <xref target="RFC2960"/> is an end-to-end transport 
+		protocol that is equivalent to TCP, UDP, or DCCP in many 
+		aspects. 
+		With a few exceptions, SCTP can do most of what UDP, TCP,
+		or DCCP can achieve. SCTP as well can do most of what
+		a combination of the other transport protocols can achieve
+		(eg TCP and DCCP or TCP and UDP).
+        </t>
+	<t>
+		Like TCP, it provides ordered, reliable, connection-oriented,
+		flow-controlled, congestion controlled data exchange. 
+		Unlike TCP, it does not provide byte streaming and instead
+		provides message boundaries.
+        </t>
+	<t>
+		Like UDP, it can provide unreliable, unordered
+		data exchange. 
+		Unlike UDP, it does not provide multicast support
+        </t>
+	<t>
+		Like DCCP, it can provide unreliable, ordered, congestion
+		controlled, connection-oriented data exchange. 
+        </t>
+	<t>
+		SCTP also provides other services that none of the
+		3 transport protocols mentioned above provide. These
+		include:
+
+	   <list style = "symbols">
+		   <t>Multi-homing <vspace />
+			   An SCTP connection can make use of multiple
+			   destination IP addresses to communicate with 
+			   its peer. 
+		   </t>
+		   <t>Runtime IP address binding <vspace />
+			   With the SCTP ADDIP feature, a new address
+			   can be bound at runtime. This allows for
+			   migration of endpoints without restarting
+			   the association (valuable for high availability).
+		   </t>
+		   <t>A range of reliability shades with congestion 
+			   control <vspace />
+			   SCTP offers a range of services from full
+			   reliability to none, and from full ordering to none.
+			   With SCTP, on a per message basis, the application
+			   can specify a message's time-to-live. When
+			   the expressed time expires, the message can 
+			   be "skipped".
+		   </t>
+		   <t>Built-in heartbeats <vspace />
+			   SCTP has built-in heartbeat mechanism that validate
+			   the reachability of peer addresses.
+			   <!--
+			   Are these HBs traffic sensitive? I think yes,
+			   but need to double check.
+			   -->
+		   </t>
+		   <t>Multi-streaming <vspace />
+			   A known problem with TCP is head of line (HOL)
+			   blocking. If you have independent messages, TCP
+			   enforces ordering of such messages. Loss at the
+			   head of the messages implies delays of delivery
+			   of subsequent packets. SCTP allows for defining
+			   upto 64K independent streams over the same socket
+			   connection, which are ordered independently. 
+		   </t>
+		   <t>Message boundaries with reliability <vspace />
+			   SCTP allows for easier message parsing (just 
+			   like UDP but with reliability built in) 
+			   because it establishes boundaries on a PL
+			   message basis. On a TCP stream, one would 
+			   have to use techniques such peeking 
+			   into the message to figure the boundaries.
+		   </t>
+		   <t>Improved SYN DOS protection <vspace />
+			   Unlike TCP, which does a 3 way connection
+			   setup handshake, SCTP does a 4 way handshake.
+			   This improves against SYN-flood attacks because
+			   listening sockets do not set up state until
+			   a connection is validated.
+
+		   </t>
+		   <t>Simpler transport events <vspace />
+			   An application (such as the TML) can subscribe
+			   to be notified of both local and remote transport
+			   events. Events that can be subscribed-to include
+			   indication of association changes, addressing 
+			   changes, remote errors, expiry of timed messages, 
+			   etc. These events are off by default
+			   and require explicit subscription.
+
+		   </t>
+		   <t>Simplified replicasting <vspace />
+			   Although SCTP does not allow for multicasting
+			   it allows for a single message from an application
+			   to be sent to multiple peers. This reduces
+			   the messaging that typically crosess different
+			   memory domains within a host.
+		   </t>
+	   </list>
+	</t>
+    <section title="Rationale for using SCTP for TML">
+     <t>
+	     SCTP has all the features required to provide a robust
+	     TML. As a transport that is all-encompassing, it negates 
+	     the need for having multiple transport protocols, as has 
+	     been suggested so far in the other proposals for TMLs. 
+	     As a result it allows for simpler coding
+	     and therefore reduces a lot of the interoperability concerns.
+     </t>
+     <t>
+	     SCTP is also very mature and widely deployed
+	     completing the equation that makes it a 
+	     superior choice in comparison with other proposed TMLs.
+     </t>
+     <t>
+     </t>
+    </section>
+
+<section title="Meeting TML requirements">
+
+<figure anchor = "sctptml_api" title="The TML-SCTP interface">
+<preamble> </preamble>
+<artwork><![CDATA[
+
+               PL
+               +---------------------+ 
+               |                     |
+               +-----------+---------+ 
+                           |   TML API
+                TML        |
+               +-----------+----------+ 
+               |           |          |
+               |    +------+------+   |
+               |    |  TML core   |   |
+               |    +-+----+----+-+   |
+               |      |    |    |     | 
+               |    SCTP socket API   |
+               |      |    |    |     | 
+               |      |    |    |     | 
+               |    +-+----+----+-+   |
+               |    |    SCTP     |   |
+               |    +------+------+   |
+               |           |          |
+               |           |          |
+               |    +------+------+   |
+               |    |      IP     |   |
+               |    +-------------+   |
+               +----------------------+ 
+
+]]></artwork>
+
+</figure>
+
+<t>
+<xref target="sctptml_api"/> details the interfacing between the TML
+and SCTP and the internals of the SCTP TML. The core of the TML interfaces
+on its north bound interface to the PL (utilizing the TML API).
+On the southbound interface, the TML core interfaces to the SCTP layer
+utilizing the standard socket interface [Editorial:
+add here a reference to SCTP Sockets API doc].
+There are three SCTP socket connections opened between any two PL layers
+(whether FE or CE).
+</t>
+<section title="SCTP TML Channels">
+<figure anchor = "sctptml_chan" title="The TML-SCTP channels">
+<preamble> </preamble>
+<artwork><![CDATA[
+
+               +--------------------+ 
+               |                    |
+               |     TML   core     |
+               |                    |
+               +-+-------+--------+-+ 
+                 |       |        |
+                 |   Med prio,    |
+                 |  Semi-reliable |
+                 |    channel     |
+                 |       |      Low prio,
+                 |       |      Unreliable channel
+                 |       |        |
+                 ^       ^        ^
+                 |       |        |
+                 Y       Y        Y
+       High prio,|       |        |
+        reliable |       |        |
+         channel |       |        |
+                 Y       Y        Y
+              +-+--------+--------+-+ 
+              |                     |
+              |        SCTP         |
+              |                     |
+              +---------------------+ 
+
+]]></artwork>
+</figure>
+<t>
+<xref target="sctptml_chan"/> details further the interfacing 
+between the TML core and SCTP layers. There are 3 channels used
+to separate and prioritize the different types of ForCES traffic.
+Each channel constitutes a socket interface. 
+It should be noted that all SCTP channels are congestion aware (and
+for that reason that detail is left out of the description of the 3
+channels).
+SCTP port 6700, 6701, 6702 are used for the higher, medium and 
+lower priority channels respectively.
+</t>
+
+<section title="Justifying Choice of 3 Sockets">
+<t>
+SCTP allows upto 64K streams to be sent over a single socket 
+interface. The authors initially envisioned using a single socket 
+for all three channels (mapping a channel to an SCTP stream). This 
+simplifies programming of the TML as well as conserves use of SCTP ports. 
+</t>
+<t>
+Further analysis revealed head of line blocking issues with this 
+initial approach.  Lower priority packets not needing reliable delivery
+could block higher priority packets (needing reliable delivery) under
+congestion situation. This proposal alleviates that problem by making 
+the medium and low priority channels obsolete over a period of time, but 
+that is still insufficient to resolve the outstanding HOL issue.
+</t>
+<t> XXX: Talk here about Michael Tuxen's approach which will allow
+for SCTP to prioritize streams within a single socket.
+Unfortunately, until that approach completes standardization
+effort we cannot recomend its use for ForCES TML.
+</t>
+</section>
+
+<section title="Higher Priority, Reliable channel">
+<t>
+The higher priority channel uses a standard SCTP reliable socket on 
+port 6700.  It is used for CE solicited messages and their responses:
+<list style = "numbers">
+<t>
+ForCES configuration messages flowing from CE to FE and responses
+from the FE to CE.
+</t>
+<t>
+ForCES query messages flowing from CE to FE and responses from
+the FE to the CE.
+</t>
+</list>
+<t>
+Some events which require guaranteed delivery could also optionally 
+use this interface. An example of an event that would be prioritized
+and delivered on this channel would be a PL heartbeat
+(in a scenario when the first few HBs fail to make it to the destination).
+</t>
+</t>
+</section>
+
+<section title="Medium Priority, Mixed Reliable channel">
+<t>
+The medium priority channel uses SCTP-PR on port 6701.
+Time limits on how long a message is valid are set on each
+outgoing message. This channel is used for events from the FE
+   to the CE that are obsoleted over time. 
+
+Events that are accumulative in nature and are recoverable by the CE
+(by issuing a query to the FE) can tolerate lost events and therefore 
+should this channel.
+Example a counter that is monotonically incrementing fits to use this
+channel.
+</t>
+</section>
+
+<section title="Lower Priority, Unreliable channel">
+<t>
+<!-- check with sctp specs: Could we achieve this by
+setting timeout to be much lower that medium channel?
+In that case, could we not then combine into one socket
+with the medium prio?
+Also could we not just use a single socket as original plan was
+because a) reliable socket means it will cause a HOL blocking
+of medium and low prio and b) we can distinguish the medium
+and low reliable versions by using different timeouts.
+Example, if a reliable packet is ahead of medium prio and
+it is being retransmitted, it will block until reliable packet
+makes it out. If medium prio packet is blocking the low prio
+packet, the medium prio will sit there until it times out and only
+then can low prio packets make it.
+
+UPDATE: July 07/2008. We have decided to go with a triplicate
+socket approach.
+-->
+The lower priority channel on SCTP port 6702 is used for 
+redirect messages between the CE and FE. This channel also uses 
+SCTP-PR with lower timeout values than the medium priority channel.
+The reason an unreliable channel is used for redirect
+messages is to allow the control protocol at both the CE and its
+peer-endpoint to take charge of how the end to end semantics of the
+said control protocol's operations.  For example:
+<list style = "numbers">
+<t>
+Some control protocols are reliable in nature, therefore making
+this channel reliable introduces an extra layer of reliability
+which could be harmful.  So any end to end retransmits will
+happen from remote.
+   </t>
+   <t>
+Some control protocols may desire to have obsolescence of messages
+over retransmissions; making this channel reliable contradicts
+that desire.
+   </t>
+</list>
+
+</t>
+</section>
+<section title="Scheduling of The 3 Channels"  anchor = "sched">
+<t>
+Strict priority work-conserving scheduling is used to process 
+both on sending and receving by the TML Core. This means that the 
+higher priority messages are always processed first until there are no more
+left. The lower priority channel is processed only if a channel that
+is higher priority than itself has no more messages left to process.
+This means that under congestion situation, a higher priority channel
+with sufficient messages that occupy the available bandwidth would
+starve lower priority channel(s). The authors feel this is justified
+given the choice of the messaging prioritization as described above.
+</t>
+</section>
+<section title="TML Parameterization">
+<t>
+TBA: This section will have a list of all parameters
+needed for booting the TML.
+</t>
+</section>
+
+<section title="TML Bootstrapping">
+<t>
+TBA: This section will show how the FE and CE side of bootstrapping.
+</t>
+</section>
+</section>
+
+<section title="Satisfying Reliability Requirement">
+    <t>
+    As mentioned earlier, a shade of reliability
+    ranges is possible in SCTP. Therefore this requirement
+    is met.
+    </t>
+</section>
+<section title="Satisfying Congestion Control Requirement">
+    <t>
+    Congestion control is built into SCTP. Therefore,
+    this requirement is met.
+    </t>
+</section>
+<section title="Satisfying Timeliness and prioritizationi Requirement">
+    <t>
+    By using 3 sockects in conjunction with the
+    partial-reliability feature, both timeliness and
+    prioritization can be achieved.
+    </t>
+</section>
+<section title="Satisfying Addressing Requirement">
+    <t>
+    SCTP can be told to replicast packets to multiple
+    destinations. The TML will translate PL level
+    addresses, to a variety of unicast IP addresses
+    in order to emulate multicast and broadcast. Note,
+    that there are no extra headers required for SCTP.
+    </t>
+</section>
+<section title="Satisfying HA Requirement">
+<t>
+    Transport link resiliency is SCTP's strongest point
+    (where it totally outclasses all other TML proposals).
+    Failure detection and recovery is built in as mentioned
+    earlier.
+   <list style = "symbols">
+     <t>
+	  The SCTP multi-homing feature is used to provide path 
+	  diversity. 
+	  Should one of the peer IP addresses become unreachable, 
+	  the other(s) are used without needing lower layer
+	  convergence (routing, for example) or even
+	  the TML becoming aware.
+    </t>
+    <t>
+	   SCTP heartbeats and data transmission thresholds are used
+	   on a per peer IP address to detect reachability faults.
+	   The faults could be a result of an unreachable address or 
+	   peer, which may be caused by a variety of reasons, 
+	   like interface, network, or endpoint failures. The cause
+	   of the fault is noted.
+    </t>
+    <t>
+	   With the ADDIP feature, one can migrate IP addresses
+	   to other nodes at runtime. This is not unlike the
+	   VRRP<xref target="RFC3768"/>  protocol use. This feature
+	   is used in addition to multi-homing in a planned migration
+	   of activity from one FE/CE to another. In such a case, part
+	   of the provisioning recipe at the CE for replacing an FE
+	   involves migrating activity of one FE to another.
+    </t>
+   </list>
+</t>
+</section>
+    <section title="Satisfying DOS Prevention Requirement">
+	    <t>
+		    Three separate streams (one per socket) are used 
+		    within any FE-CE setup. 
+		    The scheduling design for processing channels 
+		    (<xref target="sched"/>)is strict priority. This
+		    guarantees that lower priority messages are starved if 
+		    lack of resources happen. i.e under congestion
+		    (which is likely to occur under DOS attack), redirected
+		    packets (from outside the NE) get very low
+		    priority and obsoleted in short periods if the CE-FE
+		    path is congested without consuming resources on the
+		    CE-FE path.
+	    </t>
+	    </section>
+	    <section title="Satisfying Encapsulation Requirement">
+	    <t>
+		    There is no extra encapsulation added by this TML.
+		    SCTP provides for extensions to be added to it by 
+		    defining new chunks. In the future, should the need
+		    arise, a new SCTP extension can be defined to meet
+		    newer ForCES requirements.
+	    </t>
+	    </section>
+    </section>
+</section>
+
+
+
+<section anchor="IANA" title="IANA Considerations">
+	<t>
+		This document makes request of IANA to reserve SCTP ports
+		6700, 6701, and 6702.
+	</t>
+</section>
+
+<section anchor="Security" title="Security Considerations">
+
+<t>
+   When operating under a secured environment then the network 
+   administrator can turn off all the security functions. This feature 
+   is configured during the pre-association phase of the protocol. This 
+   mode is called "no security" mode of operation. 
+   </t>
+   <t>
+   When the CEs, FEs are running over IP networks or in an insecure 
+   environment, the operator has the choice of configuring either TLS 
+   <xref target="RFC2246"/> or IPSec  <xref target="RFC2401"/> to provide 
+   needed security. For IPSec, The security association 
+   between the CEs and FEs MUST be established before any ForCES 
+   protocol messages are exchanged between the CEs and FEs.  
+   </t>
+    
+   <section title="TLS Usage for Securing TML">
+    
+   <t>
+   This section is applicable for CE or FE endpoints that use the TML 
+   with TLS <xref target="RFC2246"/> to secure communication. 
+   </t>
+    
+   <t>
+   Since CE is master and FEs are slaves, the FEs are TLS clients and 
+   CEs are TLS server. The endpoints that implement TLS MUST perform 
+   mutual authentication during TLS session establishment process. CE 
+   must request certificate from FE and FE needs to pass the requested 
+   information.  
+   </t>
+    
+   <t>
+   We recommend TLS-RSA-with-AES-128-CBC-SHA cipher suite. Although
+   consistency
+   is expected it is possible for the CE or FE to negotiate other TLS 
+   cipher suites.
+   </t>
+   </section>
+    
+   <!--
+   The security information is very old, find new RFCs and update
+   (eg IPSEC uses RFC 4xxx these days).
+   We also need to explain what mode of IPSEC is going to run;
+   transport, ESP?
+   -->
+   <section title="IPSec Usage for securing TML"> 
+   <t>
+   This section is applicable for CE or FE endpoints that use the TML 
+   with IPSec <xref target="RFC2401"/>  to secure their respective 
+   communication. IPSec is 
+   transparent to the higher-layer applications and can provide 
+   security for any transport layer protocol. This mechanism is can be 
+   used to secure just the control or both the control and the data 
+   channel simultaneously.   
+   </t>
+    </section>
+   <t>
+	   Editorial Note: We need to flesh the security section
+	   with more details.
+   </t>
+</section>
+
+<section anchor="Manageability" title="Manageability Considerations">
+    <t>TBA</t>
+<!-- 
+Talk about TML configuration here ..
+-->
+</section>
+
+    <section anchor="Acknowledgements" title="Acknowledgements">
+	    <t>
+    The authors would like to thank Joel Halpern, Michael Tuxen
+    and Randy Stewart for engaging us in discussions that have made
+    this draft better.
+    </t>
+    </section>
+  </middle>
+
+<!-- 
+XXX: The model, proto, tmlapi drafts have changed ownership and
+release dates - please update
+-->
+  <back>
+    <references title="Normative References">
+    &rfc3654;
+    &rfc3746;
+<!-- 
+XXX: The model draft and RFC2434 are defined but not referenced
+-->
+    &rfc2434;
+    &rfc2401;
+    &rfc2246;
+    &rfc2960;
+    </references>
+    <references title="Informative References">
+     <reference anchor="FE-MODEL">
+      <front>
+       <title>ForCES Forwarding Element Model</title>
+       <author initials="J." surname="Halpern" fullname="J. Halpern"></author>
+       <author initials="E." surname="Deleganes" fullname="E. Deleganes"></author>
+       <author initials="J." surname="Hadi Salim" fullname="Jamal Hadi Salim"> </author>
+       <date month="February" year="2008" />
+      </front>
+     </reference>
+     <reference anchor="FE-PROTO">
+      <front>
+       <title>ForCES Protocol Specification</title>
+       <author initials="A." surname="Doria (Ed.)" fullname="Avri Doria"></author>
+       <author initials="R." surname="Haas (Ed.)" fullname="Robert Haas"></author>
+       <author initials="J." surname="Hadi Salim (Ed.)" fullname="Jamal Hadi Salim"> </author>
+        <author initials="H." surname="Khosravi (Ed.)" fullname="Hormuzd M Khosravi"> </author>
+        <author initials="W. " surname="M. Wang (Ed.)" fullname="Weiming Wang"> </author>
+	<author initials="L. " surname="Dong" fullname="Ligang Dong"> </author>
+        <author initials="R. " surname="Gopal" fullname="Ram Gopal"> </author>
+       <date month="March" year="2008" />
+      </front>
+     </reference>
+     <reference anchor="TML-API">
+      <front>
+       <title>ForCES Transport Mapping Layer (TML) Service Primitives</title>
+        <author initials="W. " surname="M. Wang" fullname="Weiming Wang"> </author>
+       <author initials="J." surname="Hadi Salim" fullname="Jamal Hadi Salim"> </author>
+       <author initials="A." surname="Audu" fullname="Alex Audu"> </author>
+       <date month="Feb." year="2007" />
+      </front>
+      &rfc3768;
+     </reference>
+    </references>
+  </back>
+</rfc>

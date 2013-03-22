@@ -1,0 +1,663 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc1034 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.1034.xml'>
+]>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc1035 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.1035.xml'>
+]>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2401 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2401.xml'>
+]>
+
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2821 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2821.xml'>
+]>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2845 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2845.xml'>
+]>
+
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc3833 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3833.xml'>
+]>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc4033 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4033.xml'>
+]>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY bcp46 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3013.xml'>
+]>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY bcp38 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2827.xml'>
+]>
+
+
+<rfc updates='1034' category="std" ipr="full3978" docName="draft-ietf-dnsext-forgery-resilience-02.txt">
+
+  <?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+  
+  <?rfc toc="yes" ?>
+  <?rfc symrefs="yes" ?>
+  <?rfc sortrefs="yes"?>
+  <?rfc iprnotified="no" ?>
+  <?rfc strict="yes" ?>
+  
+  <front>
+    <title abbrev="DNS resilience against forged answers">Measures for making DNS more resilient against forged answers</title>
+    <author initials='A.W.R.' surname='Hubert' fullname='bert hubert'>
+      <organization>
+	Netherlabs Computer Consulting BV.
+      </organization>
+      
+      <address>
+	<postal>
+	  <street>Braillelaan 10</street>
+	  <city>Rijswijk (ZH)</city>
+	  <code>2289 CM</code>
+	  <country>The Netherlands</country>
+	</postal>
+	<email>bert.hubert@netherlabs.nl</email>
+      </address>
+    </author>
+    <author initials='R.S.' surname='van Mook' fullname='Remco van Mook'>
+      <organization>
+	Virtu
+      </organization>
+      
+      <address>
+	<postal>
+	  <street>Auke Vleerstraat 1</street>
+	  <city>Enschede</city>
+	  <code>7521 PE</code>
+	  <country>The Netherlands</country>
+	</postal>
+	<email>remco@virtu.nl</email>
+      </address>
+    </author>
+    <date month="February" year="2008"/>
+    <workgroup>DNS Extensions (DNSEXT)</workgroup>
+    <abstract>
+      <t>
+	The current Internet climate poses serious threats to the
+	Domain Name System. In the interim period before the DNS protocol can be secured 
+	more fully, measures can already be taken to harden the DNS to make 'spoofing' a recursing
+      nameserver many orders of magnitude harder.</t>
+      <t>
+	Even a cryptographically secured DNS benefits from having the ability to discard bogus answers
+	quickly, as this potentially saves large amounts of computation.
+      </t>
+      <t>
+	By describing certain behaviour that has previously not been
+	standardised, this document sets out how to make the DNS more
+	resilient against accepting incorrect answers. This document updates
+	RFC 1034.
+      </t>
+    </abstract>
+  </front>
+<middle>
+<section title="Requirements and definitions">
+    <section title="Definitions">
+      <t>
+	      This document uses the following definitions:
+	      <list style="hanging">
+		<t>Client: typically a 'stub-resolver' on an end-user's computer</t>
+		<t>Resolver: a nameserver performing recursive service for clients, also known as a caching server</t>
+		<t>Stub resolver: a very limited Resolver on a client computer, that leaves most of the recursing work to a full resolver</t>
+		<t>Question: a question sent out by a resolver, typically in a UDP packet</t>
+		<t>Answer: the answer sent back by an authoritative nameserver, typically in a UDP packet</t>
+		<t>Third party: any host other than the resolver or the intended recipient of a question. The third party 
+		may have access to a random authoritative nameserver, but has no access to packets transmitted by the Resolver or authoritative server</t>
+		<t>Attacker: malicious third party.</t>
+		<t>Spoof: the activity of attempting to subvert the DNS process by getting a chosen answer accepted</t>
+		<t>Authentic answer: the answer that would be accepted if no third party interferes</t>
+		<t>Target domain: domain for which the attacker wishes to spoof in an answer</t>
+		<t>Fake data: answer chosen by the attacker</t>
+	      </list>
+	    </t>
+	  </section>
+	  <section title="Key words">
+            <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+            "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+            and "OPTIONAL" in this document are to be interpreted as
+            described in <xref target="RFC2119"/>.</t>
+	  </section>
+	</section>
+	<section title="Introduction">
+	  <t>
+	    This document describes several common problems in DNS implementations which, although previously 
+	    recognized, remain largely unsolved. Besides briefly recapping these problems, this RFC contains rules 
+	    that, if implemented, make complying resolvers vastly more resistant to the attacks described.
+	  </t>
+	  <t>
+	    The words below are aimed at authors of resolvers: it is up to
+	    operators to decide which nameserver implementation to use, or which options to
+	    enable. Operational constraints may override the security
+	    concerns described below. However, implementations are expected
+	    to allow an operator to enable functionality described in this
+	    document.
+	  </t>
+	  <t>
+	    Almost every transaction on the Internet involves the Domain Name System, which is
+	    described in <xref target="RFC1034"/>, <xref target="RFC1035"/> and beyond.
+	  </t>
+	  <t>
+	    Additionally, it has recently become possible to acquire SSL/TLS certificates with no other confirmation of identity
+	    than the ability to respond to a verification email sent via SMTP (<xref target="RFC2821"/>) - which generally 
+	    uses DNS for its routing.
+	  </t>
+	  <t>
+	    In other words, any party that (temporarily) controls the Domain Name System is in a position to 
+	    reroute most kinds of Internet transactions, including the verification steps in acquiring an SSL/TLS certificate 
+	    for a domain. This in turn means that even transactions protected by SSL/TLS could be diverted.
+	  </t>
+	  <t>
+	    It is entirely conceivable that such rerouted traffic could be used to the disadvantage of Internet users. 
+	  </t>
+	  <t>
+	    These and other developments have made the security and trustworthiness of DNS of renewed importance. Although the
+	    DNS community is working hard on finalising and implementing a cryptographically enhanced DNS protocol, 
+	    steps should be taken to make sure that the existing use of DNS is as secure as possible within the bounds
+	    of the relevant standards.
+	  </t>
+	  <t>
+	    It should be noted that the most commonly used resolver currently does not perform as well as possible
+	    in this respect, making this document of urgent importance.
+	  </t>
+	  <t>
+	    A thorough analysis of risks facing DNS can be found in <xref target="RFC3833"/>. 
+	  </t>
+	  <t>
+	    This document expands on some of the risks mentioned in RFC 3833, especially those outlined in the sections on
+	    'ID Guessing and Query Prediction' and 'Name Chaining'. Furthermore, it emphasises a number of
+	    existing rules and guidelines embodied in the relevant STDs and RFCs. The following also specifies
+	    new requirements to make sure the Domain Name System can be relied upon until a more 
+	    secure protocol has been standardised and deployed.
+	  </t>
+	  <t>
+	    It should be noted that even when all measures suggested below are implemented, protocol users
+	    are not protected against third parties with the ability to intercept, change or inject packets
+	    sent to the resolver. 
+	  </t>
+	  <t> 
+	    For protocol extensions under development that offer protection against these scenarios, see <xref target="RFC4033"/> and
+	    beyond.
+	  </t>
+	</section>
+	<section title="Description of DNS spoofing" anchor="spoofing">
+	  <t>
+	    When certain steps are taken it is feasible to 'spoof' the current deployed majority of caching resolvers
+	    with carefully crafted and timed DNS packets. Once spoofed, a caching server will repeat the data
+	    it wrongfully accepted, and make its clients contact the wrong, and possibly malicious, servers. 
+	  </t>
+	  <t>
+	    To understand how this process works it is important to know what makes a resolver (and more specifically
+	    a caching server) accept an answer.
+	  </t>
+	  <figure>
+	    <preamble>
+	    The following sentence in section 5.3.3 of <xref target="RFC1034"/> presaged the present problem:
+	    </preamble>
+	    <artwork>
+  The resolver should be highly paranoid in its parsing of responses.  
+  It should also check that the response matches the query it sent 
+  using the ID field in the response.
+	    </artwork>
+	  </figure>
+	  <t>DNS data is accepted by a resolver if and only if:
+	    <list style="numbers">
+	      <t>The question section of the reply packet is identical to that of a question packet currently waiting for an answer</t>
+	      <t>The ID field of the reply packet matches that of the question packet</t>
+	      <t>The answer comes from the same network address the question was sent to</t>
+	      <t>The answer comes in on the same network address, including port number, as the question was sent from</t>
+	      <t>It is the first answer to match the previous four conditions.</t>
+	    </list>
+	  </t>
+	  <t>
+	    If a third party succeeds in meeting the first four conditions before the answer from the authentic answer does so, 
+	    it is in a position to feed a resolver fabricated data. When it does so, we dub it an attacker, 
+	    attempting to spoof in fake data.
+	  </t>
+	  <t>
+	    All conditions mentioned above can theoretically be met, with the difficulty being a 
+	    function of the resolver implementation and zone configuration.
+	  </t>
+	</section>
+	<section title="Details">
+	  <t>
+	    The previous paragraph discussed a number of requirements an attacker must match in order to spoof in 
+	    manipulated (or fake) data. This section discusses the relative difficulties and how implementation defined
+	    choices impact the amount of work an attacker has to perform to meet said difficulties.
+	  </t>
+	  <t>
+	    Some more details can be found in section 2.2 of <xref target="RFC3833"/>.
+	  </t>
+	  <section title="Matching the question">
+	    <t>
+	      Formally, there is no need for a nameserver to perform service except for its operator, its customers
+	      or more generally its users. Recently, open recursing nameservers have been used to amplify denial of service
+	      attacks.
+	    </t>
+	    <t>
+	      In spite of this, many resolvers perform at least partial service for the whole world. This is partially out of 
+	      lack of concern, and is reminiscent of the open relay SMTP service the net enjoyed up to the early 1990s.
+	      Some access providers may serve so many subnets that it is hard to enumerate these all in the DNS configuration.
+	    </t>
+	    <t>
+	      Providing full service enables the third party to send the target resolver a question for the domain 
+	      name it intends to spoof. On receiving this question, and not finding the answer in its cache, the resolver
+	      will transmit questions to relevant authoritative nameservers. This opens up a window of opportunity 
+	      for getting fake answer data accepted.
+	    </t>
+	    <t>
+	      Some operators restrict access by not recursing for unauthorised IP addresses, but only respond with data from the
+	      cache. This makes spoofing harder for a third party as it cannot then force the exact moment a question will be asked.
+	      It is still possible however to determine a time range when this will happen, because nameservers helpfully
+	      publish the decreasing TTL of entries in the cache, which indicate from which absolute time onwards a new query
+	      could be sent to refresh the expired entry.
+	    </t>
+	    <t>
+	      The time to live of the 'target domain' determines how often a window of opportunity is available, which
+	      implies that a short TTL makes spoofing far more viable.
+	    </t>
+	    <t>
+	      Note that the attacker might very well have authorised access to the target resolver by virtue of being a customer
+	      or employee of its operator.
+	    </t>
+	  </section>
+	  <section title="Matching the ID field">
+	    <t>
+	      The DNS ID field is 16 bits wide, meaning that if full use is made of all these bits, and if their 
+	      contents are truly random, it will require on average 32768 attempts to guess. Anecdotal evidence 
+	      suggests there are implementations utilising only 14 bits, meaning on average 8192 attempts will suffice.
+	    </t>
+	    <t>
+	      Additionally, if the target nameserver can be forced into having multiple identical questions outstanding,
+	      the 'Birthday Attack' phenomenon means that any
+	      fake data sent by the attacker is matched against multiple outstanding questions, significantly raising
+	      the chance of success. Further details in <xref target="birthday"/>.
+	    </t>
+	  </section>
+	  <section title="Matching the source address of the authentic answer">
+	    <t>
+	      Most domains have two or three authoritative nameservers, which make matching the 
+	      source address of the authentic answer very likely with even a naive choice having 
+	      a double digit success rate. 
+	    </t>
+	    <t>
+	      Most recursing nameservers store relative performance indications of authoritative nameservers,
+	      which may make it easier to predict which nameserver would originally be queried - the one most likely
+	      to respond the quickest.
+	    </t>
+	    <t>
+	      Generally, this condition requires at most two or three attempts before it is matched.
+	    </t>
+	    <t>
+	      It should be noted that meeting this condition entails being able to transmit packets
+	      on behalf of the address of the authoritative nameserver. While several important
+	      documents (<xref target="RFC2827"/> and <xref target="RFC3013"/> specifically) direct
+	      Internet access providers to prevent their customers from assuming IP addresses
+	      that are not assigned to them, these recommendations are not universally (nor even widely) 
+	      implemented. 
+	    </t>
+	  </section>
+	  <section title="Matching the destination address of the authentic answer">
+	    <t>
+	      Note that the destination address of the authentic answer is the source address of the original question.
+	    </t>
+	    <t>
+	      The actual address of a recursing nameserver is generally known; the port used for asking questions
+	      is harder to determine. Most current resolvers pick a random port at startup and use this for all
+	      outgoing questions. In quite a number of cases the source port of outgoing questions is fixed at 
+	      the traditional DNS assigned server port number of 53.
+	    </t>
+	    <t>
+	      If the source port of the original question is random, but static, any authoritative nameserver under observation 
+	      by the attacker can be used to determine this port. This means that matching this conditions often requires 
+	      no guess work.
+	    </t>
+	    <t>
+	      If multiple ports are used for sending questions, this enlarges the effective address space by 
+	      a factor equal to the number of ports used.
+	    </t>
+	    <t>
+	      Less common resolving servers choose a random port per outgoing question. If this strategy is followed,
+	      this port number can be regarded as an additional ID field, again containing up to 16 bits.
+	    </t>
+	    <t>
+	      If the maximum ports range is utilized, on average, around 32128 source ports would have to be tried 
+	      before matching the source port of the original question as ports below 1024 may be unavailable for use, 
+	      leaving 64512 options. 
+	    </t>
+	    <t>
+	      It should be noted that a firewall will not prevent the matching of this address, as it will accept
+	      answers that (appear) to come from the correct address, offering no additional security.
+	    </t>
+	  </section>
+	  <section title="Have the answer arrive before the authentic answer">
+	    <t>
+	      Once any packet has matched the previous four conditions, no further answers should be accepted. 
+	    </t>
+	    <t>
+	      This means that the third party has a limited time in which to inject its spoofed answer, typically in the 
+	      order of at most 100ms.
+	    </t>
+	    <t>
+	      This time period can be far longer if the authentic authoritative nameservers are (briefly) overloaded
+	      by queries, perhaps by the attacker.
+	    </t>
+	  </section>
+	</section>
+	<section title="Birthday attacks" anchor="birthday">
+	  <t>
+	    A curious mathematical phenomenon means that a group of 22 people suffices to have a more than
+	    even chance at having two or more members of the group share a birthday. 
+	  </t>
+	  <t>
+	    An attacker can benefit from this phenomenon if it can force the target resolver to have multiple
+	    outstanding questions at any one time for the same domain to the same authoritative server.
+	  </t>
+	  <t>
+	    Any packet the attacker sends then has a much higher chance of being accepted because it only has to
+	    match any of the outstanding queries for that single domain. Compared to the birthday analogy above,
+	    of the group composed of questions and answers, the chance of having any of these share an ID rises 
+	    quickly.
+	  </t>
+	  <t>
+	    As long as small numbers of questions are sent out, the chance of successfully spoofing an answer
+	    rises linearly with the number of outstanding questions for the exact domain and nameserver.
+	  </t>
+	  <t>
+	    For larger numbers this effect is less pronounced.
+	  </t>
+	  <t>
+	    More details are available in US-CERT <xref target="vu-457875"/>.
+	  </t>
+	</section>
+	<section title="Accepting only in-zone answers">
+	  <t>
+	    Answers from authoritative nameservers often contain information that
+	    is not part of the zone for which we deem it authoritative. As
+	    an example, a query for the MX record of a domain might get as its answer a
+            mail exchanger in another domain, and additionally the IP address of this
+            mail exchanger.
+	  </t>
+	  <t>
+	    If accepted uncritically, the resolver stands the chance of
+            accepting data from an untrusted source. Care must be taken to
+            only accept data if it is known that the originator is authoritative for
+            that data.
+          </t>
+          <t>
+            One very simple way to achieve this is to only accept data if it
+            is part of the domain we asked the question for.
+          </t>
+	</section>
+	<section title="Combined difficulty">
+	  <t>
+	    Given a known or static destination port, matching ID field, source and destination address requires
+	    on average in the order of 2 * 2^15 = 65000 packets, assuming a domain has 2 authoritative nameservers.
+	  </t>
+	  <t>
+	    If the window of opportunity available is around 100ms, as assumed above, an attacker would need to be able 
+	    to briefly transmit 650000 packets/s to have a 50% chance to get spoofed data accepted on the first attempt.
+	  </t>
+	  <t>
+	    A realistic minimal DNS answer consists of around 80 bytes, including IP headers, making the packet rate above
+	    correspond to a respectable burst of 416Mb/s.
+	  </t>
+	  <t>
+	    As of mid-2006, this kind of bandwidth was not common but not scarce either, especially among those
+	    in a position to control many servers.
+	  </t>
+	  <t>
+	    These numbers change when a window of a full second is assumed, possibly because the arrival of the authentic answer
+	    can be prevented by overloading the bonafide authoritative hosts with decoy questions. This reduces the 
+	    needed bandwidth to 42 Mb/s.
+	  </t>
+	  <t>
+	    If in addition the attacker is granted more than a single chance and allowed up to 60 minutes of work on a domain
+	    with a time to live of 300 seconds, a meagre 4Mb/s suffices for a 50% chance at getting fake data accepted. Once 
+	    equipped with a longer time, matching condition 1 mentioned above is straightforward - any popular domain will 
+	    have been queried a number of times within this hour, and given the short TTL, this would lead to questions
+	    to authoritative nameservers, opening windows of opportunity.
+	  </t>
+	  <section title='Symbols used in calculation'>
+	    <t>
+	    Assume the following symbols are used:
+	    <list style="hanging">
+	      <t>I: Number distinct IDs available (maximum 65536)</t>
+	      <t>P: Number of ports used (maximum around 64000 as ports under 1024 are not always available, but often 1)</t>
+	      <t>N: Number of authoritative nameservers for a domain (averages around 2.5)</t>
+	      <t>F: Number of 'fake' packets sent by the attacker</t>
+	      <t>R: Number of packets sent per second by the attacker</t>
+	      <t>W: Window of opportunity, in seconds. Bounded by the response time of the authoritative servers (often 0.1s)</t>
+	      <t>D: Average number of identical outstanding questions of a resolver (typically 1, see <xref target="birthday"/>)</t>
+	      <t>A: Number of attempts, one for each window of opportunity</t>
+	    </list>
+	  </t>
+	  </section>
+	  <section title='Calculation'>
+	  <t>
+	    The probability of spoofing a resolver is equal to the amount of fake packets that arrive within the window of opportunity, 
+	    divided by the size of the problem space.
+	  </t>
+	  <t>
+	    When the resolver has 'D' multiple identical outstanding questions, each fake packet has a proportionally higher 
+	    chance of matching any of these questions. This assumption only holds for small values of 'D'.
+	  </t>
+	  <t>
+	    <figure>
+	      <preamble>
+		In symbols, if the probability of being spoofed is denoted as P_s:
+	      </preamble>
+	    <artwork>
+           D * F
+P_s =    ---------
+         N * P * I
+	    </artwork>
+	    </figure>
+	  </t>
+	  <t>
+	    It is more useful to reason not in terms of aggregate packets but to convert to packet rate, which can easily
+	    be converted to bandwidth if needed.
+	  </t>
+	  <t>
+	    <figure>
+	      <preamble>
+		If the Window of opportunity length is 'W' and the attacker can send 'R' packets per second, 
+		the number of fake packets 'F' that are candidates to be accepted is:
+	      </preamble>
+	      <artwork>
+                       D * R * W
+F = R * W  ->   P_s  = ----------
+                       N * P * I
+	      </artwork>		
+	    </figure>
+	  </t>
+	  <t>
+	    Finally, to calculate the combined chance 'P_cs' of spoofing over a chosen time period 'T',
+	    it should be realised that the attacker has a new window of opportunity each time 
+	    the TTL 'TTL' of the target domain expires. This means that the number of attempts 'A' is equal
+	    to 'T / TTL'.
+	  </t>
+	  <t>
+	    <figure>
+	      <preamble>
+		To calculate the combined chance of at least one success, the following formula holds:
+	      </preamble>
+	      <artwork>  
+                                                     (T / TTL)
+                      A          (       D * R * W )
+P_cs = 1 - ( 1 - P_s )    =  1 - ( 1  -  --------- )
+                                 (       N * P * I )
+	      </artwork>
+	    </figure>
+	  </t>
+	  <t>
+	    <figure>
+	      <preamble>
+		When common numbers (as listed above) for D, W, N, P and I are inserted, this formula reduces to:
+	      </preamble>
+	      <artwork>
+                            (T / TTL)
+           (         R    )
+P_cs = 1 - ( 1 -  ------- )
+           (      1638400 )
+	      </artwork>
+	    </figure>
+	  </t>
+	  <t>
+	    From this formula it can be seen that, if the nameserver implementation is unchanged, only raising
+	    the TTL offers protection. Raising N, the number of authoritative nameservers, is not feasible beyond
+	    a small number.
+	  </t>
+	  <t>
+	    For the degenerate case of a zero-second TTL, a window of opportunity opens for each question asked,
+	    making the effective TTL equal to 'W' above, the response time of the authoritative server.
+	  </t>
+	  </section>
+	</section>
+        <section title="Discussion">
+        <t>
+	  The calculations above indicate the relative ease with which DNS data can be spoofed. 
+	  For example, using the formula derived earlier on a domain with a 3600 second TTL, 
+	  an attacker sending 7000 fake answer packets/s (a rate of 4.5Mb/s),
+	  stands a 10% chance of spoofing a record in the first 24 hours, which rises to 50% after a week.
+	</t>
+	<t>
+	  For a domain with a TTL of 60 seconds, the 10% level is hit after 24 minutes, 50% after less than 3 hours, 90% after
+	  around 9 hours.
+	</t>
+	<t>
+	  Note that the attacks mentioned above can be detected by watchful server operators - an unexpected incoming
+	  stream of 4.5mbit/s of packets might be noticed.
+	</t>
+	<t>
+	  An important assumption however in these calculations is a known or static destination port of the authentic answer.
+	</t>
+	<t>
+	  If that port number is unknown and needs to be guessed as well, the problem space expands by a factor of 64000, 
+	  leading the attacker to need in excess of 285Gb/s to achieve similar success rates.
+	</t>
+	<t>
+	  Such bandwidth is not generally available, nor expected to be so in the foreseeable future.
+	</t>
+	<t>
+	  Note that some firewalls may need reconfiguring if they are currently setup to only allow
+	  outgoing queries from a single DNS source port.
+	</t>
+        </section>
+	<section title="Countermeasures" anchor="countermeasures">
+  	  <t>Given the above, a resolver implementation MUST match answers to the following attributes of the question:</t>
+	  <t>
+	    <list style="symbols">
+	      <t>Remote address</t>                                                                            
+	      <t>Local address</t>                                                                             
+	      <t>Query port</t>                                                                                
+	      <t>Query ID</t>                                                                                  
+	      <t>Question (name and type)</t>
+	    </list>
+	    before applying DNS trustworthiness rules.
+	  </t>
+	  <t>
+	    Additionally, resolver implementations MUST have the ability to:
+	    <list style="symbols">
+	      <t>Use an unpredictable source port for outgoing queries from a range (53, or &gt; 1024) of ports that is as large as possible;</t>
+	      <t>Use multiple different source ports simultaneously in case of multiple outstanding questions;</t>
+	      <t>Use an unpredictable query ID for outgoing queries, utilizing the full range available (0-65535);</t>
+	      <t>Assure that its choices of port and ID cannot be predicted by an attacker having knowledge of its (pseudo-)random generator.</t>
+	    </list>
+	  </t>
+	  <t>If a resolver sends out multiple equivalent questions to any authoritative server, before receiving an answer,
+	    all MUST have identical ID, source address and source port.</t>
+	  <t>
+	    Resolvers SHOULD favour authoritative nameservers with which a trust relation has been established; Stub-resolvers SHOULD be
+	    able to use TSIG (<xref target="RFC2845"/>) or IPSEC (<xref target="RFC2401"/>) when communicating with their recursive resolver.
+	  </t>
+
+	  </section>
+          <section title="Security Considerations">
+	  <t>
+	    This document provides clarification of the DNS specification to decrease the probability that DNS answers can be successfully forged.
+	    Recommendations found above should be considered complementary to possible cryptographical enhancements of the domain name system.
+	  </t>
+	  <t> 
+	    A resolver that does not implement the recommendations outlined above can easily be forced to accept spoofed answers, which 
+	    in turn are passed on to client computers - misdirecting (user) traffic to possibly malicious entities.
+	  </t>
+          <t>
+	    This document directly impacts the security of the 
+	    Domain Name System, implementers are urged to follow its 
+	    recommendations.
+	  </t>
+	  <t>
+		Most security considerations can be found in <xref target="birthday"/>, while proposed 
+		countermeasures are described in <xref target="countermeasures"/>. 
+	</t>
+	<t> 
+	  For brevity's sake, in lieu of repeating the security considerations references, the reader is referred to these sections.
+		
+	</t>
+	<t>
+		Nothing in this document specifies specific algorithms for operators to use; it does specify algorithms 
+		implementations SHOULD or MUST support.
+	</t>
+	<t>
+	  The above notwithstanding, it should be noted that using a low Time To Live for DNS records raises the chances
+	  of an attacker spoofing a resolver.
+	</t>
+        </section>
+	<section title="Acknowledgements">
+	  <t>
+	    Source port randomisation in DNS was first implemented and possibly invented by Dan. J. Bernstein.
+	  </t>
+	  <t>
+	    Although any mistakes remain our own, the authors gratefully acknowledge the help and contributions of:
+	    <list>
+	      <t>Stephane Bortzmeyer,</t>
+	      <t>Alfred Hoenes,</t>
+	      <t>Sean Leach,</t>
+	      <t>Norbert Sendetzky</t>
+	    </list>
+	  </t>
+	</section>
+      </middle>
+      
+      <back>
+        <references title='Normative References'>
+	  &rfc1034; &rfc1035; &rfc2119; &rfc2401; &rfc2821; &rfc2845; &rfc3833; &rfc4033; &bcp38; &bcp46;
+	  <reference anchor="vu-457875">
+	    <front>
+	      <title>Various DNS service implementations generate multiple simultaneous queries for the same resource record</title>
+               <author>
+                   <organization abbrev="US-CERT">
+		     United States CERT
+                   </organization>
+               </author>
+               <date month="November" year="2002" />
+           </front>
+           <seriesInfo name="VU" value="457875" />
+	  </reference>
+	</references>
+    </back>
+</rfc>

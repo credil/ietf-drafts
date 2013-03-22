@@ -1,0 +1,330 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd"[
+ <!ENTITY RFC0793 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.0793.xml'>
+ <!ENTITY RFC2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+ <!ENTITY RFC3168 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3168.xml'>
+ <!ENTITY RFC4253 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4253.xml'>
+ <!ENTITY RFC4346 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4346.xml'>
+ <!ENTITY RFC1379 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.1379.xml'>
+ <!ENTITY RFC1644 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.1644.xml'>
+]>
+
+<?rfc toc="yes" symrefs="yes"?>
+
+<rfc ipr="full3978" docName="draft-agl-tcpm-sadata-00">
+  <front>
+    <title abbrev="SYNACK Payloads">Faster application handshakes with SYN/ACK payloads</title>
+    <author initials="A." surname="Langley" fullname="Adam Langley">
+      <organization>Google Inc</organization>
+      <address>
+        <email>agl@imperialviolet.org</email>
+      </address>
+    </author>
+    <date month="July" year="2008" />
+    <area>Transport</area>
+    <keyword>TCP Options</keyword>
+    <keyword>Cryptography</keyword>
+    <abstract>
+
+<t>This document describes an extension to <xref target="RFC0793">TCP</xref>
+  which permits a small, mostly constant data payload to be carried in the
+  SYN+ACK frame of the 3-way handshake. This new behaviour is enabled by an
+  option in the SYN packet to ensure backwards compatibility. We should how
+  this has latency benefits, specifically for cryptographic applications.</t>
+</abstract>
+  </front>
+
+  <middle>
+    <section title="Requirements Notation">
+<t>
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+   "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+   and "OPTIONAL" in this document are to be interpreted as
+   described in <xref target="RFC2119">RFC 2119</xref>.
+</t>
+    </section>
+
+
+<section anchor="intro" title="Introduction">
+
+  <t>Consider the following, diagrammatic representation of the beginning of an <xref target="RFC4253">SSH</xref> connection:</t>
+
+<figure anchor="ssh-std">
+  <artwork>
+   0 SYN     ------------&gt;          0.5
+   1         &lt;------------ SYNACK   0.5
+   1 Ident   ------------&gt;          1.5
+   1 NList   ------------&gt;          1.5
+   2         &lt;------------ Ident    1.5
+   2         &lt;------------ NList    1.5
+   2         &lt;------------ KX       1.5
+   2 KX      ------------&gt;          2.5
+
+   Key:
+     Ident: A string which contains the SSH implementation name
+     NList: Name list: the list of supported algorithms
+     KX: Key exchange data, usually Diffie-Hellman
+  </artwork>
+  <postamble>Standard SSH protocol</postamble>
+</figure>
+
+<t>Here, arrows from the left to the right are frames from client to server.
+  Times on the left are the times that the client either transmits or receives
+  a packet (and vice versa). Times are measured in round trip times (RTT), so
+  that it takes 0.5 units for a frame to pass between the hosts.</t>
+
+<t>The above diagram is for a latency tuned implementation of SSH,
+  specifically, the client doesn't wait for the server's identity string to be
+  received. And yes, in this ideal scenario, the client can only start
+  transmitting useful data after 2 RTT and the server can only start
+  transmitting after 2.5 RTT. As a rule of thumb, the RTT from San Francisco to
+  London is 150ms, so this means a 300ms latency, at least, when setting up
+  this connection.</t>
+
+<t>(To keep the discussion simple, we assume there is no packet loss, that
+  the path is symmetrical and that the client's ACK of the 3-way handshake
+  carries a data payload.)</t>
+
+<t>Now, let us consider a hypothetical SSH protocol where the server could
+  include a short, constant byte-string in the SYNACK packet of the TCP
+  exchange. First we compact the name-list (part of the algorithm negotiation)
+  and put it in the SYNACK.</t>
+
+<figure anchor="ssh-opt1">
+  <artwork>
+   0 SYN     ------------&gt;          0.5
+   1         &lt;------------ SA+NList 0.5
+   1 NList   ------------&gt;          1.5
+   1 KX      ------------&gt;          1.5
+   2         &lt;------------ KX       1.5
+  </artwork>
+  <postamble>SSH protocol with a compact name list carried in the SYN+ACK frame</postamble>
+</figure>
+
+<t>In this situation, the client knows the results of the algorithm
+  negotiation as soon as the SYNACK comes back and can include the correct key
+  exchange with the first ACK packet. This reduces the server's latency by a full
+  RTT since it can transmit as soon as the 3-way handshake completes.</t>
+
+<t>As a final optimisation, we could assume either that the server takes a successful
+  guess at the key exchange algorithm to use, or that the application level
+  protocol specifies a single key exchange algorithm:</t>
+
+<figure anchor="ssh-opt2">
+  <artwork>
+   0 SYN     ------------&gt;          0.5
+   1         &lt;------------ SA+KX    0.5
+   1 KX      ------------&gt;          1.5
+  </artwork>
+  <postamble>A protocol which includes key exchange information in the SYN+ACK frame.</postamble>
+</figure>
+
+<t>Here the client's latency is 1 RTT and the server's is 1.5 RTT, which is
+  equal to the minimum required by the 3-way handshake, saving a full RTT of
+  latency from the initial diagram. In order for the SYNACK to be sent without
+application involvement, some cryptographic tricks are needed, as detailed
+below.</t>
+
+<t>None of the above discussion is specific to SSH. Many cryptographic
+  protocols, such as <xref target="RFC4346">TLS</xref>, involve a similar
+  scheme and could benefit from lower latency. Specifically designed protocols
+  could style themselves on the third example and achieve, essentially, no
+  latency overhead. This also allows existing protocols to be extended with
+  encryption with no additional round trips and with transparent fallback.</t>
+
+</section>
+
+<section anchor="lo" title="The SYNACK Payload Permitted Option">
+
+<t>Several commonly used TCP stacks don't support receiving data payloads in
+  SYNACK packets. Thus, SYNACK payloads cannot be enabled unless it's known
+  that the remote host can support them. To that end we define an option in the
+  SYN frame:</t>
+
+<figure anchor="fig-flags">
+  <artwork>
+                     1                   2
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2   . . .
++---------------+---------------+--------------- . . .
+|     Kind =    |  Length = 2+n | Flag bits
+| TDB-IANA-KIND1|               |0 1 2 3 4 5 6 7 . . .
++---------------+---------------+--------------- . . .
+  </artwork>
+  <postamble>TCP Flags Option</postamble>
+</figure>
+
+<t>The flags option contains a conceptually infinite number of bits which are
+  numbered from the MSB of the first byte, upwards. If not specified, bits are
+  assumed to be false.  The flags option MUST be as short as possible and yet
+  cover all the true bits that need to be specified. If no bits are true, the
+  flags option MUST NOT be included. The meanings of flag bits are to be assigned
+  by IANA. For this RFC, bit 0 is assumed to be "SYNACK Payload Permitted".</t>
+
+<t>For example, if no other flag bits are to be set, SYNACK payload support would be
+  advertised by a 3-byte option whose first data byte is <spanx style="verb">0x80</spanx>.</t>
+
+<t>Hosts MUST NOT set the SYNACK Payload Permitted bit unless an application
+  has requested it for the current socket. If SYNACK Payload Permitted is
+  requested for a socket, the host SHOULD include the SYNACK Payload Permitted.
+  For example, it may choose not to in the case of having to retransmit the SYN
+  frame as middleware may be filtering the extra option.</t>
+
+<t>Upon receipt of a SYN frame with SYNACK Payload Permitted, a host SHOULD include
+  a data payload in any resulting SYNACK frame, if so configured. For a given
+  SYN, if any resulting SYNACK frame has a payload then all resulting frames
+  MUST have a payload. If a host chooses to retransmit a SYN frame without a
+  SYNACK Payload Permitted bit when previous transmissions included the bit, it
+  MUST reject any SYNACK with a payload. If a SYN frame for a given handshake
+  is ever transmitted without a SYNACK Payload Permitted bit, all
+  retransmissions MUST NOT include the bit.</t>
+
+<t>The data payload affects the SEQ/ACK numbers like any other data. Any ACK
+  frame resulting from such a SYNACK frame MUST acknowledge the whole SYNACK
+  frame, including the SYN flag. If a frame is the final ACK in a 3-way
+  handshake, a host MUST reject it unless it acknowledges the whole SYNACK
+  frame.</t>
+
+<t>A host MUST NOT include a data payload in any SYNACK resulting from a SYN
+  frame without SYNACK Payload Permitted.</t>
+
+<t>A host MUST provide a method for applications to set a SYNACK payload, to
+  determine if a passive-open connection sent a SYNACK payload and to determine
+  if an active open connection received a payload in the SYNACK frame. This is
+  because the SYNACK data appears to the application like any other, but its
+  presence may alter the application level protocol.</t>
+
+<t>It's expected that a host will make a best effort to include a SYNACK
+  payload when the application has set one. It may choose not to for a number
+  of reasons including: the SYN frame didn't request it, the host is under
+  heavy SYN load, is using SYN cookies or that the host is having to retransmit
+  the SYNACK.</t>
+
+</section>
+
+<section title="Security Considerations">
+
+<t>Any payload in a SYNACK packet must be as frugal as possible since a host
+  will be transmitting it to an unconfirmed address. If a 40 byte frame could
+  elicit a 1500 byte reply to an attacker controlled address, this would be
+  readily used to hide and amplify distributed denial of service attacks.</t>
+
+<t>Thus we specify a maximum size of 64 bytes for the payload. This is
+  sufficient to include a strong elliptic curve key (256 bits), a 64-bit nonce
+  and a small amount of overhead (12 bytes).</t>
+
+</section>
+
+<section title="Implementation details">
+
+<t>Although the exact implementation details shouldn't be spelled out by this
+  document, consideration must be given to it.</t>
+
+<t>Breaking the very common BSD sockets API by having applications get advance
+  notice of connections so that they can specify the SYNACK payload (if any)
+  would be painfully incongruent with current implementations. Thus it would
+  be ideal if the SYNACK payload for a given, listening socket were constant;
+  a constant value can be specified by a
+  <spanx style="verb">setsockopt</spanx>.</t>
+
+<t>However, for the specific motivating case here (cryptography), it's very helpful
+  to include an nonce. One could consider using the SEQ and ACK numbers as
+  nonces but the overloading is distasteful and they are quite short for
+  secure nonces. So, at the risk of over optimising for a specific case:
+  implementations SHOULD allow applications to specify that the first 8 bytes
+  of the SYNACK payload be replaced with a cryptographically strong nonce.</t>
+
+<t>For the case where the key exchange material is carried in the SYN+ACK
+  frame, the public key thus has to be constant. This means that certain
+  schemes which provide perfect forward secrecy are inapplicable and that
+  implementors should be careful to use key exchange algorithms which are
+  still secure under this model.</t>
+
+</section>
+
+<section title="Comparison to T/TCP">
+
+<t>The idea of including data in frames which also carry a SYN flag isn't new:
+  it was included in the experimental T/TCP RFCs
+  <xref target="RFC1379">1379</xref> and
+  <xref target="RFC1644">1644</xref>. T/TCP suffered because it broke the
+  assumption that the source address of a new connection from a passive-open
+  socket had been verified by a 3-way handshake. This was a critical security
+  issue for applications like RSH which often used source address
+  whitelists.</t>
+
+<t>This draft doesn't break any such assumptions that applications may be
+  depending on. Source addresses for new connections are still validated by a
+  3-way handshake for passive-open sockets. Additionally, this draft is
+  dramatically simpler than T/TCP: it doesn't introduce any additional TCP
+  states nor does it deal with the complexity of including payloads in a SYN
+  frame. Nor does this draft apply to any application which is unaware of it
+  since applications are required to explicitly configure SYNACK payloads
+  before they come into effect.</t>
+
+</section>
+
+    <section title="Middlebox Interactions">
+<t>
+
+The large number of middleboxes (firewalls, proxies, protocol scrubbers, etc)
+currently present in the Internet pose some difficulty for deploying new TCP
+options.  Some firewalls may block segments that carry unknown options.  For
+instance, if the flags option is not understood by a firewall, incoming SYNs
+advertising SYNACK payload support may be dropped, preventing connection
+establishment.  This is similar to the ECN blackhole problem, where certain
+faulty hosts and routers throw away packets with ECN bits set
+<xref target="RFC3168"/>.  Some recent results indicate that for new TCP
+options, this may not be a significant threat, with only 0.2% of web requests
+failing when carrying an unknown option <xref target="transport-middlebox"/>.
+
+</t>
+</section>
+
+    <section title="IANA Considerations">
+
+<t>This document requires IANA to create a new registry of flag option bits,
+  currently containing a single entry: bit 0 is assigned by SYNACK Payload
+  Permitted.</t>
+
+<t>This document requires IANA to update values in its registry of TCP options
+numbers to assign a new entry, referred herein as
+<spanx style="verb">TBD-IANA-KIND1</spanx>.</t>
+
+    </section>
+
+    <section title="Acknowledgements">
+      <t>Wesley Eddy kindly reviewed initial versions of this draft.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+
+      &RFC0793;
+      &RFC2119;
+
+    </references>
+    <references title="Informative References">
+
+      &RFC3168;
+      &RFC4253;
+      &RFC4346;
+      &RFC1379;
+      &RFC1644;
+
+      <reference anchor="transport-middlebox">
+        <front>
+          <title>Measuring Interactions Between Transport Protocols and Middleboxes</title>
+          <author initials="A." surname="Medina"> <organization/> </author>
+          <author initials="M." surname="Allman"> <organization/> </author>
+          <author initials="S." surname="Floyd"> <organization/> </author>
+          <date month="ACM SIGCOMM/USENIX Internet Measurement Conference, October" year="2004"/>
+        </front>
+      </reference>
+
+    </references>
+
+    <section title="Changes">
+    </section>
+  </back>
+</rfc>

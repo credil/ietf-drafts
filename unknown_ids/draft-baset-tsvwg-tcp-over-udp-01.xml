@@ -1,0 +1,844 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<!-- $Id$ -->
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc strict="yes" ?>
+<?rfc toc="yes"?>
+<?rfc tocdepth="4"?>
+<?rfc iprnotified="no" ?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+
+<rfc category="exp" docName="draft-baset-tsvwg-tcp-over-udp-01" ipr="pre5378Trust200902">
+  
+  <front>
+    <title abbrev="TCP-over-UDP">TCP-over-UDP</title>
+
+    <author fullname="Salman A. Baset" initials="S.A." surname="Baset">
+      <organization>Columbia University</organization>
+
+      <address>
+        <postal>
+          <street>1214 Amsterdam Avenue</street>
+
+          <city>New York</city>
+
+          <region>NY</region>
+
+          <country>USA</country>
+        </postal>
+
+        <email>salman@cs.columbia.edu</email>
+      </address>
+    </author>
+
+    <author fullname="Henning Schulzrinne" initials="H.G."
+            surname="Schulzrinne">
+      <organization>Columbia University</organization>
+
+      <address>
+        <postal>
+          <street>1214 Amsterdam Avenue</street>
+
+          <city>New York</city>
+
+          <region>NY</region>
+
+          <country>USA</country>
+        </postal>
+
+        <email>hgs@cs.columbia.edu</email>
+      </address>
+    </author>
+
+
+    <date month="June" year="2009" />
+
+    <area>Transport Area</area>
+    
+    <workgroup>Transport Area Working Group</workgroup>
+
+    <keyword>TCP UDP</keyword>
+
+    <abstract>
+      <t>We present TCP-over-UDP (ToU), an instance of TCP on top of UDP. It provides
+      exactly the same congestion control, flow control, reliability, and extension
+      mechanisms as offered by TCP. It is intended for use in scenarios where applications
+      running on two hosts may not be able to establish a direct TCP connection but are 
+      able to exchange UDP packets.      
+      </t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+
+      <t>
+        Network address translators (NATs) pose a challenge for establishing
+        a direct TCP connection between hosts. While TCP connectivity works when 
+        a TCP client is behind a NAT device and the server is not, it is 
+        problematic when both the TCP client and server are behind different NAT 
+        devices. Thus, applications running on hosts behind different NAT devices
+        may not be able to establish a direct TCP connection with each other.
+        Instead, these applications must establish a TCP connection with a 
+        reachable host, which relays the traffic of the application on the first 
+        host to the application on the second host and vice versa. While this 
+        works, this is undesirable as it creates a dependency on a reachable host. 
+        With certain NAT types, even though the applications cannot 
+        establish a direct TCP connection, they may be able to exchange UDP 
+        traffic by using techniques such as 
+        <xref target="I-D.ietf-mmusic-ice">ICE-UDP</xref>. Thus, using UDP is
+        attractive for such applications as it removes the dependency on a
+        reachable host. However, these applications have a requirement
+        that the underlying transport be reliable. Further, these applications
+        may run on machines with heterogeneous network connectivity, thereby
+        requiring flow control. UDP does not provide reliability, congestion
+        control, or flow control semantics. Therefore, these applications may
+        either use TCP with a reachable host, or invent their own reliable,
+        congestion control, and flow control transport protocol to establish
+        a direct connection.
+      </t>
+
+      <t>
+        We present TCP-over-UDP (ToU), a reliable, congestion control, and flow control 
+        transport protocol on top of UDP. The idea is that TCP is a well-designed
+        transport protocol that provides reliable, congestion control, and flow control
+        mechanisms and these mechanisms must be reused as much as possible. Further, 
+        a transport protocol that provides reliability and flow control mechanisms 
+        must not be tied to a specific application and must be designed to provide modular
+        functionality. To accomplish this, ToU almost uses the same header as TCP
+        which allows to easily incorporate TCP's reliable and congestion 
+        control algorithms as defined in 
+        <xref target="I-D.ietf-tcpm-rfc2581bis">TCP congestion control</xref> 
+        document. In essence, ToU is not a new protocol 
+        but merely an instance (or profile) of TCP over UDP minus the TCP checksum, 
+        urgent flag, and urgent data.
+      </t>
+
+      <t>
+        We think that our approach is attractive for several reasons. First,
+        we are not proposing a new congestion control algorithm. Designing
+        new congestion control algorithms is complex, and requires
+        a large validation effort. Second, our approach takes advantage
+        of existing user-level-TCP (such as <xref target="Daytona">Daytona</xref>
+        and <xref target="MINET">MINET</xref>)
+        or TCP-over-UDP implementations (such as <xref target="atou">atou</xref>). Finally,
+        since we are replicating TCP semantics over UDP, any TCP options such 
+        as <xref target="RFC1323">window scaling</xref>,         
+        <xref target="RFC2018">selective acknowledgement option (SACK)</xref>,
+        or proposed TCP options such 
+        as <xref target="I-D.ietf-tcpm-tcp-auth-opt">TCP-Auth</xref> can be 
+        easily incorporated in ToU without a new standardization effort.
+      </t>
+
+      <section title="Conventions">
+        <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+        "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+        document are to be interpreted as described in <xref
+        target="RFC2119">RFC 2119</xref>.</t>
+      </section>
+
+      <section title="Terminology">
+        <t>
+          We use the terms such as congestion window (cwnd), initial window (IW),
+          restart window (RW), receiver window (rwnd), and sender maximum segment 
+          size (SMSS) as defined 
+          in <xref target="I-D.ietf-tcpm-rfc2581bis">TCP congestion control</xref>
+          document.
+        </t>
+      </section>
+    </section>
+
+
+    <section title="Model of Operation">
+
+      <!--
+      <t>
+        <xref target="tou_model">Figure 2</xref> describes how an application may use
+        TCP-over-UDP. The ToU exists as a user-level library that provides a socket-like
+        interface to the application. We refer to this interface as tou_socket_interface.
+        This interface creates 'logical sockets' and the library maintains a mapping to the
+        underlying OS-level sockets. Like OS-level sockets, the interface returns
+        and operates on integer socket handles, which we refer to as tou_socket_handle.
+        These handles are not related to the OS-level socket handles and cannot be
+        used by the OS-level socket operations.
+      </t>
+
+      <figure align="center" anchor="tou_model">
+        <artwork align="left">
+          <![CDATA[
+       +-----------------+
+       |   Application   |
+       +---|--------|----+
+           |        | tou_socket_interface
+        +--------------+  
+        | TCP-over-UDP |
+        |   library    |
+        +--|--------|--+
+           |        | OS sockets
+        +--------------+
+        |  Operating   |
+        |    system    |
+        +--|--------|--+
+           |        |
+             Network
+          ]]>
+        </artwork>
+
+        <postamble>Using TCP-over-UDP</postamble>
+      </figure>
+
+      <t>
+        This interface provides methods for opening and closing a ToU socket, listen
+        for incoming connections and accept new connections, connect to a server,
+        and send and receive data. An application that desires to send data reliably over 
+        UDP uses the socket calls provided by this library to open a socket, 
+        and connects to the server that listens for incoming connections on a specific port,
+        and send the data.
+      </t>
+    -->
+      <t>Like TCP, ToU has a client and a server. A client connects to a TCP server to establish
+      a ToU connection. Below, we describe the key ToU operations.</t>
+      
+      <section title="Setup and tear down">
+        <t>
+          Like TCP, ToU uses a three-way handshake to establish a connection. Similarly, it
+          follows TCP's semantics in tearing down the connection.
+        </t>
+      </section>
+
+      <section title="Connection tracking">
+        <t>
+          A key difference between TCP and UDP is that the former is connection-oriented whereas
+          the later is not. This means that a ToU server must provide a way to keep track of existing
+          connections. It does so through the source port and IP address of the UDP packet.
+        </t>
+      </section>
+
+      <section title="MTU discovery">
+        <t>ToU uses <xref target="RFC4821">packetization layer path MTU discovery</xref> to discover 
+        link MTU. </t>
+
+        <t>Some NAT devices placed in front of PPPoE devices perform MSS clamping, i.e., they
+        rewrite TCP's MSS option in a SYN packet from 1500 bytes to 1492 bytes. This operation is
+        performed because PPPoE has a MTU of 1492 bytes instead of Ethernet's 1500 bytes. 
+        MSS clamping is considered a 'faster' way of discovering MTU in such scenarios. MSS clamping 
+        does not work for ToU because NAT devices treat ToU packets as a stream of UDP packets. It is 
+        an open question how a ToU stack should deal with PPPoE MTU if faster MTU discovery is desired. 
+        One option is to configure ToU stack with a default MTU of 1492 bytes.
+        </t>
+      </section>     
+
+    </section>    
+    
+
+    <section title="Congestion Control, Flow Control, and Reliability">
+      <t>ToU follows the TCP congestion control algorithms described in 
+        <xref target="I-D.ietf-tcpm-rfc2581bis">TCP congestion control</xref> document. 
+        Thus, a ToU sender goes through the slow-start and congestion-avoidance phases. 
+        A ToU sender
+        starts with an initial window (IW) following the guidelines in 
+        <xref target="RFC3390">RFC 3390</xref>. During slow start, a ToU sender 
+        increments congestion window (cwnd) by at most SMSS bytes for each ACK 
+        received that cumulatively acknowledges new data. It switches to congestion 
+        avoidance when the congestion window (cwnd) exceeds slow start threshold 
+        (ssthresh). A ToU receiver generates an acknowledgement following the
+        guidelines in 
+        <xref target="I-D.ietf-tcpm-rfc2581bis">Section 4.2 of TCP congestion control</xref>
+        document. It immediately generates an ACK when an out-of-order
+        segment arrives. The ToU sender uses the fast retransmit algorithm
+        to detect and repair losses, and fast recovery algorithm to govern the 
+        transmission of new data until a non-duplicate ACK arrives. When ToU sender 
+        has not received a segment for more than one retransmission timeout (RTO), cwnd 
+        is reduced to the value of the restart window (RW) before transmission begins.
+        The ToU sender may also use 
+        <xref target="RFC2018">selective acknowledgement option (SACK)</xref> to improve
+        loss recovery when multiple packets are lost from one window of data. Like
+        TCP, it uses receiver window (rwnd) to achieve flow control.
+      </t>
+      
+      <section title="Explicit Congestion Notification (ECN)">
+        <t>
+          TCP-over-UDP operates above UDP. To use <xref target="RFC3168">ECN</xref> with
+          ToU, a UDP socket must allow ToU to set and retrieve the ECN bits in the
+          IP header. Currently, UDP sockets do not provide such a mechanism. However,
+          ToU assumes that in future, UDP sockets will provide this mechanism so that
+          ECN can be incorporated in the congestion control mechanism of ToU.
+        </t>
+
+        <t>
+          ToU endpoints also need to determine whether they both support ECN.
+          Similar to ECE and CWR flags for TCP as defined in <xref target="RFC3168">ECN</xref>,
+          ToU header includes these flags.
+        </t>          
+      </section>
+      
+    </section>    
+    
+
+    <section title="Header Format">
+      <t>
+        A ToU header is like a <xref target="RFC0793">TCP header</xref>
+        except that it does not include source port, destination port,
+        and checksum, as they are already included in the UDP header.
+        ToU header also does not include the 1-bit Urgent flag and bit 
+        corresponding to this flags are reserved in the ToU header. Further, it 
+        also does not include the 16-bit Urgent Pointer. The reason for 
+        excluding Urgent flag and Urgent pointer is that they are only used 
+        in <xref target="RFC0854">Telnet</xref> which is not a widely used 
+        protocol.
+      </t>
+
+      <t>
+        Between sequence number and acknowledgement number, ToU header 
+        has a 32-bit magic cookie to demultiplex it with other UDP-based 
+        protocols such as <xref target="RFC5389">STUN</xref>.
+        A ToU header also includes ECE and CWR flags for negotiating ECN
+        capabilities. These flags are defined 
+        in <xref target="RFC3168">RFC 3168</xref>.
+        The rest of the fields in a ToU header have exactly the same meaning
+        as those in a TCP header. The size of the fixed ToU header is 
+        16 bytes, whereas the size of fixed TCP header is 20 bytes. The fixed 
+        ToU header and UDP header have a cumulative size of 24 bytes, four 
+        more than a fixed TCP header.
+      </t>
+
+      <figure align="center" anchor="tou_header">
+        <artwork align="left">
+          <![CDATA[   
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                        Sequence Number                        |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                         Magic Cookie                          |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                    Acknowledgment Number                      |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |  Data |       |C|E| |A|P|R|S|F|                               |
+   | Offset|Reserve|W|C|R|C|S|S|Y|I|            Window             |
+   |       |       |R|E| |K|H|T|N|N|                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                    Options                    |    Padding    |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                             data                              |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            ]]>
+        </artwork>
+
+        <postamble>Header for TCP-over-UDP (ToU)</postamble>
+      </figure>
+
+      <t>
+        Since ToU header fields are exactly the same as TCP, we have borrowed
+        their descriptions from the <xref target="RFC0793">TCP RFC</xref>.
+        <list style="hanging">
+          <t hangText="Sequence Number (32-bits):"> Same as a TCP sequence number.</t>
+
+          <t hangText="Magic Cookie (32-bits):">
+            A fixed value of 0x7194B32E in network byte order to demultiplex ToU from 
+            other application layer protocols.
+          </t>
+
+          <t hangText="Acknowledgement Number (32-bits):"> Same as a TCP acknowledgement number.</t>
+
+          <t hangText="Data offset (4-bits):">
+            The number of 32-bit words in ToU header. Like a TCP header,
+            ToU header is an integral number of 32-bits long.
+          </t>
+
+          <t hangText="Reserved (4-bits):"> Reserved for future use. Must be zero.</t>
+
+          <t hangText="Control Bits (8-bits):">8-bits from left to right. Unlike TCP, the 
+           Urgent bit is excluded.</t>
+          <t> CWR:  Congestion window reduced flag as defined in <xref target="RFC3168">RFC 3168</xref>.</t>
+          <t> ECE:  ECN-Echo flag as defined in <xref target="RFC3168">RFC 3168</xref>.</t>
+          <t> R:    Reserved in ToU. In the TCP header, it is used for the Urgent bit.</t>
+          <t> ACK:  Acknowledgment field significant</t>
+          <t> PSH:  PSH function.</t>
+          <t> RST:  Reset the connection</t>
+          <t> SYN:  Synchronize sequence numbers</t>
+          <t> FIN:  No more data from sender</t>
+
+          <t hangText="Window (16-bits):">
+            Same as the window in TCP header. The number of data octets beginning with 
+            the one indicated in the acknowledgment field which the sender of this segment is 
+            willing to accept.
+          </t>
+
+          <t hangText="Options:">Same as TCP options.</t>
+
+          <t hangText="Padding:">
+            Like TCP, the ToU header padding is used to ensure that the ToU header ends
+            and data begins on a 32 bit boundary.  The padding is composed of zeros.
+          </t>
+        </list>
+      </t>
+
+    </section>
+    
+
+    <section title="NAT related issues">
+      <t>
+        This section discusses how to determine if hosts should use ToU and the impact
+        of UDP NAT bindings on ToU connection management.
+      </t>
+      
+      <section title="Using ToU">
+        <t>
+          Hosts should only use ToU when establishing a direct TCP connection fails.
+          It is outside the scope of this draft to specify a mechanism to determine 
+          if establishing a TCP connection fails between two hosts behind NATs.
+          Hosts may use <xref target="I-D.ietf-mmusic-ice-tcp">ICE-TCP</xref>
+          and <xref target="I-D.ietf-mmusic-ice">ICE-UDP</xref> to determine if hosts
+          can directly establish a TCP connection or directly exchange UDP packets, 
+          respectively. If hosts fail to establish a direct TCP connection but 
+          are able to directly exchange UDP packets, they can establish a ToU connection.
+        </t>
+      </section>
+      
+      <section title="NAT bindings">
+        <t>
+          NAT devices maintain a binding for mapping an internal IP address and port number
+          to an external IP address and port number. The lifetime of bindings for UDP is 
+          much smaller than TCP because UDP is a connection less protocol. If an application
+          does not send packets over ToU, the UDP binding may be lost resulting in a broken
+          ToU connection.
+        </t>
+
+        <t>
+          ToU does not provide any mechanism to determine UDP binding lifetimes or to refresh 
+          these bindings. Rather, an application establishing a ToU connection can use <xref target="RFC5389">STUN</xref> 
+          to <xref target="I-D.ietf-behave-nat-behavior-discovery">discover</xref> binding 
+          lifetimes and periodically refresh these bindings. Running STUN in conjunction
+          with ToU has a design implication that a ToU packet must be differentiated from 
+          a STUN packet. The magic cookie in a ToU packet serves this purpose.</t>
+      </section>
+
+      
+    </section>
+    
+
+    <section title="ToU, TLS, and DTLS">
+      <t>
+        <xref target="RFC5246">Transport layer security (TLS)</xref> and
+        <xref target="RFC4347">Datagram transport layer security (DTLS)</xref> 
+        protocols provide privacy and data integrity between two communicating applications. 
+        TLS is layered on top of some reliable transport protocol such as TCP, whereas DTLS
+        only assumes a datagram service. A question is what is the layering relationship 
+        between ToU protocol, TLS, and DTLS. <xref target="tou_tls"></xref> shows 
+        three possible options. Option-3 is not feasible since ToU layer must be
+        made aware of the size of header which DTLS may add. Option-2 layers
+        DTLS on top of ToU. Unlike TLS, DTLS carries a sequence number because
+        it assumes a datagram service. However, the use of sequence number is
+        made redundant because ToU provides reliable and inorder delivery semantics.
+        Therefore, Option-1 is most feasible in which TLS is layered on top of
+        ToU.
+      </t>
+
+      <figure align="center" anchor="tou_tls">
+        <artwork align="left">
+          <![CDATA[   
+   +-+-+-+-+   +-+-+-+-+   +-+-+-+-+
+   |  TLS  |   |  DTLS |   |  ToU  |
+   +-+-+-+-+   +-+-+-+-+   +-+-+-+-+
+   |  ToU  |   |  ToU  |   |  DTLS |
+   +-+-+-+-+   +-+-+-+-+   +-+-+-+-+
+   |  UDP  |   |  UDP  |   |  UDP  |
+   +-+-+-+-+   +-+-+-+-+   +-+-+-+-+
+   Option-1    Option-2    Option-3
+            ]]>
+        </artwork>
+
+        <postamble>Layering options for ToU, TLS, DTLS</postamble>
+      </figure>
+    </section>
+
+    <section title="Implementation Guidelines">
+      <t>
+        From the implementers perspective, the use of ToU should be as modular
+        as possible. Once way to achieve this modularity is to implement ToU
+        as a user-level library that provides socket-like function calls to
+        the applications. The library may have its own thread of execution and
+        can be instantiated at the start of the program. The library implements the
+        reliable, inorder, congestion control, and flow control semantics of TCP.
+        Applications can interact with the ToU library through socket-like function calls.
+      </t>
+      
+    </section>
+    
+    <section title="Design Alternatives">
+      <t>
+        ToU is strictly meant for scenarios where end-points desire to establish a TCP
+        connection but are unable to do so due to the presence of NATs and firewalls.
+        Below, we briefly discuss the design alternatives and address possible criticisms
+        for ToU.
+      </t>
+
+      <section title="Changing IP protocol number">
+        <t>
+          One solution is to change the IP protocol number of TCP packets to UDP before
+          sending them on the wire. Similarly, when the packets are received, the protocol
+          number is changed back to TCP and the received packets are passed to the TCP stack.
+          The idea behind this approach is to reuse TCP stack as much as possible.
+          This approach suffers from a number of problems. First, it requires a change in the
+          operating system kernel to rewrite IP protocol number of TCP packets to UDP and it
+          is unrealistic to expect all the OS kernels to implement this change. Second, TCP 
+          checksum has a different offset than a UDP checksum and many NAT devices parsing 
+          the UDP packet will reject the packet because the UDP checksum is incorrect.
+          Third, since applications can use the same port number for TCP and UDP ports,
+          it is unclear how the kernel will correctly differentiate between TCP and UDP
+          packets for the same port number.</t>
+      </section>
+      
+      
+      <section title="Simplified TCP">
+        <t>It may be argued that TCP semantics are too complicated and it might be easier
+        to define a protocol that adds retransmission of individual UDP packets, and
+        ACK mechanisms, and sequencing layer. However, unless one is content with 
+        stop-and-wait congestion control (and roughly modem data rates), it is necessary 
+        for a transport protocol to have AIMD or rate-based congestion control (TFRC). 
+        As discussed in <xref target="tfrc"></xref>, rate-based congestion control 
+        is not suitable for mid-sized transfers and is not any simpler than AIMD.        
+        Further, since hosts may have heterogeneous network connectivity, a transport protocol
+        needs to provide flow control. Moreover, it may not be easy to validate a new
+        transport protocol that only provides selective TCP semantics. </t>
+        <!--Conversely, it 
+        is relatively easy to validate ToU behavior by running TCP and ToU together on the same 
+        simulator and lots of implementers already understand TCP.-->
+      </section>
+
+      <section title="TCP-like mechanism within an application layer protocol">
+        <t>
+          In this approach, key TCP mechanisms such as reliability, congestion control, 
+          and flow control are designed as part of the application layer protocol. This approach 
+          has several disadvantages. First, every application layer protocol that is unable 
+          to establish TCP connections in the presence of NAT and firewalls but may 
+          use UDP will need to invent its own reliable, congestion control and flow 
+          control transport protocol. Second, it is non-trivial to get the first implementations 
+          of a conceptually new protocol right. Third, any new transport protocol, even if 
+          it is specified within an application layer protocol must undergo a large 
+          validation effort. Finally, most long-term successful protocols are those 
+          that provide modular functionality, and not extremely narrowly-tailored protocols.
+        </t>
+      </section>
+      
+      
+      <section title="Tunneling">
+        <t>
+          Another design option is to provide a VPN-like tunnel for sending and receiving TCP 
+          packets over UDP. The idea is to use tunneling solutions between hosts so that hosts can 
+          use the kernel TCP stack and unmodified socket functions calls.
+        </t>
+        
+        <!--This is conceivable as follows. An application 
+        uses the regular TCP socket calls which make use of the TCP stack. Just before the 
+        transmission of the packet, a module or a virtual ethernet driver intercepts
+        the packet, and sends the TCP packet along with its payload over UDP. Similarly,
+        when a packet is received over UDP, the virtual ethernet driver checks if it is an
+        encapsulated TCP packet, and if yes, passes it to the appropriate kernel level TCP handler.        
+        </t>
+        -->
+
+        <!--
+        <t>While this approach works, it is not desirable for several reasons. First, it creates a 
+        dependency on a kernel-level module or a virtual ethernet driver that must 
+        capture TCP packets before transmission and immediately upon reception. Kernel-level 
+        modules or virtual ethernet drivers require root access to a machine. Peer-to-peer 
+        applications are user space applications are expected to be the main users of ToU. 
+        It is unrealistic to create a dependency 
+        between these user space applications and a kernel level module. Second, sending
+        a full-sized TCP segment over UDP may cause fragmentation. Lastly, other 
+        UDP based protocols such as STUN may need to be 
+        run on the same port as the tunneling port which can complicate the 
+        disabiguation of these protocols from the tunneled TCP.</t>
+        -->
+
+        <t>
+          This approach is not desirable for several reasons. First, tunneling solutions
+          typically require support from kernel or require kernel upgrades to work. Requiring 
+          kernel upgrades to work is not plausible for an application that is trying to get 
+          deployment traction. Second, establishing a tunnel typically requires root access to
+          the system and it is unrealistic for user-space applications to require root
+          access for proper functioning. Third, peer-to-peer applications, which are expected
+          to use ToU, establish a large number of connections with other hosts. Even, if a 
+          tunneling solution does not require any kernel support, such a solution consumes
+          significant bandwidth and CPU resources to maintain a large number of tunnels with 
+          other hosts. Popular P2P applications such as Skype and Bittorrent do not 
+          take advantage of a layer-3 tunneling solution.</t>
+        
+      </section>
+      
+      <section title="TFRC" anchor="tfrc">
+        <t>
+          <xref target="RFC5348">TFRC</xref> is a congestion control mechanism (not
+          a protocol) that is designed for long-lived media streams. Its main benefit
+          is of smoothing rates to these media streams. It does not
+          provide any packet formats, reliability, or flow control. It's congestion
+          control mechanism is not suited for exchanging data objects that range from a 
+          few dozen to a few hundred packets. The reason is that TFRC is based on 
+          estimating loss rates within 8 loss intervals. With a loss rate of 
+          1%, this translates, very roughly, into 800 packets or roughly 800 kB, 
+          before a reliable estimate of a better (higher) rate is computed. Further, 
+          its main  benefit, smoothing rates, is of no importance to applications desiring
+          to replicate TCP functionality over UDP.          
+        </t>
+      </section>
+
+      <section title="SCTP">
+        <t>
+          <xref target="RFC4960">SCTP</xref> is significantly more complicated than 
+          TCP in its implementation and
+          its performance is generally the same, except in circumstances involving
+          head-of-line blocking. Further, SCTP will have trouble getting traction in 
+          the consumer and enterprise Internet space unless it (also) runs over UDP, 
+          as there seem to be few NATs that know how to handle SCTP and thus it is 
+          effectively unusable by a fair fraction of the Internet user population.
+        </t>        
+      </section>
+
+      <section title="Criticism">
+        <t>
+          A criticism of the ToU approach is that it is deceptively simple to describe but
+          difficult to implement and is likely to suffer from
+          broken implementations. We think that this assertion is not valid for three reasons.
+          First, ToU does not define a new congestion control protocol and thus stays away from
+          all the validation issues associated with a new congestion control protocol. Second,
+          a reasonable implementation approach is to first implement connection
+          management and AIMD congestion control and test it with regular TCP to determine
+          if the implemented congestion control mechanisms are broken. This implementation
+          can be followed by implementing TCP options such as window scaling and SACK. Third,
+          ToU like other protocols such as SIP will be implemented as a module or library
+          and is likely to mature over time.
+        </t>
+      </section>
+
+    </section>
+    
+<!--    
+    <section title="ToU Socket API">
+      <t>We define a socket API for TCP-over-UDP whose semantics exactly mimic 
+      the TCP socket API.</t>
+
+      <t>
+        <list style="hanging">
+          <t hangText="int tou_socket()" />
+          <t>Parameters: int domain, int type, int protocol</t>
+          <t>
+            Creates a ToU socket, allocates the send and receive buffers,
+            and returns an integer handle (tou_socket_handle) to the created ToU socket.
+            The method internally creates a UDP socket and stores a mapping between
+            the tou_socket_handle and UDP socket. The type parameter is SOCK_STREAM.
+          </t>
+
+          <t hangText="int tou_bind()" />
+          <t>Parameters: int socketfd, const struct sockaddr *address, socklen_t address_len</t>
+          <t>Assigns a local socket address to a ToU socket identified by the socket descriptor. </t>
+
+          <t hangText="int tou_listen()" />
+            <t>Parameters: int socketfd, int backlog</t>
+            <t>
+              Marks a ToU socket specified by the socketfd argument, as ready to accept new connections.
+              The backlog parameter provides a hint to the ToU library to limit the number
+              of outstanding connections in the ToU socket's queue.
+            </t>
+
+          <t hangText="int tou_accept()" />
+            <t>Parameters: int socketfd, struct sockaddr *restrict address, socklen_t *restrict address_len</t>
+            <t>
+              Extracts the first connection on the queue for ToU socket connections, creates a ToU socket,
+              and returns the handle to the newly created ToU socket to the application. At the 
+              system level, no new sockets are created.
+            </t>
+
+          <t hangText="int tou_accept()" />
+            <t>Parameters: int socketfd, const struct sockaddr *address, socklen_t address_len</t>
+            <t>Attempts to make a connection on a ToU socket.</t>
+
+          <t hangText="int tou_select()" />
+            <t>
+              Parameters: int nfds, fd_set *restrict readfds, fd_set *restrict writefds, 
+              fd_set *restrict errorfds, struct timeval *restrict timeout
+            </t>
+            <t>Examines the file descriptors given by readfds, writefds, and errorfds parameters
+            to determine whether they are ready for reading, writing, or have an error condition.</t>
+
+          <t hangText="int tou_close()" />
+            <t>Parameters: int socketfd</t>
+            <t>Closes the socket indicated by socketfd descriptor. Any system level
+            UDP sockets associated with this logical socket descriptor are also closed.</t>
+
+          <t hangText="int tou_get_sys_sock()" />
+            <t>Parameters: int socketfd</t>
+            <t>Returns the system level socket descriptor associated with the socketfd.</t>
+
+          <t hangText="int tou_setsockopt()" />
+            <t>Parameters: int socketfd, int level, int optname, const void *optval, socklen_t optlen</t>
+            <t>Set options associated with the socket.</t>
+
+
+          <t hangText="int tou_getsockopt()" />
+            <t>Parameters: int socketfd, int level, int optname, void *optval, socklen_t *optlen</t>
+            <t>Retrieve options associated with the socket.</t>
+          
+        </list>
+      </t>
+      
+    </section>
+-->
+    
+    <!-- This PI places the pagebreak correctly (before the section title) in the text output. -->
+
+    <?rfc needLines="8" ?>
+
+<!--
+    <section title="Implementation Considerations">
+      <t></t>
+    </section>
+-->
+
+    <section anchor="Acknowledgements" title="Acknowledgements">
+      <t>
+        The draft incorporates comments from the discussion on TSVWG and P2PSIP mailing list. We also
+        acknowledge an earlier draft by R. Denis-Courmont on UDP transports.
+      </t>
+    </section>
+
+
+    <section anchor="IANA" title="IANA Considerations">
+      <t>TBD.</t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>ToU is subject to the same security considerations as TCP.</t>
+    </section>    
+  </middle>
+
+  <!--  *****BACK MATTER ***** -->
+
+  <back>
+   
+    <references title="Normative References">
+
+      <?rfc include="reference.RFC.0793"?>
+
+      <?rfc include="reference.RFC.0854"?>
+
+      <?rfc include="reference.RFC.1122"?>
+
+      <?rfc include="reference.RFC.1323"?>
+      
+      <?rfc include="reference.RFC.2018"?>
+      
+      <?rfc include="reference.RFC.2119"?>
+
+      <?rfc include="reference.RFC.3168"?>
+
+      <?rfc include="reference.RFC.3390"?>
+
+      <?rfc include="reference.RFC.4347"?>
+
+      <?rfc include="reference.RFC.4821"?>
+      
+      <?rfc include="reference.RFC.4960"?>
+
+      <?rfc include="reference.RFC.5246"?>
+      
+      <?rfc include="reference.RFC.5348"?>
+      
+      <?rfc include="reference.RFC.5389"?>      
+      
+      <?rfc include="reference.I-D.ietf-tcpm-rfc2581bis"?>
+
+      <?rfc include="reference.I-D.ietf-tcpm-tcp-auth-opt"?>
+
+    </references>
+
+    <references title="Informative References">
+
+      <?rfc include="reference.I-D.ietf-behave-nat-behavior-discovery"?>
+      
+      <?rfc include="reference.I-D.ietf-mmusic-ice"?>
+
+      <?rfc include="reference.I-D.ietf-mmusic-ice-tcp"?>
+      
+      <reference anchor="Daytona"
+                 target="http://nms.lcs.mit.edu/~kandula/data/daytona.pdf">
+        <front>
+          <title>Daytona : A User-Level TCP Stack</title>
+
+          <author initials="P." surname="Pradhan">  
+            <organization/>
+          </author>
+          <author initials="S." surname="Kandula">
+            <organization/>
+          </author>
+          <author initials="W." surname="Xu">
+            <organization/>
+          </author>
+          <author initials="A." surname="Sheikh">
+            <organization/>
+          </author>
+          <author initials="E." surname="Nahum">
+            <organization/>
+          </author>
+
+          <date year="2004" />
+        </front>
+      </reference>
+
+
+      <reference anchor="MINET"
+                 target="http://cs.northwestern.edu/~pdinda/minet/NWU-CS-02-08.pdf">
+        <front>
+          <title>The Minet TCP/IP Stack</title>
+
+          <author initials="P." surname="Dinda">
+            <organization/>
+          </author>
+
+          <date year="2002" />
+        </front>
+      </reference>
+      
+
+      <reference anchor="atou"
+                       target="http://www.csm.ornl.gov/~dunigan/atou.ps">
+        <front>
+          <title>A TCP-over-UDP Test Harness</title>
+
+          <author initials="T." surname="Dunigan">
+            <organization/>
+          </author>
+
+          <author initials="F." surname="Fowler">
+            <organization/>
+          </author>
+
+          <date year="2002" />
+        </front>
+      </reference>
+      
+    </references>
+
+    <section title="Change Log">
+      <section title="Changes since draft-baset-tsvwg-tcp-over-udp-00">
+        <t>
+          <list style="symbols">
+            <t>Updated introduction to reflect that it is difficult for two hosts behind 
+            two different NATs to establish a TCP connection.</t>
+            <t>Added PSH bit.</t>
+            <t>Added MTU discovery to model of operation section.</t>
+            <t>Added text on ECN to congestion control section.</t>
+            <t>Added a section on NAT related issues.</t>
+            <t>Updated text in design alternatives section.</t>
+          </list>
+        </t>
+       </section>
+    </section>
+    
+  </back>
+</rfc>

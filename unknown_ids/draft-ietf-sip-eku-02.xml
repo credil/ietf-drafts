@@ -1,0 +1,518 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="no" ?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc sortrefs="no" ?>
+<?rfc colonspace='yes' ?>
+<?rfc comments='yes' ?>
+<?rfc inline='no' ?>
+
+<rfc docName="DOCNAME"
+     category="std"
+     ipr="full3978"
+     updates="3261"
+>
+<front>
+
+<title abbrev="SIP EKU">
+ Using Extended Key Usage (EKU) for Session Initiation Protocol (SIP)
+ X.509 Certificates</title>
+
+<author initials= "S." surname="Lawrence" fullname="Scott Lawrence">
+  <organization>Bluesocket Inc.</organization>
+  <address>
+   <postal>
+    <street>10 North Ave.</street>
+    <city>Burlington</city> 
+    <region>MA</region> <code>01803</code>
+    <country>USA</country>
+   </postal>
+   <phone>+1 781 229 0533</phone>
+   <email>slawrence@bluesocket.com</email>
+  </address>
+</author>
+
+<author initials="V.K." surname="Gurbani" fullname="Vijay K. Gurbani">
+ <organization>Bell Laboratories, Alcatel-Lucent</organization>
+ <address>
+  <postal>
+   <street>2701 Lucent Lane</street>
+   <street>Room 9F-546</street>
+   <city>Lisle</city>
+   <region>IL</region>
+   <code>60532</code>
+   <country>USA</country>
+  </postal>
+  <phone>+1 630 224-0216</phone>
+  <email>vkg@alcatel-lucent.com</email>
+ </address>
+</author>
+
+<date month="MONTH" day="DAY" year="YEAR" />
+
+<area>Realtime Applications and Infrastructure</area>
+<workgroup>SIP WG</workgroup>
+<keyword>I-D</keyword>
+<keyword>Internet-Draft</keyword>
+
+<abstract>
+<t>This memo documents an extended key usage (EKU) X.509 certificate extension
+for identifying the holder of a certificate as authoritative for a Session
+Initiation Protocol (SIP) service in the domain named by the DNS name in 
+the certificate.</t>
+</abstract> 
+
+</front>
+
+<middle>
+
+<section title="Terminology" >
+<section title="Key Words">
+<t>
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
+"SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be
+interpreted as described in <xref target="RFC2119">RFC 2119</xref>. </t>
+</section>
+
+<section title="Abstract syntax notation">
+<t>
+All X.509 certificate <xref target="CCITT.X509.1988">X.509</xref>
+extensions are defined using ASN.1 <xref target="CCITT.X680.1994">X.680
+</xref>, <xref target="ITU.X690.1994">X.690</xref>.
+</t>
+</section>
+</section>
+
+<section title="Problem statement">
+
+<t>Consider the SIP <xref target="RFC3261"/> trapezoid shown in <xref 
+target="sip-trapezoid"/>.</t>
+
+<figure anchor="sip-trapezoid" title="SIP Trapezoid">
+ <artwork><![CDATA[
+
+
+  Proxy-A.example.com           Proxy-B.example.net
+     +-------+                    +-------+
+     | Proxy |--------------------| Proxy |
+     +----+--+                    +---+---+
+          |                           |
+          |                           |
+          |                           |
+          |                         +---+
+        0---0                       |   |
+         /-\                        |___|
+        +---+                      /    /
+                                  +----+
+   alice@example.com          bob@example.net
+
+ ]]></artwork>
+</figure>
+
+<t>An user, alice@example.com, invites bob@example.net for a multimedia
+communication session.  Her user agent routes the request to a proxy,
+in her domain.  Assume also that example.com is a large organization 
+that maintains several SIP proxies, and normal request forwarding rules 
+cause her invitation to be sent to an outbound proxy, Proxy-A.example.com.
+This proxy uses RFC 3263 <xref target="RFC3263"/> resolution to discover
+that Proxy-B.example.net offers TLS support and can accept the request
+on behalf of the example.net domain.  Proxy-A establishes a TLS
+connection to Proxy-B, each proxy presents a X.509 certificate to 
+authenticate and protect the confidentiality of the connection.
+This is the basic mututal authentication model explored in depth in
+<xref target="I-D.domain-certs"/>.</t>
+
+<t>However, there arise certain cases where one SIP proxy needs to know
+whether it has reached an authoritative proxy in target SIP domain.  For
+instance, billing transactions may be triggered when an authoritative SIP 
+proxy in one domain sends messages to its equivalent in another domain.
+In <xref target="sip-trapezoid"/>, Proxy-A.example.com performs certain DNS
+queries to arrive at Proxy-B.example.net.  Because of the answers to the
+DNS queries, Proxy-A has a certain expectation that Proxy-B is a valid
+proxy in the example.net domain and is authorized to receive inbound
+requests targeted to that domain.</t>
+
+<t>The problem for Proxy-B is different: it accepts a connection from a 
+specific host (Proxy-A.example.com) but what it needs to determine is
+whether or not that connection can be treated as coming authoritatively
+from a particular SIP domain.  If Proxy-B receives a certificate tha
+only contains the identity "sip:Proxy-A.example.com", it is unable to
+make a determination that Proxy-A is authorized to act as a SIP outbound
+proxy for the example.com domain (note that example.com domain may
+use different inbound proxies, so SIP DNS resolution of "sip:example.com"
+may not lead to "Proxy-A.example.com".)  Certificate usage in SIP 
+cannot require that every outbound proxy for a domain also serve as
+its inbound proxy.  Thus, there is a need for an extra attribute that 
+allows an inbound proxy to know that its peer is an authorized proxy for 
+that domain.  This document discusses such an attribute as part of the
+X.509 certificate exchanged by the proxies when a TLS connection is 
+first established.</t>
+
+</section> <!-- Problem statement -->
+
+<section title="Restricting usage to SIP" anchor="sipusage">
+
+<t>This memo defines a certificate profile for binding a SIP
+domain name to an entity.  A SIP domain name is frequently textually 
+identical to the same DNS name used for other purposes.  For example, the DNS 
+name example.com may serve as a SIP domain name, an email domain name, and 
+web service name.  Since these different services within a single organization 
+might be administered independently and hosted separately, it should be 
+possible to create a certificate that binds the DNS name to its usage as a 
+SIP domain name without creating the implication that the usage is also valid 
+for some other purpose.  RFC5280 <xref target="RFC5280"/> section 
+4.2.1.12 defines a mechanism for this purpose: an "Extended Key Usage" 
+attribute.  Certificates whose purpose is to bind a SIP domain 
+identity without binding other non-SIP identities MUST include an 
+id-kp-SIPdomain attribute.
+</t>
+
+<section title="Extended Key Usage values for SIP domains">
+  <t>
+    RFC 5280 <xref target="RFC5280"/> specifies the EKU
+    X.509 certificate Extension for use in the Internet.  The 
+    extension indicates one or more purposes for which the certified public 
+    key may be used.  The EKU extension can be used in conjunction with 
+    the key usage extension, which indicates how the public key in the 
+    certificate may be used, in a more basic cryptographic way.
+  </t>
+  <figure>
+    <preamble>
+      The EKU extension syntax is repeated here for
+      convenience:
+    </preamble>
+    <artwork>
+      ExtKeyUsageSyntax  ::=  SEQUENCE SIZE (1..MAX) OF KeyPurposeId
+
+      KeyPurposeId  ::=  OBJECT IDENTIFIER
+    </artwork>
+  </figure>
+  <t>
+    This specification defines the KeyPurposeId id-kp-sipDomain. 
+
+  <figure>
+    <artwork>
+      id-kp  OBJECT IDENTIFIER  ::=
+         { iso(1) identified-organization(3) dod(6) internet(1)
+           security(5) mechanisms(5) pkix(7) 3 }
+
+      id-kp-sipDomain  OBJECT IDENTIFIER  ::=  { id-kp VALUE-TBD }
+    </artwork>
+  </figure>
+
+    Inclusion of this KeyPurposeId in a certificate indicates that 
+    any DNS subject names in the certificate are intended to identify 
+    the holder as authoritative for a SIP service in the domain named by 
+    the subjectAltName values.  Whether or not to include this restriction 
+    is up to the certificate issuer, but if it is included, it SHOULD 
+    be marked as critical.
+    <list style="empty">
+     <t>This is so that implementations that understand this extension
+     will honor it while those that do not are not impeded by its 
+     presence.</t>
+    </list>
+   </t>
+
+  <t>See <xref target='using-eku'/> for how the presence of an
+  id-kp-sipDomain value affects the interpretation of the certificate.</t>
+
+</section>
+
+</section> <!-- problem-mutual -->
+
+<section title="Using the SIP EKU in a certificate" anchor="using-eku">
+
+<t>Section 7.1 of <xref target="I-D.domain-certs"/> contains two steps
+for finding an identity (or a set of identities) in an X.509 certificate.
+In order to determine whether the SIP entity presenting the certificate
+is authoritative for its domain, implementations MUST perform the 
+step given below first, and then proceed with the steps in 
+Section 7.1 of <xref target="I-D.domain-certs"/>.
+</t>
+
+<t>The Extended Key Usage value(s), if any, MUST be examined to determine
+whether or not the certificate is valid for use in SIP (note that in
+the steps below, we assume that the certificate is otherwise valid 
+following the checks in RFC5280 <xref target="RFC5280"/>):
+
+<list style='symbols'>
+
+  <t>If the certificate does not contain any EKU values (the Extended Key
+  Usage extension does not exist), it is a matter of local policy whether
+  or not to accept the certificate for use as a SIP certificate.</t>
+
+  <t>If the certificate contains the id-kp-sipDomain EKU extension, then
+  the certificate MUST be acceptable as valid for use as a SIP
+  certificate.</t>
+
+  <t>If the certificate does not contain the id-kp-sipDomain EKU value, but
+  does contain the id-kp-anyExtendedKeyUsage EKU value, it is a matter of
+  local policy whether or not to accept it for use as a SIP
+  certificate.</t>
+
+  <t>If the certificate does not contain the id-kp-sipDomain EKU value, but
+  does contain either the id-kp-serverAuth or id-kp-clientAuth EKU values,
+  it is a matter of local policy whether or not to accept it for use as a
+  SIP certificate.
+   <list style="empty">
+    <t>id-kp-serverAuth and id-kp-clientAuth EKU values are defined in
+    Section 4.2.1.12 of RFC 5280 <xref target="RFC5280"/>.</t>
+   </list>
+  </t>
+
+  <t>If EKU extension exists but does not contain any of the
+  id-kp-sipDomain, id-kp-anyExtendedKeyUsage, id-kp-serverAuth, or
+  id-kp-clientAuth EKU values, then the certificate MUST NOT be 
+  considered acceptable as being authoritative for the domain portion 
+  of the SIP domain identities contained in the certificate.
+   <list style="empty">
+    <t>The term "SIP domain identity" is defined in RFC XXXX <xref
+    target="I-D.domain-certs"/>.</t>
+   </list>
+  </t>
+</list>
+</t>
+
+</section> <!-- using-eku -->
+
+<section title="Guidelines for a Certification Authority" anchor="ca">
+
+<t>The procedures and practices employed by the certification authority
+MUST ensure that the correct values for the EKU extension and subjectAltName 
+are inserted in each certificate that is issued.  For certificates that
+indicate authority over a SIP domain, but not over services other than
+SIP, certificate authorities SHOULD include the id-kp-sipDomain EKU 
+extension.</t>
+
+</section> <!-- ca -->
+
+<section title="Security Considerations" anchor="sec-cons">
+
+<t>This memo defines an EKU X.509 certificate extension that enables
+the holder of a certificate to be authoritative for a SIP service
+belonging to an autonomous domain.  Relying parties may execute applicable
+policies (such as those related to billing) on receiving a certificate
+with the id-kp-sipDomain EKU value.  An id-kp-sipDomain EKU value
+does not introduce any new security or privacy concerns.  At the very most,
+it simply allows the relying party to know that the holder of the certificate
+is authoritative for the SIP service in a certain domain.  In the absence
+of the id-kp-sipDomain EKU value, this information can be collected over
+time by a peer in any case.</t>
+
+</section> <!-- Security Considerations -->
+
+<section title="IANA Considerations" anchor="iana-cons">
+
+<!-- This text is taken from rfc5055, S10. -->
+
+<t>The id-kp-sipDomain purpose requires an object idenitifier (OID).
+The objects are defined in an arc delegated by IANA to the PKIX 
+working group.  No further action is necessary by IANA.</t>
+
+</section> <!-- iana-cons -->
+
+<section title="Acknowledgments">
+
+<t>The following IETF contributors provided substantive input to this
+document: Jeroen van Bemmel, Michael Hammer, Cullen Jennings, Paul Kyzivat,
+Derek MacDonald, Dave Oran, Jon Peterson, Eric Rescorla, Jonathan
+Rosenberg, Russ Housley, and Stephen Kent.</t>
+
+<t>Sharon Boyen and Trevor Freeman reviewed the document and facilitated 
+the discussion on id-kp-anyExtendedKeyUsage, id-kpServerAuth and 
+id-kp-ClientAuth purposes in certificates.</t>
+
+</section>
+
+</middle>  
+
+<back>
+
+<references title= "Normative References" >
+
+<reference anchor="RFC2119">
+ <front>
+  <title>Key words for use in RFCs to Indicate Requirement Levels</title>
+  <author initials="S." surname="Bradner">
+    <organization/></author>
+  <date month="March" year="1997"/>
+ </front>
+ <seriesInfo name="RFC" value="2119"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc2119.txt"/>
+</reference>
+
+<reference anchor="RFC3261">
+ <front>
+  <title>SIP: Session Initiation Protocol</title>
+  <author initials="J." surname="Rosenberg">
+   <organization></organization>
+  </author>
+  <author initials="H." surname="Schulzrinne">
+   <organization></organization>
+  </author>
+  <author initials='G.' surname='Camarillo'>
+   <organization></organization>
+  </author>
+  <author initials='A.' surname='Johnston'>
+   <organization></organization>
+  </author>
+  <author initials='J.' surname='Peterson'>
+   <organization></organization>
+  </author>
+  <author initials='R.' surname='Sparks'>
+   <organization></organization>
+  </author>
+  <author initials='M.' surname='Handley'>
+   <organization></organization>
+  </author>
+  <author initials='E.' surname='Schooler'>
+   <organization></organization>
+  </author>
+  <date month="June"  year="2002"/>
+ </front>
+ <seriesInfo name="RFC" value="3261"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc3261.txt"/>
+</reference>
+
+<reference anchor="RFC5280">
+ <front>
+  <title>Internet X.509 Public Key Infrastructure Certificate and
+  Certificate Revocation List (CRL) Profile</title>
+  <author initials="D." surname="Cooper">
+   <organization></organization>
+  </author>
+  <author initials="S." surname="Santesson">
+   <organization></organization>
+  </author>
+  <author initials="S." surname="Farrell">
+   <organization></organization>
+  </author>
+  <author initials="S." surname="Boyen">
+   <organization></organization>
+  </author>
+  <author initials="R." surname="Housley">
+   <organization></organization>
+  </author>
+  <author initials="W." surname="Polk">
+   <organization></organization>
+  </author>
+  <date year='2008' month='May' />
+</front>
+ <seriesInfo name="RFC" value="5280"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc5280.txt"/>
+</reference>
+
+<reference anchor="CCITT.X509.1988">
+  <front>
+    <title>Information Technology - Open Systems Interconnection - The Directory: Authentication Framework</title>
+    <author>
+      <organization>International International Telephone and Telegraph
+      Consultative Committee</organization>
+    </author>
+    <date month="November" year="1988" />
+  </front>
+
+  <seriesInfo name="CCITT" value="Recommendation X.509" />
+</reference>
+
+<reference anchor="CCITT.X680.1994">
+  <front>
+    <title>Specification of Abstract Syntax Notation One (ASN.1): Specification of Basic Notation</title>
+    <author>
+      <organization>International International Telephone and Telegraph
+      Consultative Committee</organization>
+    </author>
+    <date month="July" year="1994" />
+  </front>
+
+  <seriesInfo name="CCITT" value="Recommendation X.680" />
+</reference>
+
+<reference anchor="ITU.X690.1994">
+  <front>
+    <title>Information Technology - ASN.1 encoding rules: Specification of Basic Encoding Rules (BER), Canonical Encoding Rules (CER) and Distinguished Encoding Rules (DER)</title>
+    <author>
+      <organization>International Telecommunications Union</organization>
+    </author>
+    <date month="" year="1994" />
+  </front>
+
+  <seriesInfo name="ITU-T" value="Recommendation X.690" />
+</reference>
+
+<reference anchor="RFC3263">
+ <front>
+  <title>Session Initiation Protocol (SIP): Location SIP Servers</title>
+  <author initials="J." surname="Rosenberg">
+   <organization></organization>
+  </author>
+  <author initials="H." surname="Schulzrinne">
+   <organization></organization>
+  </author>
+  <date month="June" year="2002"/>
+ </front>
+ <seriesInfo name="RFC" value="3263"/>
+ <format type="TXT" target="http://www.ietf.org/rfc/rfc3263.txt"/>
+</reference>
+
+</references>
+
+<references title= "Informative References" >
+
+<reference anchor="I-D.domain-certs">
+ <front>
+  <title>Domain Certificates in the Session Initiation Protocol (SIP)</title>
+  <author initials="V." surname="Gurbani"><organization/></author>
+  <author initials="S." surname="Lawrence"><organization/></author>
+  <author initials="A." surname="Jeffrey"><organization/></author>
+  <date month="July" year="2008"/>
+ </front>
+ <seriesInfo name="Internet-Draft" value="draft-ietf-sip-domain-certs-01.txt"/>
+ <format type="TXT"
+ target="http://www.ietf.org/internet-drafts/draft-ietf-sip-domain-certs-01.txt"/>
+</reference>
+</references>
+
+<section title="ASN.1 Module" anchor="asn1">
+
+  <figure>
+    <artwork>
+   SIPDomainCertExtn
+     { iso(1) identified-organization(3) dod(6) internet(1)
+       security(5) mechanisms(5) pkix(7) id-mod(0)
+       id-mod-sip-domain-extns2007(VALUE-TBD) }
+
+   DEFINITIONS IMPLICIT TAGS ::=
+   BEGIN
+
+   -- OID Arcs
+
+   id-pe  OBJECT IDENTIFIER  ::=
+      { iso(1) identified-organization(3) dod(6) internet(1)
+        security(5) mechanisms(5) pkix(7) 1 }
+
+   id-kp  OBJECT IDENTIFIER  ::=
+      { iso(1) identified-organization(3) dod(6) internet(1)
+        security(5) mechanisms(5) pkix(7) 3 }
+
+   id-aca  OBJECT IDENTIFIER  ::=
+      { iso(1) identified-organization(3) dod(6) internet(1)
+        security(5) mechanisms(5) pkix(7) 10 }
+
+   -- Extended Key Usage Values
+
+   id-kp-sipDomain  OBJECT IDENTIFIER  ::=  { id-kp 20 }
+
+   END
+    </artwork>
+  </figure>
+</section>
+
+</back>
+</rfc>

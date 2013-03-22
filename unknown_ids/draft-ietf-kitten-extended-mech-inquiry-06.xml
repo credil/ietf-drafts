@@ -1,0 +1,744 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml' -->
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY rfc2119 SYSTEM '/home/nw141292/public_html/bibxml/reference.RFC.2119.xml'>
+<!ENTITY rfc2025 SYSTEM '/home/nw141292/public_html/bibxml/reference.RFC.2025.xml'>
+<!ENTITY rfc2743 SYSTEM '/home/nw141292/public_html/bibxml/reference.RFC.2743.xml'>
+<!ENTITY rfc2744 SYSTEM '/home/nw141292/public_html/bibxml/reference.RFC.2744.xml'>
+<!ENTITY rfc1964 SYSTEM '/home/nw141292/public_html/bibxml/reference.RFC.1964.xml'>
+<!ENTITY rfc4251 SYSTEM '/home/nw141292/public_html/bibxml/reference.RFC.4251.xml'>
+<!ENTITY rfc4462 SYSTEM '/home/nw141292/public_html/bibxml/reference.RFC.4462.xml'>
+<!ENTITY rfc4178 SYSTEM '/home/nw141292/public_html/bibxml/reference.RFC.4178.xml'>
+<!ENTITY rfc2847 SYSTEM '/home/nw141292/public_html/bibxml/reference.RFC.2847.xml'>
+]>
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc tocindent="no" ?>
+<?rfc autobreaks="no" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes"?>
+
+<rfc category="std" ipr="trust200902" docName="draft-ietf-kitten-extended-mech-inquiry-06.txt">
+    <front>
+	       <title abbrev="Extended GSS Mech Inquiry">Extended
+		   Generic Security Service Mechanism Inquiry APIs</title>
+	<author initials='N.' surname="Williams" fullname='Nicolas
+	    Williams'>
+	    <organization abbrev="Sun">Sun Microsystems</organization>
+	    <address>
+		<postal>
+		    <street>5300 Riata Trace Ct</street>
+		    <city>Austin</city> <region>TX</region>
+		    <code>78727</code> <country>US</country>
+		</postal>
+		<email>Nicolas.Williams@sun.com</email>
+	    </address>
+        </author>
+        <date month="April" year="2009"/>
+	<area>Security</area>
+	<workgroup>NETWORK WORKING GROUP</workgroup>
+	<keyword>Internet-Draft</keyword>
+	<abstract><t>This document introduces new application
+		programming interfaces (APIs) to the Generic Security
+		Services API (GSS-API) for extended mechanism attribute
+		inquiry.  These interfaces are primarily intended to
+		reduce instances of hardcoding of mechanism identifiers
+		in GSS applications.</t>
+	    <t>These interfaces include: mechanism attributes and
+		attribute sets, a function for inquiring the attributes
+		of a mechanism, a function for indicating mechanisms
+		that posses given attributes, and a function for
+		displaying mechanism attributes.</t>
+	</abstract>
+    </front>
+
+    <middle>
+	<section title="Conventions used in this document">
+            <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+            "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+            and "OPTIONAL" in this document are to be interpreted as
+            described in <xref target="RFC2119"/>.</t>
+        </section>
+
+	<section anchor="intro" title="Introduction">
+
+	    <t>GSS-API <xref target="RFC2743"/> mechanisms have a number
+		of properties that may be of interest to applications.
+		The lack of APIs for inquiring about available
+		mechanisms' properties has meant that many GSS-API
+		applications must hardcode mechanism OIDs.  Ongoing work
+		may result in a variety of new GSS-API mechanisms.
+		Applications should not have to hardcode their OIDs.</t>
+
+	    <t>For example, the SSHv2 protocol <xref target="RFC4251"/>
+		supports the use of GSS-API mechanisms for
+		authentication <xref target="RFC4462"/>, but it
+		explicitly prohibits the use of SPNEGO <xref
+		    target="RFC4178"/>.  Future mechanisms that
+		negotiate mechanisms would have to be forbidden as well,
+		but there is no way to implement applications that
+		inquire what mechanisms are available and then
+		programmatically exclude mechanisms "like SPNEGO".</t>
+
+	</section>
+
+	<section anchor="new_interfaces" title="New GSS-API Interfaces">
+
+	    <t>We introduce a new concept: that of mechanism attributes.
+		By allowing applications to query the set of attributes
+		associated with individual mechanisms and to find out
+		which mechanisms support a given set of attributes we
+		allow applications to select mechanisms based on their
+		attributes yet without having to hardcode mechanism
+		OIDs.</t>
+
+	    <t><xref target='mech_attrs'/> describes the mechanism
+		attributes concept.  Sections <xref target='gss_imba'
+		    format='counter'/>, <xref target='gss_iafm'
+		    format='counter'/> and <xref target='gss_dma'
+		    format='counter'/> describe three new interfaces
+		that deal in mechanisms and attribute sets: <vspace
+		    blankLines='1'/> <list style='symbols'>
+
+		    <t>GSS_Indicate_mechs_by_attrs()</t>
+
+		    <t>GSS_Inquire_attrs_for_mech()</t>
+
+		    <t>GSS_Display_mech_attr()</t>
+
+		</list>
+	    </t>
+
+	    <section anchor="mech_attrs" title="Mechanism Attributes and Attribute Sets">
+
+		<t>An abstraction for the features provided by
+		    mechanisms and pseudo-mechanisms is needed in order
+		    to facilitate the programmatic selection of
+		    mechanisms.  Pseudo-mechanisms are mechanisms which
+		    make reference to other mechanisms in order to
+		    provide their services.  For example, SPNEGO is a
+		    pseudo-mechanism, for without other mechanisms
+		    SPNEGO is useless.</t>
+
+		<t>Two data types are needed: one for individual
+		    mechanism attributes and one for mechanism attribute
+		    sets.  To simplify the mechanism attributes
+		    interfaces we reuse the 'OID' and 'OID set' data
+		    types and model individual mechanism attribute types
+		    as OIDs.</t>
+
+		<t>To this end we define an open namespace of mechanism
+		    attributes and assign them arcs off of this OID:</t>
+
+		<t>&lt;TBA by IANA&gt; [1.3.6.1.5.5.13 appears to be
+		    available; see
+		    http://www.iana.org/assignments/smi-numbers]</t>
+
+		<t>Each mechanism has a set of mechanism attributes that
+		    it supports as described in its specification.</t>
+
+	    </section>
+
+	    <section anchor='initial_mech_attr_list' title="List of Known Mechanism Attributes">
+
+		<texttable anchor='table_mech_attrs'>
+		    <ttcol align='left'>Mech Attr Name</ttcol>
+		    <ttcol align='right'>OID Arc</ttcol>
+		    <ttcol align='left'>Arc Name</ttcol>
+		    <c>GSS_C_MA_MECH_CONCRETE</c>   <c>(1)</c> <c>concrete-mech</c>
+		    <c>GSS_C_MA_MECH_PSEUDO</c>     <c>(2)</c> <c>pseudo-mech</c>
+		    <c>GSS_C_MA_MECH_COMPOSITE</c>  <c>(3)</c> <c>composite-mech</c>
+		    <c>GSS_C_MA_MECH_NEGO</c>       <c>(4)</c> <c>mech-negotiation-mech</c>
+		    <c>GSS_C_MA_MECH_GLUE</c>       <c>(5)</c> <c>mech-glue</c>
+		    <c>GSS_C_MA_NOT_MECH</c>        <c>(6)</c> <c>not-mech</c>
+		    <c>GSS_C_MA_DEPRECATED</c>      <c>(7)</c> <c>mech-deprecated</c>
+		    <c>GSS_C_MA_NOT_DFLT_MECH</c>   <c>(8)</c> <c>mech-not-default</c>
+		    <c>GSS_C_MA_ITOK_FRAMED</c>	    <c>(9)</c> <c>initial-is-framed</c>
+		    <c>GSS_C_MA_AUTH_INIT</c>       <c>(10)</c> <c>auth-init-princ</c>
+		    <c>GSS_C_MA_AUTH_TARG</c>       <c>(11)</c> <c>auth-targ-princ</c>
+		    <c>GSS_C_MA_AUTH_INIT_INIT</c>  <c>(12)</c> <c>auth-init-princ-initial</c>
+		    <c>GSS_C_MA_AUTH_TARG_INIT</c>  <c>(13)</c> <c>auth-targ-princ-initial</c>
+		    <c>GSS_C_MA_AUTH_INIT_ANON</c>  <c>(14)</c> <c>auth-init-princ-anon</c>
+		    <c>GSS_C_MA_AUTH_TARG_ANON</c>  <c>(15)</c> <c>auth-targ-princ-anon</c>
+		    <c>GSS_C_MA_DELEG_CRED</c>      <c>(16)</c> <c>deleg-cred</c>
+		    <c>GSS_C_MA_INTEG_PROT</c>      <c>(17)</c> <c>integ-prot</c>
+		    <c>GSS_C_MA_CONF_PROT</c>       <c>(18)</c> <c>conf-prot</c>
+		    <c>GSS_C_MA_MIC</c>		    <c>(19)</c> <c>mic</c>
+		    <c>GSS_C_MA_WRAP</c>	    <c>(20)</c> <c>wrap</c>
+		    <c>GSS_C_MA_PROT_READY</c>      <c>(21)</c> <c>prot-ready</c>
+		    <c>GSS_C_MA_REPLAY_DET</c>      <c>(22)</c> <c>replay-detection</c>
+		    <c>GSS_C_MA_OOS_DET</c>         <c>(23)</c> <c>oos-detection</c>
+		    <c>GSS_C_MA_CBINDINGS</c>       <c>(24)</c> <c>channel-bindings</c>
+		    <c>GSS_C_MA_PFS</c>             <c>(25)</c> <c>pfs</c>
+		    <c>GSS_C_MA_COMPRESS</c>        <c>(26)</c> <c>compress</c>
+		    <c>GSS_C_MA_CTX_TRANS</c>	    <c>(27)</c> <c>context-transfer</c>
+		    <c>&lt;reserved&gt;</c>         <c>(28..)</c> <c></c>
+		</texttable>
+
+		<texttable anchor='mech_attr_desc'>
+		    <ttcol align='left'>Mech Attr Name</ttcol>
+		    <ttcol align='left'>Purpose</ttcol>
+
+		    <c>GSS_C_MA_MECH_CONCRETE</c>   <c>Indicates that a mech is neither a pseudo-
+			mechanism nor a composite mechanism.</c>
+
+		    <c>GSS_C_MA_MECH_PSEUDO</c>  <c>Indicates that a mech is a
+			pseudo-mechanism.</c>
+
+		    <c>GSS_C_MA_MECH_COMPOSITE</c>  <c>Indicates that a mech is a composite
+			of other mechanisms.  This is reserved for a
+			specification of "stackable" pseudo-mechanisms.</c>
+
+		    <c>GSS_C_MA_MECH_NEGO</c>       <c>Indicates that a mech negotiates other
+			mechs (e.g., SPNEGO has this attribute).</c>
+
+		    <c>GSS_C_MA_MECH_GLUE</c>       <c>Indicates that the OID is not for a
+			mechanism but for the GSS-API itself.</c>
+
+		    <c>GSS_C_MA_NOT_MECH</c>        <c>Indicates that the OID is known,
+			yet also known not to be the OID of any GSS-API mechanism (or
+			the GSS-API itself).</c>
+
+		    <c>GSS_C_MA_DEPRECATED</c>      <c>Indicates that a mech (or its OID) is
+			deprecated and MUST NOT be used as a default
+			mechanism.</c>
+
+		    <c>GSS_C_MA_NOT_DFLT_MECH</c>   <c>Indicates that a mech (or its OID) MUST NOT
+			be used as a default mechanism.</c>
+
+		    <c>GSS_C_MA_ITOK_FRAMED</c> <c>Indicates that the given mechanism's initial
+			context tokens are properly framed as
+			per-section 3.1 of rfc2743.</c>
+
+		    <c>GSS_C_MA_AUTH_INIT</c>       <c>Indicates support for authentication of
+			initiator to acceptor.</c>
+
+		    <c>GSS_C_MA_AUTH_TARG</c>       <c>Indicates support for authentication of
+			acceptor to initiator.</c>
+
+		    <c>GSS_C_MA_AUTH_INIT_INIT</c>  <c>Indicates support
+			for "initial" authentication
+			of initiator to acceptor.  "Initial
+			authentication" refers to the use of passwords,
+			or keys stored on tokens, for authentication.
+			Whether a mechanism supports initial
+			authentication may depend on IETF consensus (see
+		        Security Considerations).</c>
+
+		    <c>GSS_C_MA_AUTH_TARG_INIT</c>  <c>Indicates support for initial authentication
+			of acceptor to initiator.</c>
+
+		    <c>GSS_C_MA_AUTH_INIT_ANON</c>  <c>Indicates
+			support for GSS_C_NT_ANONYMOUS as an initiator
+			principal name.</c>
+
+		    <c>GSS_C_MA_AUTH_TARG_ANON</c>  <c>Indicates support
+			for GSS_C_NT_ANONYMOUS as a target principal name.
+		    </c>
+
+		    <c>GSS_C_MA_DELEG_CRED</c>      <c>Indicates support for credential delegation.
+		    </c>
+
+		    <c>GSS_C_MA_INTEG_PROT</c>      <c>Indicates support for per-message integrity
+			protection.</c>
+
+		    <c>GSS_C_MA_CONF_PROT</c>       <c>Indicates support for per-message
+			confidentiality protection.</c>
+
+		    <c>GSS_C_MA_MIC</c>		    <c>Indicates support for MIC tokens.</c>
+
+		    <c>GSS_C_MA_WRAP</c>	    <c>Indicates support for WRAP tokens.</c>
+
+		    <c>GSS_C_MA_PROT_READY</c>      <c>Indicates support for per-message protection
+			prior to full context establishment.
+		    </c>
+
+		    <c>GSS_C_MA_REPLAY_DET</c>      <c>Indicates
+			support for replay detection.</c>
+
+		    <c>GSS_C_MA_OOS_DET</c>         <c>Indicates support for out-of-sequence
+			detection.
+		    </c>
+
+		    <c>GSS_C_MA_CBINDINGS</c>       <c>Indicates
+			support for channel bindings.</c>
+
+		    <c>GSS_C_MA_PFS</c>             <c>Indicates support for Perfect Forward
+			Security.
+		    </c>
+
+		    <c>GSS_C_MA_COMPRESS</c>        <c>Indicates support for compression of data
+			inputs to GSS_Wrap().</c>
+
+		    <c>GSS_C_MA_CTX_TRANS</c>       <c>Indicates support
+			for security context export/import.</c>
+
+		</texttable>
+
+	    </section>
+
+	    <section title="Mechanism Attribute Sets of Existing Mechs">
+
+		<t>The Kerberos V mechanism <xref target="RFC1964"/> provides the following
+		    mechanism attributes:
+		    <vspace blankLines='1'/>
+		    <list style='symbols'>
+			<t>GSS_C_MA_MECH_CONCRETE</t>
+			<t>GSS_C_MA_ITOK_FRAMED</t>
+			<t>GSS_C_MA_AUTH_INIT</t>
+			<t>GSS_C_MA_AUTH_TARG</t>
+			<t>GSS_C_MA_DELEG_CRED</t>
+			<t>GSS_C_MA_INTEG_PROT</t>
+			<t>GSS_C_MA_CONF_PROT</t>
+			<t>GSS_C_MA_MIC</t>
+			<t>GSS_C_MA_WRAP</t>
+			<t>GSS_C_MA_PROT_READY</t>
+			<t>GSS_C_MA_REPLAY_DET</t>
+			<t>GSS_C_MA_OOS_DET</t>
+			<t>GSS_C_MA_CBINDINGS</t>
+			<t>GSS_C_MA_CTX_TRANS (some implementations,
+			    using implementation-specific exported
+			    context token formats)</t>
+		    </list>
+		</t>
+
+		<t>The Kerberos V mechanism also has a deprecated OID which has the same
+		    mechanism attributes as above, and GSS_C_MA_DEPRECATED.</t>
+
+		<t>The mechanism attributes of the SPKM <xref
+			target="RFC2025"/> family of mechanisms will be
+		    provided in a separate document as SPKM is current being reviewed
+		    for possibly significant changes due to problems in its
+		    specifications.</t>
+
+		<t>The LIPKEY mechanism <xref target="RFC2847"/> offers the following attributes:
+		    <vspace blankLines='1'/>
+		    <list style='symbols'>
+
+			<t>GSS_C_MA_MECH_CONCRETE</t>
+			<t>GSS_C_MA_ITOK_FRAMED</t>
+			<t>GSS_C_MA_AUTH_INIT_INIT</t>
+			<t>GSS_C_MA_AUTH_TARG (from SPKM-3)</t>
+			<t>GSS_C_MA_AUTH_TARG_ANON (from SPKM-3)</t>
+			<t>GSS_C_MA_INTEG_PROT</t>
+			<t>GSS_C_MA_CONF_PROT</t>
+			<t>GSS_C_MA_REPLAY_DET</t>
+			<t>GSS_C_MA_OOS_DET</t>
+			<t>GSS_C_MA_CTX_TRANS (some implementations,
+			    using implementation-specific exported
+			    context token formats)</t>
+		    </list>
+		</t>
+
+		<t>
+		    <list style='empty'>
+			<t>(LIPKEY should also provide GSS_C_MA_CBINDINGS, but
+			    SPKM-3 requires clarifications on this point.)</t>
+		    </list>
+		</t>
+
+		<t>The SPNEGO mechanism <xref target="RFC4178"/> provides the following
+		    attributes:
+		    <list style='symbols'>
+			<t>GSS_C_MA_MECH_NEGO</t>
+			<t>GSS_C_MA_ITOK_FRAMED</t>
+		    </list>
+		</t>
+
+		<t>All other mechanisms' attributes will be described elsewhere.</t>
+
+	    </section>
+
+	    <section anchor="new_functions" title="New GSS-API Function Interfaces">
+
+		<t>Several new interfaces are given by which, for
+		    example, GSS-API applications may determine what
+		    features are provided by a given mechanism and what
+		    mechanisms provide what features.</t>
+
+		<t>These new interfaces are all OPTIONAL.</t>
+
+		<t>Applications should use GSS_Indicate_mechs_by_attr()
+		    instead of GSS_Indicate_mechs() wherever
+		    possible.</t>
+
+		<t>Applications can use GSS_Indicate_mechs_by_attr() to
+		    determine what, if any, mechanisms provide a given
+		    set of features.</t>
+
+		<t>GSS_Indicate_mechs_by_attr() can also be used to
+		    indicate (as in GSS_Indicate_mechs()) the set of
+		    available mechanisms of each type (concrete,
+		    mechanism negotiation pseudo-mechanism, etc.).</t>
+
+		<section anchor="criticality" title="Mechanism Attribute Criticality">
+
+		    <t>Mechanism attributes may be added at any time.
+			Not only may attributes be added to the list of
+			known mechanism attributes at any time, but the
+			set of mechanism attributes supported by a
+			mechanism can be changed at any time.</t>
+
+		    <t>For example, new attributes might be added to
+			reflect whether a mechanism's initiator must
+			contact online infrastructure, and/or whether
+			the acceptor must do so.  In this example the
+			Kerberos V mechanism would gain a new attribute
+			even though the mechanism itself is not
+			modified.</t>
+
+		    <t>Applications making use of attributes not defined
+			herein then would have no way of knowing whether
+			a GSS-API implementation and its mechanisms know
+			about new mechanism attributes.  To address this
+			problem GSS_Indicate_mechs_by_attr() and
+			GSS_Indicate_mechs_by_attr() support a notion of
+			critical mechanism attributes.  Applications can
+			search for mechanisms that understand mechanism
+			attributes that are critical to the application,
+			and the application may ask what mechanism
+			attributes are understood by a given
+			mechanism.</t>
+
+		</section>
+
+		<section anchor="gss_imba" title="GSS_Indicate_mechs_by_attr()">
+
+		    <t>Inputs:
+			<list style='symbols'>
+
+			    <t>desired_mech_attrs SET OF OBJECT
+				IDENTIFIER  -- set of GSS_C_MA_* OIDs
+				that the mechanisms indicated in the
+				mechs output parameter MUST offer</t>
+
+			    <t>except_mech_attrs SET OF OBJECT
+				IDENTIFIER  -- set of GSS_C_MA_* OIDs
+				that the mechanisms indicated in the
+				mechs output parameter MUST NOT
+				offer</t>
+
+			    <t>critical_mech_attrs SET OF OBJECT
+				IDENTIFIER  -- set of GSS_C_MA_* OIDs
+				that the mechanisms indicated in the
+				mechs output parameter MUST understand
+				(i.e., mechs must know whether critical
+				attributes are or are not
+				supported)</t>
+
+			</list>
+		    </t>
+
+		    <t>Outputs:
+			<list style='symbols'>
+
+			    <t>major_status INTEGER</t>
+
+			    <t>minor_status INTEGER</t>
+
+			    <t>mechs SET OF OBJECT IDENTIFIER  -- set of
+				mechanisms that support the given
+				desired_mech_attrs but not the
+				except_mech_attrs, and all of which
+				understand the given
+				critical_mech_attrs (the caller must
+				release this output with
+				GSS_Release_oid_set())</t>
+
+			</list>
+		    </t>
+
+		    <t>Return major_status codes:
+			<list style='symbols'>
+
+			    <t>GSS_S_COMPLETE indicates success; the
+				output mechs parameter MAY be the empty
+				set (GSS_C_NO_OID_SET).</t>
+
+			    <t>GSS_S_FAILURE indicates that the request
+				failed for some other reason.</t>
+
+			</list>
+		    </t>
+
+		    <t>GSS_Indicate_mechs_by_attrs() returns the set of
+			OIDs corresponding to mechanisms that offer at
+			least the desired_mech_attrs but none of the
+			except_mech_attrs, and which understand all of
+			the attributes listed in
+			critical_mech_attrs.</t>
+
+		    <t>When all three set of OID input parameters are
+			the empty set this function acts as a version of
+			GSS_indicate_mechs() that outputs the set of all
+			supported mechanisms.</t>
+
+		</section>
+
+		<section anchor="gss_iafm" title="GSS_Inquire_attrs_for_mech()">
+
+		    <t>Inputs:
+			<list style='symbols'>
+
+			    <t>mech OBJECT IDENTIFIER -- mechanism OID</t>
+
+			</list>
+		    </t>
+
+		    <t>Outputs:
+			<list style='symbols'>
+
+			    <t>major_status INTEGER</t>
+
+			    <t>minor_status INTEGER</t>
+
+			    <t>mech_attrs SET OF OBJECT IDENTIFIER  --
+				set of mech_attrs OIDs (GSS_C_MA_*)
+				supported by the mechanism (the caller
+				must release this output with
+				GSS_Release_oid_set())</t>
+
+			    <t>known_mech_attrs SET OF OBJECT IDENTIFIER
+				-- set of mech_attrs OIDs known to the
+				mechanism implementation (the caller
+				must release this output with
+				GSS_Release_oid_set()).</t>
+
+			</list>
+		    </t>
+
+		    <t>Return major_status codes:
+			<list style='symbols'>
+
+			    <t>GSS_S_COMPLETE indicates success; the
+				output mech_attrs parameter MAY be the
+				empty set (GSS_C_NO_OID_SET).</t>
+
+			    <t>GSS_S_BAD_MECH indicates that the
+				mechanism named by the mech parameter
+				does not exist or that mech is
+				GSS_C_NO_OID and no default mechanism
+				could be determined.</t>
+
+			    <t>GSS_S_FAILURE indicates that the request
+				failed for some other reason.</t>
+
+			</list>
+		    </t>
+
+		    <t>GSS_Inquire_mech_attrs_for_mech() indicates the
+			set of mechanism attributes supported by a given
+			mechanism.</t>
+
+		</section>
+
+		<section anchor="gss_dma" title="GSS_Display_mech_attr()">
+
+		    <t>Inputs:
+			<list style='symbols'>
+
+			    <t>mech_attr OBJECT IDENTIFIER -- mechanism attribute
+				OID</t>
+
+			</list>
+		    </t>
+
+		    <t>Outputs:
+			<list style='symbols'>
+
+			    <t>major_status INTEGER</t>
+
+			    <t>minor_status INTEGER</t>
+
+			    <t>name OCTET STRING, -- name of mechanism
+				attribute (e.g., GSS_C_MA_*)</t>
+
+			    <t>short_desc OCTET STRING, -- a short
+				description of the mechanism attribute
+				(the caller must release this output
+				with GSS_Release_buffer())</t>
+
+			    <t>long_desc OCTET STRING -- a longer
+				description of the mechanism attribute
+				(the caller must release this output
+				with GSS_Release_buffer())</t>
+
+			</list>
+		    </t>
+
+		    <t>Return major_status codes:
+			<list style='symbols'>
+
+			    <t>GSS_S_COMPLETE indicates success.</t>
+
+			    <t>GSS_S_BAD_MECH_ATTR indicates that the
+				mechanism attribute referenced by the
+				mech_attr parameter is unknown to the
+				implementation.</t>
+
+			    <t>GSS_S_FAILURE indicates that the request
+				failed for some other reason.</t>
+
+			</list>
+		    </t>
+
+		    <t>This function can be used to obtain
+			human-readable descriptions of GSS-API mechanism
+			attributes.</t>
+
+		</section>
+
+		<section title="New Major Status Values">
+
+		    <t>A single new major status code is added for
+			GSS_Display_mech_attr():
+			<list style='symbols'>
+
+			    <t>GSS_S_BAD_MECH_ATTR</t>
+			</list>
+
+			roughly corresponding to GSS_S_BAD_MECH, but
+			applicable to mechanism attribute OIDs, rather
+			than to mechanism OIDs.</t>
+
+		    <t>For the C-bindings of the GSS-API <xref
+			    target="RFC2744"/> GSS_S_BAD_MECH_ATTR shall
+			have a routine error number of 19 (this is
+			shifted to the left by
+			GSS_C_ROUTINE_ERROR_OFFSET).</t>
+
+		</section>
+
+		<section title="C-Bindings">
+
+		    <t>Note that there is a bug in the C bindings of the
+			GSS-APIv2u1 <xref target="RFC2744"/> in that
+			the C 'const' attribute is applied to types
+			which are pointer typedefs.  This is a bug
+			because this declares that the pointer argument
+			is 'const' rather than that the object pointed
+			by it is const.  To avoid this error we hereby
+			define new typdefs which include const properly:</t>
+
+		    <figure anchor='const_typedefs' title="const typedefs">
+			<artwork>
+   typedef const gss_buffer_desc * gss_const_buffer_t;
+   typedef const struct gss_channel_bindings_struct * 
+      gss_const_channel_bindings_t;
+   typedef const &lt;platform-specific&gt; gss_const_ctx_id_t;
+   typedef const &lt;platform-specific&gt; gss_const_cred_id_t;
+   typedef const &lt;platform-specific&gt; gss_const_name_t;
+   typedef const gss_OID_desc * gss_const_OID;
+   typedef const gss_OID_set_desc * gss_const_OID_set;
+			</artwork>
+		    </figure>
+
+		    <t>Note that only gss_const_OID and
+			gss_const_OID_set are used below.
+			We include the other const typedefs for
+			convenience since the C bindings of the GSS-API
+			do use const with pointer typedefs when it
+			should often instead use the above typedefs
+			instead.</t>
+
+		    <figure anchor='cbindings' title="C bindings">
+			<artwork>
+
+   #define GSS_S_BAD_MECH_ATTR (19ul &lt;&lt; GSS_C_ROUTINE_ERROR_OFFSET)
+
+   OM_uint32 gss_inquire_mechs_for_attrs(
+      OM_uint32         *minor_status,
+      gss_const_OID_set  desired_mech_attrs,
+      gss_const_OID_set  except_mech_attrs,
+      gss_const_OID_set  critical_mech_attrs,
+      gss_OID_set       *mechs);
+
+   OM_uint32 gss_inquire_attrs_for_mech(
+      OM_uint32         *minor_status,
+      gss_const_OID      mech,
+      gss_OID_set       *mech_attrs,
+      gss_OID_set       *known_mech_attrs);
+
+   OM_uint32 gss_display_mech_attr(
+      OM_uint32         *minor_status,
+      gss_const_OID      mech_attr,
+      gss_buffer_t       name,
+      gss_buffer_t       short_desc,
+      gss_buffer_t       long_desc);
+
+			</artwork>
+		    </figure>
+
+		    <t>Note that output buffers must be released via
+			gss_release_buffer().  Output OID sets must be
+			released via gss_release_oid_set().</t>
+
+		</section>
+	    </section>
+	</section>
+
+	<section title="Requirements for Mechanism Designers">
+
+	    <t>All future GSS-API mechanism specifications MUST:
+		<list style='symbols'>
+
+		    <t>list the set of GSS-API mechanism attributes associated
+			with them</t>
+
+		</list>
+	    </t>
+
+	</section>
+	<section title="IANA Considerations">
+
+	    <t>The namsepace of programming language symbols with names
+		beginning with GSS_C_MA_* is reserved for allocation by
+		IESG Protocol Action.  The IANA should allocate a base
+		OID, as an arc of 1.3.6.1.5.5, for the set of GSS_C_MA_*
+		described herein, and it should register all of the
+		GSS_C_MA_* values described in <xref
+		    target='initial_mech_attr_list'/></t>
+
+	</section>
+	<section title="Security considerations">
+
+	    <t>This document specifies extensions to a security-related
+		API.  It imposes new requirements on future GSS-API
+		mechanisms, and the specification of future protocols
+		that use the GSS-API should make reference to this
+		document where applicable.  The ability to inquire about
+		specific properties of mechanisms should improve
+		security.</t>
+
+	    <t>The semantics of each mechanism attribute may include a
+		security component.</t>
+
+	    <t>Application developers must understand that mechanism
+		attributes may be added at any time, both, to the set of
+		known mechanism attributes, as well as to existing
+		mechanism's sets of supported mechanism attributes.
+		Therefore application developers using the APIs
+		described herein must understand what mechanism
+		attributes their applications depend critically on, and
+		must use the mechanism attribute criticality features of
+		these APIs.</t>
+
+	</section>
+
+    </middle>
+
+    <back>
+	<references title="Normative References">&rfc2119;&rfc2743;&rfc2744;
+	</references>
+	<references title="Informative
+	    References">&rfc1964;&rfc2025;&rfc4251;&rfc4462;&rfc4178;&rfc2847;
+	</references>
+    </back>
+
+</rfc>

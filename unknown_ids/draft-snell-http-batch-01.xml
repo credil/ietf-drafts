@@ -1,0 +1,250 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+  <!ENTITY rfc2616 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2616.xml'>
+  <!ENTITY rfc2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+<?rfc toc="yes"?>
+<?rfc strict="yes"?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc compact="yes"?>
+<rfc ipr="trust200811" category="std" docName="draft-snell-http-batch-01">
+  <front>
+    <title abbrev="HTTP BATCH">
+      HTTP Multipart Batched Request Format
+    </title>
+
+    <author initials="J.M." surname="Snell" fullname="James M Snell">
+      <organization>IBM</organization>
+      <address>
+        <postal>
+          <street></street>
+          <city>Hanford</city> <region>CA</region> <code>93230</code>
+          <country></country>
+        </postal>
+        <phone></phone>
+        <email>jasnell@us.ibm.com</email>
+        <uri>http://www.ibm.com</uri>
+      </address>
+    </author>
+    
+    <date month="June" year="2009" />
+
+    <area>Applications</area>
+    <workgroup>Individual Submission</workgroup>
+    <keyword>I-D</keyword>
+    <keyword>http</keyword>
+    <keyword>batch</keyword>
+    <keyword>mime</keyword>
+    <keyword>multipart</keyword>
+
+    <abstract>
+      <t>This document specifies a format for packaging multiple, independent 
+      HTTP requests into a single multipart payload.</t>
+    </abstract>
+
+  </front>
+  
+
+  <middle>
+    <section anchor="intro" title="Introduction">
+
+      <t>This specification defines a format for packaging multiple, independent
+      HTTP requests into a single multipart MIME payload.  The intent is to 
+      provide applications with a method of grouping sets of individual HTTP
+      requests for processing as a unit. This approach is designed to work around a number of 
+      limitations that currently exist in HTTP pipelining, such as the inability to pipeline 
+      a mix of idempotent and non-idempotent requests.  In addition, it addresses the inability 
+      of a server to determine the completeness and optimum order of processing for a logical 
+      collection of requests before attempting to process any of the individual requests. 
+      Note that batching HTTP requests using the mechanism defined here, is not intended 
+      to replace pipelining.</t> 
+
+      <t>In this document, the key words "MUST", "MUST NOT", "REQUIRED", "SHALL", 
+      "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" 
+      are to be  interpreted as described in <xref target="RFC2119" />.</t>
+
+    </section>
+
+    <section anchor="multipart-http" title="The Multipart/Http Content Type">
+    
+      <t>The multipart/http media type is a new subtype of MIME multipart
+      message in which the body parts are either HTTP request or response 
+      messages. A multipart/http message MUST NOT contain a mixture of both 
+      request and response messages.</t>
+          
+      <t>In addition to the boundary parameter required for all Multipart
+      message types, the multipart/http type has two additional optional 
+      parameters: "msgtype" and "version".</t>
+      
+      <t>The "msgtype" parameter value specifies either "request" or "response" 
+      and indicates the type of the enclosed messages.</t> 
+      
+      <t>The "version" parameter value specifies the HTTP Version (e.g. "1.1") 
+      of the enclosed messages. If not present, the version can be determined by 
+      examining each individual request part. All of the enclosed messages MUST 
+      be of the same HTTP Version.</t>
+          
+      <t>The following illustrates an example multipart/http message 
+      containing two HTTP Request messages.</t>  
+      
+      <figure><artwork>
+    POST /example/application HTTP/1.1
+    Host: example.org
+    Content-Length: 123832
+    Content-Type: multipart/http;version=1.1;
+      msgtype=request;boundary=batch
+    Mime-Version: 1.0
+    
+    --batch
+    Content-ID: &lt;df536860-34f9-11de-b418-0800200c9a66@example.org&gt;
+    
+    POST /example/application HTTP/1.1
+    Host: example.org
+    Authorization: Basic amFtZXM6c25lbGw=
+    Content-Type: text/plain
+    Content-Length: 3
+    
+    Foo
+    --batch
+    Content-ID: &lt;226e35d0-34fa-11de-b418-0800200c9a66@example.org&gt;
+    
+    PUT /example/application/resource HTTP/1.1
+    Host: example.org
+    Authorization: Basic amFtZXM6c25lbGw=
+    Content-Type: image/jpg
+    Content-Length: 123456
+    
+    {jpg image data}
+    --batch
+    Content-ID: &lt;22fe12d0-ef12-e1de-c456-0834212c9a88@example.org&gt;
+    
+    GET /example/application/resource2 HTTP/1.1
+    Host: example.org
+    Authorization: Basic amFtZXM6c25lbGw=
+    --batch--
+</artwork></figure>
+    
+      <t>A multipart/http message containing HTTP request messages is called a
+      Batch Request.  A multipart/http message containing HTTP response
+      messages is called a Batch Response.</t>      
+      
+      <t>A client application creates an Batch Request message with one or more 
+      individual HTTP requests and transmits that to the server as the payload 
+      of another HTTP request message as illustrated in Listing 1. 
+      Each body part MUST specify a Content-ID header specifying a reference 
+      identifier for the individual request message.</t>
+      
+      <t>The server receives the Batch Request and processes each
+      body part in any order the server determines to be appropriate.</t>
+      
+      <t>Upon processing the Batch Request, the server will generate a Batch
+      Response message containing one HTTP response message for every message
+      in the request. Each part of Batch Response MUST contain a Content-ID header 
+      specifying the value of the Content-ID of the matching request. Client 
+      applications MUST NOT assume that the ordering of responses in 
+      the Batch Response matches the ordering of requests in the Batch Request 
+      and MUST use the Content-ID header values to correlate request and 
+      response messages.</t>
+      
+      <t>A server need not wait until all batched requests have been processed
+      to create and begin sending the Batch Response back to the client.</t>
+    
+      <t>The example below contains a Batch Response for the Batch Request in
+      Listing 1.</t>
+        <figure><artwork>
+    HTTP/1.1 200 OK
+    Date: Wed, 29 Apr 2009 20:00:00 GMT
+    Content-Length: 291
+    Content-Type: multipart/http;version=1.1
+      ;msgtype=request;boundary=batch
+    Mime-Version: 1.0
+
+    --batch
+    Content-ID: &lt;226e35d0-34fa-11de-b418-0800200c9a66@example.org&gt;
+    
+    HTTP/1.1 415 Unsupported Media Type
+    Date: Wed, 29 Apr 2009 20:00:00 GMT
+    --batch
+    Content-ID: &lt;22fe12d0-ef12-e1de-c456-0834212c9a88@example.org&gt;
+    
+    HTTP/1.1 401 Unauthorized
+    Date: Wed, 29 Apr 2009 20:00:00 GMT
+    --batch
+    Content-ID: &lt;df536860-34f9-11de-b418-0800200c9a66@example.org&gt;
+    
+    HTTP/1.1 204 OK
+    Date: Wed, 29 Apr 2009 20:00:00 GMT    
+    --batch--
+</artwork></figure>
+    
+      <t>A server MUST determine the status of an HTTP request containing a 
+      Batch Request based solely on its ability to successfully process the 
+      Batch Request as a whole and not on the status of each individual 
+      contained message. For instance, if the server is capable of understanding 
+      and processing the Batched Request, even if some or all of the contained requests 
+      fail individually, the server SHOULD respond with a status of either 
+      200 OK or 202 Accepted. The 201 Created, 204 No Content, 205 Reset 
+      Content, and 206 Partial Content responses are not appropriate responses 
+      for a successfully processed batch request.</t>
+      
+      <t>While it is possible for Batch Request and Batch Response messages to
+      be transferred using Chunked Transfer Coding, the individual HTTP request 
+      and response messages contained within MUST NOT use Chunked Transfer Coding.</t> 
+      
+      <t>Batch Responses are not cacheable. Individual HTTP response messages
+      contained within the Batch Response might be cacheable.</t>
+      
+    </section>
+        
+    <section title="IANA Considerations">
+      <section title="The 'Multipart/Batch' Content-Type">
+    <t><figure><artwork>
+    Media Type Name: multipart
+    Media Subtype Name: http
+    Required Parameters:
+      boundary: The standard MIME boundary parameter
+    Optional Parameters:
+      version: The HTTP-Version number of the enclosed messages
+               (e.g., "1.1")
+      msgtype: The message type -- "request" or "response"
+    Encoding considerations:
+      HTTP messages enclosed by this type are in "binary" format
+    Security considerations: Depends on the batched content-type
+    Published specification: This document
+    Contact: James M Snell
+             jasnell@us.ibm.com
+             877-511-5082
+    </artwork></figure></t>
+      </section>  
+    </section>
+    
+    <section title="Security Considerations">
+
+      <t>It is possible that a malicious client could attempt to bypass 
+      security policies by batching requests that otherwise would have 
+      been blocked by protective firewalls, proxies and server configurations. 
+      Applications supporting batched requests must be prepared to deal with such 
+      requests and should be implemented so that security policies are 
+      properly enforced on batched requests.</t>
+
+      <t>TODO: Discussion about how each batched request must be processed
+      separately when it comes to applying security rules. Each has it's own
+      authentication and authorization. A batched request must not inherit the
+      authentication/authorization of the containing Multipart Batch Request
+      or the other requests in the batch.  Just because a user is authorized
+      to submit a batch of requests, that doesn't mean they are authorized to
+      submit any of the individually batched requests.</t>
+
+    </section>
+  </middle>
+  
+  <back>
+    <references title="Normative References">
+      &rfc2119;
+      &rfc2616;
+    </references>    
+  </back>
+
+</rfc>
+

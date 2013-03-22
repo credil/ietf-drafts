@@ -1,0 +1,1484 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfcXXXX.dtd" [
+      <!ENTITY rfc1928 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.1928.xml'>
+      <!ENTITY rfc2765 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2765.xml'>
+      <!ENTITY rfc3103 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3103.xml'>
+      <!ENTITY rfc4380 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4380.xml'>
+      <!ENTITY rfc5246 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.5246.xml'>
+      <!ENTITY rfc5389 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.5389.xml'>
+]>
+<rfc ipr="pre5378Trust200902" docName="draft-moore-nat-xc-02">
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes" ?>
+<front>
+  <title abbrev="NAT-XC">IPv4/v6 NAT With Explicit Control (NAT-XC)</title>
+  <author initials="K." surname="Moore" fullname="Keith Moore">
+    <organization>Network Heretics</organization>
+    <address>
+      <postal>
+	<street>PO Box 1934</street>
+	<city>Knoxville</city> 
+	<region>TN</region>
+	<code>37901</code>
+	<country>US</country>
+      </postal>
+      <email>moore@network-heretics.com</email>
+    </address>
+  </author>
+  <date month="March" year="2009" />
+  <abstract>
+    <t>This document describes a mechanism called NAT-XC (for NAT with
+      Explicit Control) for translating between IPv4 and IPv6.  NAT-XC
+      is distinguished from other IPv4/IPv6 translations schemes in that it
+      separates the translation between IPv4 and IPv6 from the management
+      of address bindings for such a translation; and is designed to allow
+      applications to be explicitly aware of, and control, their
+      address bindings. NAT-XC can be used by both IPv4 clients
+      wishing to communicate via IPv6, and IPv6 clients wishing to
+      communicate via IPv4.   NAT-XC appears to be usable in a wide variety
+      of scenarios requiring communication across IPv4/IPv6 boundaries.</t>
+  </abstract>
+</front>
+<middle>
+<section title="Introduction">
+<t>
+This document describes a mechanism called NAT-XC (or NAT with
+Explicit Control) for translating between IPv4 and IPv6, with the
+following characteristics:
+<list style='symbols'>
+<t>The translation is explicitly controlled (e.g. its address bindings
+  are created, maintained, and discarded) from a remote location using a
+  well-defined protocol, rather than having the bindings maintained
+  at the point at which translation occurs using traffic analysis and
+  heuristics.</t>
+
+<t>Such control may be accomplished from any of several points,
+  including from one of the endpoints participating in a conversation,
+  or even (when necessary or desirable) by an application.</t>
+
+<t>Any party wishing to conduct a conversation across address realm
+  boundaries, may arrange for the translation without knowledge of, or
+  cooperation by, other parties.</t>
+
+<t>While the most common deployment of NAT-XC is assumed to locate the
+  translation at the periphery of an enterprise network or within the
+  enterprise's ISP, such translation may occur, via explicit 
+  arrangement, at any location on the network which has both public 
+  IPv4 and public IPv6 network access.</t>
+
+<t>An application using the translator to accept inbound traffic from
+  a remote address realm, is able to be informed of its endpoint
+  addresses in that realm, as well as the endpoint addresses of its peers.</t>
+</list>
+This mechanism is believed to have the following benefits:
+<list style='symbols'>
+<t>Deployability.
+<vspace blankLines="1" />
+  This single mechanism is adaptable to suit a wide variety of
+  application configurations, network constraints, and operator
+  requirements.  Because the translation can be accomplished at a 
+  variety of network locations, operators have a great deal of
+  flexibility as to how they arrange for such translation.  The
+  mechanism can accommodate IPv4-only networks, IPv6-only networks,
+  legacy hosts without IPv4 capability, applications written to a
+  dual-stack model, and applications written to an IPv4-only
+  model. The mechanism can also function when the client host is
+  behind a legacy IPv4 NAT.
+<vspace blankLines="1" />
+
+  Because NAT-XC is able to translate packets for either IPv4-only or
+  IPv6-only clients, it allows either of two hosts wishing to
+  communicate (one using IPv4, the other using IPv6) to make itself
+  accessible to the other.
+<vspace blankLines="1" />
+
+  NAT-XC also avoids the need to upgrade multiple components of the
+  network before any application can communicate across the
+  IPv4/IPv6 boundary.  Any of several mechanisms can be used to
+  adapt an application to use a NAT-XC translator; and the NAT-XC
+  translator itself can either be provided locally, or by the
+  network's ISP, or outsourced to a third party.
+</t>
+<t>Minimizes the need for ALGs (including DNS ALG).
+<vspace blankLines="1" />
+In many cases, NAT-XC permits applications written to a dual-stack
+programming model to function as if they had direct access to both
+native IPv4 and native IPv6 networks.  Applications written to a
+dual-stack model are presumed to be aware of both IPv4 and IPv6, and
+therefore, to also be aware of details of using higher-level protocols
+with IPv4 and IPv6 (e.g. address literals, DNS AAAA records, FTP EPRT
+vs. PORT, and so forth).  
+<vspace blankLines="1" />
+However, some applications, such as those written to an IPv4-only
+model, will not be aware of these differences. Those applications will need
+protocol translation to be implemented by ALGs in order to effectively
+interoperate with peers speaking only IPv6.  Unfortunately, ALGs, when
+applied indiscriminately to all traffic, can interfere with the
+interoperation of applications that do not need ALGs.
+<vspace blankLines="1" />
+The NAT-XC architecture minimizes unnecessary use of ALGs as follows:
+First, by separating the management of address bindings from the address
+translation, it becomes possible for the address binding management to
+be implemented closer to the application. So a network library or
+network stack that supports NAT-XC can provide a means to enable or
+disable ALGs on a per-application basis.  Second, the NAT-XC
+architecture allows the bindings to be managed by the application
+itself, pre-empting any binding management that might otherwise be
+provided by lower layers.  Third, for those cases when the binding
+control is implemented in a Control Router, the NAT-XC Control
+Protocol has the provision to explicitly disable ALGs.  This makes it
+possible for an application to disable ALGs that might have
+otherwise interfered with its interoperation.
+</t>
+<!--
+<vspace blankLines="1" />
+
+  Since NAT-XC applications have the means to both be aware of
+  network translation and to explicitly manage the translation, it is
+  no longer necessary to expect the NAT to inspect and modify traffic
+  containing endpoint IP addresses.  In many cases, applications
+  written to a dual-stack model can work through NAT-XC without
+  modification, as the API or kernel stack can provide the
+  application with the appearance of direct access to public IPv4 and
+  IPv6 networks through normal API calls, even if the local network
+  does not have such access.
+<vspace blankLines="1" />
+
+  To accommodate applications that are written to an IPv4-only model,
+  ALGs can be provided by the local host or the local network.   This
+  allows ALGs to be "plugged in" where needed, without requiring that
+  they be implemented in the NAT.   Since such ALGs can also be
+  limited in scope, this also minimizes the potential for negative
+  effect of ALGs on applications which do not need them.
+</t>
+-->
+
+<t>Provides a predictable programming environment for applications.  
+<vspace blankLines="1" />
+
+  With NAT-XC it is possible for application vendors and authors to 
+  ship a single application binary that will work correctly across
+  IPv4/IPv6 realm boundaries in a wide range of customer environments,
+  ranging anywhere from a dual-stack host with access to both public
+  IPv4 and  public IPv6, to a IPv4-only host running on an IPv4-only
+  network located behind a legacy NAT.  Such an application would be
+  able to use a NAT-XC translator provided by the customer's network
+  if one existed, or be explicitly configured to use a remote NAT-XC
+  translator with which the operator had arranged to use.
+</t>
+<t>Separates network security policy from address translation.  
+<vspace blankLines="1" />
+
+  An application request for an address binding can be refused with an
+  error indicating that such communication is a violation of local
+  policy.  This provides a means for applications to be aware of the
+  difference between security policy, and the limitations imposed by a
+  traditional NAT.  Such an application can then report failures due
+  to security policy to its operator or user (and the NAT-XC
+  translator can also report failed requests), while continuing to
+  work around other network limitations or problems that are not
+  policy related.
+</t>
+<t>Encourages a desirable end-state for the Internet.  
+<vspace blankLines="1" />
+NAT-XC is designed to ease the transition to an Internet in which
+IPv6 network access is sufficient for a host in order to reach all
+other hosts of interest (when not prohibited by network policy).
+In the near term, NAT-XC allows applications to communicate across
+the IPv4/IPv6 boundary without requiring major changes to the
+hosts and networks on which they reside.  In the long term, NAT-XC
+allows applications to operate on an IPv6-only network even if they
+still need to occasionally communicate with hosts using IPv4.
+NAT-XC thus reduces the near-term burden of transition, while still
+permitting cross-realm operation, and allows changes to a
+network's infrastructure to be decoupled from IPv6 transition and
+deferred until a later date.
+<vspace blankLines="1" />
+It appears that, in a future Internet where NAT-XC were widely
+supported by software, the greatest functionality with the least
+overhead would be achieved by a configuration where most applications
+were written to a dual-stack model, and where most enterprise networks
+were IPv6-only. Other configurations could be similarly functional,
+but have greater overhead.  It is assumed that networks would
+eventually migrate to the configuration with lower operational cost.
+</t>
+</list>
+</t>
+</section> <!-- introduction -->
+<section title="Functional Description">
+<section title="Terminology">
+<t>
+NAT-XC defines a Translator, which mediates between a Client
+Application and one or more other Address Realms to which the Client
+Application lacks direct access.  The translation allows the Client
+Application to communicate with a Peer Application.  The Translator is
+controlled by a Control Protocol.  Control Protocol messages are
+exchanged between the Translator and the Control Point.  The Control
+Point is responsible for establishing and maintaining the bindings
+used by an application.  The Control Point for a particular binding
+may be located at any one of several locations along the signal path
+between the Client Application and the Translator, or at the Client
+Application itself.
+<vspace blankLines="1" />
+
+(Note that the use of the term Client Application does not imply that
+the application has a client role in the sense of the client-server
+model.  The Client Application may originate outbound connections or accept
+inbound connections, or both.)
+<vspace blankLines="1" />
+
+Control Protocol messages sent by a Control Point are addressed to a
+Control Address and Port (CAP) assigned to the Translator.  Such
+packets are not translated, but are used to control Translator
+operation.
+
+<figure anchor="fig1"
+title='Signal Path Between Client and Peer Applications'>
+<artwork>
++----------+
+|  Client  |
+|   Host   |   
+| +------+ |              (optional)
+| |Client| |              ..........
+| | App  | |              : legacy :
+| +------+ |---->[P0]---->:  NAT   :
++----------+              :........:
+            IPvX             |      
+            src:PrCA:PrCP    |     
+            dst:LTA:LTP      v   IPvX
+                            [P1] src:PuCA:PuCP   
+                             |   dst:LTA:LTP    
+                             |                  
+                             v                  
+                         +--------+              
+                         | Trans- |              +----------+
+                         | lator  |---->[P2]---->|   Peer   |
+                         +--------+              |   Host   |
+                                     IPvY        | +------+ |
+                                     src:RTA:RTP | | Peer | |
+                                     dst:PA:PP   | | App  | |
+                                                 | +------+ |
+                                                 +----------+
+
+</artwork>
+</figure>
+
+The signal path between the Client Application to Peer Application is
+shown in <xref target="fig1" />.  The path taken by a packet sent by the Client
+Application to the Peer Application is described as follows:
+<list style="symbols">
+<t>
+The Client Application emits packets from the Client Host with a
+Private Client Address (PrCA) as the IP source address and a Private
+Client Port (PrCP) as the TCP or UDP source port.  These packets are
+sent to an IP destination address called the Local Translator Address
+(LTA) and a TCP or UDP destination port called the Local Translator
+Port (LTP).  Note that the triple consisting of (PrCA, LTA, LTP) is
+different for each Peer Address and Peer Port with which the Client
+Application communicates.</t>
+
+<t>Since the NAT-XC Protocol is designed to permit use of a legacy
+IPv4 NAT between the Client Host and the Translator, an IP packet sent
+to a Translator by a Client Host may arrive at the Translator with a
+different source address and port than the ones originally specified
+by the Client Host.  The source address and port appearing in the
+packet as it arrives at the translator are known as the Public
+Client Address (PuCA) and Public Client Port (PuCP).  (The destination
+address and port of IP packets sent to the Translator from the Client
+Host must be the same as originated by the Client Host.)</t>
+
+<t>When a packet from a Client Host is received by the Translator, it
+determines whether there is a Binding established for that
+particular PuCA and PuCP and LTA and LTP.  If so, it will translate
+the incoming IPvX packet into an IPvY packet that is originated
+from a Remote Translator Address (RTA) and Remote Translator Port
+(RTP) and sent to a Peer Address (PA) and Peer Port (PP).</t>
+</list>
+
+The path taken by a packet sent by the Peer Application to the Client
+Application is similar.  It originates with source address PA and
+source port PP, is sent to the Translator at destination address RTA
+and destination port RTP.  The Translator then looks for a Binding
+associated with RTA and RTP.  If it finds one, it translates the
+packet into one with source address LTA and source port LTP, with
+destination address PuCA and destination port PuCP.  (In the case
+where the Client Application is listening for incoming traffic from
+Peers for which there is no prior Binding, a new LTA and LTP will be
+assigned for use with a new Peer, and a new Binding will be created
+specifically for use with that Peer.)  The translated packet
+will then be sent to the Client Host with destination address PrCA and
+destination port PrCP.
+<vspace blankLines="1" />
+
+The description above is not intended to forbid the use of
+administrative controls on communication between endpoints.  If so
+configured, the Translator may refuse to forward traffic between
+particular endpoint addresses and ports, even when a Binding exists.
+</t>
+<t>
+Note: the author's intention is to rewrite this document using the
+concept of a "transport address" to avoid the need, in most cases, to
+refer to an address and port.
+</t>
+</section> <!-- terminology -->
+<section title="Translator">
+<t>
+A Translator may be located at any point which has both public IPv4
+and public IPv6 network access.  One or more public IPv4 addresses and
+one or more public IPv6 addresses will be routed to the Translator.
+<vspace blankLines="1" />
+
+A Translator translates between IPv4 and IPv6 packets, in both
+directions, according to Bindings which have been established.
+A Binding associates the following with one another:
+
+<list style="symbols">
+<t>Transport Protocol (e.g. UDP, TCP)</t>
+<t>Public Client Address and Port (PuCA, PuCP)</t>
+<t>Local Translator Address and Port (LTA, LTP)</t>
+<t>Remote Translator Address and Port (RTA, RTP)</t>
+<t>Peer Address and Port (PA, PP)</t>
+</list>
+
+Note that an Address may either be an IPv4 address or an IPv6 address.
+The Public Client Address and the Local Translator Address associated
+with a Binding must be in the same address realm.  Likewise, the
+Remote Translator Address and the Peer Address must be in the same
+address realm.  It is generally expected that the Local Translator
+Address and the Remote Translator Address associated with a Binding
+will be in different address realms.
+<vspace blankLines="1" />
+
+In discussions of NAT-XC, "Client" refers to some party for whom access
+to a remote address realm is needed.  A Translator may serve IPv4
+clients (providing them with access to the public IPv6 network), IPv6
+clients (providing them with access to the public IPv4 network), or
+both.  It is possible for both ends of a conversation to be Clients of
+the same Translator.
+<vspace blankLines="1" />
+
+For each realm for which it provides services to clients, a Translator
+has a Control Address and Port (CAP) to which Control Protocol
+messages may be sent.  Note that a Translator may have more than one
+CAP.  It is anticipated that a well-known address and port will be
+requested from IANA for use with the NAT-XC Control Protocol as the
+default CAP, as this will allow the use of NAT-XC without
+site-specific configuration.  However, a Translator may accept Control
+Protocol messages at any address and port at which it can receive
+packets, and a Control Point may be explicitly configured to use a
+particular CAP.  <vspace blankLines="1" />
+
+Unlike traditional NAT devices, the Translator does not act as the
+default router for any address realm.  The Translator MAY appear to
+the network as a router in either or both of the public IPv4 and
+public IPv6 address realms, but packets sent to the Translator from
+the Client Host or a Peer Host are sent directly to an IP address
+assigned to the Translator.  Similarly, there is no "inside" or
+"outside" to a NAT-XC Translator, nor even the notion of "sides" in
+the definition of the Translator.  Client-originated traffic is
+distinguished from Peer-originated traffic via the destination address
+and port.  i.e. the Translator designates certain address and port
+combinations to be used as the destination of Client-originated
+traffic.  Packets arriving at these address and port combinations
+which was not originated by a Client will not be translated or
+forwarded.
+</t>
+</section> <!-- translator -->
+<section title="Control Point">
+<t>
+A Control Point is the point from which Bindings are requested and
+managed.  Depending on circumstances, the Control Point may exist at a
+variety of locations between the Client Application and the Translator.
+Bindings are created and managed via a Control Protocol.  Binding
+requests are sent by the Control Point to a Control Address and Port
+(CAP) on the Translator.
+<vspace blankLines="1" />
+
+The following examples illustrate different locations (i.e. Control
+Points) from which Translator Bindings may be managed:
+<list style="symbols">
+<t>An Application may be explicitly coded to generate NAT-XC Control
+Messages, or it may be statically linked to a library which
+generates NAT-XC Control Messages as part of its implementation of
+network access. In either case the Application is the Control Point.</t>
+
+<t>An Application may be bound at run time to a library which
+generates NAT-XC Control Messages as part of its implementation of
+network access, in which case the library may serve as the Control
+Point for any application that calls it, and which does not manage its
+own bindings.
+(also known as "Bump in the API" or "BitA").</t>
+
+<t>Support for NAT-XC may be included in the network stack of the host
+platform. In this case the network stack is the Control Point for any
+application that uses it, and whose bindings are not managed either by
+the application itself or by a library called by the application.
+(also known as "Bump in the Stack" or "BitS").</t>
+
+<t>If there is no Control Point closer to the Client Application, a
+Control Router located in the signal path between the Client Host and
+the Translator may serve as the Control Point.  Unlike other kinds of
+Control Points, the Control Router appears to the network as a router.
+Such a Control Router infers bindings based on traffic analysis and
+heuristics, in a manner similar to legacy NAT devices. (Such a Control
+Router may also implement a DNS ALG or other ALGs to accommodate
+IPv4-only hosts or applications not written to a dual stack model. The
+Control Router configuration is thus considered a "last resort"
+mechanism, and it should be used sparingly.)
+
+(NB: I'm looking for a better name than Control Router for this.)</t>
+
+<t>For legacy "server" Applications in the "client-server" sense (that is,
+Applications that accept inbound traffic) it is possible for a
+separate process to manage one or more Bindings in the Translator so
+that traffic sent to a particular Remote Translator Address and Port
+will be forwarded to a Private Client Address and Port.  This allows
+such "server" Applications to accept traffic from other address realms.</t>
+</list>
+
+It is possible for more than one of these mechanisms to be in place.
+For instance, an Application which is NAT-XC aware may run on a
+network stack which is also NAT-XC aware, and there may also be a
+Control Router between that Host and the Translator.  In this case the
+Control Point that is closest to the Client Application is the one
+that controls the Bindings for that Application.
+<vspace blankLines="1" />
+
+There are tradeoffs associated with different locations for Control
+Points.  In particular, a Control Router arrangement requires explicit
+configuration to establish a binding that listens for traffic from a
+remote realm.  Also, a Control Router cannot easily distinguish
+between traffic from dual-stack applications and IPv4-only
+applications, and so it does not reliably know when to intercept
+traffic using ALGs that compensate for such legacy applications. On
+the other hand, the other mechanisms all require that some change be
+made on each host supporting an application that wishes to communicate
+across realm boundaries.  And a Control Router can be very useful for
+accommodating an occasional legacy application, host, or network
+appliance, as long as it is configured so as not to adversely affect
+other network traffic.
+</t>
+</section> <!-- control point -->
+</section> <!-- functional description -->
+<section title="Control Protocol">
+<t>
+This is an ROUGH sketch of what the Control Protocol for use between a
+Control Point and a Translator might look like.  Many details have not
+been worked out yet.
+</t>
+<section title="Protocol Design Goals">
+<t>
+<list style="symbols">
+<t>Permit operation of most dual-stack applications by intercepting existing
+API calls.</t>
+
+<t>Permit applications to explicitly control translation bindings when
+necessary.</t>
+
+<t>Permit use of NAT-XC with unmodified dual stack or legacy IPv4-only
+applications using any of BitA, BitS, or a Control Router.</t>
+
+<t>Defer control of NAT-XC to the most upstream Control Point in the
+signal path.</t>
+
+<t>Allow enterprise networks to avoid per-host configuration, but allow individual host or
+application operators to use NAT-XC even without local network support.</t>
+
+<t>Facilitate operation from hosts with IPv4 only (or IPv6 only) stacks.</t>
+
+<t>Permit operation through legacy IPv4 NAT.</t>
+
+<t>Support all of the Control Point configurations listed above,
+including Control Routers, while still permitting applications to
+disable ALGs implemented by Control Routers. </t>
+
+<t>Facilitate recovery from loss of state at the Translator or Control Router.</t>
+
+</list>
+</t>
+</section> <!-- protocol design goals -->
+<section title="Bindings and Translation">
+<t>
+A Translator has one or more public IPv4 addresses routed to it, and
+one or more public IPv6 addresses routed to it.  Each of those
+addresses has potentially 2**16 TCP and 2**16 UDP ports which can be
+used.  A Translator MAY be a host which performs other functions
+and/or provides other services in addition to being a Translator.  If
+so, some of the TCP and/or UDP ports may be reserved for other
+purposes and not be available to the Translator.
+<vspace blankLines="1" />
+
+Of the (transport protocol, address, port) combinations available to
+the Translator, the Translator will mark some of them as for use by
+Clients, and others for use by Peers.  (Other combinations may be
+reserved and unavailable for either use).  Any (transport protocol,
+address, port) combination currently used in a Binding must be marked
+in such a way.  The designation of a (transport protocol, address,
+port) combination as Client or Peer may not be changed while the
+combination appears in any Binding.  <vspace blankLines="1" />
+
+The Translator maintains a set of Bindings which it uses to 
+translate packets from one realm to another. A Binding is an 9-tuple
+consisting of Transport Protocol (e.g. UDP or TCP), Public Client
+Address and Port (PuCA, PuCP), Local Translator Address and Port (LTA,
+LTP), Remote Translator Address and Port (RTA, RTP), and Peer Address
+and Port (PA, PP).
+
+The PA, PP, and LTP parameters of a Binding may be "wildcards" which
+can match any address or port.  A Binding consisting of PA, PP, and
+LTP which are "wildcards" is used to permit new inbound conversations
+from potential Peers to a Client.  Normally when such a binding
+exists, the Client Host will be "listening" for traffic at the PrCA
+and PrCP corresponding to the PuCA and PuCP associated with that binding.
+<vspace blankLines="1" />
+
+Other information (e.g. lease timeout, binding ID, client ID, access
+permissions) may also be associated with the Binding, but the details
+of these are implementation-specific.
+<vspace blankLines="1" />
+
+For any Transport Protocol, there is at most one unique, one-to-one,
+bidirectional mapping between a combination of client-side binding
+parameters (PuCA, PuCP, LTA, LTP) and a combination of peer-side
+binding parameters (RTA, RTP, PA, PP).
+<vspace blankLines="1" />
+
+The Client Address and Peer Address SHOULD be from different realms -
+e.g. either the Client Address IPv4 and the Peer Address is IPv6, or
+vice versa.  The Public Client Address and the Local Translator
+Address MUST be from the same realm.  Similarly, the Remote Translator
+Address and Peer Address MUST be from the same realm.
+<vspace blankLines="1" />
+
+NOTE: Translation between public IPv6 addresses is strongly
+discouraged.  Use of this protocol to translate between public IPv4
+and private IPv4, or between different private IPv4 realms, is for
+further study. 
+<vspace blankLines="1" />
+
+Translation between IPv4 and IPv6 is generally as defined
+in <xref target="RFC2765">SIIT</xref>,
+except that address mapping is as follows:
+<vspace blankLines="0" />
+When a packet arrives at the Translator, its
+transport protocol, IP destination address, and transport protocol
+destination port are inspected.
+
+<list style="symbols">
+<t>If the transport protocol is not supported, an appropriate ICMP (v4
+or v6) Destination Unreachable message SHOULD be generated in response.</t>
+
+<t>If this (transport protocol, address, port) combination is marked
+for use by Clients, the Translator searches for a Binding matching
+the transport protocol and (PuCA = source address, PuCP = source
+port, LTA = IP destination address, LTP = destination port) for the
+incoming packet.</t>
+
+<t>If such a Binding is found, the inbound packet is translated to a
+new packet with (source address = RTA, source port = RTP,
+destination address = PA, destination port = RTP).
+<vspace blankLines="1" />
+
+If no such Binding is found, an ICMP Destination Unreachable message
+SHOULD be generated.</t>
+
+<t>If this (transport protocol, address, port) combination is marked
+for use by Peers, the Translator searches for a Binding matching the
+transport protocol and (RTA = destination address, RTP = destination
+port, PA = source address, PP = source port).
+<vspace blankLines="1" />
+
+If such a Binding is found, the inbound packet is translated to a
+new packet with (source address = LTA, source port = LTP,
+destination address = PuCA, destination port = PuCP).
+<vspace blankLines="1" />
+
+If no such Binding is found, the Translator searches for a Binding
+matching (RTA = destination address, RTP = destination port, PA =
+"wildcard", PP = "wildcard").  If such a Binding is found, a new
+Binding is created with the same PuCA, PuCP, LTA, RTA, and RTP as
+the one matching the inbound packet.  The PA and PP of the new
+binding are the source address and source port, respectively, from
+the inbound packet.  The LTP of the new binding is chosen by the
+translator from the set of available ports, subject to the
+constraint that the (transport protocol, LTA, port) are marked for
+Client use.  Finally, the inbound packet is translated according to
+the newly created binding.
+<vspace blankLines="1" />
+
+Note that whenever a new Binding is created, a Binding Information
+message is sent to the Control Point.</t>
+</list>
+
+It is possible for both endpoints of a conversation to use the
+same Translator at the same time, and thus, for the packet to need to
+be translated twice.  It is therefore necessary for the Translator to
+detect this case.  It is assumed that the right thing to do here is to
+avoid translating the packet between IPv6 and IPv4 (and back again)
+and instead, just translate the addresses without changing the packet
+format.  This case needs further study.
+</t>
+</section> <!-- bindings and translation -->
+<section title="Leases">
+In order to avoid keeping Translator state for client hosts across
+host failures which cause those hosts to lose state, Bindings
+are generally "leased" for some finite time.  If a Lease is not
+renewed, any Bindings associated with that Lease are cancelled.
+<vspace blankLines="1"/>
+A Translator may associate an arbitrary number of Bindings made by a
+Control Point with a single Lease.  A single RenewLease request for a
+LeaseID is sufficient to maintain all of the bindings associated with
+that LeaseID for another lease interval.  LeaseIDs are assigned by the
+Translator.  Generally the Translator will assign the same LeaseID to
+all Bindings requested by a particular Control Point if the Control
+Point authenticates to the Translator.  Generally the Translator will
+assign a unique LeaseID for each Binding requested by a Control Point
+that does not authenticate to the Translator, because in such cases
+the Translator has no way to distinguish one Control Point from
+another.  It is the Control Point's responsibility to keep track of
+the LeaseID assigned by the Translator to each Binding and to issue
+RenewLease requests as needed to maintain all of its Bindings.
+or to 
+</section>
+<section title="Sending Requests">
+<t>
+Communications between a Control Point and a Translator are
+accomplished using different mechanisms depending on the nature of the
+request. 
+<list style="symbols">
+<t>A Control Channel may be established between a Control Point and a
+  Translator's Control Address and Port (CAP).  The Control Channel
+  uses <xref target="RFC5246">TLS</xref> over TCP.  This channel is used
+  to establish  credentials for the authentication of client requests
+  sent over UDP,   for Binding Information messages sent from the
+  Translator to the Control Point, and other purposes.  The Control
+  Channel is not required to be maintained at all times, and Bindings
+  MUST be maintained for the duration of their leases even if the
+  Control Channel fails for some reason.</t>
+
+<t>However, due to the requirement that NAT-XC work when a legacy IPv4
+  NAT exists between the Client Host and the Translator, Bind Request
+  messages for UDP MUST be sent to a Translator's CAP via UDP from the
+  PuCA and PuCP.  This is because the Translator must be able to
+  establish the Binding in terms of the PrCA and PrCP, and these are
+  only known by sending traffic through the legacy IPv4 NAT from the
+  same transport protocol, Client source address, and port that will
+  be used by later traffic between the Client and the Peer.</t>
+
+<t>In addition, when a Binding Request is issued for a new
+  client-originated conversation by a Control Router, it is necessary for
+  the new Binding to be established before the initial packet is
+  translated.  For this reason, the Control Point MAY include a
+  "piggybacked" packet to be translated onto a Binding Request or
+  Renew Binding Request.  This facility SHOULD NOT be used by other
+  kinds of Control Points.
+<vspace blankLines="1" />
+
+  Discussion: There is a possibility that some kinds of middleware
+  boxes (e.g. traffic filters) may block TCP connections unless they
+  first see a SYN packet from the host initiating the SYN.  If, say, a
+  NAT-XC aware TCP stack were to use piggybacking to send an initial SYN
+  packet while establishing a Binding in the Translator, and the
+  middleware box were placed between the host and the Translator, the
+  middleware box would not see a SYN packet, and might disrupt
+  subsequent traffic from the host.</t>
+</list>
+</t>
+</section> <!-- sending requests -->
+<section title="Security">
+<t>
+As details have obviously not been worked out, the main purpose of
+this section is to explicitly acknowledge the necessity of designing
+security into this protocol from day one.
+<vspace blankLines="1" />
+
+There are many cases (perhaps all of them) where communications
+between a Control Point and a Translator will need to be
+authenticated, and perhaps encrypted.  At the moment, it is naively
+assumed that TLS can be profiled to provide adequate
+Translator-to-Control Point authentication and encryption for the
+Control Channel.  Authentication by the Control Point to the
+Translator, when needed, can be accomplished either using TLS client
+certificates or a username/password like mechanism similar to that
+used with TLS by several application protocols (e.g. POP, IMAP).
+However, there is a conflict between the goal of providing zero
+configuration for Control Points and providing the authentication
+needed to avoid man-in-the-middle attacks over TLS.
+<vspace blankLines="1" />
+
+For other communications between the Control Point and the Translator,
+it is (again, naively) assumed that a symmetric encryption key
+obtained via the Control Channel (and subject to renewal at intervals)
+can be used to both authenticate and encrypt those communications, in
+a manner similar to that used by Kerberos.
+</t>
+</section> <!-- security -->
+<section title="Framing of requests and responses sent using TCP and TLS over TCP">
+<t>
+Protocol messages sent via UDP have an obvious framing - one request
+or response per UDP datagram.  Protocol messages sent via TCP require
+framing in order to separate one protocol message from another.  For
+now it is assumed that, when sent over TCP, each request or response
+message can be prefixed by a 16-bit request or response length in
+network byte order.
+</t>
+</section> <!-- framing -->
+<section title="Protocol Messages">
+  <t>The intention is to define NAT-XC control protocol as a usage of
+    <xref target="RFC5389">STUN</xref>.  It seems appropriate to
+    leverage STUN because there are usage scenarios in which there
+    will be a legacy v4 NAT between the Control Point and the
+    Translator, and STUN is designed to work around some of the
+    payload damage that some NATs are known to cause.  The NAT-XC
+    Control Protocol therefore consists of some new STUN methods and
+    some new attributes to be used with those methods.</t>
+  <section title="Create Binding">
+    <t>
+      The CreateBindingRequest message requests the Translator to
+      establish a Binding between the Client Host's Public Address and
+      Port (PuCA, PuCP) and a Remote Address and Port available to the
+      Translator.
+      <vspace blankLines="1" />
+
+      CreateBindingRequest messages for TCP MUST be sent over the
+      Control Channel to the CAP.  The source address and port used by
+      the Control Point to request a TCP Binding MUST be the same as
+      the Private Client Address and Port (PrCA, PrCP) which will be
+      used with that Binding.
+      <vspace blankLines="1" />
+
+      CreateBindingRequest messages for UDP MUST be sent over UDP to
+      the CAP.  The source address and port used by the Control Port
+      to request a UDP Binding MUST be the same as the Private Client
+      Address and Port (PrCA, PrCP) which will be used with that
+      Binding.
+      <vspace blankLines="1" />
+
+      The following attributes apply to CreateBindingRequest messages:
+      <list style='symbols'>
+	<t>XOR-PRIVATE-CLIENT-ADDRESS.  This is used to convey the Private
+	  Client Address and Port (PrCA, PrCP).  This attribute is REQUIRED
+	  for CreateBindingRequest messages.</t>
+
+	<t>XOR-REMOTE-ADDRESS.  This is used to convey the Remote
+	  Translator Address and Port.  This attribute is REQUIRED.
+	  However if either of the X-Address or X-Port fields of that
+	  attribute are set to zero, the Translator may assign any
+	  available address or port to that binding.</t>
+
+	<t>XOR-PEER-ADDRESS.  This is used to convey the Peer Address
+	  and Port to the Translator, for the case where the client
+	  wishes to communicate with a specific peer.  If the
+	  XOR-PEER-ADDRESS attribute is included in the CreateBinding
+	  request, the Translator assigns a particular Local
+	  Translator Address and Port for use when sending to the Peer
+	  Address and Port provided by the Control Point, and the
+	  Translator will include that Local Translator Address and
+	  Port in the XOR-LOCAL-ADDRESS of the response.
+	  <vspace blankLines="1"/>
+
+	  If the XOR-PEER-ADDRESS attribute is omitted, it implies
+	  that the Control Point is requesting a binding to permit any
+	  peer to send unsolicited traffic to the Remote Translator
+	  Address and Port assigned by the Translator.  If such a
+	  CreateBinding request is honored, the Translator will
+	  effectively create a new Binding any time it receives
+	  traffic at the Remote Translator Address and Port from a new
+	  Peer Address and/or Port.  The Binding will associate a
+	  Local Translator Address and Port to be assigned by the
+	  Translator, and the Public Client Address and Port from
+	  which the CreateBinding request was received, with the Peer
+	  Address and Port from which the new traffic was received.
+	  Whenever such a Binding is created, a Binding Notification
+	  message is sent to the Control Point.</t>
+
+	<t>A XOR-PIGGYBACK-PACKET attribute MAY be included with a
+	  Bind Request.  If the Bind Request is successful, this
+	  packet will be translated and sent by the Translator just as
+	  if it had been sent by the Client Host.  The source IP
+	  address and source port of the PiggyBack Packet MUST be the
+	  same as the PrCA and PrCP, and the destination IP address
+	  and port of the PiggyBack Packet.  (The Translator MAY
+	  accept the Bind Request while refusing to forward the
+	  PiggyBack packet, in which case it will return a Status of
+	  {TBD} in the CreateBinding Response message).</t>
+
+	<t>REQUESTED-TTL.  This attribute is OPTIONAL.  If omitted,
+	  the Translator will supply a default.</t>
+
+	<t>A CREATE-BINDING-OPTIONS attribute MAY be included to
+	  request specific binding options:
+
+	  <list style='symbols'>
+	    <t>The DisableALG option is actually for use by Control
+	      Routers.  A Control Router intercepts traffic sent to
+	      the default CAP, processes it, and then forwards the
+	      requests to the Translator.  This allows the Control
+	      Router to act as an authentication proxy between the
+	      Client and the Translator, but it also provides a means
+	      by which applications can disable ALG behavior provided
+	      by the Control Router.</t>
+
+	    <t>The DoubleNAT option affects the Bind Response and
+	      Binding Information messages in the case where (a) two
+	      endpoints are clients of the same Translator, and (b)
+	      both endpoints are connected via a translated address.
+	      If the DoubleNAT option is TRUE, the Bind Response and
+	      Binding Information messages will reflect both layers of
+	      address translation, even if the translation is v6 to v6
+	      or v4 to v4.  If the DoubleNAT option is FALSE, the Bind
+	      Response and Binding Information messages for that
+	      Binding will only reflect a single layer of translation.
+	      This is believed to be useful when implementing IPv4
+	      socket APIs - so that for instance a getpeername() call
+	      on a socket that is connected via the translator will
+	      always produce an address of the expected address
+	      family.</t>
+	  </list>
+	</t>
+      </list>
+      <vspace blankLines="1" />
+      The CreateBindingResponse message contains the following attributes:
+      <list style='symbols'>
+	<t>XOR-PRIVATE-CLIENT-ADDRESS.</t>
+	<t>XOR-LOCAL-ADDRESS.</t>
+	<t>XOR-REMOTE-ADDRESS.</t>
+	<t>XOR-PEER-ADDRESS.</t>
+	<t>CREATE-BINDING-RESPONSE-FLAGS.
+	  <list style='symbols'> 
+	    <t>The LegacyNATisPresent flag is set to 1 if the
+	      Translator detects the presence of a Legacy NAT (i.e. if
+	      the Public Client Address and/or Port are different from
+	      the values in the XOR-PRIVATE-CLIENT-ADDRESS attribute
+	      of the request).</t>
+	    <t>The ALGisPresent flag is set to 1 by a Control Router
+	      (when forwarding a response to a client) if the Control
+	      Router is imposing some ALG on the traffic associated
+	      with this binding.</t>
+	  </list>
+	</t>
+	<t>BINDING-ID.  The BindingID assigned to this Binding, for use in
+	  a subsequent CancelBinding request</t>
+	<t>LEASE-ID.  The LeaseID assigned to this Binding, for use in
+	  a subsequent RenewLease request.  If the Control Point is
+	  authenticated to the Translator this LeaseID may be the same
+	  ID as used for other bindings requested by the same Control
+	  Point.</t>
+	<t>LEASE-TTL.  The new TTL associated with this LeaseID.  Note
+	  that if any other Bindings are associated with this LeaseID,
+	  the new TTL applies to all of them.  Each new
+	  CreateBindingRequest message from an authenticated Control
+	  Point thus serves as an implicit RenewLease request.</t>
+      </list>
+    </t>
+  </section> <!-- bind request -->
+  <section title="Renew Lease">
+<t>
+The RenewLeaseRequest message is to be used to renew the lease on one or more
+Bindings that are already established.  
+<vspace blankLines="1"/>
+Attributes included with the RenewLeaseRequest message are:
+<list>
+<t>LEASE-ID.  This attribute is REQUIRED.</t>
+<t>REQUESTED-TTL.  This attribute is OPTIONAL.</t>
+</list>
+Attributes included with the RenewLeaseResponse message are:
+<list>
+<t>LEASE-TTL.  This specifies the new TTL associated with that lease ID.</t>
+</list>
+</t>
+</section> <!-- renew lease -->
+<section title="Delete Binding">
+<t>
+The DeleteBindingRequest message is to be used to cancel a Binding
+that is already established.  The following attributes may be used:
+<vspace blankLines="1"/>
+<list>
+<t>BINDING-ID.  This attribute is REQUIRED</t>
+<t>DELETE-BINDING-DELAY.  This attribute MAY be used to specify the amount
+of time (in milliseconds) during which the binding will be maintained
+for existing connections.  This is, for example, to allow for TCP FINs and FIN ACKs
+to continue to traverse the Translator so that both ends will be aware that the
+connection was cleanly closed.  If the Client has round-trip time
+estimates available for a particular connection, that information can
+be used to specify an appropriate delay.  This attribute is OPTIONAL.
+If omitted, a default value will be used.
+Translators SHOULD limit the amount of delay which a client can
+request, so that the client cannot use this mechanism to specify a
+longer lease than might otherwise be available.
+</t>
+</list>
+The DeleteBindingResponse message contains the following attribute:
+<list>
+<t>DELETE-BINDING-DELAY.  This is the actual delay assigned by the
+Translator after which it will delete this binding.</t>
+</list>
+</t>
+</section> <!-- delete binding -->
+<section title="Change Binding">
+<t>
+The Change Binding Request is to be used when, for whatever reason. the
+Client Host has changed its PuCA.  (For instance, if its IPv4 DHCP
+server has changed its address.)  
+<vspace blankLines="1" />
+
+Note that this is of limited applicability for many kinds of Control
+Points, because a TCP stack that has open TCP connections in terms of
+the host's old IP address will not change the local address associated
+with those connections.  However this request may be useful for Control
+Points implemented within a host's TCP stack.
+<vspace blankLines="1" />
+Attributes applicable to a ChangeBindingRequest message are:
+<list>
+<t>BINDING-ID.  The ID of the existing Binding.  REQUIRED.</t>
+<t>XOR-PRIVATE-CLIENT-ADDRESS.  The new Private Client Address and
+Port.  REQUIRED.</t>
+<t>REQUESTED-TTL.  The requested TTL for the new Binding. OPTIONAL.</t>
+</list>
+<vspace blankLines="1" />
+Attributes included in a ChangeBindingResponse message are the same as
+defined for a CreateBindingResponse message.
+</t>
+</section> <!-- change binding -->
+<section title="Get Binding List">
+<t>
+The purpose of this function is to allow a Control Point to request a
+list of all of the Bindings which it currently has established.  This
+request may be useful, for instance, when the Control Channel has been
+broken, or in general, to synchronize views between the Control Point
+and the Translator.
+<vspace blankLines="1" />
+
+(not yet specified, though it is expected that a parameter will be
+LEASE-ID, and the request will list all bindings associated with that
+LEASE-ID.)
+</t>
+</section> <!-- get binding list -->
+<section title="Binding Notification messages">
+<t>
+Any time a new Binding is established, or a Binding expires, or a
+Binding is changed, a Binding Notification message is sent to the
+Control Point by the Translator over the Control Channel.  This message
+is not a response to an explicit request, but is sent asychronously.
+<vspace blankLines="1" />
+
+(not yet specified)
+</t>
+</section><!-- binding notification messages -->
+<section title="Keepalives">
+<t>
+When communicating using UDP via a legacy IPv4 NAT, it may be necessary
+to occasionally send traffic that will maintain the legacy IPv4 NAT's
+binding, in a manner similar to that employed
+by <xref target="RFC4380">Teredo</xref>.  So in order to 
+maintain the part of the communications path of a UDP conversation
+between the Control Point, through the legacy IPv4 NAT, to the
+Translator, it may be necessary to send UDP messages between the
+PuCA,PuCP and LTA,LTP (in either direction) which are NOT translated or
+forwarded to the Peer.  Similarly it may be necessary to send UDP
+messages from the Translator through the legacy IPv4 NAT to the PuCA,
+PuCP which are discarded before they reach the Client Application.
+There needs to be some way to construct a UDP packet which will appear
+normal to the legacy NAT and be passed through it, but which the
+Translator can recognize as a packet that should not be forwarded. It is
+assumed that IP options will not work for this purpose.
+<vspace blankLines="1" />
+
+One way to do this might be for the Control Point and Translator to
+choose a random number of sufficient length to be very unlikely to
+appear in a conversation.  Any UDP packet of exactly that length,
+containing exactly that random number, would be discarded.
+<vspace blankLines="1" />
+
+This needs further study.
+<vspace blankLines="1" />
+
+(not yet specified)
+</t>
+</section><!-- keepalives -->
+</section> <!-- protocol messages -->
+<section title="Attributes">
+<section title="XOR-*-ADDRESS">
+<t>
+The attributes XOR-PRIVATE-CLIENT-ADDRESS, XOR-PUBLIC-CLIENT-ADDRESS,
+XOR-LOCAL-ADDRESS, XOR-REMOTE-ADDRESS, and XOR-PEER-ADDRESS are
+defined as follows:
+<figure>
+<artwork>
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|x x x x x x x x|    Protocol   |         X-Port                |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                X-Address (Variable)
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork>
+</figure>
+Protocol is an Internet Protocol Number as defined by the 
+IANA Internet Protocol Numbers registry.  This is the same 
+value as used in the IPv4 "protocol" field or the IPv6 
+"xxx" (whatever it's called) field.  Examples are TCP (6),
+UDP (17), and SCTP (132).  
+<vspace blankLines="1" />
+Note that not all Protocol values are useful or appropriate 
+for bindings in a NAT.  Also note that this field's definition
+differs from the Family field in STUN's MAPPED-ADDRESS and 
+XOR-MAPPED-ADDRESS attributes.  This was done to make NAT-XC
+more generally applicable.
+<vspace blankLines="1" />
+X-Port and X-Address are as defined in STUN.
+</t>
+</section> <!-- xor-*-address -->
+<section title="XOR-PIGGYBACK-PACKET">
+<t>
+This attribute consists of an IP packet which is obscured in such a
+way as to deter overzealous legacy NATs from modifying patterns within
+the packet that happen to look like addresses.  Details of such
+obscuration are TBD.
+</t>
+</section> <!-- xor-piggyback-packet -->
+<section title="REQUESTED-TTL">
+<t>This is a single 32 bit unsigned integer in network byte order, specifying
+  the requested TTL in seconds.</t>
+</section> <!-- requested-ttl -->
+<section title="CREATE-BINDING-OPTIONS">
+<t>This attribute consists of one or more 32-bit integers in network
+  byte order.  The first integer is used to encode Boolean values as
+  follows:
+<list>
+<t>Bit Mask 0x01: DisableALG.  Directs any Control Router acting as a
+  proxy between the Control Point and a Translator to disable any ALGs
+  that apply to the endpoint addresses associated with the
+  Binding.</t>
+<t>Bit Mask 0x02: DoubleNAT: In case two endpoints are clients of the
+  same Translator, and both endpoints are connected via a translated
+  address, setting this bit to 1 will cause the response to reflect the
+  complete translation being done.  If the bit is set to 0, the
+  response will only reflect a single layer of translation.</t>
+</list>
+Other bits of the first integer, and the contents of additional words
+of this attribute, are TBD.  Clients implementing this version of the
+specification MUST set the additional bits of the first word to zero,
+and MUST NOT include additional words in this attribute.  
+</t>
+</section> <!--  -->
+<section title="CREATE-BINDING-RESPONSE-FLAGS">
+<t>Like CREATE-BINDING-OPTIONS, this consists of one or more
+  32-bit integers in network byte order.  Bits defined so far
+  include: LegacyNATisPresent (word 0, mask 0x01), and ALGisPresent
+  (word 0, mask 0x02).</t>
+</section> <!--  -->
+<section title="BINDING-ID">
+<t>This consists of a 32-bit unsigned integer in network byte order.</t>
+</section> <!--  -->
+<section title="LEASE-ID">
+<t>This consists of a 32-bit unsigned integer in network byte order.</t>
+</section> <!--  -->
+<section title="LEASE-TTL">
+<t>This consists of a 32-bit unsigned integer in network byte order,
+  defining the TTL of the lease in seconds.</t>
+</section> <!--  -->
+<section title="DELETE-BINDING-DELAY">
+<t>This consists of a 32-bit unsigned integer in network byte order,
+  defining the time in milliseconds during which a binding is
+  requested to be maintained after a DeleteBindingRequest, or the time
+  in milliseconds during which the Translator agrees to maintain the
+  binding when this attribute appears in a DeleteBindingResponse.</t>
+</section> <!--  -->
+
+</section> <!-- attributes -->
+</section> <!-- control protocol -->
+<section title="Control Point Implementation">
+<t>
+As stated above, the Control Point may be located at any of several
+locations in the signal path between the Client Host and the Translator.
+This section discusses some details of Control Point implementation
+which are understood at this time.
+</t>
+<section title="Application Control Over Bindings">
+<t>
+A NAT-XC aware application may explicitly control its own bindings.
+This is done by generating NAT-XC protocol messages and sending them
+to the NAT-XC Translator.  For example, an application running on an
+IPv4-only network (or on an IPv4-only host) may still access IPv6 via
+a NAT-XC Translator.  To establish a TCP connection to an IPv6 host,
+the application would:
+<list style="symbols">
+<t>Establish a TCP over IPv4 connection to the Translator's Control Address
+  and Port (CAP).  Any available source IP address and port can be
+  used, but the application needs to know what they are.</t>
+<t>Authenticate to the Translator (if required).  If Authentication is
+  required the application will need to have been supplied with 
+  authentication credentials.</t>
+<t>Request a Binding between the source IPv4 address and TCP port
+  used by the application, and the desired Peer IPv6 address and TCP
+  port.</t>
+<t>Read the Bind Response message from the Translator to determine
+  whether the Bind Request was honored.</t>
+<t>If the Bind Request was honored, note the BindingID and LeaseTTL
+  associated with the binding, and arrange for the lease to be renewed
+  as necessary when the TTL expires.</t>
+<t>Establish a new TCP over IPv4 connection from the same source IPv4
+  address and Port as before, but with a destination IPv4 address and
+  port as returned in the Bind Response issued by the Translator.  At
+  this point there is a connection between the local host (using
+  IPv4) and the remote peer (using IPv6).</t>
+<t>Once the binding is no longer needed, free it up by issuing a
+  Delete Binding request.</t>
+</list>
+Similarly, to listen for inbound IPv6 connections, the application
+would:
+<list style="symbols">
+<t>Arrange to listen for incoming connections on a TCP socket with a
+  known IPv4 address and TCP port.</t>
+<t>Establish a TCP over IPv4 connection to the CAP, using the same
+  IPv4 source address and port as is being listened to.</t>
+<t>Request a Binding between that source address and port, and a
+  Translator IPv6 address and port of the application's choosing.
+  Either the address or port can be specified to be a wildcard, in
+  which case the Translator is free to choose them. </t>
+<t>Read the Bind Response message to determine whether the Bind
+  Request was successful.</t>
+<t>Arrange for the Binding to be renewed when its TTL expires, for as
+  long as necessary.</t> 
+<t>At this point the application will be able to receive inbound IPv6
+  traffic that is sent to the Translator address and port assigned to
+  it.  This traffic will be translated and forwarded to the IPv4
+  address and port on which the application is listening.</t>
+<t>When the Binding is no longer needed, free it up by issuing a
+  Delete Binding request.</t>
+</list>
+While few applications are expected to need to control their own
+bindings, this technique does have some interesting advantages.  For
+instance, it allows an application to communicate with IPv6 peers even
+if the local host or network do not support IPv6.</t>
+</section>
+<section title="Control Point implemented in a Network Library">
+<t>
+One way to manage NAT-XC bindings is to provide a Library which implements
+the platform's usual network API.  The library would issue NAT-XC requests
+as necessary to provide the application with the appearance of having
+access to both the native IPv4 and native IPv6 networks.
+<vspace blankLines="1" />
+There are two ways to implement such a library.  One is to provide a
+"dual stack" API which makes both IPv4 and IPv6 visible to the
+application as separate networks, even if the underlying host stack or
+network only supported one of those.  With such an library, the
+application would be able to lookup IPv4 or IPv6 addresses in DNS,
+request IPv4 or IPv6 connections, etc. using normal API calls. The
+library would make "real" system calls and invoke the translator as
+necessary to provide the application with the appearance of having
+access to both networks.
+<vspace blankLines="1" />
+The other way to implement such a library is to map all IPv6 traffic
+onto IPv4.  This would be used to allow an app written to an IPv4-only
+programming model to exchange traffic with IPv6 peers. In this case
+several of the usual "tricks" would be needed to provide the application
+with the illusion that IPv6-only hosts had IPv4 addresses - DNS ALG to
+return fake IPv4 addresses for hosts with only AAAA records.  An
+additional layer of address mapping within the library (in addition to
+that provided by the Translator) would be needed to make this work.
+All of the usual caveats associated with NAT-PT and similar schemes
+apply here. 
+<vspace blankLines="1" />
+A single library could implement both programming models, but would
+need external configuration (say via an environment variable) to let
+it know whether to provide a dual stack programming model or an
+IPv4-only programming model.  The dual stack model should be the default.
+<vspace blankLines="1" />
+It is possible that a NAT-XC aware application might be used with a
+NAT-XC aware library.   There are two cases for this.  One is when the
+application wishes to completely manage all of its Bindings by itself
+and to not have the library get in the way.  It is useful if such an
+application has a way to "turn off" the library so that networking API
+calls are handled transparently.  One "natural" way to 
+do this might be for the library to recognize if the application
+establishes a TCP connection with the Translator's CAP.  This works as
+long as the library's idea of the Translator's address is the same as
+the application's idea of the address.  A less natural way would be
+for the application to be able to set an environment variable which
+could then be recognized by the library to mean "don't intercept
+networking system calls and let the application manage its own bindings".
+<vspace blankLines="1" />
+The other case is when the application is willing to let the library
+do the work of maintaining the bindings, but it wants to have
+visibility into the bindings, lease times, etc. that are being
+maintained by the library.  Such an application might also want to
+adjust lease times, disable ALGs, etc.  For this case it is useful if
+the library provides additional API calls to give it that visibility.
+For example, on UNIX, the ioctl(), setsockopt() or getsockopt()
+functions might be overloaded to allow the application to find out
+binding information for network sockets.   Overloading an existing API
+function would allow applications to link to that function without the
+potential of an unresolved symbol error.  The application could
+determine at runtime whether the additional functionality were
+supported. 
+</t>
+</section>
+<section title="Control Router">
+</section>
+<section title="Use of ALGs - and avoiding unnecessary ALGs">
+<t>
+It is hoped that in most cases Application Layer Gateways (ALGs) will
+not be needed.  In particular, since NAT-XC can often provide an
+application with the appearance of direct access to both public IPv4 and
+public IPv6 networks, the application can know its public addresses
+(RTA, RTP) and its peer addresses (PA, PP) via the normal API calls
+(e.g. getlocalname, getpeername).  Address referrals, IP address
+logging, etc., should work fine.  In addition, source IP addresses may
+still be used for access control, but this requires that trust be
+extended to the Translator and to the entire communications path
+between the Control Point and the Translator.
+<vspace blankLines="1" />
+However, ALGs will still be needed for some applications, especially
+those written for an IPv4-only programming model.  ALGs MAY therefore be
+provided at the Control Point.  But since ALGs can actually interfere with
+the operation of applications that don't need them, it is necessary to
+provide means to explicitly enable and disable them.  For Control
+Points which implement ALGs, a default setting of "ALGs disabled" is
+strongly encouraged.  In addition, an application may disable ALGs
+implemented downstream by issuing a Bind request with the disableALGs
+option set to TRUE.
+
+<list style="symbols">
+<t>For the case of apps that are explicitly aware of NAT-XC and interact
+directly with the Translator, ALGs should not be an issue.  However,
+an ALG in a downstream Control Router might still interfere with
+traffic.  For instance an FTP ALG would change the addresses in PORT
+commands, whereas a DNS ALG would alter the nature of DNS queries and
+return results different than provided by the queried server.  While
+Control Routers SHOULD NOT enable ALGs except for hosts known to need
+them, the only way that an application can be sure that a Control
+Router will not apply an ALG is to issue a Bind request with the
+disableALGs flag set to TRUE.</t> 
+
+<t>For the case of Control Points implemented on the Client Host (BitA,
+BitS), it SHOULD be possible to explicitly configure whether any
+particular ALGs can be enabled. Ideally this would be done on a
+per-application basis.  This could be done, say, by setting an
+environment variable when launching the application, or by marking the
+application in a particular way that could be recognized by the
+Control Point.</t>
+
+<t>There is potential for an ALG implemented in a Control Router to
+interfere with an application.  For instance, a DNS ALG implemented in
+a Control Router can provide incorrect and misleading results for a
+dual-stack app.  Furthermore a Control Router cannot reliably
+distinguish between different applications' traffic nor determine
+which applications need ALGs and which do not.
+<vspace blankLines="1" />
+A Control Router that implements ALGs SHOULD have them disabled by
+default, and SHOULD be configurable to enable them on a per-host
+basis. For instance, it should be possible to enable ALGs for an
+IPv4-only host and have them be disabled for dual-stack hosts.
+(It is possible to imagine a small Control Router, designed for use only
+with a single host, with a switch to turn ALGs needed by v4-only apps
+either "on" or "off".  That would at least allow control of ALGs on a
+per-host basis.) 
+<vspace blankLines="1" />
+However, because per-host configuration can be wrong, and because
+different applications on the same host may be affected differently
+by ALGs, it seems necessary to provide a mechanism by which upstream
+Control Points can disable or bypass ALGs implemented in Control
+Routers on a per-application basis.</t>
+</list>
+</t>
+</section> <!-- use of ALGs -->
+</section> <!-- control point implementation -->
+<section title="Inspiration and Related Work">
+<t>
+Ideas for NAT-XC came from various places.  
+<list style="symbols">
+<t>
+<xref target="RFC1928">SOCKS</xref> is a mechanism that was originally
+designed to permit IPv4 access over a serial line to hosts lacking a
+network connection.  It was later adapted as a means to establish
+communications through a firewall.</t>
+
+<t>The author designed a general purpose NAT traversal solution for
+the NetSolve distributed computing project, which used connection
+forwarding and was similar to TRT.  Like NAT-XC, the NetSolve
+mechanism was designed to be usable with minimal changes to existing
+code. </t>
+
+<t><xref target="RFC3103">RSIP</xref> is a mechanism for providing access
+to the public IPv4 realm from within a private IPv4 realm.  NAT-XC
+is similar, but because IPv4 and IPv6 use different packet formats
+with different sized addresses, because the two kinds of addresses
+are separate spaces which do not overlap, and because many
+applications nowdays are written to handle the two different kinds
+of addresses explicitly, many of the limitations associated with
+RSIP do not appear to impact NAT-XC.</t>
+</list>
+</t>
+</section> <!-- inspiration and related work -->
+<section title="Using NAT-XC">
+<section title="Use cases">
+<t>
+NAT-XC can be used to facilitate access across IPv4/IPv6 realm
+boundaries in a variety of cases.  Note that the inability of an
+application to communicate with both IPv4 and IPv6 peers can be due to
+any of several different factors: 
+<list style="symbols">
+<t>The application may be written only to an IPv4 programming model,</t>
+
+<t>The host may lack either an IPv4 or an IPv6 stack, </t>
+
+<t>The local network may lack support for either IPv4 or IPv6, </t>
+
+<t>The local network may not provide routing to both the public IPv4 and
+  IPv6 networks, or</t>
+
+<t>The local network may be behind a legacy IPv4 NAT and use private 
+  IPv4 addressing.</t> 
+</list>
+NAT-XC was designed to permit cross-realm communications in all of the
+cases above.  e.g.:
+
+<list style="symbols">
+<t>Public IPv4 access from an IPv6-only network.</t>
+
+<t>Public IPv6 access from an IPv4-only network.  (6to4 and Teredo 
+  address this problem in a different way, via tunneling rather than
+  address/packet translation.)</t>
+
+<t>Dual Stack application operating on IPv4-only host, needing access to IPv6.</t>
+
+<t>Dual Stack application operating on IPv6-only host, needing access to
+  IPv4.  (assumed to be rare)</t>
+
+<t>IPv4-only application talking with public IPv6 hosts.  (DNS ALG and
+  perhaps other ALGs required.)</t>
+
+<t>Applications explicitly aware of NAT-XC.</t>
+</list>
+</t>
+</section> <!-- use cases -->
+<section 
+title='"How do I get my applications working across IPv4/IPv6 boundaries?"'>
+<t>
+This section is intended to illustrate the ways in which ANY of various
+parties can act to use NAT-XC to ease IPv4/IPv6 transition,
+independently of one another.  This is a contrast to the traditional
+IPv6 transition model where multiple parties (user, server operator,
+network operator, ISPs) ALL have to act to provide IPv6 access.
+<list style="symbols">
+
+<t>If you are the developer of an application, you can:
+<list style="symbols">
+
+  <t>modify your application to explicitly support NAT-XC (if provided by
+    the customer), or</t>
+
+  <t>relink your application with a library that intercepts network API
+    calls and makes use of NAT-XC (if provided by the customer), or</t>
+
+  <t>if your application is dynamically linked (i.e. it makes use of a
+    separate library that is loaded at run time to implement network
+    access), you can ship a library that is compatible with NAT-XC as a
+    replacement for the previous one.</t>
+</list>
+
+You can even (if you wish) provide a NAT-XC Translator for use by your
+customers.</t>
+
+<t>If you are a server operator, you can:
+<list style="symbols">
+
+  <t>update your servers' operating systems to support NAT-XC, or</t>
+
+  <t>for dynamically linked applications, install a NAT-XC aware
+    networked library on your servers.</t>
+</list>
+
+You have the option of providing your own NAT-XC Translator or making
+arrangements with a third party to provide that service.</t>
+
+<t>If you are a network operator, you can
+
+<list style="symbols">
+  <t>make arrangements for your network to have a NAT-XC Translator
+    (either by installing one, or by arrangement with your ISP, or
+    by making arrangement with a third-party Translator and tunneling
+    Control Protocol traffic to that Translator.), and</t>
+
+  <t>optionally, install a Control Router</t>
+</list>
+</t>
+
+<t>If you are an ordinary personal computer user, you can
+<list style="symbols">
+
+  <t>upgrade your operating system to support NAT-XC, or</t>
+
+  <t>install a NAT-XC aware dynamic library, or</t>
+
+  <t>upgrade your software to versions that explicitly support
+  NAT-XC, or</t>
+
+  <t>install a NAT-XC Control Router between your computer and the
+  network, and configure it to establish connections with a
+  third-party Translator.</t>
+</list>
+</t>
+</list>
+</t>
+</section> <!-- how do i... -->
+</section> <!-- using nat-xc -->
+<section title="Security Considerations">
+<t>Security considerations are still being determined.  The following
+  issues have been identified.  
+<list style="symbols">
+<t>There is a need for the Translator to be able to require
+  authentication, and to impose access controls on Bindings,
+  especially when the Translator is not provided by the
+  enterprise network or that network's ISP.</t>
+<t>There is a need to provide encryption for the Control Protocol.</t>
+<t>NAT-XC provides the capability of individual hosts and applications to
+  source traffic from addresses outside the enterprise network and
+  receive traffic sent to addresses to outside the enterprise
+  network. In some cases network operators will want to prevent, or
+  control, such traffic - and in some cases they have a legitimate
+  interest in doing so.  This tussle needs to be addressed explicitly
+  in the document.</t>  
+<t>More generally, NAT-XC impacts any network that analyzes or filters
+  traffic based on IP address.  Locally-provided Translators may log,
+  analyze, or filter traffic based on local policies, and networks MAY
+  attempt to block connections to external Translators.  However the
+  Control Channel is encrypted, and nothing prevents an application
+  and an external Translator from agreeing to use a different port for
+  Control Channels.  Also, there is no reliable mechanism for
+  distinguishing between Control Channel traffic and other traffic
+  that might be sent over TLS.
+</t> 
+<t>Applications using IP source addresses as authentication tokens,
+  will be extending trust to the Translator and to the entire signal
+  path between the Application and the Translator.  Especially when
+  the Translator is located on an external network, this may
+  introduce new opportunities for source address spoofing.</t>
+</list>
+</t>
+</section>
+<section title="IANA Considerations">
+<t>
+This document is a long way from being a formal protocol
+specification, much less a published one.  However in the event that
+this protocol were ever standardized or approved on an experimental
+basis, IANA would be requested to assign a well-known port for use
+with NAT-XC, and to assign an IP address which could be used as a
+default address for use with NAT-XC.
+</t>
+</section>
+</middle>
+<back>
+<references title="Informative References">
+&rfc1928;
+&rfc2765;
+&rfc3103;
+&rfc4380;
+&rfc5246;
+&rfc5389;
+</references>
+</back>
+</rfc>

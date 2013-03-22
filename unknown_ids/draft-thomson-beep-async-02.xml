@@ -1,0 +1,275 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="rfc2629.xslt"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY RFC1323 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.1323.xml">
+<!ENTITY RFC2119 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+<!ENTITY RFC3080 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3080.xml">
+<!ENTITY RFC3081 PUBLIC "" "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3081.xml">
+]>
+
+<?rfc rfcedstyle="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="no"?>
+<?rfc iprnotified="yes"?>
+<?rfc strict="yes"?>
+<?rfc toc="yes"?>
+<?rfc tocindent="yes"?>
+
+<rfc category="std" ipr="trust200902">
+  <front>
+    <title abbrev="Asynchronous BEEP Channels">
+      Asynchronous Channels for the Blocks Extensible Exchange Protocol (BEEP)
+    </title>
+
+    <author initials="M." surname="Thomson"
+            fullname="Martin Thomson">
+      <organization>Andrew</organization>
+
+      <address>
+        <postal>
+          <street>PO Box U40</street>
+          <city>Wollongong University Campus</city>
+          <region>NSW</region>
+          <code>2500</code>
+          <country>AU</country>
+        </postal>
+
+        <phone>+61 2 4221 2915</phone>
+        <email>martin.thomson@andrew.com</email>
+        <uri>http://www.andrew.com/</uri>
+      </address>
+    </author>
+
+    <date month="March" year="2009"/>
+    <area>Application</area>
+    <keyword>Internet-Draft</keyword>
+    <keyword>BEEP</keyword>
+    <keyword>Asynchronous</keyword>
+    <keyword>Channel</keyword>
+
+    <abstract>
+      <t>The Blocks Extensible Exchange Protocol (BEEP) provides a protocol framework for the development of application protocols.  This document describes an BEEP feature that enables asynchrony for individual channels.
+      </t>
+    </abstract>
+  </front>
+
+  <middle>
+
+    <section title="Introduction">
+      <t>The Blocks Extensible Exchange Protocol (BEEP) provides a protocol framework that manages many of the aspects necessary in developing an application protocol: framing, encoding, privacy, authentication and asynchrony.  However the asynchrony provided by BEEP is limited to asynchrony between channels; replies to messages sent on any channel are strictly ordered.
+      </t>
+
+      <t>Serial processing behaviour is desirable for a range of applications.  However, serial processing is less suitable for applications that rely more heavily on asynchrony.  In particular, if a response takes a significant amount of time to create, the channel is effectively blocked until the request has been processed and the response sent.  Pipelining only ensures that network latency does not add to this time; subsequent requests cannot be processed until a response is made to the first request.
+      </t>
+
+      <t>Asynchronous applications require a protocol that is able to support a large number of concurrent outstanding requests.  The analogy of a channel as a thread does not scale to the large number of threads used in modern systems.  Modern applications regularly have large numbers of concurrent processing threads.  Thus, a better way of multiplexing large numbers of concurrent requests is required.
+      </t>
+
+      <t>This document describes an BEEP feature, an extension to BEEP, that enables the creation of an asynchronous channel.  An asynchronous channel is a channel where response ordering is not fixed to the order of the requests sent by the client peer.  An asynchronous channel is identical to other channels, using unmodified framing; only requests may be processed in parallel and responses may be sent in any order.
+      </t>
+
+      <t>An asynchronous channel enables the efficient use of a single channel for multiple concurrent requests.  There is no impact on requests arising from the timing of responses to other requests.  The requesting peer can process responses to the requests it sends as they come available; similarly, the serving peer can take advantage of parallel processing without artificial constraints on the order of responses.
+      </t>
+
+      <t>Asynchronous channels allow for greater throughput where the serving peer requires any time to process requests.  This is particularly relevant where the serving peer needs to perform lengthy computations or make network-based requests as a part of servicing the request.
+      </t>
+
+      <t>BEEP feature negotiation is used to ensure that both peers are mutually willing to create asynchronous channels.  A means for establishing an asynchronous channel is described.
+      </t>
+
+    </section>
+
+    <section anchor="conventions" title="Conventions used in this document">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target="RFC2119"/>.  Similar to in <xref target="RFC3080"/>, these words are written in lower case; this document refrains from unnecessary shouting.
+      </t>
+    </section>
+
+    <section anchor="async" title="Asynchronous BEEP Channels">
+      <t>This document defines a BEEP feature that enables the use of asynchronous channels.  An asynchronous channel is a BEEP channel that is not subject to the restrictions of Section 2.6.1 of <xref target="RFC3080"/> regarding ordering of responses; requests can be processed and responded to in any order by the serving peer.
+      </t>
+
+      <t>Asynchronous channels use the <spanx style="verb">msgno</spanx> element of the BEEP frame header to correlate request and response.  Regular BEEP channels do not use <spanx style="verb">msgno</spanx> for request/response correlation, contrary to what might be inferred by the presence of the parameter.  In a regular BEEP channel, the <spanx style="verb">msgno</spanx> only serves as an means of checking for protocol errors.
+      </t>
+
+      <t>Asynchronous channels are not suitable for applications where state established by requests is relied upon in subsequent requests or the ordering of messages is significant.
+      </t>
+
+      <section title="Asynchronous Feature">
+        <t>The <spanx style="verb">feature</spanx> attribute in the BEEP greeting contains a whitespace separate list of features supported by each peer.  If both lists contain the same feature that feature may be used by either peer.
+        </t>
+
+        <t>This document registers the feature <spanx style="verb">async</spanx>.  If both peers include this feature in the greeting message, either peer is able to create an asynchronous channel.
+        </t>
+
+        <t><xref target="greeting"/> shows an example exchange where both peers declare willingness to use this feature.
+        </t>
+
+        <figure anchor="greeting" title="BEEP greetings with asynchronous feature">
+<artwork><![CDATA[
+   L: <wait for incoming connection>
+   I: <open connection>
+   L: RPY 0 0 . 0 133
+   L: Content-Type: application/beep+xml
+   L:
+   L: <greeting features="async x-foo">
+   L:    <profile uri="http://iana.org/beep/TLS" />
+   L: </greeting>
+   L: END
+   I: RPY 0 0 . 0 69
+   I: Content-Type: application/beep+xml
+   I:
+   I: <greeting features="async" />
+   I: END
+]]></artwork>
+        </figure>
+
+        <t>The registration template for BEEP features is included in <xref target="iana"/>.
+        </t>
+      </section>
+
+      <section title="Starting an Asynchronous Channel">
+        <t>To create an asynchronous channel, an <spanx style="verb">async</spanx> parameter set to <spanx style="verb">true</spanx> is included in the <spanx style="verb">start</spanx> request.  If omitted, or set to <spanx style="verb">false</spanx>, the channel is not asynchronous.
+        </t>
+
+        <t><xref target="start"/> shows how the <spanx style="verb">async</spanx> attribute can be used to start an asynchronous channel.
+        </t>
+
+        <figure anchor="start" title="Asynchronous Channel Start">
+          <artwork><![CDATA[
+   C: MSG 0 1 . 52 130
+   C: Content-Type: application/beep+xml
+   C:
+   C: <start number="1" async="true">
+   C:    <profile uri="http://example.org/protocol"/>
+   C: </start>
+   C: END
+   S: RPY 0 1 . 221 102
+   S: Content-Type: application/beep+xml
+   S:
+   S: <profile uri="http://example.org/protocol"/>
+   S: END
+]]></artwork>
+        </figure>
+
+        <t>If the serving peer is unable to create an asynchronous channel for any reason, the channel start is rejected.  This could occur if the selected profile is not suitable for an asynchronous channel.  The response can include the <spanx style="verb">553</spanx> response code (parameter invalid) and an appropriate message, as shown in <xref target="start-bad"/>.
+        </t>
+
+        <figure anchor="start-bad" title="Asynchronous Channel Start Error">
+          <artwork><![CDATA[
+   C: MSG 0 1 . 52 128
+   C: Content-Type: application/beep+xml
+   C:
+   C: <start number="1" async="true">
+   C:    <profile uri="http://example.org/serial"/>
+   C: </start>
+   C: END
+   S: ERR 0 1 . 221 152
+   S: Content-Type: application/beep+xml
+   S:
+   S: <error code="553">Profile &lt;http://example.org/serial&gt;
+   S: cannot be used for asynchronous channels.</error>
+   S: END
+]]></artwork>
+        </figure>
+      </section>
+
+      <section title="Asynchronous Channel Behaviour">
+        <t>Asynchronous channels differ from normal BEEP channels in one way only: an asynchronous channel is not subject to the restrictions in Section 2.6.1 of <xref target="RFC3080"/> regarding the processing and response ordering.  A peer in the serving role may process and respond to requests in any order it chooses.
+        </t>
+
+        <t>In an asynchronous channel the <spanx style="verb">msgno</spanx> element of the frame header is used to correlate request and response.  A BEEP peer receiving responses in a different order to the requests that triggered them must not regard this is a protocol error.
+        </t>
+
+        <t><spanx style="verb">MSG</spanx> messages sent on an asynchronous chanel may be processed in parallel by the serving peer.  Responses (<spanx style="verb">RPY</spanx>, <spanx style="verb">ANS</spanx>, <spanx style="verb">NUL</spanx> or <spanx style="verb">ERR</spanx> messages) can be sent in any order.  Different <spanx style="verb">ANS</spanx> messages that are sent in a one-to-many exchange may be interleaved with responses to other <spanx style="verb">MSG</spanx> messages.
+        </t>
+
+        <t>An asynchronous channel must still observe the rules in <xref target="RFC3080"/> regarding segmented messages.  Each message must be completed before any other message can be sent on that same channel.
+        <list style="hanging">
+          <t hangText="Note:">An exception to this rule is made in <xref target="RFC3080"/> for interleaved ANS segments sent in response to the same <spanx style="verb">MSG</spanx>.  It is recommended that BEEP peers do not generate interleaved ANS segments.
+          </t>
+        </list>
+        </t>
+
+        <t>The BEEP management channel (channel 0) is never asynchronous.
+        </t>
+      </section>
+    </section>
+
+    <section title="Alternatives">
+      <t>The option presented in this document provides for asynchronous communication.  Asynchronous channels might not be applicable in every circumstance, particularly where ordering of requests is significant.  Depending on application protocol requirements, the alternatives discussed in this section could be more applicable.
+      </t>
+
+      <section title="Increasing Throughput">
+        <t>Asynchronous channels can be used to remove limitations on message processing throughput in some cases.  Alternatively, pipelining of requests can increase throughput significantly where network latency is the limiting factor.  Spreading requests over several channels increases overall throughput, if throughput is the only consideration.
+        </t>
+
+        <t><list style="hanging"><t hangText="Note:">Be wary of false optimizations that rely on the pipelining of requests.  If later requests in a series of pipelined requests rely on state established by earlier requests, errors in earlier requests could invalidate later requests.
+        </t></list></t>
+
+        <t>The flow control window used in the <xref target="RFC3081">TCP mapping</xref> can introduce a limiting factor in throughput for individual channels.  Choice of TCP window size similarly limits throughput, see <xref target="RFC1323"/>.  To avoid limitations introduced by flow control, receiving peers can increase the window size used; sending peers can open additional channels with the same profile.  Correctly managing flow control also applies to asynchronous channels.
+        </t>
+      </section>
+
+      <section title="Asynchrony in the Application Protocol">
+        <t>With changes to the application protocol, serial channels can be used for asynchronous exchanges.  Asynchrony can be provided at a protocol layer above BEEP by separating request and response.  This requires the addition of proprietary MIME headers or modifications to the application protocol.
+        </t>
+
+        <t>The serving peer provides an immediate <spanx style="verb">RPY</spanx> (or <spanx style="verb">NUL</spanx>) response to requests.  This frees the channel for further requests.  The actual response is sent as a separate <spanx style="verb">MSG</spanx> using a special identifier included in the original request to correlate the response with the request.  This second <spanx style="verb">MSG</spanx> can be sent on the same channel (since these are full duplex) or on a channel specifically created for this purpose.
+        </t>
+
+        <t>This method is not favoured since it requires that the application protocol solve the problem of correlating request with response.  BEEP aims to provide a general framework for the creation of an application protocol, and for it to not provide request/response correlation would limit its usefulness.  Using a MIME header is also possible, but using <spanx style="verb">msgno</spanx> is the most elegant solution.
+        </t>
+      </section>
+    </section>
+
+    <section anchor="security" title="Security Considerations">
+      <t>Enabling asynchronous messaging for a channel potentially requires the maintenance of additional state information.  A peer in the server role that does not reply to messages can cause the accumulation of state at the client peer.  If this state information were not limited, this mode could be used to perform denial of service.  This problem, while already present in BEEP, is potentially more significant due to the nature of the processing on the serving peer that might occur for requests received on an asynchronous channel.  The extent to which denial is possible is limited by what a serving peer accepts; the number of outstanding requests can be restricted to protect against excessive accumulation of state.
+      </t>
+
+      <t>Peers that serve requests on asynchronous channels are not subject to any specific problems from state accumulation.  Peers in the serving role are able to use <xref target="RFC3081">flow control</xref> to limit the consumption of local resources.
+      </t>
+    </section>
+
+    <section anchor="iana" title="IANA Considerations">
+      <t>This section registers the BEEP <spanx style="verb">async</spanx> feature in the BEEP parameters registry, following the template from Section 5.2 of <xref target="RFC3080"/>.
+      <list style="hanging">
+        <t hangText="Feature Identification:">async</t>
+        <t hangText="Feature Semantics:">This feature enables the creation of asynchronous channels, see <xref target="async"/> of RFCXXXX.  [[EDITORS NOTE: Please replace XXXX with the assigned number of this document.]]
+        </t>
+        <t hangText="Contact Information:">Martin Thomson &lt;martin.thomson@andrew.com&gt;
+        </t>
+      </list>
+      </t>
+
+    </section>
+
+<!--    <section title="Acknowledgements">
+      <t>
+      </t>
+    </section> -->
+<!--
+    <appendix title="Change Log">
+      <t>[[The RFC Editor is requested to remove this section at publication.]]</t>
+      <t>Changes since -0-1:
+      <list style="symbols">
+        <t>Document created.</t>
+      </list>
+      </t>
+    </appendix>
+-->
+  </middle>
+
+  <back>
+
+    <references title="Normative References">
+      &RFC2119;
+      &RFC3080;
+    </references>
+
+    <references title="Informative References">
+      &RFC3081;
+      &RFC1323;
+    </references>
+
+  </back>
+</rfc>

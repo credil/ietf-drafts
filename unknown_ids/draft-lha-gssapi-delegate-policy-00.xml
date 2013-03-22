@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+	  <!ENTITY rfc2119 PUBLIC '' 
+		   'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+	  <!ENTITY rfc4120 PUBLIC '' 
+		   'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4120.xml'>
+	  <!ENTITY rfc2743 PUBLIC '' 
+		   'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2743.xml'>
+	  <!ENTITY rfc2744 PUBLIC '' 
+		   'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2744.xml'>
+	  <!ENTITY rfc4121 PUBLIC '' 
+		   'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4121.xml'>
+	  ]>
+
+<rfc category="std" ipr="full3978" docName="draft-lha-gssapi-delegate-policy-00">
+
+  <?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+  <?rfc toc="yes" ?>
+  <?rfc symrefs="yes" ?>
+  <?rfc sortrefs="yes"?>
+  <?rfc iprnotified="no" ?>
+  <?rfc strict="yes" ?>
+
+  <front>
+    <title>GSS-API: Delegate if approved by policy</title>
+    <author initials='L' surname="Hornquist Astrand" fullname='Love Hornquist Astrand'>
+      <organization>Apple, Inc.</organization>
+      <address>
+        <email>lha@apple.com</email>
+      </address>
+    </author>
+    <author initials="S." surname="Hartman" fullname="Sam Hartman">
+      <organization>Painless Security, LLC</organization>
+      <address>
+	<email>hartmans-ietf@mit.edu</email>
+      </address>
+    </author>
+
+    <date month="August" year="2008"/>
+    <abstract>
+      <t>
+
+	Several GSS-API applications work in a multi-tiered
+	architecture, where the server takes advantage of delegated
+	user credentials to act on behalf of the user and contact
+	additional servers.  In effect, the server acts as an agent on
+	behalf of the user.  Examples include web applications that
+	need to access e-mail or file servers as well as CIFs file
+	servers.  However, delegating the ability to act as a user to
+	a party who is not sufficiently trusted is problematic from a
+	security standpoint.  Kerberos provides a flag called
+	OK-AS-DELEGATE that allows the administrator of a Kerberos
+	realm to communicate that a particular service is trusted for
+	delegation.  This specification adds support for this flag and
+	similar facilities in other authentication mechanisms to
+	GSS-API (RFC 2743).
+
+      </t>
+    </abstract>
+  </front>
+
+  <middle>
+
+    <section title="Requirements Notation">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+        "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+        and "OPTIONAL" in this document are to be interpreted as
+        described in <xref target="RFC2119"/>.</t>
+    </section>
+    <section title="Introduction">
+
+      <t>
+
+	Several GSS-API applications work in a multi-tiered
+	architecture, where the server takes advantage of delegated
+	user credentials to act on behalf of the user and contact
+	additional servers.  In effect, the server acts as an agent on
+	behalf of the user.  Examples include web applications that
+	need to access e-mail or file servers as well as CIFs file
+	servers.  However, delegating the ability to act as a user to
+	a party who is not sufficiently trusted is problematic from a
+	security standpoint.
+
+      </t>
+      <t>
+
+	Today, GSS-API <xref target="RFC2743" /> leaves the
+	determination of whether delegation is desired to the client
+	application.  If the client sets the deleg_req_flag to
+	gss_init_sec_context then the application requests
+	delegation. This requires client applications to know what
+	services should be trusted for delegation.  In some cases,
+	however, a central authority is in a better position to know
+	what services should receive delegation than the client
+	application.  Some mechanisms such as Kerberos
+	<xref target="RFC4121" /> have a facility to allow a realm
+	administrator to communicate that a particular service is a
+	valid target for delegation.  In Kerberos, the KDC can set the
+	OK-AS-DELEGATE flag in issued tickets.  However even in such a
+	case, delegating to services for applications that do not need
+	delegation is problematic.  So, it is desirable for a GSS-API
+	client to be able to request delegation if and only-if central
+	policy reccomends delegation to the given target.
+
+      </t>
+      <t>
+
+	This specification adds a new input flag to
+	GSS_Init_sec_context to request delegation when approved by
+	central policy.  In addition, a constant value to be used in
+	the GSS-API C bindings <xref target="RFC2744" /> is defined.
+	Finally, the behavior for the Kerberos mechanism
+	<xref target="RFC4121" /> is specified.</t>
+
+    </section>
+
+    <section title="GSS-API flag, c binding">
+      <t>
+	The GSS_Init_sec_context API is extended to gain a new input
+	flag: if the deleg_policy_req flag is set, then delegation
+	should be performed if recommended by central policy.  In
+	addition, the C bindings are extended to define the following
+	constant to represent this new flag.</t>
+      <t>
+
+        <figure>
+          <artwork>
+            <![CDATA[
+#define GSS_C_DELEG_POLICY_FLAG 32768
+]]>
+          </artwork>
+        </figure>
+      </t>
+    </section>
+
+    <section title="GSS-API behavior">
+      <t>
+	
+	As before, if the GSS_C_DELEG_FLAG is set, the GSS-API
+	mechanism tries to delegate. Output ret_flags contains the
+	flag GSS_C_DELEG_FLAG if delegation is successful.
+	
+      </t>
+      <t>
+
+	If the GSS_C_DELEG_POLICY_FLAG is set, the code delegates only
+	if the mechanism policy allows delegation. If delegation is
+	done, the output flag ret_flags contain both GSS_C_DELEG_FLAG
+	and GSS_C_DELEG_POLICY_FLAG on the initator and GSS_C_DELEG_FLAG
+	on the acceptor.
+
+
+      </t>
+      <t>
+
+	If both GSS_C_DELEG_FLAG and GSS_C_DELEG_POLICY_FLAG are set,
+	then delegation is attempted.  However GSS_C_DELEG_POLICY_FLAG
+	is only set in ret_flags on the initiator if
+	GSS_C_DELEG_POLICY_FLAG would have been sufficient to request
+	delegation.
+
+      </t>
+    </section>
+    
+    <section title="GSS-API behavior">
+      <t>
+
+	If the GSS_C_DELEG_POLICY_FLAG is set, the Kerberos GSS-API
+	mechanism  will only delegate if ok-as-delegate is set
+	<xref target="RFC4120"/> in the service ticket.  Other policy checks MAY be applied.
+
+      </t>
+    </section>
+
+
+
+    <section title="Security Considerations">
+
+      <t>
+	Introduce a flag what allows client to get help from the KDC
+	when to delegate to servers, will limit what servers that
+	client delegate too.
+      </t>
+
+    </section>
+
+    <section title="IANA Considerations">
+
+      <t>
+	This section needs to be revised to be consistent with the kitten IANA draft.
+      </t>
+
+    </section>
+
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      &rfc2119;
+      &rfc4120;
+      &rfc4121;
+      &rfc2743;
+      &rfc2744;
+    </references>
+  </back>
+
+</rfc>

@@ -1,0 +1,1069 @@
+<?xml version='1.0'?>
+<!DOCTYPE rfc SYSTEM 'rfc2629.dtd'>
+<?rfc symrefs='yes'?>
+<?rfc sortrefs='yes'?>
+<?rfc toc='yes'?>
+
+<rfc category='exp' ipr='full3978' docName='draft-wyllie-dtnrg-badisc-01'>
+<front>
+ <title abbrev='DTN Bundle Agent Discovery'>Automated Bundle Agent Discovery for Delay/Disruption-Tolerant Networking</title>
+ <author initials='J.' surname='Wyllie' fullname='Jim Wyllie'>
+  <organization>Ohio University</organization>
+  <address>
+   <email>jw280601@ohiou.edu</email>
+   <postal>
+    <street>EECS Department #18</street>
+    <street>Stocker Center</street>
+    <city>Athens</city><region>OH</region>
+    <code>45701</code>
+   </postal>
+   <phone>+1-740-593-1562</phone>
+  </address>
+ </author>
+ <author initials='W.' surname='Eddy' fullname='Wesley M. Eddy'>
+  <organization abbrev='Verizon'>Verizon Federal Network Systems</organization>
+  <address>
+   <email>weddy@grc.nasa.gov</email>
+   <postal>
+    <street>NASA Glenn Research Center</street>
+    <street>21000 Brookpark Rd, MS 54-5</street>
+    <city>Cleveland</city><region>OH</region>
+    <code>44135</code>
+   </postal>
+   <phone>216-433-6682</phone>
+  </address>
+ </author>
+ <author fullname='Joseph Ishac' initials='J.' surname='Ishac'>
+  <organization abbrev='NASA'>NASA Glenn Research Center</organization>
+  <address>
+   <postal>
+    <street>21000 Brookpark Road</street>
+    <city>Cleveland</city>
+    <region>Ohio</region>
+    <code>44135</code>
+    <country>USA</country>
+   </postal>
+   <phone>+1-216-433-6587</phone>
+   <facsimile>+1-216-433-8705</facsimile>
+  <email>jishac@nasa.gov</email>
+  </address>
+ </author>
+ <author fullname='Will Ivancic' initials='W.' surname='Ivancic'>
+  <organization abbrev='NASA'>NASA Glenn Research Center</organization>
+  <address>
+   <postal>
+    <street>21000 Brookpark Road</street>
+    <city>Cleveland</city>
+    <region>Ohio</region>
+    <code>44135</code>
+    <country>USA</country>
+   </postal>
+   <phone>+1-216-433-3494</phone>
+   <facsimile>+1-216-433-8705</facsimile>
+  <email>William.D.Ivancic@nasa.gov</email>
+  </address>
+ </author>
+ <author initials='S.' surname='Ostermann' fullname='Shawn Ostermann'>
+  <organization>Ohio University</organization>
+  <address>
+   <email>ostermann@cs.ohiou.edu</email>
+   <postal>
+     <street>Department of Computer Science</street>
+     <street>322b Stocker Center</street>
+     <city>Athens</city><region>Ohio</region>
+    <code>45701</code>
+   </postal>
+  <phone>+1-740-593-1234</phone>
+  </address>
+ </author>
+ <date year='2007' />
+ <area>IRTF</area>
+ <keyword>DTN</keyword>
+ <keyword>Delay-Tolerant</keyword>
+ <keyword>Disruption-Tolerant</keyword>
+ <abstract>
+  <t>
+
+In Delay/Disruption-Tolerant Networking (DTN), Bundle Agents form an overlay network
+that forwards DTN bundles between their source and destination applications.
+This document describes a mechanism that Bundle Agents can use to discover when
+they are in contact with one another and optionally provide information on the
+additional properties of current or future contacts, such as duration and 
+capabilities.  This information can be used to trigger bundle forwarding or 
+make future bundle scheduling decisions.
+
+  </t>
+ </abstract>
+</front>
+
+<middle>
+ <section anchor='intro' title='Introduction'>
+  <t>
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
+"SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be
+interpreted as described in <xref target="RFC2119"/>.
+
+  </t>
+  <t>
+
+The Delay/Disruption-Tolerant Networking (DTN) architecture <xref
+target='RFC4838'/> describes an overlay network of Bundle Agents (BAs).  Each
+BA manages the forwarding of bundles during contacts with other BAs and queues
+bundles between contacts.  As the bundle format and basic forwarding operations
+were designed, it became clear that an automated means for BAs to discover 
+neighboring nodes, their neighbors' capabilities, and contact times
+was needed.  This document describes such a mechanism as well as the
+mechanism's relationship to potential DTN routing protocols.
+
+  </t>
+  <t>
+
+While the mechanism described within this document is specifically designed to
+convey peer-to-peer contact information between two BAs that are adjacent in
+the overlay topology, it also can be used as one of the building blocks to 
+enable multi-hop routing decisions between BAs.  To clarify, consider a
+typical Internet routing protocol (e.g. OSPF <xref target='RFC2328'/>) which
+has two main types of messages: (1) &quot;Hello&quot; messages used to
+automatically discover connectivity with other directly-reachable peers, and
+(2) messages used to update databases of connectivity information for further
+hops.  The mechanism described in this document satisfies the first function
+(&quot;Hello&quot; messaging) within a DTN overlay by allowing Bundle Agents to
+automatically discover other nodes to which they can directly forward bundles.
+
+  </t>
+  <t>
+
+Previously, implementations of DTN Bundle Agents provided these functions
+using either static, manual configuration or ad-hoc, custom advertisement 
+mechanisms that were neither formally defined nor independent of convergence
+layers.  This document provides a means that will interoperate between 
+differing BA implementations and allow them to exchange contact information
+over any shared convergence layers.
+
+  </t>
+  <t>
+
+This exchange of contact information can be useful even when contact properties
+are known in advance.  It can be used to verify the pre-configured information
+or reveal discrepancies in contact properties (expected duration, expected
+future contact times, etc.).
+
+  </t>
+  <t>
+
+The remainder of this document contains a high-level overview of the discovery
+mechanism's design in <xref target='overview'/>, a specification of the
+message formats used in <xref target='convergencelayer'/> and <xref target='messages'/>,
+and a description of the rules for generating and processing these messages in <xref
+target='processing'/>.  In addition, <xref target='examples'/> contains example
+message exchanges to clarify the protocol's operation.
+
+  </t>
+  <section title='Terminology'>
+   <t>
+
+Defining neighboring nodes on a typical network is fairly straightforward.
+However, the overlay nature of a DTN complicates the definition of
+neighboring DTN BAs.  Furthermore, communication may be unidirectional in DTNs:
+for example, DTN node A may be able to send to DTN node B, but not vice versa.  We
+therefore define the following terms:
+
+    <list style='hanging'>
+     <t hangText='Neighbor: '>
+
+Two nodes are said to be 'neighbors' over a convergence layer if and only
+if the nodes can communicate symmetrically directly over that convergence
+layer.  For example, assume A, B, and C are all DTN BAs, and A is connected
+to B over one TCP convergence layer adapter while B is connected to C over
+another TCP convergence layer adapter, but TCP segments between A and C
+are blocked by a firewall, so no direct contact between them is possible.
+A and C are not neighbors while B is a neighbor to both A and C, regardless
+of how many IP-layer hops exist between them.  The convergence layers here
+imply connection symmetry: if B were connected to C over a convergence layer
+which only permitted unidirectional transmission (e.g. FLUTE), B may not be
+a neighbor to C, and instead might be one of the following:
+
+     </t>
+     <t hangText='Pitcher: '>
+
+When a contact exists between two nodes, but they are not neighbors because
+they lack bidirectional connectivity, one is called a &quot;pitcher&quot;,
+and the other a &quot;catcher&quot;.  The node that can only send over
+the convergence layer takes the role of the pitcher.  A pitcher meets the
+definition of &quot;neighbor&quot; in every other way.  As an example, A is
+a pitcher to B over a particular convergence layer adapter if A can directly
+send and B can directly receive using that convergence layer.
+
+     </t>
+     <t hangText='Catcher: '>
+
+A node that can only receive over a convergence layer adapter fills the
+role of catcher.  A catcher meets the definition of &quot;neighbor&quot;
+in every other way.  As an example, A is a catcher to B over a particular
+convergence layer adapter if A can directly receive and B can directly send
+using that convergence layer.
+
+     </t>
+     <t hangText='In-Contact: '>
+
+A node X is said to be 'in-contact' to another node Y if X is either a
+neighbor, pitcher, or catcher to node Y.
+
+     </t>
+    </list>
+
+The terms 'pitcher' and 'catcher' were borrowed from JPL's implementation of
+the Asynchronous Message Service.
+
+   </t>
+  </section>
+  <section title='Protocol Overview' anchor='overview'>
+   <t>
+
+BA autodiscovery is complicated by the diverse set of deployment 
+environments in which DTN may be used.  As stated in <xref target='RFC4838'/>, 
+deployment environments may include networks with any combination of:
+
+    <list style='symbols'>
+     <t>Delays which are orders of magnitude larger than terrestrial 
+networks</t>
+     <t>'High' bit-error rates, either overall or bursty in nature</t>
+     <t>Relatively high asymmetry in network properties compared to the terrestrial Internet</t>
+    </list>
+
+To adequately accommodate all of these environments, the protocol in this
+document provides two levels of information: (1) domain-specific and (2)
+domain-independent, where a domain refers to a particular class of deployment
+environment.  Domain-specific information typically is needed to determine
+the expected duration and other properties that are clearly determined
+by different factors.  For instance, deep-space networks have known and stable
+orbital properties while terrestrial vehicular ad-hoc networks have unknown
+and fairly random motion and link fading.  Domain-independent information
+directly specifies contact properties that can be determined and communicated
+independently of any particular deployment environment.  As a result, it
+contains only basic information that is consistently useful across environments
+such as the remaining amount of storage space and EIDs in use.
+
+   </t>
+   <t>
+
+This dual-level design provides flexibility in determining information about
+other BAs.  For example, DTN-enabled nodes on a local sensor network may send
+domain-specific bundles including both power levels and received signal
+strengths to a central point that determines contact times and durations.  In
+contrast, DTN-enabled deep-space probes may send no domain-specific information
+at all, instead relying on preconfigured schedules or internal ephemeris data
+to determine contacts, and using autodiscovery only as a status and sanity
+check of the DTN-level networking configuration.
+
+   </t>
+   <t>
+
+The protocol also allows for third-party configuration of contact information
+(a third DTN node may inform two other nodes about their expected contact
+times).  This can facilitate remote configuration.  For instance,
+'dumb' sensor network nodes may not have complete information to determine
+optimal contact times on their own.  However, a single, more sophisticated node
+can communicate this information to the entire sensor network.  The potential
+for misuse of this capability raises some security concerns that are discussed
+in <xref target='security' />.
+
+   </t>
+  </section>
+ </section>
+ <section title='Message Format' anchor='messages'>
+  <section title='Bundle Processing Control Flags'>
+   <t>
+
+Bundle Processing Control Flags MUST adhere to the following guidelines:
+
+    <list style='symbols'>
+
+     <t>Bundle Fragment -- Nominally, autodiscovery bundles will be small
+enough that fragmentation is never needed.  However, unless fragmentation is
+forbidden by a domain-specific application, autodiscovery bundles may be
+fragmented.  This bit MUST be set according to the fragmentation guidelines in
+<xref target='SB07' />.</t>
+
+     <t>Administrative Record -- Autodiscovery bundles are not administrative
+records; this bit MUST be clear.</t>
+
+     <t>Fragmentation Allowed -- As stated above, autodiscovery bundles may be
+fragmented at the discretion of the domain-specific rules.</t>
+
+     <t>Custody Transfer Required -- Since the autodiscovery information is
+advisory by nature, it does not require reliable transmission and custody
+transfer should never be required; this bit SHOULD always be clear.
+Furthermore, since bundles used for autodiscovery move over only a single
+overlay-hop, a Bundle Status Report is sufficient for acknowledgement
+without invoking custody transfer semantics.</t>
+
+     <t>Destination Endpoint is a Singleton -- In certain scenarios, it may
+make sense to define contact timings for large sets of nodes.  Therefore,
+autodiscovery may take place between non-singleton endpoints, and autodiscovery
+messages may be multicast at the bundle layer and/or below.</t>
+
+     <t>Acknowledgement by application is requested -- As there is no
+'application' associated with autodiscovery, this should not be
+necessary and the bit SHOULD be cleared.</t>
+
+    </list>
+
+   </t>
+   <t>
+
+Therefore, the low-order Bundle Processing Control Flags SHOULD be set to:
+
+   </t>
+
+   <figure>
+    <artwork>
+   000Z0Y0X
+    </artwork>
+   </figure>
+
+   <t>
+
+where the value of X is determined by whether the current bundle is a fragment,
+the value of Y is determined by whether the domain-specific case allows for
+fragmentation, and the value of Z is determined by the number of intended destinations.
+
+   </t>
+  </section>
+  <section title='Autodiscovery Message Format'>
+   <t>
+
+In order to work regardless of the convergence layer adapters that are
+available, BA autodiscovery uses DTN bundles to communicate its data.
+More specifically, all autodiscovery data is encoded in the payload block
+of the bundle.  Some of the autodiscovery fields use Self-Delimiting Numeric
+Values (SDNVs) <xref target='I-D.irtf-dtnrg-sdnv'/> within the messaging format,
+as in several other parts of the Bundle Protocol and its extensions.
+
+   </t>
+   <t>
+
+Any bundles related to autodiscovery MUST contain the domain-independent
+portion of the autodiscovery bundle, followed optionally by the domain-specific
+portion.  The fields should be ordered as follows:
+
+   <list style='symbols'>
+    <t>Version -- 16-bit value specifying the autodiscovery version to which
+    this bundle adheres.  This document defines version 0.  A daemon MUST
+    drop any bundle with any other version number.</t>
+
+    <t>Autodiscovery Flags -- SDNV-encoded field describing the contents of the 
+    autodiscovery header.  The meanings of the individual bits within this field
+    are defined in <xref target='autodiscoveryflags' />.</t>
+
+    <t>Contact Start Time -- An optionally included field indicating the
+    beginning point of a contact.  The time is encoded as a DTN timestamp as
+    specified in <xref target='SB07' />.</t>
+
+    <t>Contact End Time -- An optionally included field indicating the ending
+    point of a contact, encoded as a DTN timestamp as specified in 
+    <xref target='SB07' />.</t>
+
+    <t>Pitcher -- An endpoint ID reference as specified in
+    <xref target='SB07' /> referring to the node designated as the 'pitcher' in
+    the connection.</t>
+
+    <t>Catcher -- An endpoint ID reference as specified in
+    <xref target='SB07' /> referring to the node designated as the 'catcher in
+    the connection.</t>
+
+    <t>Capabilities -- SDNV-encoded field describing the capabilities of
+    the node referred to by this block.  This is described in
+    <xref target='capabilities' />.</t>
+
+    <t>Autodiscovery Protocol Type -- A 16-bit field that indicates the format of the
+    domain-specific data and domain-specific procedures.  This is described in
+    <xref target='autodiscoveryprotocoltype' />.</t>
+
+   </list>
+
+  </t>
+  </section>
+  <section title='Autodiscovery Flags' anchor='autodiscoveryflags'>
+   <t>
+
+The bits of the Autodiscovery Flags indicate which optional fields of the Autodiscovery Block are present, and are explained in detail below:
+
+   </t>
+
+   <figure>
+    <artwork>
+   Bit 0 -- Start Time Present
+   Bit 1 -- End Time Present
+   Bit 2 -- Connection is bidirectional
+   Bit 3-7 -- Reserved
+    </artwork>
+   </figure>
+
+   <t>
+    <list style='symbols'>
+     <t>
+
+Start Time Present -- If this bit is set, then the autodiscovery message
+includes the Contact Start Time field.  A sender can either indicate a specific
+time when a predicted future contact may start, or this bit can be clear (and the
+corresponding field omitted) to indicate an immediate contact (or, put differently,
+that the nodes can commence communication upon processing of the autodiscovery
+bundle).  If this bit is set, then a Contact Start Time field MUST be included in
+the autodiscovery message; if the bit is cleared, then that field MUST NOT be present.
+
+     </t>
+     <t>
+
+End Time Present -- If this bit is set, then the autodiscovery message
+includes the Contact End Time field.  If the field is omitted, this means that the
+nodes will remain in contact for the indefinite future.  If this bit is set, then a 
+Contact End Time field MUST be included in the autodiscovery message; if the bit is
+cleared, then that field MUST NOT be present.
+
+     </t>
+     <t>
+
+Connection is bidirectional -- If this bit is set, it signifies that not only can the
+pitcher send to the catcher, but vice versa as well.  This establishes the two nodes
+as neighbors.
+
+     </t>
+    </list>
+   </t>
+  </section>
+  <section title='Capabilities' anchor='capabilities'>
+   <t>
+
+Though many capabilities could be considered domain-specific, some capabilities are nearly ubiquitous in utility and relevance.  Those capabilities are defined here.  To reduce bit overhead when not all capabilities are relevant or desired, the capabilities are set as a two-level SDNV.  The top-level SDNV specifies which second-level SDNVs are present in the bundle.  Each second-level is a categorized SDNV with flags signifying the presence or absence of some capability.
+
+   </t>
+   <t>
+
+Currently, two second-level SDNVs are defined.  Therefore, the top-level capabilities SDNV has the following values:
+
+   </t>
+   <t>
+
+    <list style='symbols'>
+     <t>Convergence Layers Supported -- Setting this bit signifies the presence of the convergence layer capabilities SDNV.</t>
+     <t>Grokability of Schemes -- Setting this bit signifies the presence of the schemes capabilities SDNV.  Clearing this bit signifies that the SDNV is absent from this bundle.</t>
+    </list>
+
+For any capabilities that are not defined, default values may be chosen by the BA in an implementation-specific manner.
+
+   </t>
+   <section title='Convergence Layers Supported'>
+    <t>
+
+This capabilities SDNV defines over which convergence layers the BA can communicate.  Setting the convergence layer bit indicates that the convergence layer is understood; clearing indicates that it is not.  Currently, the SDNV is defined as follows:
+
+     <list style='symbols'>
+      <t>Bit 0 -- Single-packet UDP (one bundle per UDP packet)</t>
+      <t>Bit 1 -- TCPCL, defined in <xref target='I-D.irtf-dtnrg-tcp-clayer' /></t>
+      <t>Bit 2 -- LTP, defined in <xref target='I-D.irtf-dtnrg-ltp' /></t>
+      <t>Bit 3 -- Saratoga, defined in <xref target='I-D.wood-tsvwg-saratoga' /></t>
+      <t>Bit 4 -- FLUTE, defined in <xref target='RFC3926' /></t>
+      <t>Bit 5-7 -- Reserved</t>
+     </list>
+    </t>
+   </section>
+   <section title='Grokability of Schemes'>
+    <t>
+
+This capabilities SDNV defines which EID schemes the BA can understand.  Currently, the SDNV defines the following:
+
+     <list style='symbols'>
+      <t>Bit 0 -- The BA understands the &quot;dtn&quot; scheme</t>
+      <t>Bit 1 -- The BA understands the &quot;ipn&quot; scheme</t>
+     </list>
+
+    </t>
+   </section>
+   <section title='Structure of the Capabilities SDNVs'>
+    <t>
+
+All capabilities information is included as part of the &quot;capabilities&quot; section of the discovery header.  The top-level SDNV MUST be present.  If any of its bits are set, the accompanying SDNV MUST be concatenated immediately following the top-level SDNV.  If multiple second-level SDNVs are indicated, they MUST be concatenated together in the order in which they are indicated in the top-level SDNV.
+
+    </t>
+   </section>
+  </section>
+  <section title='Autodiscovery Protocol Type' anchor='autodiscoveryprotocoltype'>
+   <t>
+
+If an autodiscovery bundle contains domain-specific information, this field indicates the
+structure of the payload data.  Effectively, this field defines the
+&quot;domain&quot; of the domain-specific portion.  Currently, the following
+fields are defined:
+
+    <list style='symbols'>
+     <t>0x00 -- Basic - no domain-specific information; payload MUST be empty</t>
+     <t>0x01 -- DMC-like Satellites - payload format defined in a separate document</t>
+     <t>0x02 through 0xEF -- Currently undefined; can be defined in later documents</t>
+     <t>0xF0 through 0xFF -- Experimental</t>
+    </list>
+
+Domain-specific information, in a bundle which has any, immediately follows the payload of
+the autodiscovery message.
+
+   </t>
+  </section>
+ </section>
+
+ <section title='Convergence Layer Behavior' anchor='convergencelayer'>
+  <t>
+
+Due to the nature of an overlay network, autodiscovery may take place over
+many different convergence layers.  In addition, depending on the convergence
+layer used, convergence layer discovery might be necessary prior to bundling
+discovery.  For instance, when using Bluetooth as a convergence layer,
+paired devices must undergo device discovery and service discovery before
+encapsulated data (such as the autodiscovery bundle) can be sent.  Therefore,
+initiating autodiscovery over Bluetooth for previously unknown devices
+will require cooperation between device/service discovery and the bundling
+layer <xref target='BTSPEC' />.  If any data obtained in service discovery
+is relevant, it could be communicated as domain-specific information in the
+discovery bundle.  For the common terrestrial Internet protocols TCP and UDP,
+discovery over TCP implies that the devices have bidirectional communication
+where discovery over UDP can use unidirectional communication and multicast.
+TCP requires handshaking prior to bundle communication; UDP does not.
+
+  </t>
+  <t>
+
+Certain capabilities of a convergence layer node may be relevant in the
+bundling autodiscovery process.  For instance, when using TCP, it may be
+relevant to communicate the round-trip time (RTT) to the bundle layer as it
+may impact routing decisions.  Extra features like this can be included as
+part of a domain-specific protocol.
+
+  </t>
+  <t>
+
+The capabilities as described in <x target='capabilities' /> are explicitly
+for the bundle layer.  Convergence layer-specific information (aside from
+their existence) is purposefully not included there.  Communicating
+relevant convergence layer-specific information can be done in a
+domain-specific protocol.
+
+  </t>
+  <t>
+
+Due to the myriad convergence layers over which bundles are expected to travel,
+exact mechanisms for executing bundle-layer autodiscovery over convergence
+layers are outside the scope of this document and are left as future work.
+
+  </t>
+ </section>
+
+ <section title='Processing Behavior' anchor='processing'>
+  <t>
+
+Due to the domain-specific portions of autodiscovery, exact processing of
+autodiscovery bundles can vary widely between domains.  Therefore, only a
+general framework for autodiscovery bundle processing is given in this
+document while exact autodiscovery procedures for particular domains is defined
+separately.
+
+  </t>
+  <t>
+
+Autodiscovery functions can either be implemented within a BA, or as one or
+more external 'helper' applications.  An interface supporting both types of
+implementation are outlined below.  Although a helper application may assist in
+interpreting autodiscovery payloads, autodiscovery is not itself a DTN
+application.  Autodiscovery bundles are addressed to the administrative
+endpoints of BAs themselves, whose EIDs are not suffixed with an application
+de-muxing token, or otherwise altered.  In this way, autodiscovery works for
+all EID schemes regardless of how EIDs are constructed within them.
+
+  </t>
+
+   <section title='Exported Bundling Agent Interface'>
+    <t>
+
+In addition to providing the basic bundling API as defined in <xref
+target='SB07' />, the daemon SHOULD allow for explicit values specified
+for the following fields in an outgoing bundle:
+
+     <list style='symbols'>
+      <t>Local Convergence Layer Adapter for transmission</t>
+      <t>Destination EID -- SHOULD be set to dtn:discovery for discovery of BAs
+      with unknown EIDs; may be set to an actual EID if it is known</t>
+      <t>Bundle Payload -- to include the autodiscovery message</t>
+      <t>Lifetime -- A lifetime of 0 squelches forwarding of discovery bundles.</t>
+     </list>
+    </t>
+    <t>
+
+Exactly how this interface is supplied (e.g. via IPC, RPC, etc) is an
+implementation-specific consideration.
+
+    </t>
+    <t>
+
+A BA SHOULD use the &quot;expedited&quot; priority for all autodiscovery
+bundles, given that they may affect immediate decisions and are typically small
+bundles, although this interface MAY be extended in some implementations to
+allow the priority to be specified.
+
+    </t>
+   </section>
+   <section title='Bundling Daemon Autodiscovery Request Handling'>
+    <t>
+
+Requests for autodiscovery will be honored as long as the supplied parameters
+are valid and the requested convergence layer adapter exists and is capable
+of sending bundles.
+
+    </t>
+    <t>
+
+Upon receiving a request to initiate autodiscovery, the BA MUST initiate this
+procedure regardless of its current knowledge of contacts.  It will, however,
+maintain its current contact information base entries at least until
+autodiscovery completes.
+
+    </t>
+   </section>
+   <section title='Processing of Received Autodiscovery Bundles'>
+    <t>
+
+Processing of incoming autodiscovery responses proceeds differently depending
+on the Autodiscovery Type field:
+
+
+     <list style='hanging'>
+      <t hangText='Zero (fully domain-independent): '>
+
+A domain-independent bundle can be processed entirely within any bundle agent
+capable of autodiscovery.  The contact information given in the autodiscovery
+message can be used to update the contact information base at the bundle agent's
+discretion.
+
+      </t>
+      <t hangText='Non-Zero (domain-specific): '>
+
+Upon reception of an Autodiscovery Bundle with a domain-specific payload
+(indicated by a non-zero Autodiscovery Type code), the bundle agent can either
+process the domain-specific payload itself (if it understands the autodiscovery
+protocol used) or may hand the entire payload block to external autodiscovery
+code that can suggest changes to the bundle agent's contact information base
+after processing.
+
+      </t>
+     </list>
+
+    </t>
+    <t>
+
+It is possible that after receiving an Autodiscovery Bundle, a bundle agent
+will wish to advertise its own view of contact information in response.  This is
+fully at the discretion of the bundle agent or external autodiscovery code.
+
+    </t>
+   </section>
+   <section title='Adding and Overwriting Contact Times'>
+    <t>
+
+When a valid new contact is received, it will be updated according to the
+following rules:
+
+    </t>
+    <t>
+
+More recently-received and valid updates will always be added to the BA.  Only
+the contact window, pitcher EID, and catcher EID are considered in decisions
+to keep or eliminate older discovery entries.
+
+    </t>
+    <t>
+
+If no contact information about the pitcher and catcher currently exists, or if
+contact information exists but does not overlap with the time period specified
+in the received bundle, then the contact information will be added to the BA
+without modification to existing entries.
+
+    </t>
+    <t>
+
+If contact information about the pitcher and catcher currently exists and
+overlaps the time period specified in the received bundle at any point in
+time, the now &quot;outdated&quot; entry should be deleted in its entirety,
+including the part which does not overlap with the newly-received bundle.
+Other entries pertaining to the pitcher and catcher which have no time
+overlap with the newly received bundles SHOULD be retained.
+
+    </t>
+    <t>
+
+More examples to illustrate the updating procedure can be found in <xref
+target='updatingcontactsexamples' />.
+
+    </t>
+   </section>
+   <section title='Bundle Status Reports'>
+    <t>
+
+As any bundle sender can request a Bundle Status Report (a Bundle Reception
+Status Report in this case), Autodiscovery Bundles may also be acknowledged
+using this mechanism, if desired.  These could be utilized by a bundle agent
+or external autodiscovery code in order to suppress retransmission of
+autodiscovery information, for instance, when sending over unreliable
+convergence layer adapters that lack feedback of their own (e.g. single-packet
+UDP).  This is not necessary in all domains, and since information gained
+through autodiscovery is generally advisory, it is assumed that Bundle Status
+Reports will not be frequently requested for Autodiscovery Bundles.
+
+    </t>
+   </section>
+  </section>
+ <section title='Examples' anchor='examples'>
+
+This section provides several examples of how the protocol described in this
+document can be instantiated in various scenarios.  These examples are
+informative rather than normative.  In this section, domain-specific messages
+in diagrams are tagged with an '(s)', and domain-independent messages
+are tagged with an '(i)'.
+
+  <section title='Sensor Node to Sensor Node'>
+   <t>
+
+In this example, dozens of sensor nodes are deployed in an area without any
+infrastructure and must discover one another in order to communicate at the
+bundle layer.  All nodes are connected on the same network.  Exact discovery
+would depend on the domain-specific protocol used, but it could look similar
+to the the diagram below:
+
+   </t>
+
+   <figure>
+    <artwork>
+     
+     Sensor node                         Sensor node
+  (s) MULTICAST HELLO -----------------> 
+
+                      &lt;----------------- HELLO / BATTERY LIFE (s)
+
+      (consults signal power level)
+      (consults battery life)
+
+  (i) CALCULATED
+      CONTACT TIME    -----------------> 
+                      &lt;----------------- BUNDLE RECEIVED
+
+    </artwork>
+   </figure>
+  </section>
+  <section title='Deep-Space Probe to Earth Discovery'>
+   <t>
+
+In this example, a deep-space node has a set contact schedule with Earth nodes
+established prior to each window of communication.  Due to some event that
+causes re-allocation of ground-station resources, changing the space probe's
+schedule may be necessary.
+
+   </t>
+
+   <figure>
+    <artwork>
+     
+     Deep-Space Satellite                      Earth Node
+  (i)       &lt;----------------------------- CONTACT TIME
+
+    </artwork>
+   </figure>
+
+  </section>
+  <section title='LEO Satellites to Terrestrial Center'>
+   <t>
+
+Many LEO satellites are particularly concerned with optimizing link
+utilization, and primarly send data downwards.  Contacts with ground stations
+can be brief, on the order of several minutes, so synchronizing clocks and
+getting the BA onboard a satellite to be ready to forward at the correct time
+can be accomplished through autodiscovery.  The authoritative timing figure
+would be the terrestrial station, which would asynchronously send contact time
+information to the satellite on some schedule that let it optimize its
+forwarding decisions to avoid reactive fragmentation due to interrupted
+transfers and possibly to ensure that transmission preconditions are met before
+the contact (transmitter powered up, on correct frequency, using correct
+modulation and coding, etc.).
+
+   </t>
+
+   <figure>
+    <artwork>
+     
+     LEO Satellite                             Earth Node
+                                         (consults ephemeris data)
+		   &lt;-------------------- CONTACT TIME (i)
+		                         (time a1, time a2)
+     ASYNC. DATA   -------------------->
+		   &lt;-------------------- CONTACT TIME (i)
+		                         (time b1, time b2)
+		   &lt;-------------------- CONTACT TIME (i)
+		                         (time c1, time c2)
+     ASYNC. DATA   -------------------->
+
+    </artwork>
+   </figure>
+
+  </section>
+  <section title='Updating and Overwriting Contacts' anchor='updatingcontactsexamples'>
+   <t>
+
+This section provides examples for updating and overwriting contact information
+depending on discovery bundles received.
+
+   </t>
+   <t>
+
+Existing contact windows are numbered 1...n: the received bundle is labeled
+X.  
+
+   </t>
+   <figure>
+    <artwork>
+
+-------------------------- time --------------------------->
+
+  --------   ------------------------------
+ |   1    | |             X                |
+  --------   ------------------------------
+
+-------------------------- time --------------------------->
+
+    </artwork>
+   </figure>
+
+   <t>
+
+Procedure: 1 is kept; X is added
+
+   </t>
+
+   <figure>
+    <artwork>
+
+-------------------------- time --------------------------->
+
+  --------   ---
+ |   1    | | 2 |
+  --------   ---
+
+              ---------------------------------
+	     |               X                 |
+	      ---------------------------------
+
+-------------------------- time --------------------------->
+
+    </artwork>
+   </figure>
+
+   <t>
+
+Procedure: 1 is kept, 2 is removed, and X is added
+
+   </t>
+
+   <figure>
+    <artwork>
+
+-------------------------- time --------------------------->
+
+  --------   ---       ------------      -----------
+ |   1    | | 2 |     |     3      |    |     4     |
+  --------   ---       ------------      -----------
+
+              -----------------------
+	     |          X            |
+	      -----------------------
+
+-------------------------- time --------------------------->
+
+    </artwork>
+   </figure>
+
+   <t>
+
+Procedure: 1 is kept, 2 and 3 are removed, 4 is kept, and
+X is added.
+
+   </t>
+  </section>
+  <section title='A Note on Flexibility'>
+   <t>
+
+The lack of structure in the protocol is due to the necessary flexibility in deployment.  The domain-independent timing packets are meant
+to give a universal way to apply discovery and timing principles to any DTN environment that does not currently exist.  The
+domain-dependent part is meant to add the needed flexibility to adhere to all DTN environments.  Consequently, there is no 'typical'
+example that generalizes all DTN neighbor discovery.
+
+   </t>
+   <t>
+
+More specific examples of neighbor discovery can be found in documentation describing domain-specific exchanges.
+
+   </t>
+  </section>
+ </section>
+ <section title='Security Considerations' anchor='security'>
+  <t>
+
+Nearly all threats that apply to other neighbor discovery protocols apply to DTN neighbor discovery.  As suggested in <xref
+target='RFC3756' />, many of these are solved by ensuring a 'trusted' network.  Networks that are not trusted are subject to different
+limitations (and expectations), so we deal with probable attacks and mitigations for each network separately.
+
+  </t>
+  <section title='Security in a Trusted Network'>
+   <t>
+
+Unlike general networking in the Internet, in DTN scenarios, there are many
+cases where a 'stranger' on the network is an unexpected condition.
+For example, sensor networks in poorly-connected environments are often
+controlled by a single organization which grants connection to only approved
+nodes.  This may be implemented through link-layer encryption, keying of
+spreading sequences, or other means. Currently, as these two deployment
+environments are the two major proposed uses for DTN, securing the 'trusted'
+network against attack deserves further consideration.
+
+   </t>
+   <t>
+
+The most likely attack on a trusted network is an attack where a
+node infiltrates a closed network, masquerading as a trusted node using a
+trusted address.  To mitigate this
+attack, one could pre-share symmetric keys and use encryption with nodes that
+are allowed on the closed network.  Blocks to accomplish this are defined in
+<xref target='DTNSEC' />.
+All aspects of neighbor discovery, therefore, could be encrypted using these
+keys.  In this manner, no nodes lacking the pre-shared key (and, by extension,
+permission to use the network) can communicate on the network.
+
+   </t>
+   <t>
+
+In nodes that can afford the overhead of public-key cryptography, <xref target='DTNSEC' /> also supports X.509 certificate processing.
+This would be more desirable for nodes that may communicate with many entities (such as the international space station) that each
+require separate keys (such as member nations with varying levels of cooperation).  If necessary, this would also help protect the system
+from a single point of failure as in the pre-shared key system, only one pre-shared key needs to be compromised to compromise an entire
+system.
+
+   </t>
+  </section>
+  <section title='Security in an Untrusted Network'>
+   <t>
+
+Though many currently proposed deployments of DTN involve closed networks,
+future DTN networks may include untrusted public networks <xref
+target='haggle'/>.  For example, a DTN node on a public transportation system
+may send a bundle to a curbside receiver which would then forward it through
+the network.  As part of public transportation, it is impossible to guarantee
+trust to nodes on the network, so the above system will not work.
+
+   </t>
+   <t>
+
+In this environment, likely attacks generally are some variation of man-in-the-middle attacks.  For instance, a PDA on the public
+transportation system may masquerade as a router and sniff traffic or deny it altogether.  As stated in <xref target='RFC4251' />, there is
+no known way to prevent these attacks outright.
+
+   </t>
+   <t>
+
+To help mitigate these attacks, we propose a 'fingerprint' system combined with public-key cryptography.  If a node considers the above
+attack serious enough, it can require public-key cryptography as provided in <xref target='DTNSEC' />, storing the fingerprint of the
+server's public key.  In a man-in-the-middle attack, the fingerprint would change, and the user could be notified in an appropriate way.
+This system is very similar to the fingerprinting system currently in widespread use in SSHv2 <xref target='RFC4251' />.
+
+   </t>
+  </section>
+  <t>
+
+Due to the potentially severe limitations on processing power and bandwidth of DTN nodes, all of the above security is optional with
+respect to neighbor discovery.  In many deployments, the costs may simply outweigh the benefits.
+
+  </t>
+ </section>
+ <section title='IANA Considerations'>
+  <t>
+
+This document does not update or create any IANA registries.
+
+  </t>
+ </section>
+ <section title='Acknowledgements'>
+  <t>
+
+Some of the work on this document was performed at NASA's Glenn Research Center
+with funding provided by NASA's Earth Science Technology Office.
+
+  </t>
+ </section>
+</middle>
+
+<back>
+ <references title='Informative References'>
+
+  <?rfc include='reference.RFC.2119' ?>
+  <?rfc include='reference.RFC.2328' ?>
+  <?rfc include='reference.I-D.irtf-dtnrg-sdnv' ?>
+  <?rfc include='reference.I-D.irtf-dtnrg-tcp-clayer' ?>
+  <?rfc include='reference.I-D.irtf-dtnrg-ltp' ?>
+  <?rfc include='reference.I-D.wood-tsvwg-saratoga' ?>
+  <?rfc include='reference.RFC.3756' ?>
+  <?rfc include='reference.RFC.4838' ?>
+  <?rfc include='reference.RFC.4251' ?>
+  <?rfc include='reference.RFC.3926' ?>
+
+ <reference anchor='SB07'>
+  <front>
+   <title>Bundle Protocol Specification</title>
+   <author fullname='K. Scott' initials='K.' surname='Scott'>
+    <organization/>
+   </author>
+   <author fullname='S. Burleigh' initials='S.' surname='Burleigh'>
+    <organization/>
+   </author>
+   <date month='April' year='2007'/>
+  </front>
+  <seriesInfo name='draft-irtf-dtnrg-bundle-spec-10' value='(work in progress)' />
+ </reference>
+
+<reference anchor='DTNSEC'>
+  <front>
+   <title>Bundle Security Protocol Specification</title>
+   <author fullname='S. Symington' initials='S.' surname='Symington'>
+    <organization/>
+   </author>
+   <author fullname='S. Farrell' initials='S.' surname='Farrell'>
+    <organization/>
+   </author>
+   <date month='April 24' year='2007'/>
+  </front>
+  <seriesInfo name='draft-irtf-dtnrg-bundle-security' value='(work in progress)' />
+ </reference>
+
+  <reference anchor='haggle'>
+   <front>
+    <title>Haggle: A Networking Architecture Designed Around Mobile Users</title>
+    <author initials='J.' surname='Scott'><organization /></author>
+    <author initials='P.' surname='Hui'><organization /></author>
+    <author initials='J.' surname='Crowcroft'><organization /></author>
+    <author initials='C.' surname='Diot'><organization /></author>
+    <date month='January' year='2006'/>
+   </front>
+   <seriesInfo name='IFIP WONS,' value='Les Menuires, France'/>
+  </reference>
+  <reference anchor='BTSPEC'>
+   <front>
+    <title>Specification of the Bluetooth System</title>
+    <date month='July' year='2007'/>
+   </front>
+  </reference>
+ </references>
+</back>
+
+</rfc>

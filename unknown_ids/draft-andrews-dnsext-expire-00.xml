@@ -1,0 +1,199 @@
+<?xml version="1.0"?>
+<?rfc compact="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc toc="yes" ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<rfc ipr="full3978" category="std" docName="draft-andrews-dnsext-expire-00">
+  <front>
+    <title>EDNS EXPIRE OPTION</title>
+    <author initials="M.P." surname="Andrews" fullname="Mark P. Andrews">
+      <organization abbrev="ISC">Internet Systems Consortium</organization>
+      <address>
+	<postal>
+	  <street>950 Charter Street</street>
+	  <city>Redwood City</city>
+	  <region>CA</region>
+	  <code>94063</code>
+	  <country>US</country>
+	</postal>
+	<email>Mark_Andrews@isc.org</email>
+      </address>
+    </author>
+    <date day="25" month="August" year="2008"/>
+    <abstract>
+      <t>
+	Provide a method for slave DNS servers to honour the SOA EXPIRE
+	field as if they were always transferring from the master,
+	even when using other slaves to perform indirect transfers
+	and refresh queries.
+      </t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section toc="yes" anchor="intro" title="Introduction">
+      <t>
+	The expire field of a DNS zone's SOA record <xref
+	target="RFC 1035" /> is supposed to indicate when a slave
+	server shall discard the contents of the zone when it has
+	been unable to contact the master <xref target="RFC 1034"
+	/>.  Current practice works when all the slaves contact
+	the master directly to perform refresh queries and zone
+	transfers.
+      </t>
+
+      <t>
+	While slaves are expected to be able to transfer from other
+	slaves for robustness reasons as well as reachability
+	constraints, there was no mechanism provided to preserve the
+	expiry behaviour when using a slave.  Slaves instead have to
+	know whether they were talking directly to the master or
+	another slave, and use that to decide whether to update the
+	expiry timer or not.  This however fails to take into
+	account delays in transferring from one slave to another.
+      </t>
+
+      <t>
+	There are also zone transfer graphs in which the slave never
+	talks to the master, so the effective expiry period becomes
+	multiplied the length of the zone transfer graph--which when
+	it contains loops is infinite.
+      </t>
+
+      <t>
+	This document provides a mechanism to preserve the expiry
+	behaviour regardless of what zone transfer graph is constructed
+	or whether the slave is talking to the master or another slave.
+      </t>
+
+      <section toc="yes" anchor="reserved" title="Reserved Words">
+	<t>
+	  The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+	  "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+	  and "OPTIONAL" in this document are to be interpreted as
+	  described in <xref target="RFC 2119" />.
+	</t>
+      </section>
+    </section>
+
+    <section toc="yes" anchor="options" title="Expire EDNS option">
+      <t>
+	The EDNS <xref target="RFC 2671" /> EXPIRE option has the
+	value &lt;TBD&gt;.  The EDNS EXPIRE option MAY be set on any
+	QUERY, though usually this is only done on SOA, AXFR and
+	IXFR queries involved in zone maintenance.  This is done
+	by adding a zero length EDNS EXPIRE option to the options
+	field of the OPT record when the query is made.
+      </t>
+
+      <t>
+	When the query is directed to the master server for the
+	zone, the response will be a EDNS EXPIRE option of length
+	4 containing the current value of the SOA EXPIRE field, in
+	network order.  When the query is directed to a slave server
+	for the zone, then the response will be an EDNS EXPIRE
+	option of length 4 containing the value of the the EXPIRE
+	timer, in network order.
+      </t>
+
+      <t>
+	If an EDNS EXPIRE option is sent to a server that is not
+	authoritative for the zone then there will be no EDNS EXPIRE
+	option added to the response.
+      </t>
+    </section>
+
+    <section toc="yes" anchor="update" title="Slave Behaviour">
+      <t>
+	When a slave server performs a zone transfer request or
+	performs a zone refresh query it SHALL add an EDNS EXPIRE
+	option to the query message.
+      </t>
+
+      <t>
+	If a slave receives an EDNS EXPIRE option in its response
+	to a SOA query, it SHALL update its expire timer to be the
+	maximum of the value returned in the EDNS EXPIRE option and
+	its current value.  Similarly, if a slave receives an EDNS
+	EXPIRE option in its response to an IXFR query which indicated
+	the slave is up to date (serial matches current serial) the
+	slave SHALL update the expire timer to be the maximum of the
+	value returned in the EXPIRE EDNS option and its current
+	value.
+      </t>
+
+      <t>
+	If the zone is transferred or updated as the result of a AXFR or
+	IXFR query and there is a EDNS EXPIRE option with the response then
+	the value of the EDNS EXPIRE option SHOULD be used instead of
+	that of the SOA EXPIRE field to initialise the expire timer.
+      </t>
+
+      <t>
+	In all cases, if the value of SOA EXPIRE field is less than the
+	value of the EDNS EXPIRE option, then the value of SOA EXPIRE
+	field MUST be used and MUST be treated as a maximum when
+	updating or initialising the expire timer.
+      </t>
+    </section>
+
+    <section toc="yes" anchor="iana" title="IANA Considerations">
+      <t>
+	IANA is requested to assign a EDNS option code point.
+      </t>
+    </section>
+
+    <section toc="yes" anchor="security" title="Security Considerations">
+      <t>
+	The EDNS EXPIRE option exposes how long the slaves have
+	been out of communication with the master server.  This is
+	not believed to be a problem and may provide some benefit
+	to monitoring systems.
+      </t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <reference anchor="RFC 1034">
+	<front>
+	  <title>DOMAIN NAMES - CONCEPTS AND FACILITIES</title>
+	  <author initials="P." surname="Mockapetris" fullname="P. Mockapetris" />
+	  <date month="November" year="1987" />
+	</front>
+	<seriesInfo name="STD" value="13" />
+	<seriesInfo name="RFC" value="1034" />
+      </reference>
+
+      <reference anchor="RFC 1035">
+	<front>
+	  <title>DOMAIN NAMES - IMPLEMENTATION AND SPECIFICATION</title>
+	  <author initials="P." surname="Mockapetris" fullname="P. Mockapetris" />
+	  <date month="November" year="1987" />
+	</front>
+	<seriesInfo name="STD" value="13" />
+	<seriesInfo name="RFC" value="1035" />
+      </reference>
+
+      <reference anchor="RFC 2119">
+	<front>
+	  <title>Key words for use in RFCs to Indicate Requirement Levels</title>
+	  <author initials="S." surname="Bradner" fullname="S. Bradner"/>
+	  <date month="March" year="1997" />
+	</front>
+	<seriesInfo name="BCP" value="14" />
+	<seriesInfo name="RFC" value="2119" />
+      </reference>
+
+      <reference anchor="RFC 2671">
+	<front>
+	  <title>Extension Mechanisms for DNS (EDNS0)</title>
+	  <author initials="P." surname="Vixie" fullname="P. Vixie" />
+	  <date month="August" year="1999" />
+	</front>
+	<seriesInfo name="RFC" value="2671" />
+      </reference>
+    </references>
+  </back>
+</rfc>

@@ -1,0 +1,944 @@
+<?xml version="1.0" encoding="iso-8859-1" ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+
+<rfc ipr="full3978" iprnotified="yes" docName="draft-arkko-eap-aka-kdf-04" category="info" updates="4187">
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc autobreaks="yes"?>
+<?rfc tocindent="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+
+<front>
+
+<title abbrev="EAP-AKA'">Improved Extensible Authentication Protocol
+Method for 3rd Generation Authentication and Key Agreement
+(EAP-AKA')</title>
+
+<author initials="J" surname="Arkko" fullname="Jari Arkko">
+<organization>Ericsson</organization>
+<address>
+<postal>
+<street/>
+<city>Jorvas</city> <code>02420</code>
+<country>Finland</country>
+</postal>
+<email>jari.arkko@piuha.net</email>
+</address>
+</author>
+
+<author initials='V.' surname="Lehtovirta" fullname='Vesa Lehtovirta'>
+<organization>Ericsson</organization>
+<address>
+<postal>
+<street/>
+<city>Jorvas</city> <code>02420</code>
+<country>Finland</country>
+</postal>
+<email>vesa.lehtovirta@ericsson.com</email>
+</address>
+</author>
+
+<author initials='P.' surname="Eronen" fullname='Pasi Eronen'>
+<organization abbrev='Nokia'>Nokia Research Center</organization>
+<address>
+<postal>
+<street>P.O. Box 407</street>
+<city>FIN-00045 Nokia Group</city>
+<country>Finland</country>
+</postal>
+<email>pasi.eronen@nokia.com</email>
+</address>
+</author>
+
+<date month="September" year="2008" />
+
+<keyword>EAP</keyword>
+<keyword>AKA</keyword>
+<keyword>AKA'</keyword>
+<keyword>3GPP</keyword>
+
+<abstract>
+
+<t>This specification defines a new EAP method, EAP-AKA', a small
+revision of the EAP-AKA method. The change is a new key derivation
+function that binds the keys derived within the method to the name of
+the access network. The new key derivation mechanism has been defined
+in 3GPP. This specification allows its use in EAP in an interoperable
+manner. In addition, EAP-AKA' employs SHA-256 instead of SHA-1.</t>
+
+<t>This specification also updates RFC 4187 EAP-AKA to prevent bidding
+down attacks from EAP-AKA'.</t>
+
+</abstract>
+
+</front>
+<middle>
+
+<section title="Introduction">
+
+<t>This specification defines a new Extensible Authentication Protocol
+(EAP)<xref target="RFC3748"/> method, EAP-AKA', a small revision of
+the EAP-AKA method originally defined in
+<xref target="RFC4187"/>. What is new in EAP-AKA' is that it has a new
+key derivation function specified in
+<xref target="3GPP.33.402"/>. This function binds the keys derived
+within the method to the name of the access network. This limits the
+effects of compromised access network nodes and keys. This
+specification defines the EAP encapsulation for AKA when the new key
+derivation mechanism is in use.</t>
+
+<t>3GPP has defined a number of applications for the revised AKA
+mechanism, some based on native encapsulation of AKA over 3GPP radio
+access networks and others based on the use of EAP.</t>
+
+<t>For making the new key derivation mechanisms usable in EAP-AKA
+additional protocol mechanisms are necessary.  Given that RFC 4187
+calls for the use of CK (the encryption key) and IK (the integrity
+key) from AKA, existing implementations continue to use these.  Any
+change of the key derivation must be unambiguous to both sides in the
+protocol. That is, it must not be possible to accidentally connect old
+equipment to new equipment and get the key derivation wrong or attempt
+to use wrong keys without getting a proper error message. The change
+must also be secure against bidding down attacks that attempt to force
+the participants to use the least secure mechanism.</t>
+
+<t>This specification therefore introduces a variant of the EAP-AKA
+method, called EAP-AKA'. This method can employ the derived keys CK'
+and IK' from the 3GPP specification and updates the used hash function
+to SHA-256. But it is otherwise equivalent to RFC 4187. Given that a
+different EAP method Type value is used for EAP-AKA and EAP-AKA', a
+mutually supported method may be negotiated using the standard
+mechanisms in EAP <xref target="RFC3748"/>.
+
+<list style="empty">
+
+<t>Note: <xref target="baddesign"/> explains why it is important to be
+explicit about the change of semantics for the keys, and why other
+approaches would lead to severe interoperability problems.</t>
+
+</list></t>
+
+<t>The rest of this specification is structured as
+follows. <xref target="prime"/> defines the EAP-AKA'
+method. <xref target="bidding"/> adds support to EAP-AKA
+to prevent bidding down attacks from EAP-AKA'.  <xref target="security"/>
+explains the security differences between EAP-AKA and
+EAP-AKA'. <xref target="iana"/> describes the IANA considerations and
+<xref target="diff"/> explains what updates to RFC 4187 EAP-AKA have
+been made in this specification.
+
+<list style="empty">
+
+<t>Editor's Note: The publication of this RFC depends on its normative
+references <xref target="3GPP.33.102"/> and
+<xref target="3GPP.33.402"/> from 3GPP reaching their final Release 8
+status at 3GPP. This is expected to happen shortly. The RFC Editor
+should check with the 3GPP liaisons that this has happened. RFC
+Editor: Please delete this and other Editor's Notes upon publication
+of this specification as an RFC.
+</t>
+
+</list></t>
+
+</section>
+
+<section title='Requirements language'>
+
+   <t>In this document, the key words "MAY", "MUST, "MUST NOT", "OPTIONAL",
+   "RECOMMENDED", "SHOULD", and "SHOULD NOT", are to be interpreted as
+   described in <xref target='RFC2119' />.</t>
+
+</section>
+
+<section anchor="prime" title="EAP-AKA'">
+
+<t>EAP-AKA' is a new EAP method that follows the EAP-AKA specification
+<xref target="RFC4187"/> in all respects except the following:
+
+<list style="symbols">
+
+<t>It uses the Type code TBA1 BY IANA, not 23 which is used by
+EAP-AKA.</t>
+
+<t>It carries the AT_KDF_INPUT attribute, as defined in
+<xref target="netbind"/> to ensure that both the peer and server know
+the name of the access network.</t>
+
+<t>It supports key derivation function negotiation via the AT_KDF
+attribute (<xref target="keyderiv"/>), to allow for future
+extensions.</t>
+
+<t>It calculates keys as defined in <xref target="key"/>, not as
+defined in EAP-AKA.</t>
+
+<t>It employs SHA-256, not SHA-1 (<xref target="hashup"/>).</t>
+
+</list>
+</t>
+
+<t>Figure 1 shows an example of the authentication process. Each
+message AKA'-Challenge and so on represents the corresponding message
+from EAP-AKA, but with EAP-AKA' Type code. The definition of these
+messages, along with the definition of attributes AT_RAND, AT_AUTN,
+AT_MAC, and AT_RES can be found in <xref target="RFC4187"/>.</t>
+
+<figure>
+<artwork>
+ Peer                                                    Server
+    |                      EAP-Request/Identity             |
+    |&lt;------------------------------------------------------|
+    |                                                       |
+    | EAP-Response/Identity                                 |
+    | (Includes user's NAI)                                 |
+    |------------------------------------------------------&gt;|
+    |                           +-------------------------------+
+    |                           | Server determines the         |
+    |                           | network name, runs AKA'       |
+    |                           | algorithms generating RAND    |
+    |                           | and AUTN, derives session     |
+    |                           | keys from CK'/IK'. RAND and   |
+    |                           | AUTN are sent as AT_RAND and  |
+    |                           | AT_AUTN attributes, whereas   |
+    |                           | the network name is           |
+    |                           | transported in the            |
+    |                           | attribute. AT_KDF signals the |
+    |                           | used key derivation function. |
+    |                           | The session keys are used in  |
+    |                           | creating the AT_MAC attribute.|
+    |                           +-------------------------------+
+    |                        EAP-Request/AKA'-Challenge     |
+    |       (AT_RAND, AT_AUTN, AT_KDF, AT_KDF_INPUT, AT_MAC)|
+    |&lt;------------------------------------------------------|
++--------------------------------------+                    |
+| Peer verifies the network name from  |                    |
+| AT_KDF_INPUT, and uses it in running |                    |
+| the AKA' algorithms, verifying AUTN  |                    |
+| and generating RES. The peer also    |                    |
+| derives session keys from CK'/IK'.   |                    |
+| AT_RES and AT_MAC are constructed.   |                    |
++--------------------------------------+                    |
+    | EAP-Response/AKA'-Challenge                           |
+    | (AT_RES, AT_MAC)                                      |
+    |------------------------------------------------------&gt;|
+    |                          +--------------------------------+
+    |                          | Server checks the RES and MAC  |
+    |                          | values received in AT_RES and  |
+    |                          | AT_MAC, respectively.  Success |
+    |                          | requires both to be found      |
+    |                          | correct.                       |
+    |                          +--------------------------------+
+    |                                          EAP-Success  |
+    |&lt;------------------------------------------------------|
+
+           Figure 1: EAP-AKA' Authentication Process
+</artwork>
+</figure>
+
+<section title="AT_KDF_INPUT" anchor="netbind">
+
+<t>The format of the AT_KDF_INPUT attribute is shown below.</t>
+
+<figure>
+<artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   | AT_KDF_INPUT  | Length        | Actual Network Name Length    |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                                                               |
+   .                        Network Name                           .
+   .                                                               .
+   |                                                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+</artwork>
+</figure>
+
+<t>The fields are as follows:</t>
+
+<t><list style="hanging">
+
+<t hangText="AT_KDF_INPUT"><vspace blankLines="1"/>This is set to TBA2 BY
+IANA.</t>
+
+<t hangText="Length"><vspace blankLines="1"/>The length of the
+attribute, calculated as defined in <xref target="RFC4187"/> Section
+8.1.</t>
+
+<t hangText="Actual Network Name Length"><vspace blankLines="1"/>This
+a 2-byte actual length field, needed due to the requirement that
+the previous field is expressed in multiples of 4 bytes per the usual
+EAP-AKA rules. The Actual Network Name Length field
+provides the length of the Network Name in bytes.</t>
+
+<t hangText="Network Name"><vspace blankLines="1"/>This field contains
+the network name of the access network for which the authentication is
+being performed. The name does not include any terminating null
+characters. Because the length of the entire attribute must be a
+multiple of 4 bytes, the sender pads the name with one, two, or three
+bytes of all zero bits when necessary.</t>
+
+</list></t>
+
+<t>Only the server sends the AT_KDF_INPUT attribute. The peer SHOULD
+check the received value against its own understanding of the network
+name. Upon detecting a discrepancy, the peer either warns the user and
+continues, or fails the authentication process. More specifically, the
+peer SHOULD have a configurable policy which it can follow under these
+circumstances. If the policy indicates that it can continue, the peer
+SHOULD log a warning message or display it to the user.  If the
+peer chooses to proceed, it MUST use the network name as received in
+the AT_KDF_INPUT attribute.  If the policy indicates that the
+authentication should fail, the peer behaves as if AUTN had been
+incorrect and authentication fails. See Section 3 and Figure 3 of
+<xref target="RFC4187"/> for an overview of how authentication
+failures are handled.</t>
+
+<t>The Network Name field contains an octet string. This string MUST
+be constructed as specified in <xref target="3GPP.23.003"/>. This is
+done in a manner that is specific to a particular access
+technology. For access technologies where the above reference does not
+provide an instruction on how to construct the name, the empty (zero
+length) octet string SHOULD be used.
+
+<list style="empty">
+
+<t>Editor's Note: 
+It is assumed that this 3GPP specification ensures that conflicts
+potentially arising from using the same name in different types of
+networks are avoided. It is also assumed that the 3GPP specification
+will have detailed rules about how a client can determine these based
+on information available to the client, such as the type of protocol
+used to attach to the network, beacons sent out by the network, and so
+on. Information that the client cannot directly observe (such as the
+type or version of the home network) should not be used by this
+algorithm.</t>
+
+</list></t>
+
+<t>The AT_KDF_INPUT attribute MUST be sent when AT_KDF attribute has
+the value 2. Otherwise, the AT_KDF_INPUT attribute SHOULD NOT be
+sent.</t>
+
+</section>
+
+<section anchor="keyderiv" title="AT_KDF">
+
+<t>AT_KDF is an attribute that the server uses to reference a specific
+key derivation function. It offers a negotiation capability that can
+be useful for future evolution of the key derivation functions.</t>
+
+<t>The format of the AT_KDF attribute is shown below.</t>
+
+<figure>
+<artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   | AT_KDF        | Length        |    Key Derivation Function    |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+</artwork>
+</figure>
+
+<t>The fields are as follows:</t>
+
+<t><list style="hanging">
+
+<t hangText="AT_KDF"><vspace blankLines="1"/>This is set to TBA3 BY
+IANA.</t>
+
+<t hangText="Length"><vspace blankLines="1"/>The length of the
+attribute, MUST be set to 1.</t>
+
+<t hangText="Key Derivation Function"><vspace blankLines="1"/>An
+enumerated value representing the key derivation function that the
+server (or peer) wishes to use. Value 1 represents RFC 4187 key
+derivation, i.e., fallback to EAP-AKA functionality. Value 2
+represents the default key derivation function for EAP-AKA', i.e.,
+employing CK' and IK' as defined in <xref target="key"/>.</t>
+
+</list></t>
+
+<t>Servers MUST send one or more AT_KDF attributes
+in the EAP-Request/AKA'-Challenge message. The first of these
+attributes represents the desired function and the other ones are
+acceptable alternatives, the most desired alternative being the second
+attribute.</t>
+
+<t>Upon receiving this attribute, if the peer supports and is willing
+to use the key derivation function indicated by the first attribute,
+the function is taken into use without any further negotiation.
+However, if the peer does not support this function or is unwilling to
+use it, it responds with the EAP-Response/AKA'-Challenge message that
+contains only one attribute, AT_KDF with the value set to the selected
+alternative.  If there is no suitable alternative, the peer behaves as
+if AUTN had been incorrect and authentication fails (see Figure 3 of
+<xref target="RFC4187"/>).</t>
+
+<t>Upon receiving an EAP-Response/AKA'-Challenge with AT_KDF from the
+peer, the server checks that the suggested AT_KDF value was one of the
+alternatives in its offer. The first AT_KDF value in the message from
+the serer is not such an alternative. If this check fails, the server
+behaves as if AT_MAC of the response had been incorrect and fails the
+authentication. For an overview of the failed authentication process
+in the server side, see Section 3 and Figure 2 in
+<xref target="RFC4187"/>. Otherwise, the server re-sends the
+EAP-Response/AKA'-Challenge message, but moves the selected
+alternative to the beginning of the list of AT_KDF attributes.</t>
+
+<t>When the peer receives the new EAP-Request/AKA'-Challenge message,
+it MUST check that requested change, and only the requested change
+occurred in the list of AT_KDF attributes. If yes, it continues.  If
+not, it behaves as if AT_MAC had been incorrect and fails the
+authentication. If the peer receives multiple
+EAP-Request/AKA'-Challenge messages with differing AT_KDF attributes
+without having requested negotiation, the peer MUST behave as if
+AT_MAC had been incorrect and fails the authentication.</t>
+
+</section>
+
+<section anchor="key" title="Key Generation">
+
+<t>Both the peer and server MUST derive the keys as follows.
+
+<list style="hanging">
+
+<t hangText="AT_KDF set to 1"><vspace blankLines="1"/>
+
+The Master Key (MK) is generated and used as defined in
+<xref target="RFC4187"/>. Similarly, if fast re-authentication is
+employed, <xref target="RFC4187"/> procedures for generating the
+relevant keys are followed.<vspace blankLines="1"/>
+
+There are no restrictions on how the parameters of the AKA algorithm
+are selected. In particular, implementations MAY set the so called AMF
+separation bit to either 0 or 1 in the AKA algorithm. The
+specification of this bit can be found in Annex H of
+<xref target="3GPP.33.102"/>. Even if this bit is 1, it MUST NOT change the
+key derivation procedures when AT_KDF is set to 1. The same rules apply
+even to the EAP-AKA method; the new key derivation procedures MUST NOT
+be applied.</t>
+
+<t hangText="AT_KDF set to 2"><vspace blankLines="1"/>
+
+In this case MK is derived and used as
+follows:<vspace blankLines="1"/>
+
+<figure>
+<artwork>
+    MK = PRF'(IK'|CK',"EAP-AKA'"|Identity)
+    K_encr = MK[0..127]
+    K_aut  = MK[128..383]
+    K_re   = MK[384..639]
+    MSK    = MK[640..1151]
+    EMSK   = MK[1152..1663]
+</artwork>
+</figure>
+
+Here [n..m] denotes the substring from bit n to m.  PRF' is a new
+pseudo random function specified in <xref target="hashup"/>. The 1664
+first bits from its output are used for K_encr (encryption key, 128
+bits), K_aut (authentication key, 256 bits), K_re (re-authentication
+key, 256 bits), MSK (Master Session Key, 512 bits) and EMSK (Extended
+Master Session Key, 512 bits). These keys are used by the subsequent
+EAP-AKA' process. K_encr is used by the AT_ENCR_DATA attribute, and
+K_aut by the AT_MAC attribute. K_re is used later in this section. MSK
+and EMSK are outputs from a successful EAP method run <xref target="RFC3748"/>.
+<vspace blankLines="1"/>
+
+IK' and CK' are derived as
+specified in <xref target="3GPP.33.402"/>. The functions that derive
+IK' and CK' take the following parameters: CK and IK produced by the
+AKA algorithm, and value of the Network Name field (without length or
+padding) from AT_KDF_INPUT. <vspace blankLines="1"/>
+
+Identity is the peer identity as specified
+in Section 7 of <xref target="RFC4187"/>.<vspace blankLines="1"/>
+
+When the server creates an AKA challenge and corresponding AUTN, CK,
+CK', IK, and IK' values, it MUST set the AMF separation bit
+to 1 in the AKA algorithm <xref target="3GPP.33.102"/>. Similarly, the peer MUST check that
+the AMF separation bit set is to 1. If the bit is not set to 1, the
+peer behaves as if the AUTN had been incorrect and fails the
+authentication.<vspace blankLines="1"/>
+
+On fast re-authentication, the following keys are calculated:
+<vspace blankLines="1"/>
+
+<figure>
+<artwork>
+    MK = PRF'(K_re,"EAP-AKA' re-auth"|Identity|counter|NONCE_S)
+    MSK  = MK[0..511]
+    EMSK = MK[512..1023]
+</artwork>
+</figure><vspace blankLines="1"/>
+
+MSK and EMSK are the resulting 512 bit keys, taking the first 1024
+bits from the result of PRF'. Note that K_encr and K_aut are not
+re-derived on fast re-authentication. K_re is the re-authentication
+key from the preceding full authentication and stays unchanged over any
+fast re-authentication(s) that may happen based on it. Identity is the
+fast re-authentication identity, counter is the value from the AT_COUNTER
+attribute, NONCE_S is the nonce value from the AT_NONCE_S attribute,
+all as specified in Section 7 of <xref target="RFC4187"/>. To prevent
+the use of compromised keys on other places, it is forbidden to change
+the network name when going from the full to the fast
+re-authentication process. The peer SHOULD NOT attempt fast
+re-authentication when it knowns that the network name in the current access
+network is different from the one in the initial, full authentication. Upon seeing
+a re-authentication request with a changed network name, the server
+SHOULD behave as if the re-authentication identifer had been
+unrecognized and fall back to full authentication. The server
+observes the change in the name by comparing where the fast re-authentication
+and full authentication EAP transactions were received from at the
+Authentication, Authorization, and Accounting (AAA) protocol level.
+</t>
+
+<t hangText="AT_KDF has any other
+value"><vspace blankLines="1"/>
+
+Future variations of key derivation functions may be defined, and they
+will be represented by new values of AT_KDF. If the peer does not
+recognize the value it cannot calculate the keys and behaves as
+explained in <xref target="keyderiv"/>.</t>
+
+<t hangText="AT_KDF is missing"><vspace blankLines="1"/>
+
+The peer behaves as if the AUTN had been incorrect and fails the
+authentication.</t>
+
+</list></t>
+
+<t>If the peer supports a given key derivation function but is
+unwilling to perform it for policy reasons, it refuses to calculate
+the keys and behaves as explained in <xref target="keyderiv"/>.</t>
+
+</section>
+
+<section anchor="hashup" title="Hash Functions">
+
+<t>EAP-AKA' uses SHA-256 <xref target="FIPS.180-2.2002"/>, not SHA-1 as
+in EAP-AKA. This requires a change to the pseudo random function (PRF)
+as well as the AT_MAC and AT_CHECKCODE attributes.</t>
+
+<section title="PRF'">
+
+<t>The PRF' construction is the same one as IKEv2 uses (see Section 2.13 in
+<xref target="RFC4306"/>). The function takes two arguments. K is a
+256 bit value and S is an octet string of arbitrary length. PRF' is
+defined as follows:</t>
+
+<figure>
+<artwork>
+PRF'(K,S) = T1 | T2 | T3 | T4 | ...
+
+   where:
+   T1 = HMAC-SHA-256 (K, S | 0x01)
+   T2 = HMAC-SHA-256 (K, T1 | S | 0x02)
+   T3 = HMAC-SHA-256 (K, T2 | S | 0x03)
+   T4 = HMAC-SHA-256 (K, T3 | S | 0x04)
+   ...
+</artwork>
+</figure>
+
+<t>PRF' produces as many bits of output as is needed.  HMAC-SHA-256 is
+the application of HMAC <xref target="RFC2104"/> to SHA-256.</t>
+
+</section>
+
+<section title="AT_MAC">
+
+<t>The AT_MAC attribute is changed as follows. The MAC algorithm is
+HMAC-SHA-256-128, a keyed hash value.  The HMAC-SHA-256-128 value is
+obtained from the 32-byte HMAC-SHA-256 value by truncating the output
+to the first 16 bytes. Hence, the length of the MAC is 16 bytes.</t>
+
+<t>Otherwise the use of AT_MAC in EAP-AKA' follows Section 10.15 of
+<xref target="RFC4187"/>.</t>
+
+</section>
+
+<section title="AT_CHECKCODE">
+
+<t>The AT_CHECKCODE attribute is changed as follows. First, a 32 byte
+value is needed to accommodate a 256 bit hash output:</t>
+
+<figure>
+<artwork>
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| AT_CHECKCODE  | Length        |           Reserved            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
+|                     Checkcode (0 or 32 bytes)                 |
+|                                                               |
+|                                                               |
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork>
+</figure>
+
+<t>Second, the checkcode is a hash value, calculated with SHA-256
+<xref target="FIPS.180-2.2002"/>, over the data specified in Section
+10.13 of <xref target="RFC4187"/>.</t>
+
+</section>
+
+</section>
+
+</section>
+
+<section anchor="bidding" title="Bidding Down Prevention for EAP-AKA">
+
+<t>As discussed in <xref target="RFC3748"/>, negotiation of methods
+within EAP is insecure. That is, a man-in-the-middle attacker may
+force the endpoints to use a method that is not the strongest one they
+both support. This is a problem, as we expect EAP-AKA and EAP-AKA' to
+be negotiated via EAP.</t>
+
+<t>In order to prevent such attacks, this RFC specifies a new
+mechanism for EAP-AKA that allows the endpoints to securely discover
+the capabilities of each other. This mechanism comes in the form of
+the AT_BIDDING attribute. This allows both endpoints to communicate
+their desire and support for EAP-AKA' when exchanging EAP-AKA
+messages. This attribute is not included in EAP-AKA' messages as
+defined in this RFC. It is only included in EAP-AKA messages.  This is
+based on the assumption that EAP-AKA' is always preferrable (see
+<xref target="security"/>). If during the EAP-AKA authentication
+process it is discovered that both endpoints would have been able to
+use EAP-AKA', the authentication process SHOULD be aborted, as a
+bidding down attack may have happened.</t>
+
+<t>The format of the AT_BIDDING attribute is shown below.</t>
+
+<figure>
+<artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   | AT_BIDDING    | Length        |D|          Reserved           |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+</artwork>
+</figure>
+
+<t>The fields are as follows:</t>
+
+<t><list style="hanging">
+
+<t hangText="AT_BIDDING"><vspace blankLines="1"/>This is set to TBA4 BY
+IANA.</t>
+
+<t hangText="Length"><vspace blankLines="1"/>The length of the
+attribute, MUST be set to 1.</t>
+
+<t hangText="D"><vspace blankLines="1"/>This bit is set to 1 if the
+sender does support EAP-AKA', is willing to use it, and prefers it
+over EAP-AKA. Otherwise it should be set to 0.</t>
+
+<t hangText="Reserved"><vspace blankLines="1"/>This field MUST be set
+to zero when sent and ignored on receipt.</t>
+
+</list></t>
+
+<t>The server sends this attribute in the EAP-Request/AKA-Challenge
+message. If the peer supports EAP-AKA', it compares the received value
+to its own capabilities. If it turns out that both the server and peer
+would have been able to use EAP-AKA' and preferred it over EAP-AKA,
+the peer behaves as if AUTN had been incorrect, and fails the
+authentication (see Figure 3 of <xref target="RFC4187"/>). A peer not
+supporting EAP-AKA' will simply ignore this attribute.  In all cases,
+the attribute is protected by the integrity mechanisms of EAP-AKA, so
+it cannot be removed by a man-in-the-middle attacker.</t>
+
+</section>
+
+<section anchor="security" title='Security Considerations'>
+
+<t>A summary of the security properties of EAP-AKA' follows. These
+properties are very similar to those in EAP-AKA. We assume that SHA-256
+is at least as secure as SHA-1. This is called the SHA-256 assumption in
+the remainder of this section.  Under this assumption EAP-AKA' is at
+least as secure as EAP-AKA.</t>
+
+<t>If AT_KDF has value 1, the security properties of EAP-AKA' are
+equivalent to those of EAP-AKA <xref target="RFC4187"/>. If AT_KDF has
+value 2, then the security properties are as follows:
+
+<list style="hanging">
+
+<t hangText="Protected ciphersuite
+negotiation"><vspace blankLines="1"/> EAP-AKA' has no ciphersuite
+negotiation mechanisms. It does have a negotiation mechanism for
+selecting the key derivation functions.  This mechanism is secure
+against bidding down attacks.</t>
+
+<t hangText="Mutual authentication"><vspace blankLines="1"/> Under the
+SHA-256 assumption, the properties of EAP-AKA' are at least as good as
+those of EAP-AKA in this respect. Refer to <xref target="RFC4187"/>
+Section 12 for further details.</t>
+
+<t hangText="Integrity protection"><vspace blankLines="1"/> Under the
+SHA-256 assumption, the properties of EAP-AKA' are at least as good
+(most likely better) as those of EAP-AKA in this respect.  Refer to
+<xref target="RFC4187"/> Section 12 for further details. The only
+difference is that a stronger hash algorithm, SHA-256 is used instead
+of SHA-1.</t>
+
+<t hangText="Replay protection"><vspace blankLines="1"/> Under the
+SHA-256 assumption, the properties of EAP-AKA' are at least as good as
+those of EAP-AKA in this respect. Refer to <xref target="RFC4187"/>
+Section 12 for further details.</t>
+
+<t hangText="Confidentiality"><vspace blankLines="1"/> The properties
+of EAP-AKA' are exactly the same as those of EAP-AKA in this
+respect. Refer to <xref target="RFC4187"/> Section 12 for further
+details.</t>
+
+<t hangText="Key derivation"><vspace blankLines="1"/> EAP-AKA'
+supports key derivation with an effective key strength against brute
+force attacks equal to the minimum of the length of the derived keys
+and the length of the AKA base key, i.e. 128-bits or more.  The key
+hierarchy is specified in
+<xref target="key"/>.<vspace blankLines="1"/> The Transient EAP Keys
+used to protect EAP-AKA packets (K_encr, K_aut, K_re), the MSK, and
+the EMSK are cryptographically separate.  An attacker can thus be
+assumed to be incapable to derive any non-trivial information about
+any of these keys based on the other keys.  An attacker also cannot
+calculate the pre-shared secret from IK, CK, IK', CK', K_encr, K_aut,
+K_re, MSK, or the EMSK by any non-trivial means, without assuming a
+successful attack on the used cryptographic primitives.
+<vspace blankLines="1"/>
+
+EAP-AKA' adds an additional layer of key derivation functions within
+itself to protect against the use of compromised keys. This is
+discussed further in
+<xref target="bindprop"/>.<vspace blankLines="1"/>
+
+EAP-AKA' uses a pseudo random function modeled after the one used in
+IKEv2 <xref target="RFC4306"/> together with SHA-256.</t>
+
+<t hangText="Key strength"><vspace blankLines="1"/> See above.</t>
+
+<t hangText="Dictionary attack resistance"><vspace blankLines="1"/>
+Under the SHA-256 assumption, the properties of EAP-AKA' are at least
+as good as those of EAP-AKA in this respect. Refer to
+<xref target="RFC4187"/> Section 12 for further details.</t>
+
+<t hangText="Fast reconnect"><vspace blankLines="1"/> Under the SHA-256
+assumption, the properties of EAP-AKA' are at least as good as those
+of EAP-AKA in this respect. Refer to <xref target="RFC4187"/> Section
+12 for further details. Note that implementations MUST prevent
+performing a fast reconnect across method types.</t>
+
+<t hangText="Cryptographic binding"><vspace blankLines="1"/> Note that
+this term refers to a very specific form of binding, something that is
+performed between two layers of authentication. It is not the same as
+the binding to a particular network name. The properties of EAP-AKA'
+are exactly as those of EAP-AKA in this respect, i.e., as it is not a
+tunnel method this property is not applicable to it. Refer to
+<xref target="RFC4187"/> Section 12 for further details.</t>
+
+<t hangText="Session independence"><vspace blankLines="1"/> The
+properties of EAP-AKA' are exactly the same as those of EAP-AKA in
+this respect. Refer to <xref target="RFC4187"/> Section 12 for further
+details.</t>
+
+<t hangText="Fragmentation"><vspace blankLines="1"/> The properties of
+EAP-AKA' are exactly the same as those of EAP-AKA in this
+respect. Refer to <xref target="RFC4187"/> Section 12 for further
+details.</t>
+
+<t hangText="Channel binding"><vspace blankLines="1"/> EAP-AKA', like
+EAP-AKA, does not provide channel bindings as they're defined in
+<xref target="RFC3748"/> and <xref target="RFC5247"/>. New skippable
+attributes can be used to add channel binding support in the future,
+if required.  <vspace blankLines="1"/>
+
+However, including the network name field in the AKA' algorithms
+(which are also used for other purposes than EAP-AKA') does provide a
+form of cryptographic separation between different network names,
+which resembles channel bindings. However, the network name does not
+typically identify the EAP (pass-through) authenticator. See the
+following section for more discussion.</t>
+
+</list></t>
+
+<section anchor="bindprop" title="Security Properties of Binding Network Names">
+
+<t>The ability of EAP-AKA' to bind the network name into the used keys
+provides some additional protection against key leakage to
+inappropriate parties. The keys used in the protocol are specific to a
+particular network name. If key leakage occurs due to an accident,
+access node compromise, or another attack, the leaked keys are only
+useful when providing access with that name. For instance, a malicious
+access point cannot claim to be network Y if has stolen keys from
+network X.  Obviously, if an access point is compromised, the
+malicious node can still represent the compromised node. As a result,
+neither EAP-AKA' or any other extension can prevent such attacks, but
+the binding to a particular name limits the attacker's choices, allows
+better tracking of attacks, makes it possible to identify compromised
+networks, and applies good cryptographic hygiene.</t>
+
+<t>The peer verifies that its own observations about the access
+network name are consistent with the server's observations. The server
+receives the EAP transaction from a given access network, and can
+either trust the name claim the access network made over AAA
+protocols, or it may additionally verify that this corresponds to the
+name that this access network should be using. Where such
+verification is implemented, it becomes impossible for an access
+network to claim to the peer that it is another access network.  This
+prevents some "lying NAS" (Network Access Server) attacks. For
+instance, a roaming partner, R, might claim that it is the home
+network H in an effort to lure peers to connect to itself. Such an
+attack would be beneficial for the roaming partner if it can attract
+more users, and damaging for the users if their access costs in R are
+higher than those in other alternative networks, such as H.</t>
+
+<t>Any attacker who gets hold of the keys CK, IK produced by the AKA
+algorithm can compute the keys CK', IK' and hence the master key MK
+according to the rules in <xref target="key"/>. The attacker could
+then act as a lying NAS. In 3GPP systems in general, the keys CK and
+IK have been distributed to, for instance, nodes in a visited access
+network where they may be vulnerable. In order to reduce this risk
+this specification mandates that the AKA algorithm must be computed
+with the AMF separation bit set to 1, and that the peer checks that
+this is indeed the case whenever it runs EAP-AKA'. Furthermore,
+<xref target="3GPP.33.402"/> requires that no CK, IK keys computed in this
+way ever leave the home subscriber system.</t>
+
+<t>The additional security benefits obtained from the binding depend
+obviously on the way names are assigned to different access
+networks. This is specified in <xref target="3GPP.23.003"/>.  Ideally,
+the names allow separating each different access technology, each
+different access network, and each different NAS within a domain.  If
+this is not possible, the full benefits may not be achieved. For
+instance, if the names identify just an access technology, use of
+compromised keys in a different technology can be prevented, but it is
+not possible to prevent their use by other domains or devices using
+the same technology.</t>
+
+</section>
+
+</section>
+
+<section anchor="iana" title="IANA Considerations">
+
+<t>EAP-AKA' has the EAP Type value TBA1 BY IANA. Per
+<xref target="RFC3748"/> Section 6.2, this allocation can be made with
+Designated Expert and Specification Required.</t>.
+
+<t>EAP-AKA' shares its attribute space and message Subtypes, with
+EAP-SIM <xref target="RFC4186"/> and EAP-AKA
+<xref target="RFC4186"/>. No new registries are needed.</t>
+
+<t>However, a new Attribute Type value (TBA2) in the non-skippable range
+needs to be assigned for AT_KDF_INPUT (<xref target="netbind"/>).</t>
+
+<t>Also, a new Attribute Type value (TBA3) in the non-skippable range
+needs to be assigned for AT_KDF (<xref target="keyderiv"/>).
+IANA also needs to create a
+namespace for EAP-AKA' KDF Type values. The initial contents of this
+namespace are given below; new values can be created through
+Specification Required policy <xref target="RFC5226"/>.
+
+<figure><artwork>
+Value      Description              Reference
+---------  ----------------------   ---------------
+0          Reserved                
+1          EAP-AKA with CK/IK       [this document]
+2          EAP-AKA' with CK'/IK'    [this document]
+3-65535    Unassigned 
+</artwork></figure>
+</t>
+
+<t>Finally, a new Attribute Type value (TBA4) in the skippable range
+needs to be assigned for AT_BIDDING (<xref target="bidding"/>).</t>
+
+</section>
+
+<section title="Acknowledgments">
+
+<t>The authors would like to thank Guenther Horn, Joe Salowey, Mats
+Naslund, Adrian Escott, Brian Rosenberg, Ahmad Muhanna, Stefan Rommer,
+Russ Housley, and Alfred Hoenes for their in-depth reviews and
+interesting discussions in this problem space.</t>
+
+</section>
+
+</middle>
+<back>
+
+<references title="Normative References">
+      <?rfc include="reference.RFC.2119.xml"?>
+      <?rfc include="reference.RFC.2104.xml"?>
+      <?rfc include="reference.RFC.3748.xml"?>
+      <?rfc include="reference.RFC.4187.xml"?>
+      <?rfc include="reference.RFC.5226.xml"?>
+      <?rfc include="reference.3GPP.23003.xml"?>
+      <?rfc include="reference.3GPP.33102.xml"?>
+      <?rfc include="reference.3GPP.33402.xml"?>
+      <?rfc include="reference.FIPS.180-2.2002.xml"?>
+</references>
+
+<references title="Informative References">
+      <?rfc include="reference.RFC.4186.xml"?>
+      <?rfc include="reference.RFC.4284.xml"?>
+      <?rfc include="reference.RFC.4306.xml"?>
+      <?rfc include="reference.RFC.5113.xml"?>
+      <?rfc include="reference.RFC.5247.xml"?>
+</references>
+
+<section anchor="diff" title="Changes from RFC 4187">
+
+<t>The changes to RFC 4187 relate only to the bidding down prevention
+support defined in <xref target="bidding"/>.</t>
+
+</section>
+
+<section anchor="baddesign" title="Importance of Explicit Negotiation">
+
+<t>Choosing between the traditional and revised AKA key derivation
+functions is easy when their use is unambiguously tied to a particular
+radio access network, e.g LTE as defined by 3GPP or eHRPD as defined
+by 3GPP2. There is no possibility for interoperability problems if
+this radio access network is always used in conjunction with new
+protocols that cannot be mixed with the old ones; clients will always
+know whether they are connecting to the old or new system.</t>
+
+<t>However, using the new key derivation functions over EAP introduces
+several degrees of separation, making the choice of the correct key
+derivation functions much harder. Many different types of networks
+employ EAP. Most of these networks have no means to carry any
+information about what is expected from the authentication process.
+EAP itself is severely limited in carrying any additional information,
+as noted in <xref target="RFC4284"/> and
+<xref target="RFC5113"/>. Even if these networks or EAP were extended
+to carry additional information, it would not affect millions of
+deployed access networks and clients attaching to them.</t>
+
+<t>Simply changing the key derivation functions that EAP-AKA
+<xref target="RFC4187"/> uses would cause interoperability problems
+with all of the existing implementations. Perhaps it would be possible
+to employ strict separation into domain names that should be used by
+the new clients and networks. Only these new devices would then employ
+the new key derivation mechanism. While this can be made to work for
+specific cases, it would be an extremely brittle mechanism, ripe to
+result in problems whenever client configuration, routing of
+authentication requests, or server configuration does not match
+expectations. It also does not help to assume that the EAP client and
+server are running a particular release of 3GPP network
+specifications. Network vendors often provide features from the future
+releases early or do not provide all features of the current
+release. And obviously, there are many EAP and even some EAP-AKA
+implementations that are not bundled with the 3GPP network
+offerings. In general, these approaches are expected to lead to
+hard-to-diagnose problems and increased support calls.</t>
+
+</section>
+
+</back>
+</rfc>

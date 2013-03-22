@@ -1,0 +1,697 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+  <!ENTITY rfc2045 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2045.xml'>
+  <!ENTITY rfc2047 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2047.xml'>
+  <!ENTITY rfc2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+  <!ENTITY rfc2822 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2822.xml'>
+  <!ENTITY idSIEVEbis PUBLIC '' 
+  'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-sieve-3028bis.xml'>
+  <!ENTITY idSIEVEbody PUBLIC '' 
+  'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-sieve-body.xml'>
+  <!ENTITY idSIEVEeditheader PUBLIC '' 
+  'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-sieve-editheader.xml'>
+  <!ENTITY idSIEVEvariables PUBLIC '' 
+  'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-sieve-variables.xml'>
+]>
+    <!-- may be omitted for very short documents --> 
+<?rfc toc="yes"?>
+    <!-- strict ID-nits compliance -->
+<?rfc strict="yes"?>
+<?rfc sortrefs="no"?>
+    <!-- these two save paper: start new paragraphs from the same page etc. -->
+<?rfc compact="yes"?> <?rfc subcompact="no"?>
+    <!-- use symbolic cross references instead of [1], and sort them -->
+<?rfc symrefs="yes"?> <?rfc sortrefs="yes"?>
+    <!-- other categories: bcp, exp, historic, std -->
+<rfc ipr="full3978" category="std">
+<front>
+  <title abbrev="Sieve MIME Operations">Sieve Email Filtering: 
+  MIME part Tests, Iteration, Extraction, Replacement and Enclosure</title>
+  <!-- add 'role="editor"' below for the editors if the requiring designation -->
+  <author fullname="Tony Hansen" initials="T." surname="Hansen">
+    <organization>AT&amp;T Laboratories</organization>
+    <address>
+    <postal>
+        <street>200 Laurel Ave.</street>
+        <city>Middletown</city>
+        <region>NJ</region>
+        <code>07748</code>
+        <country>USA</country>
+    </postal>
+    <email>tony+sieveloop@maillennium.att.com </email>
+    </address>
+  </author>
+  <author initials="C." surname="Daboo" fullname="Cyrus Daboo">
+    <organization abbrev="Apple Computer">Apple Computer, Inc.</organization>
+    <address>
+      <postal>
+        <street>1 Infinite Loop</street>
+        <city>Cupertino</city>
+        <region>CA</region>
+        <code>95014</code>
+        <country>USA</country>
+      </postal>
+      <email>cyrus@daboo.name</email>
+      <uri>http://www.apple.com/</uri>
+    </address>
+  </author>
+  <date/>           <!-- month="May" is no longer necessary -->
+  <area>Applications</area>
+  <!-- WG name at the upperleft corner of the doc, IETF fine for individual submissions -->
+  <workgroup>Internet Engineering Task Force</workgroup>
+  <keyword>Email</keyword>
+  <keyword>Electronic Mail</keyword>
+  <keyword>Internet Mail</keyword>
+  <keyword>Message Filtering</keyword>
+  <abstract>
+    <t>
+    The Sieve email filtering language has no way to examine individual MIME parts or any way to manipulate those individual parts. However, being able to filter based on MIME content is important. This document defines extensions for these needs.
+    </t>
+  </abstract>
+  <note title="Note">
+    <t>
+    This document is being discussed on the MTA-FILTERS mailing list, ietf-mta-filters@imc.org.
+    </t>
+  </note>
+</front>
+<middle>
+  <section title="Introduction">
+    <t>
+        Sieve scripts are used to make decisions about the disposition of an email message.
+	The base Sieve specification, <xref target="I-D.ietf-sieve-3028bis" />, defines operators for looking at the message headers, such as addresses and the subject.
+	Other extensions provide access to the body of the message (<xref target="I-D.ietf-sieve-body"/>), or allow you to manipulate the header of the message (<xref target="I-D.ietf-sieve-editheader"/>).
+	But none of these extensions take into account that MIME messages (<xref target="RFC2045" />) are often complex objects, consisting of many parts and sub-parts.
+	This extension defines mechanisms for performing tests on MIME body parts,
+	looping through the MIME body parts,
+	extracting information from a MIME body part,
+	changing the contents of a MIME body part,
+	and enclosing the entire message with a wrapper.
+    </t>
+  </section>
+    <section title='Conventions Used in This Document'>
+        <t>
+            Conventions for notations are as in <xref target='I-D.ietf-sieve-3028bis' /> section 1.1.
+        </t>
+        <t>
+            The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target='RFC2119' />.
+        </t>
+    </section>
+
+  <section title="Sieve Loops">
+    <t>
+      The base Sieve language has no looping mechanism.
+      Given that messages may contain multiple parts, in order to support
+      filters that apply to any and all parts, we introduce a
+      new control command: "for_every_part", which is an iterator that
+      walks though every MIME part of a message, including nested
+      parts, and applies the commands in the specified block to each of them.
+      The iterator will start with the first MIME part (as its current
+      context) and will execute a command block (Sieve commands
+      enclosed by { ...}).
+      Upon completion of this command block, the
+      iterator advances to the next MIME part (as its current context)
+      and executes the same command block again.
+    </t>
+    <t>
+      The iterator can be terminated prematurely by a new Sieve command, "break".
+    </t>
+    <t>
+      <list style='hanging'>
+    <t hangText='Usage:'>
+      for_every_part block
+    </t>
+    <t hangText='Usage:'>
+      break;
+    </t>
+      </list>
+    </t>
+    <t>
+      "for_every_part" commands can be nested inside other "for_every_part" commands. When this occurs, the nested "for_every_part" iterates over the MIME parts contained within the MIME part current being targeted by the nearest enclosing "for_every_part" command. If that MIME part is a terminal MIME part (i.e. does not contain other MIME parts) then the nested "for_every_loop" is simply ignored.
+    </t>
+    <t>
+      Sieve implementations MAY limit the number of nested loops that occur within one another, however they MUST support at least one nested loop inside another loop.
+    </t>
+  </section>
+  <section title="Changes to Sieve tests">
+  <t>
+    This specification extends the base Sieve "header", "address" and "exists" tests to support targeting those tests at a specific MIME part or at all MIME parts in the enclosing scope.
+  </t>
+  <section title='Test "header"' anchor="header_test">
+    <t>
+      The "header" test is extended with the addition of a new ":mime" tagged argument, which takes a number of other arguments.
+    </t>
+    <t>
+      <list style='hanging'>
+        <t hangText='Usage:'>
+          header [:mime] [:anychild] [MIMEOPTS]<vspace blankLines="0" />
+          [COMPARATOR] [MATCH-TYPE]<vspace blankLines="0" />
+          &lt;header-names: string-list&gt; &lt;key-list: string-list&gt;
+        </t>
+        <t hangText='Usage:'>
+          The definition of [MIMEOPTS] is:
+        </t>
+        <t>
+          Syntax: ":type" / ":subtype" / ":contenttype" /<vspace blankLines="0" />
+                  ":param" &lt;param-list: string-list&gt;
+        </t>
+      </list>
+    </t>
+    <t>
+      When the ":mime" tagged argument is present in the "header" test, it will parse the MIME header lines in a message so that tests can be performed on specific elements.
+    </t>
+    <t>
+      If the ":anychild" tagged argument is NOT specified:
+      <list style='symbols'>
+        <t>
+          If used within the context of a "for_every_part" iterator, the "header" test will examine the headers associated with the current MIME part context from the loop.
+        </t>
+        <t>
+          If used outside the context of a "for_every_part" iterator, the "header" test will examine only the outer, top-level, headers of the message.
+        </t>
+      </list>
+    </t>
+    <t>
+      If the ":anychild" tagged argument  IS specified, the "header" test will examine all MIME body parts and return true if any of them satisfies the test.
+    </t>
+    <t>
+      The "header" test with the ":mime" tagged argument can test various aspects of certain structed MIME headers. These options are available:
+
+      <list style='hanging'>
+        <t hangText=":type">
+            parses the header assuming it has the format of a "Content-Type:" MIME header field, and tests the value of the MIME type specified in the header.
+        </t>
+        <t hangText=":subtype">
+            parses the header assuming it has the format of a "Content-Type:" MIME header field, and tests the value of the MIME subtype specified in the header.
+        </t>
+        <t hangText=":contenttype">
+            parses the header assuming it has the format of a "Content-Type:" MIME header field, and tests the combined value of the MIME type and subtype specified in the header.
+        </t>
+        <t hangText=":param">
+            parses the header looking for MIME parameters in the header. The supplied string-list lists the names of any parameters to be tested.
+	    If any one named parameter value matches the test string value, the test will return true.
+        </t>
+      </list>
+    </t>
+    <t>Example:</t>
+    
+    <figure><artwork><![CDATA[
+require ["mime", "fileinto"];
+
+if header :mime :type "Content-Type" "image"
+{
+    fileinto "INBOX.images";
+}
+    ]]></artwork></figure>
+    
+    <t>
+        In this example, any message that contains a MIME image type part at the top-level is saved to the mailbox "INBOX.images".
+    </t>
+    
+    <t>Example:</t>
+    
+    <figure><artwork><![CDATA[
+require ["mime", "fileinto"];
+
+if header :mime :anychild :contenttype :comparator
+          "Content-Type" "text/html"
+{
+    fileinto "INBOX.html";
+}
+    ]]></artwork></figure>
+    
+    <t>
+        In this example, any message that contains any MIME part with a content-type of "text/html" is saved to the mailbox "INBOX.html".
+    </t>
+    
+    <t>Example:</t>
+    
+    <figure><artwork><![CDATA[
+require ["mime", "for_every_part", "fileinto"];
+
+for_every_part
+{
+    if header :mime :param "filename" :comparator
+       "Content-Disposition" "important"
+    {
+        fileinto "INBOX.important";
+        break;
+    }
+}
+    ]]></artwork></figure>
+    
+    <t>
+        In this example, any message that contains any MIME part with a content-disposition with a filename parameter containing the text "important" is saved to the mailbox "INBOX.important".
+    </t>
+  </section>
+  <section title='Test "address"'>
+    <t>
+      The "address" test is extended with the addition of a new ":mime" tagged argument, which takes a number of other arguments.
+    </t>
+    <t>
+      <list style='hanging'>
+        <t hangText='Usage:'>
+       address [:mime] [:anychild] [COMPARATOR]<vspace blankLines="0" />
+       [ADDRESS-PART] [MATCH-TYPE]<vspace blankLines="0" />
+            &lt;header-list: string-list&gt; &lt;key-list: string-list&gt;
+        </t>
+      </list>
+    </t>
+    <t>
+      When the ":mime" tagged argument is present in the "address" test, it will parse the MIME header lines as if they were standard address header lines in a message so that tests can be performed on specific elements.
+    </t>
+    <t>
+      The behavior of the ":anychild" tagged argument and the interaction with the "for_every_part" iterator is the same as for the extended "header" test <xref target="header_test"/>.
+    </t>
+    <t>Example:</t>
+    
+    <figure><artwork><![CDATA[
+require ["mime", "fileinto"];
+
+if address :mime :is :all "content-from" "tim@example.com"
+{
+    fileinto "INBOX.part-from-tim";
+}
+    ]]></artwork></figure>
+    
+    <t>
+        In this example, any message that contains a MIME Content-From header at the top-level matching the text "tim@example.com" is saved to the mailbox "INBOX.part-from-time".
+    </t>
+    <!-- !!!!!!!!!!!!!!!! comment from alexey: This example would produce the same result if :mime is omitted, correct? -->
+  </section>
+  <section title='Test "exists"'>
+    <t>
+      The "exists" test is extended with the addition of a new ":mime" tagged argument, which takes one other argument.
+    </t>
+    <t>
+      <list style='hanging'>
+        <t hangText='Usage:'>
+       exists [:mime] [:anychild] &lt;header-names: string-list&gt;<vspace blankLines="0" />
+        </t>
+      </list>
+    </t>
+    <t>
+      When the ":mime" tagged argument is present in the "exists" test, the test is extended to check for the existence of MIME headers in MIME parts.
+    </t>
+    <t>
+      The behavior of the ":anychild" tagged argument and the interaction with the "for_every_part" iterator is the same as for the extended "header" test <xref target="header_test"/>.
+    </t>
+    <t>Example:</t>
+    
+    <figure><artwork><![CDATA[
+require ["mime", "fileinto"];
+
+if exists :mime :anychild "content-md5"
+{
+    fileinto "INBOX.md5";
+}
+    ]]></artwork></figure>
+    
+    <t>
+        In this example, any message that contains a MIME Content-MD5 header in any MIME part is saved to the mailbox "INBOX.md5".
+    </t>
+    
+  </section>
+  </section>
+  <section title="Action Replace">
+    <t>
+      <list style='hanging'>
+        <t hangText='Usage:'>
+      replace [:mime] [:subject string] [:from string] &lt;replacement: string&gt;
+    </t>
+      </list>
+    </t>
+    <t>
+      The "replace" command is defined to allow a MIME part to be replaced with the text supplied in the command.
+    </t>
+    <t>
+      When used in the context of a "for_every_part" iterator, the MIME part to be replaced is the "current" MIME part.
+      If the current MIME context is a multipart MIME part, the entire multipart MIME part is replaced,
+      which would alter the MIME structure of the message by eliminating all of the children of the multipart part.
+      (Replacing a non-multipart MIME part within a "for_every_part" loop context does not alter the overall message
+      structure.)
+      If the MIME structure is altered, the change takes effect immediately:
+      the "for_every_part" iterator that is executing does not go into the no-longer existing body parts,
+      and subsequent "for_every_part" iterators would use the new message structure.
+    </t>
+    <t>
+      When used outside the context of a "for_every_part" loop, the MIME part to be replaced is the entire message.
+    </t>
+    <t>
+      If the :mime parameter is not specified, the replacement string is a text/plain part.
+    </t>
+    <t>
+      If the :mime parameter is specified, then the replacement string is, in fact, a MIME entity as defined in <xref target="RFC2045" /> section 2.4,
+      including both MIME headers and content.
+      If the optional :mime parameter is not supplied, the reason string is
+      considered to be a UTF-8 string.
+    </t>
+    <t>
+      If the entire message is being replaced, a ":subject" parameter specifies a subject line to attach to the message that is generated.
+      UTF-8 characters can be used in the string argument; implementations MUST convert the string to
+      <xref target="RFC2047" /> encoded words if and only if non-ASCII characters are present.
+      Implementations MUST preserve the previous Subject header as an Original-Subject header.
+    </t>
+    <t>
+      If the entire message is being replaced, a ":from" parameter may be used to specify an alternate address to use in the From field of the message that is generated.
+      The string must specify a valid <xref target="RFC2822" /> mailbox-list.
+      Implementations SHOULD check the syntax and generate an error when a syntactically invalid ":from" parameter is specified.
+      Implementations MAY also impose restrictions on what addresses can be specified in a ":from" parameter; it is
+      suggested that values that fail such a validity check simply be ignored rather than causing the replace action to fail.
+      Implementations MUST preserve the previous From header as an Original-From header.
+    </t>
+  </section>
+  <section title="Action Enclose">
+    <t>
+      <list style='hanging'>
+        <t hangText='Usage:'>
+          enclose &lt;:subject string&gt; &lt;:headers string-list&gt; string
+        </t>
+      </list>
+    </t>
+    <t>
+      A new Sieve action command is defined to allow an entire message to be enclosed as an attachment to a new message.
+      After enclosure, subsequent actions affecting the message header or content use the newly create message instead of the original message;
+      this means that any use of a "replace" action or other similar actions should be executed before the "enclose" action.
+    </t>
+    <t>
+      If multiple "enclose" actions are executed by a script, only the text specified on the last one is used when creating the enclosed message.
+      This action does not affect messages that are forwarded via a "redirect" action.
+    </t>
+    <t>
+      Specifically, the original message becomes a multipart/mixed message with two parts:
+      a text/plain portion with the string argument as its body, and a message/rfc822 portion with the original message enclosed.
+      The Content-Type: header field becomes multipart/mixed.
+      The Subject: header is specified by the :subject argument.
+      Any headers specified by :headers are copied from the old message into the new message.
+      If not specified by :headers, Date: and From: headers should be synthesized to reflect the current date and the user running the Sieve action.
+      
+    </t>
+  </section>
+
+
+  <section title="Action extract_text">
+    <t>
+      <list style='hanging'>
+        <t hangText='Usage:'>
+	  extract_text [MODIFIER] [":first" number] &lt;varname: string&gt;
+        </t>
+      </list>
+    </t>
+    <t>
+      The extract_text action may be used within the context of a "for_every_part" loop.
+      It stores at most :first bytes of the current MIME body part in the variable identified by varname.
+      If the :first parameter is not present, the whole content of the current MIME body part is stored.
+      In either case the actually stored data MAY be truncated
+      to conform to implementation specific limit on variable length and/or
+      on MIME body part length.
+      QUESTION: What do we do if the Content-Transfer-Encoding is anything other than 7bit?
+    </t>
+    <t>
+      If extract_text is used outside the context of a "for_every_part" loop,
+      the action will set the variable identified by varname to the empty string.
+    </t>
+    <t>
+      Modifiers are applied on the extracted text before it is stored in
+      the variable.  See <xref target="I-D.ietf-sieve-variables" /> for details.
+    </t>
+  </section>
+
+  <section title="Sieve Capability Strings">
+    <t>
+      A Sieve implementation that defines the "for_every_part" and "break" actions
+      will advertise the capability string "for_every_part".
+    </t>
+    <t>
+      A Sieve implementation that defines the ":mime" tagged arguments to the "header", "address" and "exists" commands will advertise the capability string "mime".
+    </t>
+    <t>
+      A Sieve implementation that defines the "replace" action will advertise the capability string "replace".
+    </t>
+    <t>
+      A Sieve implementation that defines the "enclose" action will advertise the capability string "enclose".
+    </t>
+    <t>
+      A Sieve implementation that defines the "extract_text" action will advertise the capability string "extract_text".
+      Note that to be useful, the "extract_text" action also requires the "variables" <xref target="I-D.ietf-sieve-variables" />
+      and "mime" capabilities.
+    </t>
+  </section>
+  <section title="Examples">
+    <section title="Example 1">
+      <t>
+        A Sieve script to replace all the Windows executable attachments in a message would be:
+      </t>
+      <figure><artwork>
+require [ "for_every_part", "mime", "replace" ];
+for_every_part
+{
+  if ( anyof (
+         header :mime :contenttype :is "Content-Type" "application/exe",
+         header :mime :param "filename"
+           ["Content-Type", "Content-Disposition"] :matches "*.com" )
+  {
+    replace "Executable attachment removed by user filter";
+  }
+}
+      </artwork></figure>
+    </section>
+    <section title="Example 2">
+      <t>
+        A Sieve script to warn the user about executable attachment types would be:
+      </t>
+      <figure><artwork>
+require [ "for_every_part", "mime", "enclose" ];
+
+for_every_part
+{
+  if header :mime :param "filename"
+     ["Content-Type", "Content-Disposition"] :matches
+       ["*.com", "*.exe", "*.vbs", "*.scr",
+        "*.pif", "*.hta", "*.bat", "*.zip" ]
+  {
+    # these attachment types are executable
+    enclose :subject "Warning" "
+WARNING! The enclosed message contains executable attachments.
+These attachments types may contain a computer virus program
+that can infect your computer and potentently damage your data
+
+Before clicking on these message attachments, you should verify
+with the sender that this message was sent by them and not a
+computer virus.
+";
+    break;
+  }
+}
+        </artwork></figure>
+    </section>
+    <section title="Example 3">
+      <t>
+        A Sieve script to extract subject and text out of messages from the boss
+      </t>
+      <figure><artwork>
+require ["mime", "variables", "extract_text"];
+
+if header :contains "from" "boss@example.org" 
+{
+  # :matches is used to get the value of the Subject header
+  if header :matches "Subject" "*"
+  {
+    set "subject" "${1}";
+  }
+
+  # extract the first 100 bytes of the first text/* part
+  for_every_part
+  {
+    if header :mime :type :is "Content-Type" "text"
+    {
+      extract_text :first 100 "msgcontent";
+      break;
+    }
+  }
+
+  # if it's not a 'for your information' message
+  if not header :contains "subject" "FYI:"
+  {
+    # do something using ${subject} and ${msgcontent}
+    # such as sending a notification using a notification extion
+  }
+}
+      </artwork></figure>
+    </section>
+  </section>
+  <section title="Acknowledgements">
+    <t>Comments from members of the MTA Filters Working Group, in particular Ned Freed, Nigel Swinson, Mark Mallett and Alexey Melnikov, are gratefully acknowledged.
+    </t>
+  </section>
+  <section title="Security Considerations">
+    <t>The "enclose" action creates an entirely new message, as compared to just redirecting or forwarding the existing message.
+       Therefore, any site policies applicable to message submission should be enforced here.
+    </t>
+    <t>
+      The looping specification specified here provides easier access to information about the message contents, which may also be achieved through other sieve tests.
+      This is not believed to raise any additional security
+      issues beyond those for the Sieve "envelope" and "body" tests.
+    </t>
+    <t>
+       The system MUST be sized and restricted in such a manner that
+       even malicious use of mime part matching does not deny service to
+       other users of the host system.
+    </t>
+
+    <t>
+       Any change in a message content may interfere with digital
+       signature mechanisms that include the body in the signed
+       material.
+    </t>
+
+
+    <t>All of the security considerations given in the base Sieve
+       specification also apply to these extensions.
+    </t>
+  </section>
+  <section title="IANA Considerations">
+    <t>
+      The Original-Subject: and Original-From: headers are to be registered in the Permanent Message Header Fields table.
+    </t>
+    <t>
+      The following template specifies the IANA registration of the 
+      Sieve extensions specified in this document:
+    </t>
+    <t>
+      To: iana@iana.org
+      Subject: Registration of new Sieve extensions
+      <vspace/>
+        Capability name: for_every_part
+      <vspace/>
+        Description: adds the "for_every_part" and "break" actions for iterating through MIME parts of a message.
+      <vspace/>
+      <vspace/>
+        Capability name: mime
+      <vspace/>
+        Description: adds ":mime" tagged arguments to the "header", "address" and "exists" commands.
+      <vspace/>
+      <vspace/>
+        Capability name: replace
+      <vspace/>
+        Description: adds the "replace" action for replacing a MIME body part of a message.
+      <vspace/>
+      <vspace/>
+        Capability name: enclose
+      <vspace/>
+        Description: adds the "enclose" action for enclosing a message with a wrapper.
+      <vspace/>
+      <vspace/>
+        Capability name: extract_text
+      <vspace/>
+        Description: adds the "extract_text" action for extracting text from a MIME body part.
+      <vspace/>
+      <vspace/>
+
+      <vspace/>
+        RFC number: RFC XXXX
+      <vspace/>
+        Contact address: The Sieve discussion list &lt;ietf-mta-filters@imc.org&gt;.
+    </t>
+    <t>
+      This information should be added to the list of sieve extensions
+      given on http://www.iana.org/assignments/sieve-extensions.
+    </t>
+  </section>
+  <section title="Change History (to be removed prior to publication as an RFC)">
+    <section title="draft-ietf-sieve-mime-02">
+      <t>
+        minor syntax glitches in examples
+      </t>
+      <t>
+        Add clarification on "replace" affecting subsequent for_every_part loops?
+      </t>
+      <t>
+        Add IANA considerations for Original-Subject: and Original-From:.
+      </t>
+      <t>
+        Add note on "enclose" creating From: and Date: headers.
+      </t>
+    </section>
+    <section title="draft-ietf-sieve-mime-01">
+      <t>
+    what happens when nested for_every_loop's
+      </t>
+      <t>
+        a "mime" shorthand for testing the type/subtype, without requiring
+      </t>
+      <t>
+    interactions with variables<vspace/>
+    notifications<vspace/>
+    notifications to calendar service<vspace/>
+    address tests, exists tests<vspace/>
+    mimeheader, mimeparameter tests<vspace/>
+      </t>
+    </section>
+    <section title="draft-ietf-sieve-mime-00">
+      <t>
+        Changed title and text to emphasize MIME Tests.
+      </t>
+      <t>
+        Changed for.every.part to for_every_part.
+      </t>
+      <t>
+        Added :anychild to mime test.
+    Default is to use the current context or outer envelope; specifying :anychild will look at all children.
+      </t>
+      <t>
+        Added clarifications to replacing parts affecting the structure.
+      </t>
+      <t>
+        Added :mime option to replace, ala draft-ietf-sieve-vacation-06.
+      </t>
+      <t>
+        Various other minor nit fixes.
+      </t>
+    </section>
+    <section title="draft-hansen-sieve-loop-01">
+      <t>
+        Merged with draft-daboo-sieve-mime-00.txt.
+      </t>
+    </section>
+    <section title="draft-hansen-sieve-loop-02">
+      <t>
+        <list>
+          <t>Update to 3028bis reference.</t>
+          <t>Added 2119 conventions section.</t>
+          <t>Terminology/title tweaks.</t>
+          <t>Added informative references to body and editheader extensions.</t>
+          <t>Added description of nested loops.</t>
+          <t>Replaced mime test by extensions to header, address and exists tests.</t>
+        </list>
+      </t>
+    </section>
+    <section title="draft-hansen-sieve-loop-03">
+      <t>
+        <list>
+          <t>after enclosure, subsequent actions affect newly created message</t>
+	  <t>synthesis of Date/From headers by the enclose action is no longer controversial</t>
+	  <t>Filled in Security Considerations</t>
+	  <t>Picked up extract_text action from draft-ietf-sieve-notify</t>
+	  <t>Expanded the IANA considerations section</t>
+        </list>
+      </t>
+    </section>
+  </section>
+</middle>
+<back>
+<!-- references split to informative and normative -->
+<references title="Normative References">
+    &rfc2045;   <!-- mime part 1 -->
+    &rfc2047;   <!-- mime part 3 -->
+    &rfc2119;   <!-- keywords -->
+    &rfc2822;   <!-- message format -->
+    &idSIEVEbis;<!-- sieve -->
+</references>
+<references title="Informative References">
+    &idSIEVEbody;       <!-- Sieve body extension -->
+    &idSIEVEeditheader; <!-- Sieve editheader extension -->
+    &idSIEVEvariables;  <!-- Sieve variables extension -->
+</references>
+
+</back>
+</rfc>

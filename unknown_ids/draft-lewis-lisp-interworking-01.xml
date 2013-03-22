@@ -1,0 +1,776 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!-- 
+#
+#       draft-lewis-lisp-interworking.xml
+#
+#       Darrel Lewis
+#       darlewis@cisco.com
+#       Fri Nov 30 05:21:57 PDT 2007
+#
+#       $Header: /home/dmm/SDOs/IETF/Drafts/active/interworking/draft-lewis-lisp-interworking.xml,v 1.5 2007/11/30 21:28:01 dmm Exp $
+#
+-->
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc tocompact="yes"?>
+<?rfc tocdepth="3"?>
+<?rfc tocindent="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc comments="yes"?>
+<?rfc inline="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<rfc category="exp" docName="draft-lewis-lisp-interworking-01" ipr="full3978">
+  <front>
+    <title abbrev="LISP Transition">Interworking LISP with IPv4 and IPv6</title>
+    <author fullname="Darrel Lewis" initials="D." surname="Lewis">
+      <organization>Cisco Systems, Inc.</organization>
+      <address>
+        <email>darlewis@cisco.com</email>
+      </address>
+    </author>
+    <author fullname="David Meyer" initials="D." surname="Meyer">
+      <organization>Cisco Systems, Inc.</organization>
+      <address>
+        <email>dmm@cisco.com</email>
+      </address>
+    </author>
+    <author fullname="Dino Farinacci" initials="D." surname="Farinacci">
+      <organization>Cisco Systems, Inc.</organization>
+      <address>
+        <email>dino@cisco.com</email>
+      </address>
+    </author>
+    <author fullname="Vince Fuller" initials="V." surname="Fuller">
+      <organization>Cisco Systems, Inc.</organization>
+      <address>
+        <email>vaf@cisco.com</email>
+      </address>
+    </author>
+    <date year="2008" />
+    <abstract>
+     <t>
+   This document describes techniques for allowing sites running the
+   Locator/ID Separation Protocol (LISP [LISP]) to interoperate with Internet
+   sites not running LISP.  A fundamental property of LISP-speaking sites is
+   that they use Endpoint Identifiers (EIDs), rather than traditional IP
+   addresses, in the source and destination fields of all traffic they emit
+   or receive. While EIDs are syntactically identical to IP addresses,
+   routes for them are not carried in the global routing system so an
+   interoperability mechanism is needed for non-LISP-speaking sites to
+   exchange traffic with LISP-speaking sites.  This document introduces two
+   such mechanisms: the first uses a new network element, the LISP Proxy
+   Tunnel Router (PTR) (Section 5) to act as a intermediate LISP Ingress
+   Tunnel Router (ITR) for non-LISP-speaking hosts while the second adds
+   Network Address Translation (NAT) functionality to LISP Ingress and LISP 
+   Egress Tunnel Routers (xTRs) to substitute routable IP addresses for
+   non-routable EIDs.
+      </t>
+    </abstract>
+
+  </front>
+  <middle>
+    <section title="Introduction" toc="default">
+      <t>
+      This document describes two mechanisms for interoperation between LISP
+      <xref target="LISP"/> sites, which use non-globally-routed EIDs, and non-LISP sites: use of
+      PTRs, which create highly-aggregated routes to EID prefixes for
+      non-LISP sites to follow; and the use of NAT by LISP ETRs when 
+      communicating with non-LISP hosts. 
+      </t>
+      <t> 
+        A key behavior of the separation of Locators and End-Point-IDs is that
+       EID prefixes are not advertised to the Internet's Default Free Zone
+       (DFZ).  Specifically, only RLOCs are carried in the Internet's DFZ.  
+       Existing Internet sites (and their hosts) who do not participate
+       in the LISP system must still be able to reach sites numbered from 
+       this non routed EID space.  This draft describes a set
+       of mechanisms that can be used to provide reachability between sites
+       that are LISP-capable and those that are not.   This document introduces two
+       such mechanisms: the first uses a new network element, the LISP Proxy
+       Tunnel Router (PTR) (Section 5) to act as a intermediate LISP Ingress
+       Tunnel Router (ITR) for non-LISP-speaking hosts while the second adds 
+       a form of Network Address Translation (NAT) functionality to Tunnel
+       Routers (xTRs) to substitute routable IP addresses for non-routable
+       EIDs.
+      </t>
+      <t>
+        More detailed descriptions of these mechanisms and the network elements
+       involved may be found in the following sections:
+	</t>
+      <t>
+     - Section 2 describes the different cases where interworking mechanisms
+       are needed
+      </t>
+      <t>
+     - Section 3 defines terms used throughout the document
+      </t>
+      <t>
+     - Section 4 describes the relationship between the new EID prefix space
+       and the IP address space used by the current Internet
+      </t>
+      <t>
+     - Section 5 introduces and describes the operation of PTRs
+      </t>
+      <t>
+     - Section 6 defines how NAT is used by ETRs to translate non-routable
+       EIDs into routable IP addresses.
+      </t>
+      <t>
+        Note that any successful interworking model should be independent of
+       any particular EID-to-RLOC mapping algorithm.  This document does not
+       comment on the value of any of the particular mapping system.
+      </t>
+      </section>
+      <section title="LISP Interworking Models" anchor="models">
+      <t>
+        There are 4 unicast connectivity cases which describe how sites 
+        can communicate with each other:
+      </t>
+       <list style="numbers">
+        <t> Non-LISP site to Non-LISP site</t>
+        <t> LISP site to LISP site</t>
+        <t> LISP site to Non-LISP site</t>
+        <t> Non-LISP site to LISP site</t>
+        </list>
+      <t>
+         Note that while Cases 3 and 4 seem similar, there are subtle
+        differences due to the way communications are originated.
+      </t>
+       <t>
+         The first case is the Internet as we know it today and as such will
+        not be discussed further here.  The second case is documented in
+        [LISP] and, hence, there are no new interworking requirements because
+        there are no new protocol requirements placed on intermediate non-
+        LISP routers.
+       </t>
+       <t>
+         In case 3, LISP site to Non-LISP site, a LISP site can send packets
+        to a non-LISP site because the non-LISP site prefixes are routable.
+        The non-LISP site need not do anything new to receive packets.  The
+        only action the LISP site needs to take is to know when not to LISP-
+        encapsulate packets.  This can be achieved via two mechanisms:
+       </t>
+       <list style="numbers">
+         <t>
+           At the ITR in the source site, if the destination of an IP packet
+          is found to match a prefix from the BGP routing table, then the
+          site is directly reachable by the BGP core that exists and
+          operates today.
+        </t>
+        <t>
+          Second, if (from the perspective of the ITR at the source site)
+         the destination address of an IP address is not found in the EID-
+         to-RLOC mapping database, the ITR could infer that it is not a
+         LISP-capable site, and decide to not LISP-encapsulate the packet.
+        </t>
+      </list>
+      <t>
+        Case 4, the most challenging, occurs when a host at a non-LISP site
+       wishes to send traffic to a host at a LISP site.  If the source
+       host uses a (non-globally-routable) EID as the destination IP address,
+       the packet is forwarded inside the source site until it reaches a
+       router which cannot forward it, at which point the traffic is dropped.
+       For traffic not to be dropped, either some route must be exist for the
+       destination EID outside of LISP-speaking part of the network or an
+       alternate mechanism must be in place. Section 5 (PTRs) and Section 6
+       (LISP-NAT) describe two such mechanisms.
+      </t>
+      <t> 
+       Note that case 4 includes packets returning to the LISP Site in case 3.
+      </t>
+    </section>
+    <section title="Definition of Terms" anchor="terms">
+     <list style="hanging">
+          <t hangText="Endpoint ID (EID):">  
+	   A 32- or 128-bit value used in the source and
+	   destination fields of the first (most inner) LISP
+	   header  of a packet. A packet that is emitted by a
+	   system  contains EIDs in its headers and LISP headers
+	   are prepended only when the packet reaches an Ingress
+	   Tunnel Router (ITR) on the data path to the
+	   destination EID. 
+         </t>
+         <t hangText="EID-Prefix Aggregate:">
+           A set of EID-prefixes said to be aggregatable in the 
+           <xref target="RFC4632"/> sense. That is, an
+	   EID-Prefix aggregate is defined to be a single
+	   contiguous power-of-two EID-prefix block. Such a
+	   block is characterized by a prefix and a length.  
+          </t>
+          <t hangText="Routing Locator (RLOC):">
+           An IP address of a LISP tunnel router. It is the
+	   output of a EID-to-RLOC mapping lookup.  An EID maps
+	   to one or more RLOCs.  Typically, RLOCs are numbered
+	   from topologically-aggregatable blocks and are
+	   assigned to a site at each point to which it attaches
+	   to the global Internet; where the topology is defined
+	   by the connectivity of provider networks, RLOCs can
+	   be thought of as Provider Aggregatable (PA) addresses.
+          </t>  
+          <t hangText="EID-to-RLOC Mapping:">
+           A binding between an EID and the RLOC-set that can be
+	   used to reach the EID. We use the term "mapping" in
+	   this document to refer to a EID-to-RLOC mapping. 
+          </t>
+          <t hangText="EID Prefix Reachability:"> 
+           An EID prefix is said to be "reachable" if one or more
+	   of its locators are reachable. That is, an EID prefix
+	   is reachable if the ETR (or its proxy) is reachable. 
+          </t>
+          <t hangText="Default Mapping:">
+           A Default Mapping is a mapping entry for EID-prefix
+           0.0.0.0/0. It maps to a locator-set used for all EIDs
+	   in  the Internet. If there is a more specific
+	   EID-prefix in the mapping cache it overrides the
+	   Default Mapping  entry. The Default Mapping route can
+	   be learned by  configuration or from a Map-Reply
+	   message <xref target="LISP"/>. 
+          </t>
+          <t hangText="LISP Routable (LISP-R) Site:">
+	   A LISP site whose addresses are used as both globally
+	   routable IP addresses and LISP EIDs.  
+	  </t>
+          <t hangText="LISP Non-Routable (LISP-NR) Site:">
+	   A LISP site whose addresses are EIDs only, these EIDs
+	   are not found in the legacy Internet routing table.  
+	  </t>
+          <t hangText="LISP Proxy Tunnel Router (PTR):">
+           PTRs are used to provide interconnectivity between
+	   sites which use LISP EIDs and those which do not. They
+	   act as a gateway between the Legacy Internet and the LISP
+	   enabled Network.  A given PTR advertises one or more
+	   highly aggregated EID prefixes into the public
+	   Internet and acts as the ITR for traffic received from
+	   the public Internet. LISP Proxy Tunnel Routers are
+	   described in <xref target="PTR"/>. 
+         </t>
+         <t hangText="LISP Network Address Translation (LISP-NAT):">
+	   Network Address Translation between EID space assigned
+	   to a site and RLOC space also assigned to that
+	   site. LISP Network Address Translation is described in
+	   <xref target="LISP-NAT"/>. 
+	 </t>
+         <t hangText=" EID Sub Namespace:"> 
+	   A power-of-two block of aggregatable locators set
+	   aside for LISP interworking.  
+	 </t>
+        </list>
+    </section>
+    <section title="Routable EIDs" anchor="rEIDs">
+      <t>
+        An obvious way to achieve interworking between LISP and non-LISP
+       hosts is to simply announce EID prefixes into the DFZ, much like
+       routing system, effectively treating them as "Provider Independent (PI)"
+       prefixes. Doing this is undesirable as it defeats one of the primary
+       goals of LISP - to reduce global routing system state.  
+     </t>
+     <section title="Impact on Routing Table" anchor="routing-table">
+     <t>
+       If EID prefixes are announced into the DFZ, the impact is similar to
+      the case in which LISP has not been deployed, because these EID
+      prefixes will be no more aggregatable than existing PI addressing.
+      This behavior is not desirable and such a mechanism is not viewed as
+      a viable long term solution.   
+      </t>
+      </section>
+      <section title="Requirement for using BGP">
+	<t>
+        Non-LISP sites today use BGP to, among other things, enable ingress
+       traffic engineering.  Relaxing this requirement is another primary
+       design goal of LISP.  
+	</t>
+      </section>
+      <section title="Limiting the Impact of Routable EIDs">
+	<t>
+        Two schemes are proposed to limit the impact of having EIDs announced
+       in the current global Internet routing table:
+      </t>
+      <list> 
+      <t> 
+        <xref target="PTR"/> discusses the LISP Proxy Tunnel
+	Router, an approach that provides ITR functionality to
+	bridge LISP-capable and non-LISP-capable sites.
+      </t>
+      <t>
+        <xref target="LISP-NAT"/> discusses another approach,
+	LISP-NAT, in which NAT <xref target="RFC2993"/> is
+	combined with ITR functionality to limit the the impact
+	of routable EIDs on the Internet routing infrastructure.  
+      </t>
+      </list>
+      </section>
+      <section title="Use of Routable EIDs for Testing LISP">
+      <t>      
+        A primary design goal for LISP (and other Locator/ID separation proposals)
+       is to facilitate topological aggregation of addresses and, thus, decrease
+       global routing system state.  Another goal is to achieve the benefits of
+       improved aggregation as soon as possible.  Advertising routes for LISP
+       EID prefixes into the global routing system is therefore not recommended. 
+	</t>
+      <t>
+        That being said, sites that are already using provider-aggregated prefixes
+       can use these prefixes as LISP EIDs without adding state to the routing
+       system; in other words, such sites do not cause additional prefixes to be
+       advertised.  For such sites, connectivity to a non-LISP sites does not
+       require interworking machinery because the "PA" EIDs are already
+       routable.
+      </t>
+      </section>
+     </section>
+    <section title="Proxy Tunnel Routers" toc="default" anchor="PTR">
+      <t>
+        Proxy Tunnel Routers (PTRs) allow for non-LISP sites to communicate
+       with LISP-NR sites.  A PTR is a new network element that shares many
+       characteristics with the LISP ITR.  PTRs allow non-LISP sites to send
+       packets to LISP-NR sites without any changes to protocols or equipment
+       at the non-LISP site.  PTRs have two primary functions:
+      </t>
+      <list style="hanging">
+        <t hangText="Originating EID Advertisements:">
+          PTRs advertise highly aggregated EID-prefix
+         space on behalf of LISP sites to so that non-LISP sites
+         can reach them.  
+        </t>
+        <t hangText="Encapsulating Legacy Internet Traffic:">
+          PTRs also encapsulate non-LISP Internet traffic into
+         LISP packets and route them towards their destination RLOCs.
+         </t>
+        </list>
+      <section title="PTR EID announcements">
+	 <t>
+         A key part of PTR functionality is to advertise routes for highly-
+        aggregated EID prefixes into part of the global routing system.
+        Aggressive aggregation is performed to minimize the number of new
+        announced routes. In addition, careful placement of PTRs can greatly
+        reduce the scope of these new routes. To this end, PTRs should be
+        deployed close to non-LISP-speaking rather than close to LISP sites.
+        Such deployment not only limits the scope of EID-prefix route
+        advertisements, it also also allows traffic forwarding load to be spread
+        among many PTRs.
+	 </t>
+      </section>
+      <section title="Packet Flow with PTRs">
+       <t>
+         Packets from a non-LISP site can reach a LISP-NR site with the aid of
+        a PTR.  By advertising a route for a particular EID prefix into the
+        global routing system, traffic destined for that EID prefix is routed
+        to the PTR, which then performs LISP encapsulation.  Once encapsulated,
+        traffic packets use the LISP (outer) header's destination address to reach
+        the destination ETR.
+       </t>
+       <t>
+         What follows is an example of the path a packet would take when using a
+        PTR.  In this example, the LISP-NR site is given the EID prefix
+        240.0.0.0/24.  For the purposes of this example, this prefix and no
+        covering aggregate is present in the global routing system. 
+        In other words, if a packet with this destination were to reach
+        a router in the "Default Free Zone", it would be dropped. 
+        </t>
+        <t>
+          A full protocol exchange example follows:
+        </t>
+       <list style="numbers">
+        <t>Source host makes a DNS lookup EID for destination, and gets
+          240.1.1.1 in return.</t>
+        <t>Source host has a default route to customer Edge (CE) router and
+           forwards the packet to the CE.</t>
+        <t>The CE has a default route to its Provider Edge (PE)
+           router, and forwards the packet to the PE.</t>
+        <t>The PE has route to 240.0.0.0/24 and the next hop is the PTR.</t>
+        <t>The PTR has or acquires a mapping for 240.1.1.1 and LISP encapsulates, the
+           packet now has a destination address of the RLOC.  The source address
+           of this encapsulated packet is the PTR's RLOC.</t>
+        <t>The PTR looks up the RLOC, and forwards LISP packet to the next hop.</t>
+        <t>The ETR decapsulates the packet and delivers the packet to the
+           240.1.1.1 host in the destination LISP site.</t>
+        <t>Packets from host 240.1.1.1 will flow back through the LISP
+           site's ITR. Such packets are not encapsulated because the ITR knows
+           that the destination (the original source) is a non-LISP site.
+           The ITR knows this because it can check the LISP mapping database
+           for the destination EID, and on a failure determine that the
+           destination site is not LISP enabled.</t>
+         <t>
+           Packets are then routed natively and directly to the destination 
+           (original source) site.</t>
+        </list>
+      <t>
+        Note that in this example the return path is
+	asymmetric, so return traffic will not go back through
+	the PTR.  This is because the LISP-NR site's ITR will
+	discover that the originating site is not a LISP site,
+	and not encapsulate the returning packet (see <xref
+	target="LISP"/> for details of ITR behavior).
+      </t>
+      <t>
+        The asymmetric nature of traffic flows allows the PTR to be
+       relatively simple - it will only have to encapsulate LISP packets.
+      </t>
+      </section>
+      <section title="Scaling PTRs">
+	<t>
+        PTRs attract traffic by announcing the LISP EID namespace into parts of
+       the non-LISP-speaking global routing system.  There are several ways that
+       a network could control how traffic reaches a particular PTR to prevent
+       it from receiving more traffic than it can handle:
+      </t>
+      <list>
+      <t>
+        First, the PTR's aggregate routes might be selectively announced,
+       giving a coarse way to control the quantity of traffic attracted by
+       that PTR.
+      </t>
+      <t>
+        Second, the same address might be announced by multiple PTRs in
+       order to share the traffic using IP Anycast.  The asymmetric nature
+       of traffic flows allows the PTR to be relatively simple - it will
+       only have to encapsulate LISP packets.
+	</t>
+     </list>
+      </section>
+      <section title="Impact of the PTRs placement in the network">
+	<t>
+        There are several approaches that a network could take in placing
+       PTRs.  Placing the PTR near the ingress of traffic allows for the
+       communication between the non-LISP site and the LISP site to have the
+       least "stretch" (i.e. the least number of forwarding hops when compared
+       to an optimal path between the sites).
+      </t>
+      <t>
+        Some proposals, for example CRIO <xref target="CRIO"/>,
+	have suggested grouping PTRs near an arbitrary subset of
+	ETRs and announcing a 'local' subset of EID space.  This
+	model cannot guarantee minimum stretch if the EID prefix
+	route advertisement points are changed (such a change
+	might occur if a site adds, removes, or replaces one or
+	more ISPs connections). 
+      </t>
+      </section>
+      <section title="Benefit to Networks Deploying PTRs">
+      <t>  
+        When traffic destined for LISP-NR site arrives and is encapsulated at
+       a PTR, a new LISP packet header is pre-pended. This causes the packet's
+       destination to be set to the destination site RLOC.  Because traffic is
+       thus routed towards RLOCs, it can potentially better follow the
+       network's traffic engineering policies (such as closest exit
+       routing).  This also means that providers who are not default-free
+       and do not deploy PTRs end up sending more traffic to expensive
+       transit links rather than to RLOC addresses, to which they may have
+       settlement-free peering.  For large transit providers, deploying PTRs
+       may attract more traffic, and therefore more revenue, from their
+       customers.
+      </t>
+    </section>
+    </section>
+    <section title="LISP-NAT" anchor="LISP-NAT">
+      <t>
+        LISP Network Address Translation (LISP-NAT) is a limited 
+	form of NAT <xref target="RFC2993"/>. LISP-NAT is designed to
+      enable the interworking of non-LISP sites and LISP-NR sites by
+      ensuring that the LISP-NR's site addresses are always routable. 
+      LISP-NAT accomplishes this by translating a host's source address
+      from an 'inner' value to an 'outer' value and keeping this
+      translation in a table that it can reference for subsequent packets.
+      </t>
+      <t>
+        In addition, existing RFC 1918 <xref target="RFC1918"/>
+	sites can use LISP-NAT to talk to both LISP or non-LISP
+	sites. 
+      </t>
+      <t>
+        The basic concept of LISP-NAT is that when transmitting a
+	packet, the ITR replaces a non-routable EID source
+	address with a routable source address, which enables
+	packets to return to the site. 
+      </t>
+      <t>
+        There are two main cases that involve LISP-NAT:
+      </t>
+       <list style="numbers">
+        <t>
+         Hosts at LISP sites that use non-routable global EIDs
+	 speaking to non-LISP sites using global addresses.
+        </t>
+        <t>
+         Hosts at LISP sites that use RFC 1918 private EIDs
+	 speaking to other sites, who may be either LISP or
+	 non-LISP.
+       </t> 
+       </list>
+      <t>
+        Note that LISP-NAT is not needed in the case of LISP-R
+	(routable global EIDs) sources. This is because the
+	LISP-R source's address is routable, and return packets
+	will be able to natively reach the site.  
+      </t>
+      <section title="LISP-NAT for LISP-NR addressed hosts">
+	<t>
+        LISP-NAT allows a host with a LISP-NR EID to communicate
+	with non-LISP hosts by translating the LISP-NR EID to a
+	globally unique address. This globally unique address may
+	be a either a PI or PA address.
+	</t>
+	<t>
+        An example of this translation follows.  For this
+	example, a site has been assigned a LISP-NR EID of
+	220.1.1.0/24.  In order to utilize LISP-NAT, the site has
+	also been provided the PA EID of 128.200.1.0/24, and uses
+	the first address (128.200.1.1) as the site's RLOC.  The
+	rest of this PA space (128.200.1.2 to 128.200.1.254) is
+	used as a translation pool for this site's hosts who need
+	to communicate with non-LISP hosts.
+	</t>
+      <t>
+       The translation table might look like the following: 
+      </t>
+
+ <figure title="Example Translation Table" anchor="translation-table">
+  <artwork>
+   Site NR-EID    Site R-EID      Site's RLOC    Translation Pool
+   =========================================================================
+   220.1.1.0/24   128.200.1.0/24  128.200.1.1    128.200.1.2 - 128.200.1.254
+  </artwork>
+  </figure>
+	<t>
+        The Host 220.1.1.2 sends a packet destined for a non-LISP
+	site to its default route (the ITR).  The ITR receives
+	the packet, and determines that the destination is not a
+	LISP site.  How the ITR makes this determination is up to
+	the ITRs implementation of the EID-to-RLOC mapping system
+	used (see, for example <xref target="LISP-ALT"/>).
+	</t>
+	<t>
+        The ITR then rewrites the source address of the packet
+	from 220.1.1.2 to 128.200.1.2, which is the first
+	available address in the LISP-R EID space available to
+	it.  The ITR keeps this translation in a table in order
+	to reverse this process when receiving packets destined
+	to 128.200.1.2.
+	</t>
+	<t>
+        Finally, when the ITR forwards this packet without
+	encapsulating it, it uses the entry in its LISP-NAT table
+	to translate the returning packets' destination IPs to
+	the proper host.  
+	</t>
+      </section>
+      <section title="LISP Sites with Hosts using RFC 1918
+                      Addresses Sending to non-LISP Sites">
+	<t>
+        In the case where RFC 1918 addressed hosts desire to
+	communicate with non-LISP hosts the LISP-NAT
+	implementation acts much like an existing IPv4 NAT
+	device.  The ITR providing the NAT service must use
+	LISP-R EIDs for its global pool as well as providing all
+	the standard NAT functions required today.
+	</t>
+	<t>
+        The source of the packet must be translated to a LISP-R
+	EID in a manner similar to <xref target="LISP-NAT"/>, and
+	this packet must be forwarded to the ITR's next hop for
+	the destination, without LISP encapsulation.
+	</t>
+     </section>
+      <section title="LISP Sites with Hosts using RFC 1918 Addresses  
+                      Communicating to Other LISP Sites"> 
+	<t>
+        LISP-NAT allows a host with a RFC 1918 address to
+	communicate with LISP hosts by translating the RFC 1918
+	address to a LISP EID.  After translation, the
+	communication between source and destination ITR and ETRs
+	continues as described in <xref target="LISP"/>. 
+	</t>
+	<t>
+        An example of this translation and encapsulation follows.  For this
+       example, a host has been assigned a RFC 1918 address of 192.168.1.2.
+       In order to utilize LISP-NAT, the site also has been provided the
+       LISP-R EID of 192.0.2.0/24, and uses the first address
+       (192.0.2.1) as the site's RLOC.  The rest of this PA space
+       (192.0.2.2 to 192.0.2.254) is used as a translation pool for this
+       site's hosts who need to communicate with both non-LISP and LISP
+       hosts.
+      </t>
+	<t>
+        The Host 192.168.1.2 sends a packet destined for a non-LISP site to
+       its default route (the ITR).  The ITR receives the packet and
+       determines that the destination is a LISP site.  How the ITR makes
+       this determination is up to the ITRs implementation of the EID/RLOC
+       mapping system. 
+	</t>
+	<t>
+        The ITR then rewrites the source address of the packet from
+       192.168.1.2 to 192.0.2.2, which is the first available address in
+       the LISP EID space available to it.  The ITR keeps this translation
+       in a table in order to reverse this process when receiving packets
+       destined to 192.0.2.2.
+	</t>
+	<t>
+        The ITR then LISP encapsulates this packet (see [LISP] for details).
+       The ITR uses the site's RLOC as the LISP outer header's source and
+       the translation address as the LISP inner header's source.  Once it
+       decapsulates returning traffic, it uses the entry in its LISP-NAT
+       table to translate the returning packet's destination IP address and
+       then forward to the proper host.
+	</t>
+      </section>
+      <section title="LISP-NAT and multiple EIDs">
+	<t>
+        When a site has two addresses that a host might use for
+	global reachability, care must be chosen on which EID is
+	found in DNS.  For example, whether applications such as
+	DNS use the LISP-R EID or the LISP-NR EID.  This problem
+	exists for NAT in general, but the specific issue
+	described above is unique to LISP. Using PTRs can
+	mitigate this problem, since the LISP-NR EID can be
+	reached in all cases. 
+	</t>
+    </section>
+    <section title="LISP-NAT and PTRs Together">
+      <t>
+        With LISP-NAT, there are two EIDs possible for a given host, the
+       LISP-R EID and the LISP-NR EID.  When a site has two addresses that a
+       host might use for global reachability, name-to-address directories
+       may need to be modified.
+     </t>
+     <t>
+       This problem, global addressability, exists for NAT in general, but
+      the specific issue described above is unique to LOC/ID split schemes.
+      Some schemes [ref: 6-1 proxy] have suggested running a separate DNS
+      instance for legacy types of EIDs.  This solves the problem but
+      introduces complexity for the site.  Alternatively, using PTRs can
+      mitigate this problem, because the LISP-NR EID can hbe reached in all
+      cases.
+     </t>
+     <t>
+       In summary, there are two options for interworking LISP with IPv4 and
+      V6.  In the NAT case the LISP site can use NAT and manage the
+      transition on its own.  In the PTR case, we add a new network
+      element called a PTR that can relieve that burden on the site, with
+      the downside of potentially adding stretch to sites trying to reach
+      the LISP site.
+     </t>
+    </section>
+    </section>
+    <section title="Security Considerations" toc="default">
+      <t>
+        Like any LISP ITR, PTRs will have the ability to inspect
+	traffic at the time that they encapsulate.  More work
+	needs to be done to see if this ability can be exploited
+	by the control plane along the lines of Remote Triggered
+	BGP Black Holes. XXX:Reference?
+      </t>
+      <t>
+        As with traditional NAT, LISP-NAT will hide the actual
+	host ID behind the RLOCs used as the NAT pool.
+      </t>
+      <t>
+        When LISP Sites reply to non-LISP sites and rely on PTRs to enable
+       Interworking, packets will be sourced from addresses not recognized by
+       their Internet Service Provider's Unicast Reverse Path Forwarding (uRPF)
+       enabled on the Provider Edge Router.  Several options are available to 
+       the service provider.  For example they could enable a less strict version
+       of uRPF, where they only look for the existence of the the EID prefix in the
+       routing table.  Another, more secure, option is to add a static route for the
+       customer on the PE router, but not redistribute this route into the provider's
+       routing table.
+      </t>
+    </section>
+    <section title="Acknowledgments" toc="default">
+      <t>
+        Thanks goes to Christian Vogt, Lixia Zhang and Robin Whittle who
+       have made insightful comments with respect to interworking and transition
+       mechanisms. 
+      </t>
+      <t> 
+        A special thanks goes to Scott Brim for his initial
+	brainstorming of these ideas and also for his careful
+	review. 
+      </t>
+    </section>
+    <section title="IANA Considersations" toc="default">
+     <t> 
+       This document creates no new requirements on IANA
+       namespaces <xref target="RFC2434"> </xref>. 
+     </t> 
+    </section>
+
+  </middle>
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.RFC.1918" ?>
+      <?rfc include="reference.RFC.4632" ?>
+      <reference anchor="LISP">
+      <front>
+      <title>Locator/ID Separation Protocol (LISP)</title>
+      <author initials='D' surname='Farinacci' fullname='Dino Farinacci'>
+      </author>
+      <author initials='V' surname='Fuller' fullname='Vince Fuller'>
+      </author>
+      <author initials='D' surname='Oran' fullname='Dave Oran'>
+      </author>
+      <author initials='D' surname='Meyer' fullname='David Meyer'>
+      </author>
+      <organization />
+      <date month='July'  year='2008'/>
+      </front>
+      <seriesInfo name='Internet-Draft' value='draft-farinacci-lisp-08'/>
+      <format type='TXT'
+        target='http://www.ietf.org/internet-drafts/draft-farinacci-lisp-08.txt' />
+
+      </reference>
+      <reference anchor='LISP-ALT'>
+	<front>
+	  <title>LISP Alternative Topology (LISP-ALT)</title>
+             <author initials='D' surname='Farinacci'
+	             fullname='Dino Farinacci'>
+             </author>
+             <author initials='V' surname='Fuller' fullname='Vince Fuller'>
+             </author>
+             <author initials='D' surname='Meyer' fullname='David Meyer'>
+             </author>
+	    <organization />
+	  <date month='April' day='23' year='2008' />
+	</front>
+	<seriesInfo name='Internet-Draft' value='draft-fuller-lisp-alt-02' />
+	<format type='TXT'
+	  target='http://www.ietf.org/internet-drafts/draft-fuller-lisp-alt-02.txt' />
+      </reference>
+    </references>
+    <references title="Informative References">
+      <?rfc include="reference.RFC.2434" ?>
+      <?rfc include="reference.RFC.2993" ?>
+      <reference anchor='CRIO'>
+	<front>
+	  <title>CRIO:Scaling IP Routing with the Core
+	  Router-Integrated Overlay</title> 
+             <author initials='X' surname='Zhang'
+	             fullname='Xinyan (Joy) Zhang'>
+             </author>
+             <author initials='P' surname='Francis'
+	             fullname='Paul Francis'>
+             </author>
+             <author initials='J' surname='Wang'
+	             fullname='Jia Wang'>
+             </author>
+             <author initials='K' surname='Yoshida'
+	             fullname='Kaoru Yoshida'>
+             </author>
+	    <organization />
+	</front>
+      </reference>
+
+    </references>
+
+  </back>
+</rfc>
+
+<!--  LocalWords:  Interworking Cisco interworking EIDs RLOCs RLOC unicast PTRs
+ -->
+<!--  LocalWords:  routable aggregatable decapsulates PTR's namespace Anycast
+ -->
+<!--  LocalWords:  CRIO ETRs NR's ITRs ITR's xTRs Lixia Zhang IANA namespaces
+ -->
+<!--  LocalWords:  Vogt
+ -->

@@ -1,0 +1,450 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<?xml-stylesheet type="text/xsl" href="rfc2629.xslt" ?>
+
+<?rfc toc="yes"?>
+<?rfc strict="yes"?>
+<?rfc tocompact="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc comments="yes" ?>
+<?rfc rfcedstyle="yes"?>
+<?rfc sortrefs="yes" ?>
+<?rfc iprnotified="no" ?>
+<rfc category="exp"
+     ipr="full3978"
+     docName="draft-denis-simple-msrp-comedia-02.txt">
+  <front>
+    <title abbrev="COMEDIA for MSRP">Connection setup negociation for
+      the Message Session Relay Protocol</title>
+
+    <author fullname="R&eacute;mi Denis-Courmont" initials="R." surname="Denis-Courmont">
+      <organization abbrev="Nokia">Nokia Technology Platforms</organization>
+
+      <address>
+        <postal>
+          <street>P.O. Box 407</street>
+          <code>FIN-00045</code>
+          <city>Nokia Group</city>
+          <country>Finland</country>
+        </postal>
+
+        <phone>+358 50 487 6315</phone>
+        <email>remi.denis-courmont@nokia.com</email>
+      </address>
+    </author>
+
+    <date year="2008" month="July"/>
+
+    <area>Real-time Applications and Infrastructure Area</area>
+
+    <workgroup>SIMPLE</workgroup>
+
+    <abstract>
+      <t> This document extends the MSRP connection model to negotiate the
+        direction of the TCP connection setup.
+        This provides a partial yet simple solution for scenarios
+        whereby either, but not both, party to an MSRP session is located
+        behind a NAT or firewall,
+        and cannot serve as the passive endpoint for TCP connection setup.
+      </t>
+    </abstract>
+  </front>
+
+  <middle>
+
+    <section anchor="intro" title="Introduction">
+      <t> MSRP<xref target="RFC4975"/>
+        allows transmission of byte streams (such as computer files)
+        between two nodes using a SIP infrastructure.
+        Because reliability and congestion control are required, MSRP uses
+        TCP as its underlying transport protocol.
+        Furthermore, MSRP specifies that the party initiating the session
+        shall act as the active endpoint
+        in establishing the connection-oriented transport session.
+        The answering party shall wait for an incoming connection request,
+        then check the MSRP path header in the first MSRP request,
+        to bind the connection with the SIP dialog.
+      </t>
+      <t> This poses a significant challenge if the answering party is
+        located behind a NAT and/or a stateful firewall.
+        To address these issues,
+        MSRP defines relay nodes
+        (in <xref target="RFC4976"/>),
+        which MSRP clients can use as application-layer proxies.
+      </t>
+      <t> However, deploying these relays bears a significant extra cost,
+        especially as MSRP relays are limitated to a single application-layer
+        protocol
+        (contrary to TURN<xref target="I-D.ietf-behave-turn"/>
+        or SOCKS<xref target="RFC1928"/>).
+        This also constitute a chicken-and-egg problem
+        to MSRP deployment.
+      </t>
+      <t> In addition, MSRP relaying affects the reliability
+        of the data transmission,
+        due to the lack of end-to-end congestion control
+        and reliable end-to-end partial delivery acknowledgement mechanism
+        (partial acknowledgment are optional for receiver to send).
+      </t>
+      <t> This memo proposes an alternative connection model for MSRP.
+        It avoids the use of any middlebox when either party
+        to the MSRP session,
+        is not behind a NAT or a firewall.
+        It also brings reliability and congestion control to MSRP
+        through to the use of an end-to-end TCP session.
+      </t>
+    </section>
+
+    <section anchor="defs" title="Definitions">
+      <t> The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+        "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in
+        this document are to be interpreted as described in
+        <xref target="RFC2119"/>.
+      </t>
+    </section>
+
+    <section anchor="applty" title="Applicability statement">
+      <t> Under some usage scenarios, the offerer of an
+        MSRP<xref target="RFC4975"/>
+        session description is more likely to be able to receive incoming
+        transport-layer connection requests than the answerer.
+        Some examples scenarios might be:
+        <list style="symbols">
+          <t>a MSRP chat server inviting an user to a chat session
+            <xref target="I-D.ietf-simple-chat"/>,
+          </t>
+          <t>a file being pushed to the receiver
+            <xref target="I-D.ietf-mmusic-file-transfer-mech"/>
+            from a file server,
+          </t>
+          <t>a SOCKS<xref target="RFC1928"/> proxy, or
+            a TURN relay<xref target="I-D.ietf-behave-turn"/>
+            available to the offerer but not the answerer,
+          </t>
+          <t>adequate hole punching provision on the offerer side
+            (e.g. with UPnP IGD profile, or manual configuration).
+          </t>
+        </list>
+      </t>
+      <t> In these cases, it would be possible for the answerer to use an
+        MSRP relay<xref target="RFC4976"/>,
+        if it cannot receive incoming connection requests,
+        such as if it is located behind a NAT.
+      </t>
+      <t> However, if the offerer can act as the passive side
+        in the establishment of the media connection,
+        the connection setup can be negotiated using
+        COMEDIA<xref target="RFC4145"/>.
+        This has the following advantages:
+        <list style="symbols">
+          <t> no need to deploy and provision a MSRP relay,
+          </t>
+          <t> reliability and congestion control are transparently ensured,
+            as the transport connection is end-to-end,
+          </t>
+        </list>
+      </t>
+    </section>
+
+    <section anchor="model" title="MSRP COMEDIA Connection Model">
+      <section title="Offerer processing">
+        <section title="Sending the offer">
+          <t> If the offerer of an MSRP session knows that it is prepared
+            to handle transport-layer connection requests,
+            it MUST include the "setup" SDP attribute, as defined in
+            <xref target="RFC4145"/>.
+            It MAY also include the "connection" SDP attribute
+            (to specify whether a transport connection may be re-used),
+            as defined in the same document<xref target="RFC4145"/>.
+          </t>
+          <t> In that case, the setup attribute
+            MUST be set to either "passive" or "actpass".
+            However, for the sake of compatibility with MSRP client which do
+            not implement this specification, it is RECOMMENDED:
+            <list style="symbols">
+              <t> that "actpass" be used, rather than "passive",
+              </t>
+              <t> that the offerer be ready to establish an active connection,
+                as per the basic MSRP connection model.
+              </t>
+            </list>
+            The following example shows an exerpt of an SDP offer using
+            COMEDIA:
+            <figure title="Offer example">
+<artwork>
+v=0
+o=alice 8459831645 4643536435 IN IP4 alice.example.com
+s= -
+c=IN IP4 alice.example.com
+t=0 0
+m=message 4535 TCP/MSRP *
+a=setup:actpass
+a=connection:new
+... other session attributes ...
+</artwork>
+            </figure>
+          </t>
+          <t> If the offerer is not willing or capable
+            of handling incoming connection requests,
+            it MAY set the setup attribute to "active".
+            If not specified, this is assumed to be the default.
+            For backward compatiblity with MSRP endpoints
+            that do not support the extension specified in this memo,
+            it SHOULD include its actual transport-layer source port number
+            in the offer m= line,
+            rather than specify the port number 9 (discard).
+          </t>
+          <t> The "holdconn" setup type is not defined, and MUST NOT be used.
+            It is left for future specification.
+          </t>
+        </section>
+        <section title="Receiving the answer">
+          <t> When the offerer receives a succesful answer,
+            it looks for the setup attribute in the SDP for each media:
+            <list style="symbols">
+              <t> If the setup attribute is absent from the answer,
+                and if the offerer had included a setup attribute with the
+                value "passive",
+                the answerer does not support this specification,
+                and the media establishment MUST be considered as failed.
+              </t>
+              <t> Otherwise, if the setup attribute is absent from the answer,
+                even though the answerer might not support this specification,
+                the COMEDIA connection model can be used
+                (because it is then compatible with the baseline MSRP
+                 connection model).
+               </t>
+               <t> Otherwise, the answerer supports the COMEDIA connection
+                model described in this specification.
+              </t>
+            </list>
+          </t>
+        </section>
+        <section title="Setting up the connection">
+          <t> If it has been determined that the connection can be
+            established according to the model described in this memo,
+            the offerer MUST establish the media connection
+            according to <xref target="RFC4145"/>,
+            with the following exception:
+          </t>
+          <t> The source address of the active connection endpoint
+            would normally be found in the relevant c= line,
+            as well as in MSRP path line from the SDP.
+            However, if a NAT device is present on the media path,
+            these addresses might not match
+            the IP address and port numbers of the actual TCP packets.
+            To compensate for this inconsistency, the passive endpoint
+            MUST ignore the address found in the c= and a=path: SDP lines,
+            and accept incoming TCP connection requests from any remote peer.
+          </t>
+          <t> To protect against a potential denial of service,
+            the passive peer might need to process
+            multiple incoming TCP sessions,
+            until one of them has been authenticated.
+            The legitimate TCP session MUST be authenticated by checking
+            the From-Path and To-Path fields from MSRP requests received
+            through that TCP session.
+          </t>
+          <t> As specified in <xref target="RFC4145"/>,
+            the active endpoint MUST use the host/address and ports
+            as found in the SDP m= and c= line.
+            It SHOULD not match the MSRP path in the SDP a=path: attribute
+            with the m= and c= line.
+            That should allow interoperating with COMEDIA-aware
+            application layer gateways if there is one on the signaling path.
+          </t>
+        </section>
+      </section>
+      <section title="Answerer processing">
+        <section title="Receiving the offer">
+          <t> When a MSRP client receives a MSRP session offer,
+            and determines that it will accept the offer,
+            it looks for the setup attribute.
+            <list style="symbols">
+              <t> If it is absent, or its value is active, the client
+                MUST follow the normal MSRP connection model.
+              </t>
+              <t> If the value is "passive",
+                the answerer MUST initiate the TCP connection to the offerer,
+                as specified in <xref target="RFC4145"/>.
+                It will still need to process other SDP parameters
+                (such as "a=accept-bytes") as specified in
+                <xref target="RFC4975"/>.
+                In particular, it needs to cross-match the MSRP a=path
+                SDP attribute with the From-Path headers used in the
+                received MSRP messages.
+              </t>
+              <t> If the value is "actpass",
+                it MUST choose either of two above connection models,
+                and send format its answer accordingly as specified above.
+                In particular,
+                if it is known that connection requests cannot be processed
+                by the answerer,
+                it SHOULD act as the active endpoint.
+                Similarly, if it is known that connection requests can
+                be processed efficiently
+                (i.e. not using any relaying protocol),
+                it SHOULD act as the passive endpoint.
+              </t>
+            </list>
+          </t>
+        </section>
+        <section title="Sending the answer">
+          <t> If the answerer is to initiate the TCP connection
+            (as per the rules set above), it MUST include a
+            COMEDIA setup attribute with a value of "active"
+            in the answer SDP which it sends back to the offerer
+            (see example below).
+            It MUST also format the c= and m= line as specified in
+            <xref target="RFC4145"/>.
+            <figure title="Active setup answer example">
+<artwork>
+v=0
+o=alice 3245439832 1457605654 IN IP4 bob.example.com
+s= -
+c=IN IP4 bob.example.com
+t=0 0
+m=message 9 TCP/MSRP *
+a=setup:active
+a=connection:new
+... other session attributes ...
+</artwork>
+            </figure>
+          </t>
+          <t> Otherwise, the answerer MAY include a COMEDIA setup
+            attribute with a value of "passive", as in the following
+            example:
+            <figure title="Passive setup answer example">
+<artwork>
+v=0
+o=alice 3245439832 1457605654 IN IP4 bob.example.com
+s= -
+c=IN IP4 bob.example.com
+t=0 0
+m=message 34567 TCP/MSRP *
+a=setup:active
+a=connection:new
+... other session attributes ...
+</artwork>
+            </figure>
+          </t>
+        </section>
+        <section title="Setting up the connection">
+          <t> Once the TCP session is established,
+            and if the answerer was the active connection endpoint,
+            it MUST send an MSRP request.
+            In particular, if it has no pending data to send,
+            it MUST send an empty MSRP SEND request.
+            That is necessary for the other endpoint to authenticate
+            this TCP session.
+          </t>
+          <t> Some extension to this specification MAY specify other
+            methods to authenticate the peer, (see also
+            <xref target="I-D.niemi-simple-msrp-ice"/>).
+          </t>
+        </section>
+      </section>
+    </section>
+
+    <section anchor="relays" title="Interactions with MSRP relays">
+      <t> It is not possible to use the MSRP COMEDIA connection model
+        as defined in this memo,
+        and one or more MSRP relays<xref target="RFC4976"/>
+        for a given MSRP session.
+      </t>
+      <t> Whenever the offerer uses a MSRP relay, then it MUST NOT advertise
+        support of the MSRP COMEDIA connection model. Instead, it MUST follow
+        the baseline MSRP connection model.
+      </t>
+      <t> Whenever the answerer detects a MSRP media with a COMEDIA "a=setup"
+        SDP parameter within an offer,
+        while it wants to use a MSRP relay,
+        it MUST discard the "a=setup" attribute in the offer.
+        Note that the discarded "a=setup" SDP attribute might still apply to
+        any other media in the same offer,
+        if there are more than one m= lines in the SDP offer.
+      </t>
+    </section>
+
+    <section anchor="keep" title="NAT keep alives">
+      <t> The MSRP protocol does not allow leading CRLF (contrary to e.g.,
+        HTTP or SIP). If a keep-alive is required, a dummy MSRP SEND request
+        SHOULD be sent, similar to when establishing a new MSRP connection.
+      </t>
+      <t> It should be noted that sending frequent keep-alives may have
+        very adverse effect when used with certain network access technologies
+        (such as 3G cellular),
+        such as dramatic increase of current drain.
+        As TCP bindings tend to have much longer expiration timers than UDP,
+        on middleboxes,
+        sending of keep-alives might not be as critical as with a UDP-based
+        protocol.
+      </t>
+    </section>
+
+    <section anchor="ext" title="COMEDIA extensions">
+      <section anchor="tls" title="Interactions with TLS">
+        <t> If an MSRP connection that is negotiated using the mechanism
+          described in section <xref target="model"/>, uses the Transport
+          Layer Security protocol, the Client and Server TLS roles MUST
+          negotiate the relevant parameter as specified per
+          COMEDIA-TLS<xref target="RFC4572"/>.
+        </t>
+        <t> In addition, the MSRP "a=path" attribute MUST specify "msrps"
+          as the URI scheme, consistent with
+          <xref target="RFC4975"/>.
+          If TLS is not used, the URI scheme would be "msrp".
+        </t>
+      </section>
+
+      <section anchor="ice" title="Interactions with ICE">
+        <t> ICE-TCP<!-- TBD FIXME xref target=""-->
+          can be used as is with the MSRP COMEDIA,
+          as it is an extension to COMEDIA.
+        </t>
+      </section>
+    </section>
+
+    <section anchor="security" title="Security Considerations">
+      <t>TBD.
+      </t>
+    </section>
+
+
+    <section anchor="iana" title="IANA Considerations">
+      <t>This document raises no new IANA considerations.
+      </t>
+    </section>
+
+
+    <section anchor="ack" title="Acknowledgments">
+      <t>The authors would like to thank
+        Christian Schmidt,
+        Bernhard B&ouml;hmer,
+        Miguel Garcia,
+        Thomas Theimer,
+        Ivo Sedlacek,
+        Markku Vimpari and
+        Thomas Belling
+        for their comments on this document.
+      </t>
+    </section>
+  </middle>
+
+  <back>
+
+    <references title="Normative References">
+      <?rfc include="reference.RFC.2119" ?>
+      <?rfc include="reference.RFC.4145" ?>
+      <?rfc include="reference.RFC.4572" ?>
+      <?rfc include="reference.RFC.4975" ?>
+      <?rfc include="reference.RFC.4976" ?>
+    </references>
+    <references title="Informative References">
+      <?rfc include="reference.I-D.ietf-simple-chat" ?>
+      <?rfc include="reference.I-D.ietf-mmusic-file-transfer-mech" ?>
+      <?rfc include="reference.RFC.1928" ?>
+      <?rfc include="reference.I-D.ietf-behave-turn" ?>
+      <?rfc include="reference.I-D.niemi-simple-msrp-ice" ?>
+    </references>
+  </back>
+</rfc>

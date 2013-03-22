@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY RFC2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+
+    <!ENTITY RFC4120 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4120.xml'>
+
+    <!ENTITY RFC4121 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4121.xml'>
+
+    <!ENTITY RFC2743 PUBLIC '' 
+  'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2743.xml'>
+
+    <!ENTITY RFC3961 PUBLIC '' 
+'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3961.xml'>
+
+    <!ENTITY RFC4178 PUBLIC '' 
+'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4178.xml'>
+
+]>
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes"?>
+
+<rfc ipr='full3978' updates="4178" category="info" docName="draft-zhu-negoex-00">
+
+<front><title abbrev="NEGOEX"> The Extended GSS-API Negotiation Mechanism (NEGOEX)</title>
+
+<author initials="L." surname="Zhu" fullname="Larry Zhu">
+<organization>Microsoft Corporation</organization>
+<address><postal>
+<street>One Microsoft Way</street>
+<city>Redmond</city>
+<region>WA</region>
+<code>98052</code>
+<country>US</country>
+</postal>
+<email>lzhu@microsoft.com</email></address>
+</author>
+
+<author initials="K." surname="Damour" fullname="Kevin Damour">
+<organization>Microsoft Corporation</organization>
+<address><postal>
+<street>One Microsoft Way</street>
+<city>Redmond</city>
+<region>WA</region>
+<code>98052</code>
+<country>US</country>
+</postal>
+<email>kdamour@microsoft.com</email></address>
+</author>
+
+<author initials="D." surname="McPherson" fullname="Dave McPherson">
+<organization>Microsoft Corporation</organization>
+<address><postal>
+<street>One Microsoft Way</street>
+<city>Redmond</city>
+<region>WA</region>
+<code>98052</code>
+<country>US</country>
+</postal>
+<email>davemm@microsoft.com</email></address>
+</author>
+
+<date year="2008"></date>
+
+<area>Security</area><workgroup>NETWORK WORKING GROUP</workgroup>
+
+<keyword>Internet-Draft</keyword>
+
+<abstract>
+   
+   <t> This document defines the Extended Generic Security Service Application Program Interface (GSS-API) Negotiation Mechanism (NegoEx).
+   NegoEx is a pseudo-security mechanism that logically extends the SPNEGO protocol as defined in RFC4178. </t>
+
+   <t>The NegoEx protocol itself is a security mechanism negotiated by SPNEGO. When selected as the common mechanism, 
+   NegoEx OPTIONALLY adds a pair of meta-data messages for each negotiated security mechanism. The meta-data exchange 
+   allows security mechanisms to exchange auxiliary information such as trust configurations, thus NegoEx provides additional flexibility
+   beyond the negotiation capabilities based on exchanging object identifiers offered by SPNEGO.</t>
+
+   <t>NegoEx preserves the optimistic token semantics of SPNEGO and applies that recursively. 
+   Consequently a context establishment mechanism token can be included in the initial NegoEx message, and 
+   NegoEx does not require an extra round-trip when the initiator's optimistic token is accepted by the target.</t>
+
+   <t>Similar to SPNEGO, NegoEx defines a few new GSS-API extensions that 
+a security mechanism MUST support in order to be negotiated by NegoEx. This document defines these GSS-API extensions. </t>
+
+   <t>Unlike SPNEGO however, NegoEx defines its own way for signing the protocol messages in order to protect the protocol negotiation. The NegoEx message signing or verification
+    can occur before the security context for the negotiated real security mechanism is fully established.</t>
+
+</abstract>
+
+</front>
+<middle>
+            
+<section anchor="introduction" title="Introduction">
+
+<t> If more than one GSS-API mechanism is shared between the client and the server,
+the Simple and Protected (GSS-API) Negotiation Mechanism (SPNEGO) as defined in <xref target="RFC4178"/> can be deployed 
+to choose a mutually preferred one. This pseudo mechanism does well in the most basic scenarios but suffers from a couple of drawbacks, notably: </t>
+<t>
+ <list style="symbols"><t>First, the SPNEGO negotiation model is inefficient when negotiating based on  mechanism specific configuration information. 
+ SPNEGO negotiation is based on by exchanging object
+identifiers only, and it does not allow exchange of auxiliary information in any other from. 
+This is inefficient and often impractical in that one object identifier effectively conveys only one bit of information. <vspace blankLines="1"/></t>
+
+<t>Secondly, the SPNEGO negotiation model is inadequate when the choice cannot be made by the acceptor in the initial response. In SPNEGO, the 
+negotiation information is sent one-way from the initiator for the acceptor to make a choice, and the acceptor must choose one when it makes the initial response.  
+This negotiation model is counter intuitive. The selection of a security mechanism is typically the result of selecting one type of credentials from the available set, and the initiator 
+typically does not wish to reveal credentials information often associated with user identities. In practice, in order to operate in this model,
+the Kerberos GSS-API mechanism <xref target="RFC4121"/> must acquire the context establishment token in the initial call to GSS_Init_sec_context(). 
+If the initiator fails to acquire the Kerberos token, it must not offer Kerberos; otherwise the SPNEGO context negotiation will fail without being
+able to select the next available mechanism that could work. Obtaining the initial Kerberos GSS-API context token may require multiple round-trips of network calls 
+and the cost of the operation can be substantial.
+It is evidently suboptimal when multiple GSS-API mechanisms have to operate this way. The cost of authentication of any real security mechanism should be avoided or 
+minimized by SPNEGO when the security mechanism is not negotiated eventually but such considerations are not facilitated by the SPNEGO negotiation model.</t>
+ </list>
+</t>
+
+<t>The Extended Generic Security Service Application Program Interface (GSS-API) Negotiation Mechanism (NegoEx) is defined to address these concerns. NegoEx
+is a pseudo security mechanism that is negotiated by SPNEGO and when negotiated, it can recursively negotiate real security mechanisms.</t>
+
+<t>Any security mechanism negotiated by NegoEx MUST support integrity protection.</t>
+
+<t> The basic form of NegoEx works as follows: </t>
+<t> <list style="numbers"> <t>The initiator proposes a list of mechanisms in decreasing preference order. For each of these mechanism, 
+NegoEx OPTIOINALLY includes a mechanism specific meta-data token. GSS-API
+extensions are defined later in this document for NegoEx to query the meta-data token for inclusion in the NegoEx message.<vspace blankLines="1"/></t>
+<t>The acceptor then passes the meta-data token from the initiator to the intended security mechanism. A meta-token for a security mechanism not supported 
+on the acceptor side is ignored. New GSS-API extensions are defined later
+in this document for a security mechanism to consume the meta-data token.  When processing the received meta-data token, a security mechanism that reports a failure 
+ is removed from the set of mutually supported mechanisms. The acceptor then 
+responds with the list of mutually supported mechanisms in decreasing preference order.  For each of these mechanism, 
+NegoEx again OPTIOINALLY supplies a mechanism specific meta-data token in the response. These meta-data tokens are returned
+to NegoEx via new GSS-API extensions as described in the initial step. <vspace blankLines="1"/></t>
+
+<t>The initiator then passes the meta-data token to the intended security mechanism by invoking the new GSS-API extensions. When processing the received meta-data token, a security mechanism that reports a failure 
+ is removed from the set of mutually supported mechanisms. The initiator then selects a security mechanism from the set of mutually-supported ones. If more than one security
+ mechanism is available, unless otherwise specified, the preferred one in the server preference order SHOULD be selected. Once the common security 
+ mechanism is identified, the security mechanism may also negotiate mechanism-specific options during its context establishments. This will 
+ be inside the mechanism tokens, and invisible to the NegoEx protocol. <vspace blankLines="1"/></t>
+
+<t> The selected security mechanism provides keying materials to NegoEx, and NegoEx then signs and 
+verifies the negotiation NegoEx messages to protect the negotiation.<vspace blankLines="1"/></t>
+
+<t> The initiator and the acceptor proceed to exchange tokens till the GSS-API context for selected security mechanism
+is established,  Once the security context is established, the per-message tokens are generated and verified in accordance with the selected security mechanism.</t>
+
+</list> </t>
+
+<t>NegoEx does not work outside of SPNEGO. When negotiated by SPNEGO, NegoEx uses the
+   concepts developed in the GSS-API specification [1]. The negotiation
+   data is encapsulated in context-level tokens. Therefore, callers of
+   the GSS-API do not need to be aware of the existence of the
+   negotiation tokens but only of the SPENGO pseudo-security mechanism. </t>
+
+   <t>In its basic form NegoEx requires at least one extra round-trip. Network
+   connection setup is a critical performance characteristic of any
+   network infrastructure and extra round trips over WAN links, packet
+   radio networks, etc. really make a difference. In order to avoid such
+   an extra round trip the initial security token of the preferred
+   mechanism for the initiator may be embedded in the initial NegoEx token. The optimistic mechanism token
+   may be accompanied by the meta-data tokens and the optimistic mechanism token MUST 
+   be that of the first mechanism in the list of the mechanisms proposed by the initiator. The signature of NegoEx messages for protecting the NegoEx negotiation
+   can also be included along with the mechanism token.
+   If the target preferred mechanism matches the initiator's preferred
+   mechanism, and when the NegoEx negotiation protection messages are included along with the mechanism token,  no additional round trips are incurred by using the
+   negotiation protocol.</t>
+
+</section>
+
+<section title="Requirements Terminology">
+
+   <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+    "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref
+        target="RFC2119" pageno="false" format="default"></xref>.</t>
+
+</section>
+ 
+<section title="Presentation Language">
+
+<t>This document deals with the formatting of data in an external
+   representation. The following very basic and somewhat casually
+   defined presentation syntax will be used. The syntax draws from
+   several sources in its structure. Although it resembles the
+   programming language "C" in its syntax, it would be risky to draw too many parallels. The
+   purpose of this presentation language is to document NegoEx only; it has
+   no general application beyond that particular goal.</t>
+
+</section>
+
+<section title="Cryptographic Computations">
+    <t> The message signing and verificaiton in NegoEx is based on<xref target="RFC3961"/>. <xref target="RFC3961"/>
+ is used here as a generic framework and this application is not Kerberos specifc.</t>
+
+</section>
+
+<section title="The NegoEx Protocol">
+    <t> TBD.</t>
+</section>
+
+<section title="Supporting GSS-API Extensions">
+    <t> TBD.</t>
+</section>
+
+ <section anchor="securityconsideration" title="Security Considerations" toc="default">
+
+   <t> TBD </t>
+</section>
+
+<section title="Acknowledgements">
+
+<t> TBD.</t>
+</section>
+
+<section title="IANA Considerations">
+
+   <t> There is no action required for IANA.</t>
+</section>
+
+</middle>
+
+<back>
+
+<references title="Normative References">&RFC2119;&RFC4120;&RFC4121;&RFC2743;&RFC4178;&RFC3961;
+
+</references>
+
+<section title="Apendix A. Protocol Data Structures and Constant Values">
+
+    <t> TBD </t>
+    </section>
+</back>
+</rfc>
+
+
+

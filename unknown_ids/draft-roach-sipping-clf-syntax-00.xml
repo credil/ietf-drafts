@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd"[
+  <!ENTITY draft-gurbani-sipping-clf PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.draft-gurbani-sipping-clf-01.xml'>
+
+]>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes"?>
+<?rfc compact="yes" ?>
+<?rfc sortrefs="no" ?>
+<?rfc symrefs="yes" ?>
+
+<rfc ipr="pre5378Trust200902">
+  <front>
+    <title>Binary Syntax for SIP Common Log Format</title>
+
+    <author fullname="Adam Roach" initials="A. B." surname="Roach">
+      <organization>Tekelec</organization>
+
+      <address>
+        <postal>
+          <street>17210 Campbell Rd.</street>
+          <street>Suite 250</street>
+          <city>Dallas</city>
+          <region>TX</region>
+          <code>75252</code>
+          <country>US</country>
+        </postal>
+        <email>adam@nostrum.com</email>
+      </address>
+    </author>
+
+    <date month="March" year="2009" />
+
+    <area>Real Time Applications and Infrastructure</area>
+
+    <abstract>
+      <t>
+        This document proposes a binary syntax for the SIP
+        common log format (CLF). It does not cover semantic issues,
+        and is meant to be evaluated in the context of the
+        other efforts discussing SIP CLF.
+      </t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>
+	The Common Log File (CLF) format for the Session Initiation
+	Protocol (SIP) <xref target="I-D.gurbani-sipping-clf"/>
+	proposes a syntax for logging SIP messages received and
+	sent by SIP clients, servers, and proxies. The syntax
+	proposed by that document has been inspired by the common
+	HTTP log format. However, experience with that format has
+	shown that dealing with large quantities of log data can
+	be very processor intensive, as doing so necessary requires
+	reading and parsing every byte in the log file(s) of interest.
+      </t>
+      <t>
+	This document counterpropses a format that is no more
+	difficult to generate by logging entites, while being
+	radically faster to process. In particular, the format
+        is optimized for both rapidly scanning through log
+        records, as well as quickly locating commonly-accessed
+        data fields. Both operations can be performed in constant time
+        (as compared with O(n) time associated with the current format,
+        where n is the length of the log record).
+      </t>
+    </section>
+
+    <section title="Format">
+      <t>
+        Each data record is encoded according to the following
+        format:
+      </t>
+      <t>
+        <figure>
+          <artwork><![CDATA[
+ 0      7 8     15 16    23 24    31
++--------+--------+--------+--------+
+| Flags  |     Record Length        | 0 - 3
++--------+--------+--------+--------+
+|     Date/Time (bits 32-63)        | 4 - 7
++        +        +        +        +
+|     Date/Time (bits 0-31)         | 8 - 11
++--------+--------+--------+--------+
+|       Time (nanoseconds)          | 12 - 15
++--------+--------+--------+--------+
+|             CSeq Number           | 16 - 19
++--------+--------+--------+--------+
+| Response Code   |  TLV Start Ptr  | 20 - 23
++--------+--------+--------+--------+
+| Server Txn Ptr  | Server Txn Len  | 24 - 27
++--------+--------+--------+--------+
+| Client Txn Ptr  | Client Txn Len  | 28 - 31
++--------+--------+--------+--------+
+| Method Pointer  |  Method Length  | 32 - 35
++--------+--------+--------+--------+
+|  To Value Ptr   |  To Value Len   | 36 - 39
++--------+--------+--------+--------+
+|   To Tag Ptr    |   To Tag Len    | 40 - 43
++--------+--------+--------+--------+
+| From Value Ptr  | From Value Len  | 44 - 47
++--------+--------+--------+--------+
+|  From Tag Ptr   |  From Tag Len   | 48 - 51
++--------+--------+--------+--------+
+| Call-Id Pointer | Call-Id Length  | 52 - 55
++--------+--------+--------+--------+
+|                                   |
+|                                   |
+|      Mandatory Field Data         |
+|                                   |
+|                                   |
++--------+--------+--------+--------+ \
+|       Tag       |      Length     |  \
++--------+--------+--------+--------+   \  Repeated as
+|                                   |    > many times
+|               Value               |   /  as necessary
+|                                   |  /
++--------+--------+--------+--------+ / 
+]]></artwork>
+        </figure>
+      </t>
+      <t>
+        <list style="hanging">
+          <t hangText="Flags Field (1 byte):">
+            <list style="hanging">
+              <t hangText="0x80 - "> Request/Response flag
+                  (0 = request, 1 = response)</t>
+
+              <t hangText="0x40 - "> Retransmission flag
+                  (Always set to 0 if server is stateless)</t>
+
+              <t hangText="0x20 - "> Sent/Recieved flag
+                  (0 = message received, 1 = message sent)</t>
+
+              <t hangText="0x10 - "> Reserved</t>
+              <t hangText="0x08 - "> Reserved</t>
+              <t hangText="0x04 - "> Reserved</t>
+              <t hangText="0x02 - "> Reserved</t>
+              <t hangText="0x01 - "> Reserved</t>
+            </list>
+          <vspace blankLines="1"/></t>
+
+
+          <t hangText="Record Length (3 bytes):"> Total length of this log record,
+         including "Flags" and "Record Length" fields<vspace blankLines="1"/></t>
+
+          <t hangText="Date/Time (8 bytes):"> Seconds since midnight, January 1st,
+         1970, GMT<vspace blankLines="1"/></t>
+
+          <t hangText="Time (4 bytes):"> Nanoseconds since the time in Date/Time
+         field (&lt;= 999,999,999)<vspace blankLines="1"/></t>
+
+          <t hangText="CSeq Number (4 bytes):"> CSeq number from the SIP message<vspace blankLines="1"/></t>
+
+          <t hangText="Response Code (2 bytes):"> Set to the value of the response
+         code for responses. Should be set to 0 for requests.<vspace blankLines="1"/></t>
+
+          <t hangText="TLV Start Ptr (2 bytes):"> Indicates an absolute byte value
+         for the start of tag/length/value (TLV) groups.  Set to 0
+         if no TLVs are present.<vspace blankLines="1"/></t>
+
+         </list>
+            Bytes 24 trough 55 contain pointer/length pairs that point
+            to the values of variable-length mandatory fields. The
+            "Pointer" fields indicate absolute byte values within the
+            record, and must be >= 56 bytes. They point to the start
+            of the corresponding value within the "Mandatory Field Data"
+            area. The "Length" fields indicate the length of the
+            corresponding value.
+          <vspace blankLines="1"/>
+         <list style="hanging">
+
+          <t hangText="Server Txn:">  The transaction identifier
+             associated with the server transaction.  Implementations MAY reuse
+             the server transaction identifier (the topmost branch-id of the
+             incoming request, with or without the magic cookie), or they MAY
+             generate a unique identification string for a server transaction
+             (this identifier needs to be locally unique to the server only.)
+             This identifier is used to correlate ACKs and CANCELs to an INVITE
+             transaction; it is also used to aid in forking.<vspace blankLines="1"/></t>
+
+          <t hangText="Client Txn:"> This field is used to
+             associate client transactions with a server transaction for
+             forking proxies or B2BUAs.<vspace blankLines="1"/></t>
+
+          <t hangText="Method:"> In requests, the method from the start line. In responses,
+         the method found in the CSeq header field.<vspace blankLines="1"/></t>
+
+          <t hangText="To Value:"> Value of the To header field, possibly with the tag
+         parameter removed. (Whether to remove the tag paramter is
+         left up to the logging entity).<vspace blankLines="1"/></t>
+
+          <t hangText="To Tag:"> Value of the To header field tag parameter. If no To
+         header field tag parameter is present, the pointer field
+         is ignored, and the length field is set to 0.<vspace blankLines="1"/></t>
+
+          <t hangText="From Value:"> Value of the From header field, possibly with the tag
+         parameter removed. (Whether to remove the tag paramter is
+         left up to the logging entity)<vspace blankLines="1"/></t>
+
+          <t hangText="From Tag:"> Value of the From header field tag parameter.<vspace blankLines="1"/></t>
+
+          <t hangText="Call-Id:"> The value of the Call-ID header field<vspace blankLines="1"/></t>
+
+          <t hangText="Mandatory Field Data:"> Contains actual values for the preceding
+         fields. Note that this data is not necessarily in order, and
+         is not necessarily non-overlapping. In particular, loggers
+         may usefully choose to overlap the "To Tag" field with the
+         "To Value" field (and the "From Tag" field with the "From
+         Value" field).<vspace blankLines="1"/></t>
+
+         </list>
+            The Tag/Length/Value groups appear zero or more times, at the
+            location indicated by the "TLV Start Ptr" field. They are
+            used to log information that is not mandatory for all messages
+            (although specific TLVs are mandatory in request logs).
+          <vspace blankLines="1"/>
+         <list style="hanging">
+
+          <t hangText="Tag Field (2 bytes):"> indicates the type of value coded
+         by this TLV. Currently defined tags are: <vspace blankLines="1"/>
+            <list style="hanging">
+
+              <t hangText="0 -"> Contact value (can be repeated)<vspace/>
+                  Contains entire value of Contact header field<vspace blankLines="1"/></t>
+
+              <t hangText="1 -"> Request URI (mandatory in request)<vspace/>
+                  Contains Request URI in start line<vspace blankLines="1"/></t>
+
+              <t hangText="2 -"> Remote Host (mandatory in request)<vspace/>
+                  The DNS name of IP address from which the
+                  message was received (if "sent/received flag" is 0)
+                  of the IP address to which the message is being
+                  send (if "sent/received flag" is 1)<vspace blankLines="1"/></t>
+
+              <t hangText="3 -"> Authenticated User<vspace/>
+                  Contans the user name by which the user has
+                  been authenticated<vspace blankLines="1"/></t>
+
+              <t hangText="4 -"> Complete SIP Message (optional, should be omitted by default)<vspace/>
+                  Contains complete SIP message. Can be repeated
+                  multiple times to accomodate SIP messages that
+                  exceed 65535 bytes in length.<vspace blankLines="1"/></t>
+            </list>
+          <vspace blankLines="1"/></t>
+
+          <t hangText="Length Field (2 bytes):"> indicates the length of the value
+         coded in this TLV. This length does NOT include the TLV
+         header.<vspace blankLines="1"/></t>
+
+          <t hangText="Value Field (0 to 65535 bytes):"> contains the actual
+          value of this TLV.<vspace blankLines="1"/></t>
+        </list>
+      <vspace blankLines="1"/></t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      &draft-gurbani-sipping-clf;
+    </references>
+    <section title="Acknowledgements">
+      <t>
+        Cullen put me up to this.
+      </t>
+    </section>
+  </back>
+</rfc>

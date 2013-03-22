@@ -1,0 +1,559 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc tocompact="yes"?>
+<?rfc tocdepth="3"?>
+<?rfc tocindent="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc comments="yes"?>
+<?rfc inline="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<rfc category="std" docName="draft-knoll-idr-qos-attribute-00" ipr="full3978">
+  <front>
+    <title abbrev="BGP QoS Marking Attribute">BGP Extended Community Attribute
+    for QoS Marking</title>
+
+    <author fullname="Thomas Martin Knoll" initials="Th.M." surname="Knoll">
+      <organization>Chemnitz University of Technology</organization>
+
+      <address>
+        <postal>
+          <street>Reichenhainer Str. 70 /331</street>
+
+          <city>Chemnitz</city>
+
+          <code>09126</code>
+
+          <region></region>
+
+          <country>GERMANY</country>
+        </postal>
+
+        <phone>+49-371-531-33246</phone>
+
+        <facsimile>+49-371-531-833246</facsimile>
+
+        <email>knoll@etit.tu-chemnitz.de</email>
+      </address>
+    </author>
+
+    <date day="8" month="June" year="2008" />
+
+    <area>Routing Area</area>
+
+    <workgroup>Inter-Domain Routing Working Group</workgroup>
+
+    <keyword>Draft</keyword>
+
+    <abstract>
+      <t>This document specifies a simple signalling mechanism for
+      inter-domain QoS marking using a BGP Extended Community QoS Attribute.
+      Class based packet forwarding for delay and loss critical services is
+      currently performed in an individual AS internal manner. The new QoS
+      marking attribute makes the QoS class setup within the IP prefix
+      advertising AS known to all access and transit ASes. This enables
+      individual (re-)marking and forwarding treatment adaptation to the
+      original QoS class setup of the respective IP prefix. The attribute
+      provides the means to signal QoS markings on different layers, which are
+      linked together in QoS class sets. It provides inter-domain and
+      cross-layer insight into the QoS class mapping of the source AS with
+      minimal signalling traffic.</t>
+    </abstract>
+
+    <note title="Requirements Language">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119">RFC 2119</xref>.</t>
+    </note>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>A new BGP Extended Community Attribute is defined in this document,
+      which carries QoS marking information for different network layer
+      technologies across ASes. This attribute is called "QoS Marking
+      Attribute". This new attribute provides a mechanism for labelling
+      priority class information carried in BGP-4 <xref
+      target="RFC4271"></xref>. It allows for the consistent exchange of
+      priority class encoding values between BGP peers for physical, data
+      link, network and transport layer QoS mechanisms. These labels can be
+      used to control the distribution of this information, for the encoding
+      and for treatment adjustments within the AS or for other
+      applications.</t>
+
+      <t>Several QoS Marking Attributes MAY be included in a single BGP UPDATE
+      message. Each QoS Marking Attribute is encoded as 8-octet tuple, as
+      follows.</t>
+    </section>
+
+    <section title="Definition of the QoS Marking Attribute">
+      <t></t>
+
+      <section title="Extended Community Type">
+        <t>The new QoS Marking Attribute is encoded as a BGP Extended
+        Community Attribute <xref target="RFC4360"></xref>. It is therefore a
+        transitive optional BGP attribute with Type Code 16. An adoption to
+        the simple BGP Community Attribute encoding <xref
+        target="RFC1997"></xref> is not defined in this document. The actual
+        encoding within the BGP Extended Community Attribute is as
+        follows.</t>
+
+        <t>The QoS Marking Attribute is of regular type which results in a 1
+        octet Type field followed by 7 octets for the QoS marking structure.
+        The Type is IANA-assignable (FCFS procedure) and marks the community
+        as transitive across ASes. The type number has been assigned by IANA
+        to 0xYY (0x00-x3f).</t>
+
+        <figure>
+          <artwork><![CDATA[ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0 0 x x x x x x|                                               |
++-+-+-+-+-+-+-+-+   7 octet QoS Marking Attribute structure     |
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+]]></artwork>
+        </figure>
+
+        <t>Note to RFC Editor: The actual type number needs to replace the
+        '0xYY (0x00-x3f)' after the IANA assignment has occurred.</t>
+      </section>
+
+      <section title="Structure of the QoS Marking Attribute">
+        <t>The QoS Marking Attributes provides a flexible encoding structure
+        for various QoS Markings on different layers. This flexibility is
+        achieved by a Flags, a QoS Set Number and a Technology Type field
+        within the 7 octet structure as defined below.</t>
+
+        <figure>
+          <artwork><![CDATA[ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|    Flags      | QoS Set Number|        Technology Type        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| QoS Marking O | QoS Marking A |   P. Count    | C. Unused ='0'|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+]]></artwork>
+        </figure>
+
+        <t>Flags:</t>
+
+        <figure>
+          <artwork><![CDATA[ 0  1  2  3  4  5  6  7 
++--+--+--+--+--+--+--+--+
+|L2 L1 L0|R |I |A |0 |0 |
++--+--+--+--+--+--+--+--+
+]]></artwork>
+        </figure>
+
+        <t><list style="hanging">
+            <t>All used and unused flags default to a value of
+            &lsquo;0&rsquo;. The following table shows the bit encoding of the
+            Flags field.</t>
+          </list></t>
+
+        <texttable align="left">
+          <ttcol>Bit</ttcol>
+
+          <ttcol>Flag</ttcol>
+
+          <ttcol>Encoding</ttcol>
+
+          <c>0-2</c>
+
+          <c>L2 &amp; L1 &amp; L0</c>
+
+          <c>Specification of the applied enumeration list for the Technology
+          Type</c>
+
+          <c>3</c>
+
+          <c>R</c>
+
+          <c>&lsquo;1&rsquo; &hellip; remarking occurred</c>
+
+          <c>4</c>
+
+          <c>I</c>
+
+          <c>&lsquo;1&rsquo; &hellip; QoS marking ignored</c>
+
+          <c>5</c>
+
+          <c>A</c>
+
+          <c>&lsquo;1&rsquo; &hellip; QoS class aggregation occurred</c>
+
+          <c>6,7</c>
+
+          <c>unused</c>
+
+          <c>Default to &lsquo;0&rsquo;</c>
+        </texttable>
+
+        <t><list style="hanging">
+            <t>Technology Type Enumeration can be chosen from different
+            sources as follows.</t>
+          </list></t>
+
+        <texttable align="left">
+          <ttcol>L2&amp;L1&amp;L0</ttcol>
+
+          <ttcol>Enumeration List</ttcol>
+
+          <c>'000'</c>
+
+          <c>GMPLS LSP encoding Type <xref target="GMPLS-SIG">see</xref></c>
+
+          <c>'001'</c>
+
+          <c>MPLS Pseudowire Type <xref target="RFC4446">see</xref></c>
+
+          <c>'010'</c>
+
+          <c>EtherType <xref target="EtherType">see</xref></c>
+
+          <c>'011'</c>
+
+          <c>IANA Protocol Numbers <xref target="RFC5237">see</xref></c>
+
+          <c>'100'</c>
+
+          <c>MIB II Interface List <xref target="RFC2863">see</xref></c>
+
+          <c>'111'</c>
+
+          <c>alternative Technology Type <xref
+          target="tech_type">see</xref></c>
+        </texttable>
+
+        <t><list style="hanging">
+            <t>The Flags "R, I and A" are set to '0' in the advertisement by
+            the IP prefix originating AS. Transit ASes MUST change the flag
+            value to '1' once the respective event occurred. If the QoS
+            marking actively used in the transit AS internal forwarding is
+            different from the advertised original one, the 'Remarking (R)'
+            flag is set to '1'. This MUST be done separately for each
+            technology type attribute within the attribute set. The same
+            applies to the 'Ignore (I)' flag, if the respective advertised QoS
+            marking is ignored in the transit AS internal forwarding.</t>
+
+            <t>The 'Aggregation (A)' flag MUST be set to '1' by the UPDATE
+            message relaying transit AS, if the respective IP prefixes will be
+            advertised inside an IP prefix aggregate.</t>
+          </list></t>
+
+        <t>QoS Set Number:</t>
+
+        <t><list style="hanging">
+            <t>Several single QoS Marking Attributes can be grouped logically
+            into a QoS Marking Attribute Set characterized by a QoS Set
+            Number. This grouping of the single QoS Marking Attributes into a
+            set provides a cross-layer linking between the QoS class
+            encodings. The number of signalled QoS Marking Attributes as well
+            as QoS Marking Attribute Sets is at the operator&rsquo;s choice of
+            the originating AS. The enumerated QoS set numbers have BGP UPDATE
+            message local significance starting with set number 0x00.</t>
+          </list></t>
+
+        <t>Technology Type:</t>
+
+        <t>The technology type encoding follows commonly used enumerations as
+        referred to by the L2&amp;L1&amp;L0 bit combinations stated above. If
+        the use of external enumerations is not favoured or the mapping of
+        commonly used technologies is sufficient, the enumeration list <xref
+        target="tech_type">in</xref> SHALL be used.</t>
+
+        <t>QoS Marking / Enumeration O &amp; A:</t>
+
+        <t>The interpretation of these identically approached fields depends
+        on the selected layer and technology. QoS mechanisms using bit
+        encodings for the targeted priority (e.g. IP DSCP, Ethernet User
+        Priority, MPLS EXP etc.) MUST use a copy of the encoding in this
+        attribute field. Unused higher order bits default to &lsquo;0&rsquo;.
+        Other technologies, which use other ways of labelling priority
+        information such as L-LSPs, VPI/VCI inferred ATM classes, lambda
+        inferred priority, etc. SHALL use class enumerations as encoding in
+        this attribute field.</t>
+
+        <t>There are two QoS Marking fields within the QoS Marking Attribute
+        for the "original (O)" and the "active (A)" QoS marking.</t>
+
+        <t>QoS Marking O (Original QoS Marking):<list style="hanging">
+            <t>The IP prefix originating AS copies the internally associated
+            QoS encoding of the given Technology Type into this one octet
+            field. The field MUST remain unchanged in BGP UPDATE messages of
+            relaying nodes.</t>
+          </list></t>
+
+        <t>QoS Marking A (Active QoS Marking):<list style="hanging">
+            <t>QoS Marking A and O MUST be identically encoded by the prefix
+            originating AS.</t>
+
+            <t>All other ASes use this Active QoS Marking field to advertise
+            their internal QoS encoding of the given class and technology. A
+            cleared Marking field signals that this traffic class experiences
+            default traffic treatment within the transit AS forwarding
+            technology.</t>
+          </list></t>
+
+        <t>Processing Count (P. Count):<list style="hanging">
+            <t>Each BGP instance, which processes the attribute and appends a
+            different AS number to the AS_PATH, MUST increase this counter by
+            one. The attribute originating instance initializes the counter
+            value to '0x00'.</t>
+          </list>Currently Unused (C. Unused):<list style="hanging">
+            <t>This one octet field is currently unused and MUST be set to
+            '0x00'.</t>
+          </list></t>
+      </section>
+
+      <section anchor="tech_type" title="Technology Type Enumeration">
+        <t>A small list of technologies is provided in the table below for the
+        direct encoding of common technology types.</t>
+
+        <texttable align="left">
+          <ttcol>Value</ttcol>
+
+          <ttcol>Technology Type</ttcol>
+
+          <c>0x0000</c>
+
+          <c>DiffServ enabled IPv4</c>
+
+          <c>0x0001</c>
+
+          <c>DiffServ enabled IPv6</c>
+
+          <c>0x0010</c>
+
+          <c>Ethernet using 802.1q priority tag</c>
+
+          <c>0x0020</c>
+
+          <c>MPLS using E-LSP</c>
+
+          <c>0x0021</c>
+
+          <c>MPLS using L-LSP</c>
+
+          <c>0x0100</c>
+
+          <c>GMPLS &ndash; time slot encoding</c>
+
+          <c>0x0101</c>
+
+          <c>GMPLS &ndash; lambda encoding</c>
+
+          <c>0x0102</c>
+
+          <c>GMPLS &ndash; fibre encoding</c>
+        </texttable>
+      </section>
+    </section>
+
+    <section title="Attribute Usage">
+      <t>Providers MAY choose to process the QoS Marking Attributes and adopt
+      the priority encoding according to their local policy. Whether this MAY
+      also lead to different IGP routing decisions or even effect BGP update
+      filters is out of scope for the attribute definition.</t>
+
+      <t>Only the IP prefix originating AS is allowed to signal the QoS
+      Marking Attributes and Sets. Transit ASes MUST NOT modify or extend the
+      QoS Set except for the update of each 'QoS Marking A' field contained in
+      the Attribute Set, the respective "R, I, A" flags and the Processing
+      Counter.</t>
+
+      <section title="QoS Marking Attribute Example">
+        <t>See <xref target="appendix_a"></xref> for an example QoS Marking
+        Attribute Set.</t>
+      </section>
+
+      <section title="AS Border Packet Forwarding">
+        <t>IP packet forwarding based on packet header QoS encoding might
+        require remarking of packets in order to match AS internal policies
+        and encodings of neighbouring ASes.</t>
+
+        <t>Identical QoS class sets and encodings between neighbouring ASes do
+        not require any remarking. Different encodings will be matched on the
+        outgoing traffic.</t>
+
+        <t>Outgoing traffic for a given IP prefix uses the 'QoS Marking A'
+        information of the respective BGP UPDATE message QoS Marking Attribute
+        for adopted remarking of the forwarded packet.</t>
+
+        <t>If the Process Count is smaller than the number of different AS
+        numbers in the AS PATH or if the 'I' flag is set for a given encoding,
+        the outgoing traffic will be remarked using the 'QoS Marking O'
+        information instead.</t>
+
+        <t>'QoS Marking O' information is also used for outgoing remarking, if
+        the targeted class is not supported by the neighbouring AS.</t>
+      </section>
+
+      <section title="IP Prefix Aggregation">
+        <t>Several IP prefixes of different IP prefix originating ASes MAY be
+        aggregated to a shorter IP prefix in transit ASes. The QoS Marking
+        Attribute Set of the resulting IP prefix aggregate is chosen as
+        follows:<list style="numbers">
+            <t>If only on aggregate member contains an associated QoS Marking
+            Attribute Set, than this Set MUST be used as resulting QoS Marking
+            Attribute Set for the IP prefix aggregate.</t>
+
+            <t>If several aggregate members contain an associated QoS Marking
+            Attribute Set, than the Set of the shortest IP prefix aggregate
+            member MUST be used as resulting QoS Marking Attribute Set for the
+            IP prefix aggregate. Equal IP prefix aggregate member lengths
+            SHOULD be resolved in favour of the IP prefix with lower IP
+            addresses.</t>
+          </list>In case of IP prefix aggregation, the 'Aggregation (A)' flag
+        of each QoS Marking Attribute within the Set MUST be set to '1'.</t>
+      </section>
+    </section>
+
+    <section anchor="Confidentiality" title="Confidentiality Considerations">
+      <t>The disclosure of confidential AS intrinsic information is of no
+      concern since the signalled marking for QoS class encodings can be
+      adopted prior to the UPDATE advertisement of the IP prefix originating
+      AS. AS internal cross-layer remarking and policy based update filtering
+      allows for consistent QoS class support despite made up QoS class set
+      and encoding information within UPDATE advertisements. In case of such
+      policy hiding strategy the required originating AS internal ingress and
+      egress remarking SHALL be done transparently without explicit "Active
+      Marking" and 'R' flag signalling.</t>
+    </section>
+
+    <section anchor="IANA" title="IANA Considerations">
+      <t>This document defines a new BGP Extended Community Attribute, which
+      needs to be assigned a number by IANA within the Extended Community
+      Attribute list.</t>
+
+      <t>The new QoS Marking Attribute is a BGP Extended Community Attribute
+      of regular type. It is IANA-assignable (FCFS procedure) and is
+      transitive across ASes.</t>
+
+      <t>An number assignment application within the numbering range of 0x00 -
+      x3f is made to IANA.</t>
+
+      <t>Note to RFC Editor: this section may be removed on publication as an
+      RFC.</t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>The new QoS marking Attribute does not raise extra security concerns.
+      Existing BGP security measures are in place by means of the reused
+      transport within BGP UPDATE messages.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.RFC.2863"?>
+
+      <?rfc include="reference.RFC.1997"?>
+
+      <?rfc include="reference.RFC.2119"?>
+
+      <?rfc include="reference.RFC.4271"?>
+
+      <?rfc include="reference.RFC.4360"?>
+
+      <?rfc include="reference.RFC.4446"?>
+
+      <?rfc include="reference.RFC.5237"?>
+    </references>
+
+    <references title="Informative References">
+      <reference anchor="EtherType"
+                 target="http://standards.ieee.org/regauth/ethertype/eth.txt">
+        <front>
+          <title>IEEE EtherType registration list</title>
+
+          <author fullname="IEEE Registration Authority" surname="">
+            <organization>IEEE</organization>
+          </author>
+
+          <date day="07" month="June" year="2008" />
+        </front>
+      </reference>
+
+      <reference anchor="GMPLS-SIG"
+                 target="http://www.iana.org/assignments/gmpls-sigparameters">
+        <front>
+          <title>GMPLS Signaling Parameters</title>
+
+          <author fullname="IANA Protocol Registries">
+            <organization>IANA</organization>
+          </author>
+
+          <date day="07" month="June" year="2008" />
+        </front>
+      </reference>
+    </references>
+
+    <section anchor="appendix_a" title="QoS Marking Attribute Example">
+      <t>The example AS is advertising several IP prefixes, which experience
+      equal QoS treatment from AS internal networks. The IP packet forwarding
+      policy within this originating AS defines e.g. 3 traffic classes for IP
+      traffic (DSCP1, DSCP2 and DSCP3). These three classes are also
+      consistently taken care off within AS internal 802.1q Ethernet switches
+      (using UPC1, UPC2 and UPC3) as well as within the EXP bit supporting
+      MPLS tunnel forwarding. The BGP UPDATE message for the announced IP
+      prefixes will contain the following QoS Marking Attribute Set together
+      with the IP prefix NLRI.</t>
+
+      <figure>
+        <artwork><![CDATA[ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|1 1 1 0 0 0 0 0|0 0 0 0 0 0 0 0|0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0 0 1 0 1 1 1 0|0 0 1 0 1 1 1 0|     currently used = '0'      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|1 1 1 0 0 0 0 0|0 0 0 0 0 0 0 0|0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0 0 0 0 0 1 1 1|0 0 0 0 0 1 1 1|     currently used = '0'      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|1 1 1 0 0 0 0 0|0 0 0 0 0 0 0 0|0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0 0 0 0 0 1 0 1|0 0 0 0 0 1 0 1|     currently used = '0'      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+|1 1 1 0 0 0 0 0|0 0 0 0 0 0 0 1|0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0 0 0 1 1 0 0 0|0 0 0 1 1 0 0 0|     currently used = '0'      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|1 1 1 0 0 0 0 0|0 0 0 0 0 0 0 1|0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0 0 0 0 0 1 0 1|0 0 0 0 0 1 0 1|     currently used = '0'      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|1 1 1 0 0 0 0 0|0 0 0 0 0 0 0 1|0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0 0 0 0 0 0 1 1|0 0 0 0 0 0 1 1|     currently used = '0'      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+|1 1 1 0 0 0 0 0|0 0 0 0 0 0 1 0|0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0 0 0 0 1 0 0 0|0 0 0 0 1 0 0 0|     currently used = '0'      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|1 1 1 0 0 0 0 0|0 0 0 0 0 0 1 0|0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0 0 0 0 0 0 0 1|0 0 0 0 0 0 0 1|     currently used = '0'      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|1 1 1 0 0 0 0 0|0 0 0 0 0 0 1 0|0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0 0 0 0 0 0 0 1|0 0 0 0 0 0 0 1|     currently used = '0'      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+]]></artwork>
+      </figure>
+
+      <t>The class set as well as the example encodings are arbitrarily
+      chosen.</t>
+    </section>
+  </back>
+</rfc>

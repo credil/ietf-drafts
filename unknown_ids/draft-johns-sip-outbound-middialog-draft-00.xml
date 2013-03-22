@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+	<!ENTITY rfc2104 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2104.xml'>
+	<!ENTITY rfc3548 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3548.xml'>
+]>
+
+
+<rfc category="std" ipr="full3978" docName="draft-johns-sip-outbound-middialog-draft-00">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+<front>
+	<title abbrev="Mid dialog request routing">
+			   Routing of mid dialog requests using sip-outbound	
+	</title>
+
+	<author initials='K.J.' surname="Johns" fullname='Kevin Johns'>
+		<organization>CableLabs </organization>
+		<address>
+			<postal>
+				<street>858 Coal Creek Circle</street>
+				<city>Louisville</city> <region>CO</region> 
+				<code>80027</code>
+				<country>USA</country>
+			</postal>
+			<email>k.johns@cablelabs.com</email>
+		</address>
+	</author>
+
+	<date month="June" year="2006"/>
+	<area>Real-time Applications and Infrastructure Area</area>
+
+	<workgroup>SIP</workgroup>
+
+	<abstract>
+		<t>
+This document describes modifications to the procedures for the generation of a flow token as described in the Internet Draft titled Managing Client Initiated Connections in the Session Initiation Protocol. This modification is necessary to support routing of mid-dialog requests while preserving Edge Proxy failover. 
+		</t>
+	</abstract>
+
+		
+</front>
+
+
+<middle>
+	<section title="Introduction">
+		<t>
+The Internet Draft titled Managing Client Initiated Connections in the Session Initiation Protocol <xref target="OUTBOUND"/> describes extensions to the Session Initiation Protocol (SIP) to support NAT traversal. In particular it defines behaviors for User Agents, registrars and proxy servers that allow dialog initiating requests to be delivered on existing flows established by the User Agent. However, routing of mid-dialog request over an existing flow is explicitly placed out of scope by <xref target="OUTBOUND"/>.
+<vspace blankLines='1' />
+This draft is an attempt to highlight some of the issues that may arise due to the lack of definition of how to route mid-dialog requests in <xref target="OUTBOUND"/> and attempts to present a solution based on existing procedures defined in <xref target="OUTBOUND"/>.
+		</t>
+	</section>
+
+	<section title="Terms and Definitions">
+		<t>
+
+Note: The following definitions are borrowed from <xref target="OUTBOUND"/>
+<vspace blankLines='1' />
+
+Edge Proxy: An Edge Proxy is any proxy that is located topologically between the registering SIP User Agent (SIP UA) and the registrar.
+
+<vspace blankLines='1' />
+
+Flow: A Flow is a network protocol layer (layer 4 of the OSI model) association between two hosts that is represented by the network address and port number of both ends and by the protocol.  For TCP, a flow is equivalent to a TCP connection.  For UDP a flow is a bidirectional stream of datagrams between a single pair of IP addresses and ports of both peers.  With TCP, a flow often has a one to one correspondence with a single file descriptor in the operating system.
+
+<vspace blankLines='1' />
+
+Instance-id: This specification uses the word instance-id to refer to the value of the "sip.instance" media feature tag in the Contact header field.  This is a Uniform Resource Name (URN) that uniquely identifies this specific SIP UA instance.
+
+<vspace blankLines='1' />
+
+Outbound-proxy-set: A configured set of SIP URIs (Uniform Resource Identifiers) that represents each of the outbound proxies (often Edge Proxies) with which the SIP UA will attempt to maintain a direct flow.
+					
+		</t>
+	</section>
+
+	<section title="Use Case">
+		<t>
+According to section 5.3 of <xref target="OUTBOUND"/>:
+Note that techniques to ensure that mid-dialog requests are routed over an existing flow are out of scope and therefore not part of this specification. However, an approach such as having the Edge Proxy Record-Route with a flow token is one way to ensure that mid-dialog requests are routed over the correct flow.
+ 
+<vspace blankLines='1' />
+The following use case, as taken from <xref target="OUTBOUND"/>, illustrates how mid-dialog requests can be routed. However, this use case does not cover how the caller determines that it should use the backup Edge Proxy. 
+
+            <figure>
+                <preamble></preamble>
+                <artwork>
+                    <![CDATA[
+                   [-----example.com domain -------------------]
+   Caller           Backup             Primary            Callee
+     |                 |                  |     (1) REGISTER |
+     |                 |                  |<-----------------|
+     |                 |                  |(2) 200 OK        |
+     |                 |                  |----------------->|
+     |                 |                  |     (3) REGISTER |
+     |                 |<------------------------------------|
+     |                 |(4) 200 OK        |                  |
+     |                 |------------------------------------>|
+     |(5) INVITE       |                  |                  |
+     |----------------------------------->|                  |
+     |                 |                  |(6) INVITE        |
+     |                 |                  |----------------->|
+     |                 |                  |       (7) 200 OK |
+     |                 |                  |<-----------------|
+     |                 |      (8) 200 OK  |                  |
+     |<-----------------------------------|                  |
+     |(9) ACK          |                  |                  |
+     |----------------------------------->|                  |
+     |                 |                  |(10) ACK          |
+     |                 |                  |----------------->|
+     |                 |           CRASH  X                  |
+     |(11) BYE         |                                     |
+     |---------------->|                                     |
+     |                 | (12) BYE                            |
+     |                 |------------------------------------>|
+     |                 |                         (13) 200 OK |
+     |                 |<------------------------------------|
+     |     (14) 200 OK |                                     |
+     |<----------------|                                     |
+
+                    ]]>
+                </artwork>
+            <postamble>
+Figure 1:  Routing of Mid-Dialog Requests
+            </postamble>
+		</figure>
+
+<vspace blankLines='1' />
+
+This call flow assumes that the Callee has been configured with a outbound proxy set that consists of "sip:primary.example.com;lr;sip-stun" and "sip:backup.example.com;lr;sip-stun".
+
+<vspace blankLines='1' />
+
+Messages 1-5 are as defined in <xref target="OUTBOUND"/>. The INVITE in message 6 is a normal INVITE except that the Primary Edge Proxy has Record-Routed. As a result 6 will have a:
+
+Record-Route: &ltsip:edgeproxyset1.example.com;lr>
+
+<vspace blankLines='1' />
+
+In message 11, the BYE is sent to the backup Edge Proxy after the primary Edge Proxy failed to respond. How this is accomplished is the focus of this document.
+		</t>
+		<section title="Use of Record-Route without a Flow Token">
+			<t>
+Given that the primary Edge Proxy added a Record-Route header during the dialog establishment, the BYE must follow the established route set. It is possible that the URI in the route set could resolve to multiple IP addresses and thus identify both the primary and backup Edge Proxies. Assuming this to be the case, the caller would first send the BYE to the primary Edge Proxy and after a period of no response, send the BYE to the backup Edge Proxy.
+<vspace blankLines='1' />
+Upon receipt of the BYE, the backup Edge Proxy will attempt to forward the BYE based on the request URI as the route header will not identify a specific flow. The request URI identifies the callee based on the provided contact address. If the callee is behind a NAT device, the contact address will most likely be an IP Address containing the callees locally assigned IP Address. Since this address will not be routable by the Edge Proxy, the BYE will result in an error being returned to the caller.
+				
+			</t>
+		</section>
+		<section title="Use of Record-Route with a Flow Token">
+			<t>
+If in message 6, the primary Edge Proxy Record-Routes and includes a flow token, message 6 will have a:
+   Record-Route: &ltsip:edgeproxyset1.example.com;lr;user=flowtoken>
+<vspace blankLines='1' />
+
+Where the name edgeproxyset1.example.com resolves to the primary and backup Edge Proxies.
+<vspace blankLines='1' />
+
+Again the BYE must follow the established route set and again the caller would first send the BYE to the primary Edge Proxy and after a period of no response, send the BYE to the backup Edge Proxy.
+
+<vspace blankLines='1' />
+Upon receipt of the BYE, the backup Edge Proxy will attempt to forward the BYE based on the flow token in the route header rather then the request URI. Given that this flow token was generated by the primary Edge Proxy, the backup will have no knowledge of such a flow and not be able to route the BYE resulting in an error being returned to the caller.
+
+			</t>
+		</section>
+	</section>
+
+	<section title="Solution Requirements">
+		<t>
+Any solution that attempts to solve these use cases should adhere to the following requirements:
+<list style='numbers'>
+
+<t>
+The flow token is unique to a flow, the flow can be recovered from the token, and the token can not be modified by attackers (this requirement is taken from [outbound]);
+</t>
+<t>
+work in the presence of multiple Edge Proxies supporting redundant flows to the registrar;
+</t>
+<t>
+support the use case identified in this document for the routing of mid-dialog requests;
+</t>
+<t>
+work for the case where the SIP UA registers multiple AORs from the same contact or different contact.
+</t>
+
+</list>
+		</t>
+	</section>
+
+	<section title="Proposed Solution">
+		<t>
+The following sections propose a solution where a flow token is generated which has meaning to any Edge Proxy for which the SIP UA has a valid flow established with. This token is then used by the Edge Proxy to record route itself during the dialog establishment.
+		</t>
+		<section title="Edge Proxy Procedures">
+			<section title="Generating Flow Tokens">
+				<t>
+Outbound states a proxy can use any algorithm it wants as long as the flow token is unique to a flow, the flow can be recovered from the token, and the token can not be modified by attackers.
+
+<vspace blankLines='1' />
+
+The use of the SIP UA provided instance-id in the contact header of the REGISTER request satisfies the first desired characteristic. However, it does not allow the flow to be recovered from the token nor does it protect the token from modification by attackers.
+
+<vspace blankLines='1' />
+
+To protect against modification by attackers the flow token should be generated as follows: The Edge Proxy (both Primary and Secondary are configured with the same random 20 byte key called K. The HMAC of the SIP UA provided instance-id is computed using the key K and the HMAC-SHA1-80 algorithm, as defined in <xref target="RFC2104"/>.  The concatenation of the HMAC and instance-id are base64 encoded, as defined in <xref target="RFC3548"/>, and used as the flow identifier.
+
+<vspace blankLines='1' />
+
+The requirement that the flow be recoverable from the token cannot be satisfied if Edge Proxy failover is desired as the flow itself is specific to the Edge Proxy and cannot be generalized.
+
+				</t>
+			</section>
+
+			<section title="Forwarding Requests">
+				<t>
+There are no changes to how the Edge Proxy forwards requests. The Edge Proxy can verify that the flow token has not been tampered by verifying the instance-id in the user part of the route header by calculating the HMAC and comparing to the HMAC in the flow token, if they match the instance-id can be considered valid and the request forwarded on the proper flow.
+				</t>
+			</section>
+		</section>
+		<section title="Limitations">
+			<t>
+As stated above the use of the instance ID does not allow the flow to be recovered from the flow token.
+<vspace blankLines='1' />
+Additionally if a SIP UA is registering multiple AORs, this solution would require they all be registered over the same flow as they will all be registered using the same instance ID. If the SIP UA wanted to register multiple AORs against different contacts, it would require a different instance ID for each contact.
+			</t>
+		</section>
+	</section>
+
+
+	<section title="IANA Considerations">
+		<t>
+There are no IANA Considerations
+		</t>
+	</section>
+
+	<section title="Security Considerations">
+		<t>
+Outbound does not contemplate the idea of the flow token being known by the client. The solution proposed in this document relies on the Edge Proxy populating the record-route header with not only its URI but the flow token associated with the client it is providing service to. The end result is that the remote client will now know flow token. It is unclear what benefit this provides the remote client. For unchanged Outbound procedures, the threats listed in <xref target="OUTBOUND"/> are also applicable to this document.
+		</t>
+	</section>
+
+	<section title="Acknowledgements">
+		<t>
+The author would like to thank the following individuals for their feedback, comments and recommendations (in alphabetical order): Cullen Jennings and Jean-Francois Mule.
+		</t>
+	</section>
+</middle>
+
+
+<back>
+	<references title="Normative References">
+		<reference anchor='OUTBOUND'>
+			<front>
+				<title> Managing Client Initiated Connections in the Session Initiation Protocol(SIP) </title>
+				<author initials='C.' surname='Jennings'
+					fullname='Cullen Jennings'>
+					<organization abbrev='Cisco'>
+							Cisco Systems
+					</organization>
+				</author>
+				<author initials='R.' surname='Mahy'
+					fullname='Rohan Mahy'>
+					<organization abbrev='Cisco'>
+							Cisco Systems
+					</organization>
+				</author>
+				<date month='March' year='2006' />
+			</front>
+			<format type='TXT' target='http://www.ietf.org/internet-drafts/draft-ietf-sip-outbound-03.txt'/>
+		</reference>
+	</references>
+
+	<references title="Informative References">
+		&rfc2104; 
+		&rfc3548; 
+	</references>
+</back>
+
+
+</rfc>
+
+
+

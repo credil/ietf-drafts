@@ -1,0 +1,1624 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?xml-stylesheet type="text/xsl" href="rfc2629.xslt"?>
+<?rfc compact="yes"?>
+<?rfc strict="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc toc="yes"?>
+<rfc category="std" docName="draft-burger-sip-info-02" ipr="full3978"
+     obsoletes="" updates="RFC 2976" xml:lang="en">
+  <front>
+    <title abbrev="INFO Use">Session Initiation Protocol (SIP) INFO Method
+    Use</title>
+
+    <author fullname="Eric W. Burger" initials="E.W." surname="Burger">
+      <organization>BEA Systems, Inc.</organization>
+
+      <address>
+        <postal>
+          <street></street>
+
+          <city></city>
+
+          <region></region>
+
+          <code></code>
+
+          <country>USA</country>
+        </postal>
+
+        <email>eburger@standardstrack.com</email>
+
+        <uri>http://www.standardstrack.com</uri>
+      </address>
+    </author>
+
+    <date day="18" month="November" year="2007" />
+
+    <area>RAI</area>
+
+    <workgroup>SIP</workgroup>
+
+    <abstract>
+      <t>The purpose of the INFO request for the Session Initiation Protocol
+      (SIP), as described by RFC 2976, is to provide mid-session SIP User
+      Agent (UA)-to-SIP UA application data transport. In the years since the
+      introduction of the INFO request, experience with the use of the INFO
+      request indicates a number of problems. This document explains why there
+      are INFO-based, proprietary protocols in the wild; the flaws of using
+      INFO; and explains why it is not possible to create a framework to
+      rescue INFO for general purpose use. Since SIP has evolved considerably
+      since the introduction of INFO, this document highlights some of the
+      new, robust mechanisms for achieving the work that previously led people
+      to use INFO. As these mechanisms are now available, this document
+      formally deprecates the use of INFO for new usages beyond the existing
+      standardized ones, namely RFC 3372 (SIP-T) and RFC 4497 (QSIG).</t>
+    </abstract>
+
+    <note title="Conventions Used in this Document">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119">RFC 2119</xref>.</t>
+    </note>
+  </front>
+
+  <middle>
+    <section anchor="intro" title="Introduction" toc="default">
+      <t>There is a need for mid-session, Session Initiation Protocol (SIP)
+      User Agent (UA)-to-SIP User Agent session layer signaling. Examples of
+      such signaling include the following.<list style="symbols">
+          <t>Transporting foreign, non-SIP protocol messages for ISUP call
+          setup</t>
+
+          <t>Transport of supplemental dialed digits for ISUP or other call
+          setup</t>
+
+          <t>Transport of user stimulus to proxies and UAs</t>
+
+          <t>Transport of generic DTMF digit entry</t>
+
+          <t>SIP media server control</t>
+
+          <t>SIP video encoding control</t>
+
+          <t>SIP floor control</t>
+
+          <t>Transport of application-specific data</t>
+        </list></t>
+
+      <t>The <xref target="RFC2976">INFO</xref> request transports mid-session
+      signaling between two User Agents. These messages follow the signaling
+      path established by the SIP INVITE, including visiting proxies that
+      inserted themselves in the Record-Route path.</t>
+
+      <t>All of the examples above have implementations using the INFO
+      request. There have been numerous Internet Drafts proposing the
+      transport of DTMF using INFO. Likewise, there have been Internet Drafts
+      describing the use of INFO for video encoding control (such as fast
+      frame refresh requests) and conference floor control. <xref
+      target="RFC3372">RFC 3372</xref> describes the use of INFO for ISUP,
+      also known as SIP-T. <xref target="RFC4497">RFC 4497</xref> describes a
+      similar use of INFO for QSIG. <xref target="RFC5022">RFC 5022</xref>
+      describes a use of INFO for media server control.</t>
+
+      <t>Clearly, there must be some advantages to using INFO, or people would
+      not be using it. First and foremost, for many of these uses, INFO was
+      the only option at the time. For example, MSCML's inception predated
+      SUBSCRIBE/NOTIFY by 18 months. Moreover, one of the driving concepts in
+      MSCML is the concept of doing an operation on "this" leg. It is much
+      easier to send a message on the SIP dialog, following an already
+      established routing path, than to establish another end-to-end
+      communication channel, such as a new SIP dialog, and referencing the
+      target dialog.</t>
+
+      <t>One advantage of using any method in the signaling plane is reliable
+      delivery. A common service provider customer service issue is end user
+      devices not being able to transmit DTMF tones reliably across the
+      service network. This is because the media plane does not have reliable
+      delivery characteristics. This is by design, as the goal is to trade-off
+      network latency and jitter for reliable packet delivery. Another
+      advantage is that if the endpoint is only interested in the user
+      signaling, they only need a signaling stack and access to the much lower
+      packet rate signaling channel, as opposed to having a media stack and
+      receiving all of the media.</t>
+
+      <t>It is clear there are existence proofs for the use of INFO. However,
+      there is a serious flaw with the INFO request. The INFO request itself
+      has neither a context for interpreting any given message nor a
+      negotiation method for accepting different INFO request types. One of
+      the main reasons why INFO appears to work is most of the uses to date
+      have been in limited or controlled deployments, where one entity
+      controls the endpoints. For example, application servers, in a session
+      with a media server, will not expect to receive user stimulus. Likewise,
+      a routing proxy, such as the 3GPP IMS S-CSCF, will not be scaled to
+      receive media server control messages, as that can be independent of
+      subscriber size (call volume). Furthermore, a Voice-over-IP service
+      provider may supply or strictly mandate the manufacturer and firmware
+      for customer-premises equipment such as terminal adapters. However, with
+      the further adoption of SIP, such collisions and misinterpretation of
+      context becomes highly likely.</t>
+
+      <t>This document first describes the flaws with INFO. Then it offers
+      alternatives for INFO that covers most of the use cases for which the
+      work group has seen Internet Drafts in the past. This document describes
+      how one can unambiguously create application session signaling that does
+      require proxy traversal by using new SIP methods. Lastly, this document
+      formally restricts the use of INFO to that described by <xref
+      target="RFC3372">RFC 3372</xref>.</t>
+    </section>
+
+    <section title="Flaws With INFO">
+      <t>There are two classes of issues with the INFO method. The first class
+      of problem is INFO requests are totally without context. There is no
+      indication of what the content means in the message. There are various
+      mechanisms that could fix this problem. However, none are backwards
+      compatible. The second class of problem is INFO requests are
+      inextricably bound to the INVITE dialog. For some uses of INFO, this is
+      not a problem. For others, this is a serious problem.</t>
+
+      <section title="Message Context">
+        <t>There is no programmatic way of determining what the content of an
+        INFO request means. From the User Agent's point of view, a INFO
+        request appears. Is this INFO request conveying a DTMF digit, a SIP-T
+        encapsulated message, or a video update request? There is an argument
+        saying the User Agent can figure it out. The content of the INFO
+        request will have a MIME type. For example, <xref
+        target="RFC3204">SIP-T</xref> messages will have a MIME type of
+        application/ISUP, while <xref target="RFC5022">MSCML</xref> messages
+        will have a MIME type of application/mediaservercontrol+xml. Likewise,
+        the endpoints can negotiate what MIME types they support, thus
+        advertising their capabilities.</t>
+
+        <t>However, as we learned in the <xref target="RFC3458">messaging
+        community</xref>, relying on the MIME type alone is not sufficient to
+        determine the context of the message. Clearly, as shown in the
+        previous paragraph, the message content type relates to the message
+        context. However, it is quite easy to imagine situations where the
+        same content type has multiple meanings for a User Agent. For example,
+        a DTMF digit type could be for user stimulus, post-dial digit
+        collection, or the simple transport of a digit with no signaling
+        context.</t>
+
+        <t>In addition, there are times when an endpoint will be hosting a
+        number of different applications, each looking for different DTMF
+        patterns. For example, a call management application may be looking
+        for a long "#", while a messaging application may be looking for
+        digits. Using INFO, or named tones, for that matter, each application
+        has to examine each digit. Using subscription-based protocols such as
+        KPML, one can limit the traffic and processing to only the tones the
+        application has interest.</t>
+
+        <t>For that matter, there are application scenarios where an
+        application separate from the endpoint needs to monitor for user
+        stimulus. For example, a calling card application might want to
+        monitor for a re-origination signal. Likewise, a lawful intercept trap
+        and trace application wants to monitor only the user's entered digits.
+        With the INFO method, that application must insert itself in the
+        signaling path. This requires the application to become a Back-to-Back
+        User Agent (B2BUA), which means that it must handle all of the state
+        transactions in the dialogs, as well as intrusively be in the call
+        path.</t>
+
+        <t>An interesting issue is every INFO request traverses the same proxy
+        path as any other dialog-related SIP request. Proxies in the path that
+        have no interest in INFO requests still must process the request. This
+        may put undue load on those proxies. What makes this issue
+        interesting, is one may wish the request to traverse the proxy. The
+        problem is there is no way for proxies to know whether or not they
+        have an interest in INFO requests. Getting the requests is an
+        all-or-nothing proposition, driven by Record-Route.</t>
+
+        <t>Let us consider these issues with respect to DTMF transport.</t>
+
+        <t>First of all, if the end device is using a compressed codec, the
+        device will most likely use <xref target="RFC4733">named tones</xref>.
+        If the device also sends DTMF in INFO messages, the device will be
+        sending the digits multiple times. This would not be a problem if the
+        endpoints could negotiate the use of INFO for DTMF transport. If they
+        could, then each device would know to ignore the named tone packets,
+        which do not have reliable delivery characteristics. However, since
+        there is no negotiation, the endpoints have to assume, when they
+        receive a named tone packet, the packet represents DTMF user stimulus.
+        When an INFO arrives with DTMF in it, the endpoint will double detect
+        the digit.</t>
+
+        <t>One might argue that upon receipt of an INFO message with DTMF in
+        it, the recipient could ignore named tone packets in the media stream.
+        However, in almost all scenarios, the media stream will reach the end
+        device well before an INFO will. A negotiation mechanism would solve
+        this problem. If the endpoints explicitly agree to transport user
+        signaling in the signaling channel, then they can safely ignore named
+        tones in the media stream.</t>
+
+        <t>Unless the signaling path is secure, using S/MIME or sips, user
+        digit entry is in the clear. This has clear security and privacy
+        implications with respect to credit card numbers, account numbers,
+        personal identification numbers, and so on.</t>
+
+        <t>One argument often heard for using INFO for DTMF is that it is easy
+        and does not use very much bandwidth. However, studies of, for
+        example, <xref target="TCE">KPML versus INFO for DTMF</xref>, show
+        significantly better bandwidth utilization for <xref
+        target="RFC4730">KPML</xref>, even with the supposed overhead of the
+        <xref target="RFC3265">SUBSCRIBE / NOTIFY</xref> mechanism. This is
+        because sending tones digit-by-digit in an INFO message is very
+        inefficient.</t>
+      </section>
+
+      <section title="Dialog Reuse">
+        <t>INFO, by design, is a method within an INVITE dialog usage. <xref
+        target="RFC5057">RFC 5057</xref> enumerates the problems with using
+        dialogs for multiple usages, and we strongly urge the reader to review
+        RFC 5057. The most relevant issue is a failure of transmission or
+        processing of an INFO may render the dialog terminated. IPrior to RFC
+        5057 it was underspecified if the INFO usage was a separate usage or
+        not. However, RFC 5057 clarifies the INFO method is always part of the
+        INVITE usage.</t>
+
+        <t>Some uses of INFO can tollerate this fate sharing of the INFO
+        message over the entire dialog. For example, in the SIP-T usage, it
+        may be acceptable for a call to fail, or to tear down the call, if one
+        cannot deliver the associated SS7 information. This is not a value
+        judgement on high availability service versus high availability
+        billing, it is just an observation of service provider choice.
+        However, it may not be acceptable for a call to fail if, for example,
+        a DTMF buffer overflows. Then again, for some services, that may be
+        the exact desired behavior. Again, this is not a value judgement on
+        those who would build less than ideal user interfaces.</t>
+
+        <t>The issue is dialog reuse presents all of these problems.
+        Alternatives which we will explore in <xref
+        target="S.Alternatives"></xref> do not have these problems.</t>
+      </section>
+
+      <section title="Other Issues">
+        <t>There is no throttling mechanism for INFO. Consider that most call
+        signaling occurs on the order of 3 messages per minute. DTMF tones
+        occur in bursts at a rate of 240 messages per minute. This is a
+        considerably higher rate than for call signaling. As an Internet
+        protocol, any mechanism we use must have some throttling mechanism in
+        place.</t>
+      </section>
+    </section>
+
+    <section title="Models for User Agent-User Agent Interaction">
+      <t>Models for User Agent-to-User Agent Interaction (UUI) include
+      SUBSCRIBE / NOTIFY, establishing a communication channel associated with
+      the SIP dialog, and issuing signling over the INVITE-initiated SIP
+      dialog.</t>
+
+      <section title="SUBSCRIBE / NOTIFY">
+        <t>The first model for UUI is SUBSCRIBE / NOTIFY, <xref
+        target="RFC3265">RFC 3265</xref>. In this model, one user agent
+        requests state information, such as key pad presses from a device to
+        an application server or key map images from an application server to
+        a device. The SUBSCRIBE creates a new dialog that does not share the
+        fate of the related INVITE-initiated dialog. Moreover, using the
+        SUBSCRIBE model enables multiple applications to receive state
+        updates. These application can be outside the media path and
+        potentially outside the INVITE-initiated dialog's proxy path.</t>
+
+        <t>Implementors do need to be aware the prize of having a protocol
+        that works in all cases, can scale, can easily load balance, and will
+        not mysteriously fail a session in the event of state synchronization
+        failure does come at a cost. Session establishment is a minimum of two
+        messages in addition to the INVITE dialog establishment. If the
+        SUBSCRIBE application is co-resident with the INVITE application, the
+        application will have to manage two SIP dialogs instead of one.
+        Tracking the UUI state dominates memory and processing for some
+        applications, and as such the doubling of SIP dialogs is not an issue.
+        However, for other applications, this may be an issue.</t>
+      </section>
+
+      <section title="Communication Channel">
+        <t>The second model for UUI is to establish a communication channel.
+        One model for this is <xref
+        target="I-D.ietf-speechsc-mrcpv2">MRCPv2</xref>. Here, the
+        INVITE-initiated dialog establishes a separate reliable,
+        connection-oriented channel, such as a <xref
+        target="RFC0793">TCP</xref> or <xref target="RFC4960">SCTP</xref>
+        stream. One uses SIP to locate the remote endpoint, but uses a direct
+        connection for the UUI. One then can create whatever protocol one
+        wishes, whether from whole-cloth (as in MRCPv2) or using a substrate
+        such as <xref target="RFC3080">BEEP</xref>.</t>
+
+        <t>Another model is to use a totally externally signaled channel, such
+        as <xref target="RFC2616">HTTP</xref>. In this model, the user agent
+        knows about a rondevouz point to direct HTTP requests to for the
+        transfer of information. Examples include encoding of a prompt to
+        retrieve in the SIP Request URI in <xref target="RFC4240">RFC
+        4240</xref> or the encoding of a SUBMIT target in a <xref
+        target="W3C.REC-voicexml21-20070619">VoiceXML</xref> script.</t>
+      </section>
+
+      <section title="INVITE Dialog Signaling">
+        <t>For situations where delivery or protocol failure of a UUI message
+        should terminate the INVITE-initiated dialog, one can invision
+        creating a framework for using a UUI method within the
+        INVITE-initiated dialog.</t>
+
+        <t>Such a framework would need to address the following issues.</t>
+
+        <t><list style="symbols">
+            <t>Fully-specified context: When such a UUI method arrives at a
+            UAC, the UAC knows exactly the semantics of the message.
+            Leveraging the terminology of RFC 3265, the method includes an
+            indicator of the package the message belongs to. One can have
+            further refinement of the UUI message type by using MIME
+            types.</t>
+
+            <t>Fully negotiated: When the UAC makes an offer, it can offer
+            which UUI packages the UAC can send to the UAS as well as which
+            UUI packages the UAC would like the UAS to send to the UAC. In the
+            answer, the UAS can indicate which UUI packages it will use for
+            the session. Following the model of <xref target="RFC3264">RFC
+            3264</xref>, the offer and answer can be late. Note we mention the
+            model of RFC 3264 and not the protocol of RFC 3264, as such
+            indication may well be in the SIP headers and not the SDP
+            body.</t>
+          </list></t>
+
+        <t>Experience with <xref target="RFC3501">IMAP</xref> does offer a
+        potential drawback of such a scheme. In particular, the offer can be
+        quite long.</t>
+
+        <t>It is important to note that INFO is in protocol jail unless one
+        can create a backward-compatible mechanism to negotiate packages. To
+        wit, if an upgraded UAC offers a package, such as DTMF, but the server
+        is not upgraded, the server will ignore the negotiation request. At
+        that point, the UAC has to assume the server will not send or receive
+        DTMF in INFO. Likewise, if an upgraded UAS receives an INVITE without
+        any package support indications, the UAS has to assume the client will
+        not send or receive DTMF in INFO.</t>
+      </section>
+    </section>
+
+    <section anchor="S.Alternatives" title="Alternatives for Common INFO Use">
+      <t>What alternatives to INFO are there for UA-to-UA application session
+      signaling? As noted above, there are three broad classes of session
+      signaling available. The choice depends on the circumstances. Following
+      is a list of situations that have used INFO in the past.<list
+          style="symbols">
+          <t>State updates</t>
+
+          <t>User stimulus</t>
+
+          <t>Direct signaling channel</t>
+
+          <t>Proxy-aware signaling</t>
+
+          <t>Dialog probe</t>
+        </list></t>
+
+      <section title="State Updates">
+        <t>This is the broad class of one User Agent updating another with
+        changes in state. The design goal of the <xref
+        target="RFC3265">SUBSCRIBE/NOTIFY</xref> event framework is to meet
+        just this need.</t>
+      </section>
+
+      <section title="User Stimulus: Touch Tones and Others">
+        <t>This is the class of the user entering stimulus at one User Agent,
+        and the User Agent transporting that stimulus to the other. A key
+        thing to realize is key presses on the telephone keypad is user
+        stimulus. Thus, the appropriate mechanism to use here is <xref
+        target="RFC4730">KPML</xref>.</t>
+      </section>
+
+      <section title="Direct Signaling Channel">
+        <t>State updates and user stimulus tend to have relatively few
+        messages per session. Sometimes, User Agents need to exchange a
+        relatively high number of messages. In addition, User Agents may have
+        a need for a relatively low-latency exchange of messages. In this
+        latter case, the User Agent may not be able to tolerate the latency
+        introduced by intermediate proxies. Likewise, the intermediate proxies
+        may have no interest in processing all of that data.</t>
+
+        <t>In this case, establishing a separate, direct control channel, as
+        in <xref target="RFC4975">MSRP</xref> or <xref
+        target="I-D.ietf-speechsc-mrcpv2">MRCPv2</xref> is appropriate.</t>
+
+        <t>In addition, not every situation requires a SIP solution. Some
+        signaling is really just one-shot to third-party endpoints. That
+        situation may better be handled using an appropriate protocol, such as
+        <xref target="RFC2616">HTTP</xref>.</t>
+      </section>
+
+      <section title="Proxy-Aware Signaling">
+        <t>Sometimes, one does want proxies to be in the signaling path for
+        UA-to-UA application signaling. In this case, the use of a SIP request
+        is appropriate. To date, there are no mechanisms for completely
+        disambiguating INFO requests. For example, one could create a registry
+        of INFO packages. The definition of the package would define the
+        contexts for the various MIME Content-Types, as well as the context of
+        the request itself. However, a package can have multiple content
+        types. Moreover, having the context, or package identifier, at the SIP
+        level precludes bundling multiple contexts responding in the same INFO
+        request. For example, a User Agent might want to bundle two different
+        responses in a multipart/mixed MIME body type.</t>
+
+        <t>Because there is no difference in either the protocol machinery or
+        registration process due to these factors, we will not create an INFO
+        framework. If one needs a SIP User Agent-to-SIP User Agent application
+        session signaling transport protocol that touches all Record-Route
+        proxies in a path, one MUST create a new SIP method as described in
+        Section 27.4 of <xref target="RFC3261">RFC 3261</xref>.</t>
+      </section>
+
+      <section title="Dialog Probe">
+        <t>Some implementations in the wild use INFO to probe if an
+        INVITE-initiated dialog is alive. While this works, it is NOT
+        RECOMMENDED. In particular, <xref target="RFC4028">RFC 4028</xref>
+        describes how to ensure an INVITE-initiated dialog is alive.</t>
+      </section>
+
+      <section title="Malicious Indicator">
+        <t>Take the case of Malicious Indicator. This is where a subscriber
+        receives a call, realizes it is a malicious call (threatening, SPIT,
+        etc.). They then press the SPIT button (or press *xx), which tells
+        their service provider to mark the UAC as a bad actor. One might be
+        tempted to think that INFO would be a great option for this service.
+        It follows the return path of the INVITE, and so the INFO will hit the
+        caller's inbound proxy, which it can learn the caller is
+        (statistically) a bad actor. That way the inbound proxy can do stuff
+        like notify law enforcement, add a vote to "this is a SPIT source," or
+        other useful action.</t>
+
+        <t>However, consider a few issues. First, since INFO lives exclusively
+        within an established dialog, there is no way to assert this message
+        after the call completes. Second, this mechanism *relies* on an active
+        service provider topology. If there is no proxy in the chain that will
+        eat the INFO, the caller will see the "this is a bad guy" message,
+        which may have consequences in the real world. Third, there is no
+        a'priori way for the UAS to know whether or not it can issue the INFO.
+        The caller CERTAINLY will not advertise, "please tell me if I am bad,
+        particularly I know in advance that I *am* a bad actor."</t>
+
+        <t>One approach is for the service provider's proxy to SUBSCRIBE for
+        the SPIT event at the UAS. At this point, life is good, interoperable,
+        and works across networks. This enables events after the dialog is
+        torn down, as presumably the SPIT event will refer not to, "this
+        dialog," which does not exist, but to "that dialog identifier," which
+        exists (and is theoretically unique) forever.</t>
+
+        <t>Another approach that saves considerably on the overhead of
+        subscriptions would be for the service provider to insert a HTTP URI
+        in the initial INVITE, noting it is for reporting malicious behavior.
+        When the subscriber presses the SPIT button, an HTTP POST gets
+        executed, delivering the call information to the service provider. The
+        service provider can encode basic call information in the HTTP URI and
+        can instruct the device to send whatever arbitrary data is necessary
+        in the POST. This method has the added benefit of being entirely
+        outside the real-time SIP proxy network.</t>
+      </section>
+    </section>
+
+    <section title="INFO Use Clarification">
+      <t>There is no way to unambiguously use the INFO request in a general
+      framework. The IETF has already standardized use of INFO for <xref
+      target="RFC3372">SIP-T</xref> and <xref target="RFC4497">QSIG</xref>.
+      Thus we will not deprecate the use of INFO for those purposes. However,
+      this document explicitly updates <xref target="RFC2976">INFO</xref>, in
+      that one MUST NOT use the INFO request for anything other than the use
+      described by RFC 3372 for ISUP and RFC 4497 for QSIG.</t>
+
+      <t>In recognition of existing, proprietary use of INFO, proxies MUST NOT
+      take any action other than that described by RFC 3261 and RFC 2976 with
+      respect to handling INFO requests.</t>
+    </section>
+
+    <section title="Security Considerations" toc="default">
+      <t>By eliminating the multiple uses of INFO messages without adequate
+      community review, and by eliminating the possibility for rogue SIP User
+      Agents from confusing another User Agent by purposely sending unrelated
+      INFO messages, we expect the INFO use clarification to improve the
+      security of the Internet.</t>
+    </section>
+
+    <section title="IANA Considerations">
+      <t>None.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <reference anchor="RFC2119">
+        <front>
+          <title>Key words for use in RFCs to Indicate Requirement
+          Levels</title>
+
+          <author initials="S." surname="Bradner">
+            <organization></organization>
+          </author>
+
+          <date month="March" year="1997" />
+        </front>
+
+        <seriesInfo name="RFC" value="2119" />
+
+        <seriesInfo name="BCP" value="14" />
+      </reference>
+
+      <reference anchor="RFC2976">
+        <front>
+          <title>The SIP INFO Method</title>
+
+          <author fullname="S. Donovan" initials="S." surname="Donovan">
+            <organization></organization>
+          </author>
+
+          <date month="October" year="2000" />
+
+          <abstract>
+            <t>This document proposes an extension to the Session Initiation
+            Protocol (SIP). This extension adds the INFO method to the SIP
+            protocol. The intent of the INFO method is to allow for the
+            carrying of session related control information that is generated
+            during a session. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="2976" />
+
+        <format octets="17736" target="ftp://ftp.isi.edu/in-notes/rfc2976.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC3261">
+        <front>
+          <title>SIP: Session Initiation Protocol</title>
+
+          <author fullname="J. Rosenberg" initials="J." surname="Rosenberg">
+            <organization></organization>
+          </author>
+
+          <author fullname="H. Schulzrinne" initials="H."
+                  surname="Schulzrinne">
+            <organization></organization>
+          </author>
+
+          <author fullname="G. Camarillo" initials="G." surname="Camarillo">
+            <organization></organization>
+          </author>
+
+          <author fullname="A. Johnston" initials="A." surname="Johnston">
+            <organization></organization>
+          </author>
+
+          <author fullname="J. Peterson" initials="J." surname="Peterson">
+            <organization></organization>
+          </author>
+
+          <author fullname="R. Sparks" initials="R." surname="Sparks">
+            <organization></organization>
+          </author>
+
+          <author fullname="M. Handley" initials="M." surname="Handley">
+            <organization></organization>
+          </author>
+
+          <author fullname="E. Schooler" initials="E." surname="Schooler">
+            <organization></organization>
+          </author>
+
+          <date month="June" year="2002" />
+
+          <abstract>
+            <t>This document describes Session Initiation Protocol (SIP), an
+            application-layer control (signaling) protocol for creating,
+            modifying, and terminating sessions with one or more participants.
+            These sessions include Internet telephone calls, multimedia
+            distribution, and multimedia conferences. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3261" />
+
+        <format octets="647976"
+                target="ftp://ftp.isi.edu/in-notes/rfc3261.txt" type="TXT" />
+      </reference>
+
+      <reference anchor="RFC3372">
+        <front>
+          <title>Session Initiation Protocol for Telephones (SIP-T): Context
+          and Architectures</title>
+
+          <author fullname="A. Vemuri" initials="A." surname="Vemuri">
+            <organization></organization>
+          </author>
+
+          <author fullname="J. Peterson" initials="J." surname="Peterson">
+            <organization></organization>
+          </author>
+
+          <date month="September" year="2002" />
+        </front>
+
+        <seriesInfo name="BCP" value="63" />
+
+        <seriesInfo name="RFC" value="3372" />
+
+        <format octets="49893" target="ftp://ftp.isi.edu/in-notes/rfc3372.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC4497">
+        <front>
+          <title>Interworking between the Session Initiation Protocol (SIP)
+          and QSIG</title>
+
+          <author fullname="J. Elwell" initials="J." surname="Elwell">
+            <organization></organization>
+          </author>
+
+          <author fullname="F. Derks" initials="F." surname="Derks">
+            <organization></organization>
+          </author>
+
+          <author fullname="P. Mourot" initials="P." surname="Mourot">
+            <organization></organization>
+          </author>
+
+          <author fullname="O. Rousseau" initials="O." surname="Rousseau">
+            <organization></organization>
+          </author>
+
+          <date month="May" year="2006" />
+
+          <abstract>
+            <t>This document specifies interworking between the Session
+            Initiation Protocol (SIP) and QSIG within corporate
+            telecommunication networks (also known as enterprise networks).
+            SIP is an Internet application-layer control (signalling) protocol
+            for creating, modifying, and terminating sessions with one or more
+            participants. These sessions include, in particular, telephone
+            calls. QSIG is a signalling protocol for creating, modifying, and
+            terminating circuit-switched calls (in particular, telephone
+            calls) within Private Integrated Services Networks (PISNs). QSIG
+            is specified in a number of Ecma Standards and published also as
+            ISO/IEC standards. This document specifies an Internet Best
+            Current Practices for the Internet Community, and requests
+            discussion and suggestions for improvements.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="BCP" value="117" />
+
+        <seriesInfo name="RFC" value="4497" />
+
+        <format octets="149992"
+                target="ftp://ftp.isi.edu/in-notes/rfc4497.txt" type="TXT" />
+      </reference>
+    </references>
+
+    <references title="Informative References">
+      <reference anchor="RFC0793">
+        <front>
+          <title abbrev="Transmission Control Protocol">Transmission Control
+          Protocol</title>
+
+          <author fullname="Jon Postel" initials="J." surname="Postel">
+            <organization>University of Southern California (USC)/Information
+            Sciences Institute</organization>
+
+            <address>
+              <postal>
+                <street>4676 Admiralty Way</street>
+
+                <city>Marina del Rey</city>
+
+                <region>CA</region>
+
+                <code>90291</code>
+
+                <country>US</country>
+              </postal>
+            </address>
+          </author>
+
+          <date day="1" month="September" year="1981" />
+        </front>
+
+        <seriesInfo name="STD" value="7" />
+
+        <seriesInfo name="RFC" value="793" />
+
+        <format octets="172710" target="ftp://ftp.isi.edu/in-notes/rfc793.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC2616">
+        <front>
+          <title abbrev="HTTP/1.1">Hypertext Transfer Protocol --
+          HTTP/1.1</title>
+
+          <author fullname="Roy T. Fielding" initials="R." surname="Fielding">
+            <organization abbrev="UC Irvine">Department of Information and
+            Computer Science</organization>
+
+            <address>
+              <postal>
+                <street>University of California, Irvine</street>
+
+                <city>Irvine</city>
+
+                <region>CA</region>
+
+                <code>92697-3425</code>
+              </postal>
+
+              <facsimile>+1(949)824-1715</facsimile>
+
+              <email>fielding@ics.uci.edu</email>
+            </address>
+          </author>
+
+          <author fullname="James Gettys" initials="J." surname="Gettys">
+            <organization abbrev="Compaq/W3C">World Wide Web
+            Consortium</organization>
+
+            <address>
+              <postal>
+                <street>MIT Laboratory for Computer Science, NE43-356</street>
+
+                <street>545 Technology Square</street>
+
+                <city>Cambridge</city>
+
+                <region>MA</region>
+
+                <code>02139</code>
+              </postal>
+
+              <facsimile>+1(617)258-8682</facsimile>
+
+              <email>jg@w3.org</email>
+            </address>
+          </author>
+
+          <author fullname="Jeffrey C. Mogul" initials="J." surname="Mogul">
+            <organization abbrev="Compaq">Compaq Computer
+            Corporation</organization>
+
+            <address>
+              <postal>
+                <street>Western Research Laboratory</street>
+
+                <street>250 University Avenue</street>
+
+                <city>Palo Alto</city>
+
+                <region>CA</region>
+
+                <code>94305</code>
+              </postal>
+
+              <email>mogul@wrl.dec.com</email>
+            </address>
+          </author>
+
+          <author fullname="Henrik Frystyk Nielsen" initials="H."
+                  surname="Frystyk">
+            <organization abbrev="W3C/MIT">World Wide Web
+            Consortium</organization>
+
+            <address>
+              <postal>
+                <street>MIT Laboratory for Computer Science, NE43-356</street>
+
+                <street>545 Technology Square</street>
+
+                <city>Cambridge</city>
+
+                <region>MA</region>
+
+                <code>02139</code>
+              </postal>
+
+              <facsimile>+1(617)258-8682</facsimile>
+
+              <email>frystyk@w3.org</email>
+            </address>
+          </author>
+
+          <author fullname="Larry Masinter" initials="L." surname="Masinter">
+            <organization abbrev="Xerox">Xerox Corporation</organization>
+
+            <address>
+              <postal>
+                <street>MIT Laboratory for Computer Science, NE43-356</street>
+
+                <street>3333 Coyote Hill Road</street>
+
+                <city>Palo Alto</city>
+
+                <region>CA</region>
+
+                <code>94034</code>
+              </postal>
+
+              <email>masinter@parc.xerox.com</email>
+            </address>
+          </author>
+
+          <author fullname="Paul J. Leach" initials="P." surname="Leach">
+            <organization abbrev="Microsoft">Microsoft
+            Corporation</organization>
+
+            <address>
+              <postal>
+                <street>1 Microsoft Way</street>
+
+                <city>Redmond</city>
+
+                <region>WA</region>
+
+                <code>98052</code>
+              </postal>
+
+              <email>paulle@microsoft.com</email>
+            </address>
+          </author>
+
+          <author fullname="Tim Berners-Lee" initials="T."
+                  surname="Berners-Lee">
+            <organization abbrev="W3C/MIT">World Wide Web
+            Consortium</organization>
+
+            <address>
+              <postal>
+                <street>MIT Laboratory for Computer Science, NE43-356</street>
+
+                <street>545 Technology Square</street>
+
+                <city>Cambridge</city>
+
+                <region>MA</region>
+
+                <code>02139</code>
+              </postal>
+
+              <facsimile>+1(617)258-8682</facsimile>
+
+              <email>timbl@w3.org</email>
+            </address>
+          </author>
+
+          <date month="June" year="1999" />
+
+          <abstract>
+            <t>The Hypertext Transfer Protocol (HTTP) is an application-level
+            protocol for distributed, collaborative, hypermedia information
+            systems. It is a generic, stateless, protocol which can be used
+            for many tasks beyond its use for hypertext, such as name servers
+            and distributed object management systems, through extension of
+            its request methods, error codes and headers . A feature of HTTP
+            is the typing and negotiation of data representation, allowing
+            systems to be built independently of the data being
+            transferred.</t>
+
+            <t>HTTP has been in use by the World-Wide Web global information
+            initiative since 1990. This specification defines the protocol
+            referred to as "HTTP/1.1", and is an update to RFC 2068 .</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="2616" />
+
+        <format octets="422317"
+                target="ftp://ftp.isi.edu/in-notes/rfc2616.txt" type="TXT" />
+
+        <format octets="5529857"
+                target="ftp://ftp.isi.edu/in-notes/rfc2616.ps" type="PS" />
+
+        <format octets="550558"
+                target="ftp://ftp.isi.edu/in-notes/rfc2616.pdf" type="PDF" />
+
+        <format octets="636125"
+                target="http://xml.resource.org/public/rfc/html/rfc2616.html"
+                type="HTML" />
+
+        <format octets="493420"
+                target="http://xml.resource.org/public/rfc/xml/rfc2616.xml"
+                type="XML" />
+      </reference>
+
+      <reference anchor="RFC3080">
+        <front>
+          <title abbrev="The BEEP Core">eeeThe Blocks Extensible Exchange
+          Protocol Core</title>
+
+          <author fullname="Marshall T. Rose" initials="M.T." surname="Rose">
+            <organization>Invisible Worlds, Inc.</organization>
+
+            <address>
+              <postal>
+                <street>131 Stony Circle</street>
+
+                <street>Suite 500</street>
+
+                <city>Santa Rosa</city>
+
+                <region>CA</region>
+
+                <code>95401</code>
+
+                <country>US</country>
+              </postal>
+
+              <phone>+1 707 578 2350</phone>
+
+              <email>mrose@invisible.net</email>
+
+              <uri>http://invisible.net/</uri>
+            </address>
+          </author>
+
+          <date month="March" year="2001" />
+
+          <area>Applications</area>
+
+          <keyword>application protocols</keyword>
+
+          <keyword>BEEP</keyword>
+
+          <keyword>BXXP</keyword>
+
+          <keyword>application framework</keyword>
+
+          <abstract>
+            <t>This memo describes a generic application protocol kernel for
+            connection-oriented, asynchronous interactions called the BEEP
+            (Blocks Extensible Exchange Protocol) core. BEEP permits
+            simultaneous and independent exchanges within the context of a
+            single application user-identity, supporting both textual and
+            binary messages.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3080" />
+
+        <format octets="82089" target="ftp://ftp.isi.edu/in-notes/rfc3080.txt"
+                type="TXT" />
+
+        <format octets="111015"
+                target="http://xml.resource.org/public/rfc/html/rfc3080.html"
+                type="HTML" />
+
+        <format octets="87864"
+                target="http://xml.resource.org/public/rfc/xml/rfc3080.xml"
+                type="XML" />
+      </reference>
+
+      <reference anchor="RFC3204">
+        <front>
+          <title>MIME media types for ISUP and QSIG Objects</title>
+
+          <author fullname="E. Zimmerer" initials="E." surname="Zimmerer">
+            <organization></organization>
+          </author>
+
+          <author fullname="J. Peterson" initials="J." surname="Peterson">
+            <organization></organization>
+          </author>
+
+          <author fullname="A. Vemuri" initials="A." surname="Vemuri">
+            <organization></organization>
+          </author>
+
+          <author fullname="L. Ong" initials="L." surname="Ong">
+            <organization></organization>
+          </author>
+
+          <author fullname="F. Audet" initials="F." surname="Audet">
+            <organization></organization>
+          </author>
+
+          <author fullname="M. Watson" initials="M." surname="Watson">
+            <organization></organization>
+          </author>
+
+          <author fullname="M. Zonoun" initials="M." surname="Zonoun">
+            <organization></organization>
+          </author>
+
+          <date month="December" year="2001" />
+
+          <abstract>
+            <t>This document describes MIME types for application/ISUP and
+            application/QSIG objects for use in SIP applications, according to
+            the rules defined in RFC 2048. These types can be used to identify
+            ISUP and QSIG objects within a SIP message such as INVITE or INFO,
+            as might be implemented when using SIP in an environment where
+            part of the call involves interworking to the PSTN. [STANDARDS
+            TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3204" />
+
+        <format octets="19712" target="ftp://ftp.isi.edu/in-notes/rfc3204.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC3264">
+        <front>
+          <title>An Offer/Answer Model with Session Description Protocol
+          (SDP)</title>
+
+          <author fullname="J. Rosenberg" initials="J." surname="Rosenberg">
+            <organization></organization>
+          </author>
+
+          <author fullname="H. Schulzrinne" initials="H."
+                  surname="Schulzrinne">
+            <organization></organization>
+          </author>
+
+          <date month="June" year="2002" />
+
+          <abstract>
+            <t>This document defines a mechanism by which two entities can
+            make use of the Session Description Protocol (SDP) to arrive at a
+            common view of a multimedia session between them. In the model,
+            one participant offers the other a description of the desired
+            session from their perspective, and the other participant answers
+            with the desired session from their perspective. This offer/answer
+            model is most useful in unicast sessions where information from
+            both participants is needed for the complete view of the session.
+            The offer/answer model is used by protocols like the Session
+            Initiation Protocol (SIP). [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3264" />
+
+        <format octets="60854" target="ftp://ftp.isi.edu/in-notes/rfc3264.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC3265">
+        <front>
+          <title>Session Initiation Protocol (SIP)-Specific Event
+          Notification</title>
+
+          <author fullname="A.B. Roach" initials="A.B." surname="Roach">
+            <organization></organization>
+          </author>
+
+          <date month="June" year="2002" />
+
+          <abstract>
+            <t>This document describes an extension to the Session Initiation
+            Protocol (SIP). The purpose of this extension is to provide an
+            extensible framework by which SIP nodes can request notification
+            from remote nodes indicating that certain events have occurred.
+            [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3265" />
+
+        <format octets="89005" target="ftp://ftp.isi.edu/in-notes/rfc3265.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC3458">
+        <front>
+          <title>Message Context for Internet Mail</title>
+
+          <author fullname="E. Burger" initials="E." surname="Burger">
+            <organization></organization>
+          </author>
+
+          <author fullname="E. Candell" initials="E." surname="Candell">
+            <organization></organization>
+          </author>
+
+          <author fullname="C. Eliot" initials="C." surname="Eliot">
+            <organization></organization>
+          </author>
+
+          <author fullname="G. Klyne" initials="G." surname="Klyne">
+            <organization></organization>
+          </author>
+
+          <date month="January" year="2003" />
+
+          <abstract>
+            <t>This memo describes a new RFC 2822 message header,
+            "Message-Context". This header provides information about the
+            context and presentation characteristics of a message. A receiving
+            user agent (UA) may use this information as a hint to optimally
+            present the message. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3458" />
+
+        <format octets="34181" target="ftp://ftp.isi.edu/in-notes/rfc3458.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC3501">
+        <front>
+          <title>INTERNET MESSAGE ACCESS PROTOCOL - VERSION 4rev1</title>
+
+          <author fullname="M. Crispin" initials="M." surname="Crispin">
+            <organization></organization>
+          </author>
+
+          <date month="March" year="2003" />
+
+          <abstract>
+            <t>The Internet Message Access Protocol, Version 4rev1 (IMAP4rev1)
+            allows a client to access and manipulate electronic mail messages
+            on a server. IMAP4rev1 permits manipulation of mailboxes (remote
+            message folders) in a way that is functionally equivalent to local
+            folders. IMAP4rev1 also provides the capability for an offline
+            client to resynchronize with the server. IMAP4rev1 includes
+            operations for creating, deleting, and renaming mailboxes,
+            checking for new messages, permanently removing messages, setting
+            and clearing flags, RFC 2822 and RFC 2045 parsing, searching, and
+            selective fetching of message attributes, texts, and portions
+            thereof. Messages in IMAP4rev1 are accessed by the use of numbers.
+            These numbers are either message sequence numbers or unique
+            identifiers. IMAP4rev1 supports a single server. A mechanism for
+            accessing configuration information to support multiple IMAP4rev1
+            servers is discussed in RFC 2244. IMAP4rev1 does not specify a
+            means of posting mail; this function is handled by a mail transfer
+            protocol such as RFC 2821. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3501" />
+
+        <format octets="227640"
+                target="ftp://ftp.isi.edu/in-notes/rfc3501.txt" type="TXT" />
+      </reference>
+
+      <reference anchor="RFC4028">
+        <front>
+          <title>Session Timers in the Session Initiation Protocol
+          (SIP)</title>
+
+          <author fullname="S. Donovan" initials="S." surname="Donovan">
+            <organization></organization>
+          </author>
+
+          <author fullname="J. Rosenberg" initials="J." surname="Rosenberg">
+            <organization></organization>
+          </author>
+
+          <date month="April" year="2005" />
+        </front>
+
+        <seriesInfo name="RFC" value="4028" />
+
+        <format octets="65363" target="ftp://ftp.isi.edu/in-notes/rfc4028.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC4240">
+        <front>
+          <title>Basic Network Media Services with SIP</title>
+
+          <author fullname="E. Burger" initials="E." surname="Burger">
+            <organization></organization>
+          </author>
+
+          <author fullname="J. Van Dyke" initials="J." surname="Van Dyke">
+            <organization></organization>
+          </author>
+
+          <author fullname="A. Spitzer" initials="A." surname="Spitzer">
+            <organization></organization>
+          </author>
+
+          <date month="December" year="2005" />
+
+          <abstract>
+            <t>In SIP-based networks, there is a need to provide basic network
+            media services. Such services include network announcements, user
+            interaction, and conferencing services. These services are basic
+            building blocks, from which one can construct interesting
+            applications. In order to have interoperability between servers
+            offering these building blocks (also known as Media Servers) and
+            application developers, one needs to be able to locate and invoke
+            such services in a well defined manner.&lt;/t&gt;&lt;t&gt; This
+            document describes a mechanism for providing an interoperable
+            interface between Application Servers, which provide application
+            services to SIP-based networks, and Media Servers, which provide
+            the basic media processing building blocks. This memo provides
+            information for the Internet community.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="4240" />
+
+        <format octets="54976" target="ftp://ftp.isi.edu/in-notes/rfc4240.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC4730">
+        <front>
+          <title>A Session Initiation Protocol (SIP) Event Package for Key
+          Press Stimulus (KPML)</title>
+
+          <author fullname="E. Burger" initials="E." surname="Burger">
+            <organization></organization>
+          </author>
+
+          <author fullname="M. Dolly" initials="M." surname="Dolly">
+            <organization></organization>
+          </author>
+
+          <date month="November" year="2006" />
+
+          <abstract>
+            <t>This document describes a SIP Event Package "kpml" that enables
+            monitoring of Dual Tone Multi-Frequency (DTMF) signals and uses
+            Extensible Markup Language (XML) documents referred to as Key
+            Press Markup Language (KPML). The kpml Event Package may be used
+            to support applications consistent with the principles defined in
+            the document titled "A Framework for Application Interaction in
+            the Session Initiation Protocol (SIP)". The event package uses
+            SUBSCRIBE messages and allows for XML documents that define and
+            describe filter specifications for capturing key presses (DTMF
+            Tones) entered at a presentation-free User Interface SIP User
+            Agent (UA). The event package uses NOTIFY messages and allows for
+            XML documents to report the captured key presses (DTMF tones),
+            consistent with the filter specifications, to an Application
+            Server. The scope of this package is for collecting supplemental
+            key presses or mid-call key presses (triggers). [STANDARDS
+            TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="4730" />
+
+        <format octets="120186"
+                target="ftp://ftp.isi.edu/in-notes/rfc4730.txt" type="TXT" />
+      </reference>
+
+      <reference anchor="RFC4733">
+        <front>
+          <title>RTP Payload for DTMF Digits, Telephony Tones, and Telephony
+          Signals</title>
+
+          <author fullname="H. Schulzrinne" initials="H."
+                  surname="Schulzrinne">
+            <organization></organization>
+          </author>
+
+          <author fullname="T. Taylor" initials="T." surname="Taylor">
+            <organization></organization>
+          </author>
+
+          <date month="December" year="2006" />
+
+          <abstract>
+            <t>This memo describes how to carry dual-tone multifrequency
+            (DTMF) signalling, other tone signals, and telephony events in RTP
+            packets. It obsoletes RFC 2833.&lt;/t&gt;&lt;t&gt; This memo
+            captures and expands upon the basic framework defined in RFC 2833,
+            but retains only the most basic event codes. It sets up an IANA
+            registry to which other event code assignments may be added.
+            Companion documents add event codes to this registry relating to
+            modem, fax, text telephony, and channel-associated signalling
+            events. The remainder of the event codes defined in RFC 2833 are
+            conditionally reserved in case other documents revive their
+            use.&lt;/t&gt;&lt;t&gt; This document provides a number of
+            clarifications to the original document. However, it specifically
+            differs from RFC 2833 by removing the requirement that all
+            compliant implementations support the DTMF events. Instead,
+            compliant implementations taking part in out-of-band negotiations
+            of media stream content indicate what events they support. This
+            memo adds three new procedures to the RFC 2833 framework:
+            subdivision of long events into segments, reporting of multiple
+            events in a single packet, and the concept and reporting of state
+            events. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="4733" />
+
+        <format octets="115614"
+                target="ftp://ftp.isi.edu/in-notes/rfc4733.txt" type="TXT" />
+      </reference>
+
+      <reference anchor="RFC4960">
+        <front>
+          <title>Stream Control Transmission Protocol</title>
+
+          <author fullname="R. Stewart" initials="R." surname="Stewart">
+            <organization></organization>
+          </author>
+
+          <date month="September" year="2007" />
+
+          <abstract>
+            <t>This document obsoletes RFC 2960 and RFC 3309. It describes the
+            Stream Control Transmission Protocol (SCTP). SCTP is designed to
+            transport Public Switched Telephone Network (PSTN) signaling
+            messages over IP networks, but is capable of broader
+            applications.&lt;/t&gt;&lt;t&gt; SCTP is a reliable transport
+            protocol operating on top of a connectionless packet network such
+            as IP. It offers the following services to its
+            users:&lt;/t&gt;&lt;t&gt; -- acknowledged error-free
+            non-duplicated transfer of user data,&lt;/t&gt;&lt;t&gt; -- data
+            fragmentation to conform to discovered path MTU
+            size,&lt;/t&gt;&lt;t&gt; -- sequenced delivery of user messages
+            within multiple streams, with an option for order-of-arrival
+            delivery of individual user messages,&lt;/t&gt;&lt;t&gt; --
+            optional bundling of multiple user messages into a single SCTP
+            packet, and&lt;/t&gt;&lt;t&gt; -- network-level fault tolerance
+            through supporting of multi-homing at either or both ends of an
+            association.&lt;/t&gt;&lt;t&gt; The design of SCTP includes
+            appropriate congestion avoidance behavior and resistance to
+            flooding and masquerade attacks. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="4960" />
+
+        <format octets="346022"
+                target="ftp://ftp.isi.edu/in-notes/rfc4960.txt" type="TXT" />
+      </reference>
+
+      <reference anchor="RFC4975">
+        <front>
+          <title>The Message Session Relay Protocol (MSRP)</title>
+
+          <author fullname="B. Campbell" initials="B." surname="Campbell">
+            <organization></organization>
+          </author>
+
+          <author fullname="R. Mahy" initials="R." surname="Mahy">
+            <organization></organization>
+          </author>
+
+          <author fullname="C. Jennings" initials="C." surname="Jennings">
+            <organization></organization>
+          </author>
+
+          <date month="September" year="2007" />
+
+          <abstract>
+            <t>This document describes the Message Session Relay Protocol, a
+            protocol for transmitting a series of related instant messages in
+            the context of a session. Message sessions are treated like any
+            other media stream when set up via a rendezvous or session
+            creation protocol such as the Session Initiation Protocol.
+            [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="4975" />
+
+        <format octets="144254"
+                target="ftp://ftp.isi.edu/in-notes/rfc4975.txt" type="TXT" />
+      </reference>
+
+      <reference anchor="RFC5022">
+        <front>
+          <title>Media Server Control Markup Language (MSCML) and
+          Protocol</title>
+
+          <author fullname="J. Van Dyke" initials="J." surname="Van Dyke">
+            <organization></organization>
+          </author>
+
+          <author fullname="E. Burger" initials="E." surname="Burger">
+            <organization></organization>
+          </author>
+
+          <author fullname="A. Spitzer" initials="A." surname="Spitzer">
+            <organization></organization>
+          </author>
+
+          <date month="September" year="2007" />
+
+          <abstract>
+            <t>Media Server Control Markup Language (MSCML) is a markup
+            language used in conjunction with SIP to provide advanced
+            conferencing and interactive voice response (IVR) functions. MSCML
+            presents an application-level control model, as opposed to
+            device-level control models. One use of this protocol is for
+            communications between a conference focus and mixer in the IETF
+            SIP Conferencing Framework. This memo provides information for the
+            Internet community.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="5022" />
+
+        <format octets="184482"
+                target="ftp://ftp.isi.edu/in-notes/rfc5022.txt" type="TXT" />
+      </reference>
+
+      <reference anchor="RFC5057">
+        <front>
+          <title>Multiple Dialog Usages in the Session Initiation
+          Protocol</title>
+
+          <author fullname="R. Sparks" initials="R." surname="Sparks">
+            <organization></organization>
+          </author>
+
+          <date month="November" year="2007" />
+
+          <abstract>
+            <t>Several methods in the Session Initiation Protocol (SIP) can
+            create an association between endpoints known as a dialog. Some of
+            these methods can also create a different, but related,
+            association within an existing dialog. These multiple
+            associations, or dialog usages, require carefully coordinated
+            processing as they have independent life-cycles, but share common
+            dialog state. Processing multiple dialog usages correctly is not
+            completely understood. What is understood is difficult to
+            implement.&lt;/t&gt;&lt;t&gt; This memo argues that multiple
+            dialog usages should be avoided. It discusses alternatives to
+            their use and clarifies essential behavior for elements that
+            cannot currently avoid them.&lt;/t&gt;&lt;t&gt; This is an
+            informative document and makes no normative statements of any
+            kind. This memo provides information for the Internet
+            community.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="5057" />
+
+        <format octets="62654" target="ftp://ftp.isi.edu/in-notes/rfc5057.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="I-D.ietf-speechsc-mrcpv2">
+        <front>
+          <title>Media Resource Control Protocol Version 2 (MRCPv2)</title>
+
+          <author fullname="Saravanan Shanmugham" initials="S"
+                  surname="Shanmugham">
+            <organization></organization>
+          </author>
+
+          <author fullname="Daniel Burnett" initials="D" surname="Burnett">
+            <organization></organization>
+          </author>
+
+          <date day="19" month="October" year="2007" />
+
+          <abstract>
+            <t>The MRCPv2 protocol allows client hosts to control media
+            service resources such as speech synthesizers, recognizers,
+            verifiers and identifiers residing in servers on the network.
+            MRCPv2 is not a "stand-alone" protocol - it relies on a session
+            management protocol such as the Session Initiation Protocol (SIP)
+            to establish the MRCPv2 control session between the client and the
+            server, and for rendezvous and capability discovery. It also
+            depends on SIP and SDP to establish the media sessions and
+            associated parameters between the media source or sink and the
+            media server. Once this is done, the MRCPv2 protocol exchange
+            operates over the control session established above, allowing the
+            client to control the media processing resources on the speech
+            resource server.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="Internet-Draft"
+                    value="draft-ietf-speechsc-mrcpv2-14" />
+
+        <format target="http://www.ietf.org/internet-drafts/draft-ietf-speechsc-mrcpv2-14.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="TCE">
+        <front>
+          <title>A Novel System for Remote Control of Household Devices Using
+          Digital IP Phones</title>
+
+          <author fullname="Eric Burger" initials="E." surname="Burger">
+            <organization>Cantata Technology, Inc.</organization>
+          </author>
+
+          <date month="May" year="2006" />
+        </front>
+
+        <seriesInfo name="Transactions on Consumer Electronics" value="52(2)" />
+      </reference>
+
+      <reference anchor="W3C.REC-voicexml21-20070619"
+                 target="http://www.w3.org/TR/2007/REC-voicexml21-20070619">
+        <front>
+          <title>Voice Extensible Markup Language (VoiceXML) 2.1</title>
+
+          <author fullname="Scott McGlashan" initials="S." surname="McGlashan">
+            <organization></organization>
+          </author>
+
+          <author fullname="Alex Lee" initials="A." surname="Lee">
+            <organization></organization>
+          </author>
+
+          <author fullname="Brad Porter" initials="B." surname="Porter">
+            <organization></organization>
+          </author>
+
+          <author fullname="Matt Oshry" initials="M." surname="Oshry">
+            <organization></organization>
+          </author>
+
+          <author fullname="RJ Auburn" initials="R." surname="Auburn">
+            <organization></organization>
+          </author>
+
+          <author fullname="Michael Bodell" initials="M." surname="Bodell">
+            <organization></organization>
+          </author>
+
+          <author fullname="Paolo Baggia" initials="P." surname="Baggia">
+            <organization></organization>
+          </author>
+
+          <author fullname="Ken Rehor" initials="K." surname="Rehor">
+            <organization></organization>
+          </author>
+
+          <author fullname="David Burke" initials="D." surname="Burke">
+            <organization></organization>
+          </author>
+
+          <author fullname="Daniel C. Burnett" initials="D." surname="Burnett">
+            <organization></organization>
+          </author>
+
+          <author fullname="Emily Candell" initials="E." surname="Candell">
+            <organization></organization>
+          </author>
+
+          <author fullname="Jerry Carter" initials="J." surname="Carter">
+            <organization></organization>
+          </author>
+
+          <date day="19" month="June" year="2007" />
+        </front>
+
+        <seriesInfo name="World Wide Web Consortium Recommendation"
+                    value="REC-voicexml21-20070619" />
+
+        <format target="http://www.w3.org/TR/2007/REC-voicexml21-20070619"
+                type="HTML" />
+      </reference>
+    </references>
+
+    <section title="Acknowledgements">
+      <t>We are standing on the shoulders of giants. Jonathan Rosenberg did
+      the original "INFO Considered Harmful" Inernet Draft on 26 December
+      2002, which influenced the work group and this document. Likewise, Dean
+      Willis influenced the text from his Internet Draft, "Packaging and
+      Negotiation of INFO Methods for the Session Initiation Protocol" of 15
+      January 2003. My, we have been working on this for a long time!</t>
+
+      <t>This draft has elicited well over 450 messages on the SIP list.
+      People who have argued with its thesis, supported its thesis, added to
+      the examples, or argued with the examples, include the following
+      individuals:<list>
+          <t>Adam Roach, Bram Verburg, Brian Stucker, Chris Boulton, Cullen
+          Jennings, Dale Worley, Dean Willis, Frank Miller, Gonzalo Camarillo,
+          Gordon Beith, Henry Sinnreich, James Jackson, James Rafferty, Jeroen
+          van Bemmel, Joel Halpern, John Elwell, Johnathan Rosenberg, Juha
+          Heinanen, Keith Drage, Kevin Attard Compagno, Manpreet Singh, Martin
+          Dolly, Mary Barnes, Michael Procter, Paul Kyzivat, Peili Xu, Peter
+          Blatherwick, Raj Jain, Rayees Khan, Robert Sparks, Roland Jesske,
+          Salvatore Loreto, Sam Ganesan, Sanjay Sinha, Spencer Dawkins, Steve
+          Langstaff, Sumit Garg, and Xavier Marjou.</t>
+        </list>Christer Holmberg and Hadriel Kaplan provided numerous counter
+      examples that helped hone the message of this document.</t>
+
+      <t>John Elwell and Francois Audet helped with QSIG references. In
+      addition, Francois Audet provided actual text for the revised
+      abstract.</t>
+    </section>
+  </back>
+</rfc>

@@ -1,0 +1,771 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc PUBLIC "" "rfc2629.dtd">
+
+<!--
+    This XML document is the output of clean-for-DTD.xslt; a tool that strips
+    extensions to RFC2629(bis) from documents for processing with xml2rfc.
+-->
+
+<?xml-stylesheet type='text/xsl' href='http://greenbytes.de/tech/webdav/rfc2629.xslt' ?><!--<!DOCTYPE rfc PUBLIC "-//IETF//DTD RFC 2629//EN" "http://xml.resource.org/authoring/rfc2629.dtd">-->
+
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc compact="yes"?>
+<?rfc comments="yes"?>
+<?rfc inline="yes"?>
+<?rfc subcompact="no"?><rfc category="std" docName="draft-broyer-http-cookie-auth-00" ipr="trust200811">
+
+  <front>
+    <title>Cookie-based HTTP Authentication</title>
+
+    <author fullname="Thomas Broyer" initials="T" surname="Broyer">
+      <organization><!-- N/A --></organization>
+
+      <address>
+        <email>t.broyer@ltgt.net</email>
+      </address>
+    </author>
+
+    <date day="4" month="January" year="2009"/>
+
+    <!-- Meta-data Declarations -->
+
+    <area>Applications</area>
+
+    <abstract>
+      <t>
+        This document specifies an HTTP authentication scheme for use when credentials
+        are validated by an out-of-band mechanism (not defined here) and later
+        communicated to the server through the use of a cookie. Which out-of-band
+        mechanism should be used, and how, is described by the 401 (Unauthorized)
+        response body. It is common practice that this mechanism is an HTML form,
+        sending the user's credentials with the use of an HTTP POST request to a tier
+        URL which will set a cookie in response; though this document doesn't preclude
+        the use of other mechanisms.
+      </t>
+    </abstract>
+
+    <note title="Editorial Note (To be removed by RFC Editor before publication)">
+      <t>
+        Distribution of this document is unlimited. Please send comments to the 
+        ietf-http-auth mailing list at <eref target="mailto:ietf-http-auth@osafoundation.org">ietf-http-auth@osafoundation.org</eref>, which may be joined by sending a message with subject 
+        "subscribe" to <eref target="mailto:ietf-http-auth-request@osafoundation.org?subject=subscribe">ietf-http-auth-request@osafoundation.org</eref>.
+      </t>
+      <t>
+        Discussions of the ietf-http-auth mailing list are archived at
+        <eref target="http://lists.osafoundation.org/pipermail/ietf-http-auth/"/>.               
+      </t> 
+      <t>
+        XML versions, latest edits and the issues list for this document
+        are available from <eref target="http://broyer.info/hg/http-cookie-auth/"/>.
+      </t>
+    </note>
+  </front>
+
+  <middle>
+    <section title="Introduction" anchor="Introduction">
+      <t>
+        Authentication on the web can be done either at the <xref target="RFC2616">
+        Hypertext Transfer Protocol (HTTP)</xref> level with a 401 (Unauthorized) status
+        code, or using SSL certificates. Among other issues already listed in
+        <xref target="W3C.NOTE-authentform-19990203">User Agent Authentication
+        Forms</xref>, the former suffers from a poor user experience while the latter
+        can quickly become expensive. That's why the most common authentication mechanism
+        is based on <xref target="W3C.REC-html401-19991224">HyperText Markup Language
+        (HTML) forms</xref> and <xref target="RFC2965">cookies</xref>.
+      </t>
+      <t>
+        However, form-based authentication is almost always implemented with an HTTP
+        redirect to the login form, making it impossible for non-browser user agents
+        to detect a protected resource (this leads to people downloading and saving
+        login forms instead of the protected resource they wanted, web service clients
+        failing with unrecoverable errors, etc.).
+      </t>
+      <t>
+        <xref target="W3C.NOTE-authentform-19990203">User Agent Authentication Forms</xref>
+        tried to overcome this with an amendment to HTML forms making them
+        "HTTP-authentication aware".
+      </t>
+      <t>
+        This document solves the problem the other way around, keeping the mechanism
+        backwards compatible with browsers while making it independant of HTML.
+      </t>
+    </section>
+
+    <section title="Notational Conventions" anchor="notational.conventions">
+      <t>
+        The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL-NOT", "SHOULD",
+        "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be
+        interpreted as described in Appendix  of <xref target="RFC2119"/>. 
+      </t>
+      <t>
+        The terminology used here follows and extends that in the HTTP specification
+        Appendix  of <xref target="RFC2616"/>.
+      </t>
+    </section>
+
+    <section title="Cookie Authentication Scheme">
+      <t>
+        The "cookie" authentication scheme tries to reconcile the current practice of
+        many web sites and web development frameworks of using HTML forms and cookies
+        to authenticate users, and the Access Authentication Framework described in
+        Section 1.2 of <xref target="RFC2617"/>. The user credentials being
+        passed through cookies, the Authorization and Proxy-Authorization request
+        headers are therefore not used.
+      </t>
+
+      <t>
+        The "cookie" authentication scheme cannot be used for proxy authentication
+        (within the value of a Proxy-Authenticate response header) because, as defined
+        in Section 3.5 of <xref target="RFC2965"/>: "Proxies MUST NOT
+        introduce Set-Cookie2 (Cookie) headers of their own in proxy responses
+        (requests)."
+      </t>
+
+      <t>
+        When the origin server sends a 401 (Unauthorized) response containing a
+        WWW-Authenticate header with a "cookie" authentication scheme, the response
+        body gives instructions on how to create the appropriate cookies, generally
+        by issuing another HTTP request (preferably a POST request) to a distinct URL.
+      </t>
+      <!-- JRE: probably better not to rely on Set-Cookie2 -->
+      <t>
+        In most current web sites and web applications, the response body would be an
+        HTML document containing a form; when the form is submitted, the server checks
+        the user-provided form-data and upon validation sends the appropriate
+        Set-Cookie2 response header fields within a 303 (See Other) response redirecting
+        back to the protected resource.
+      </t>
+      <t>
+        The "cookie" authentication scheme is however not limited to such scenarios: the
+        response body could be for example an SVG image with an embedded XForms, or an
+        HTML document with an embedded script that will compute a hash of user-provided
+        data and set the cookie by script before reloading the resource, or some specific
+        entity recognized by the UA, which will authenticate using an out-of-band
+        mechanism and set the appropriate cookie before re-requesting the protected
+        resource. This last scenario might be better solved using another authentication
+        scheme, though this scenario would allow server-side negotiation of the
+        authentication mechanism using content negotiation; instead of the client-side
+        negotiation traditionally used when sending multiple WWW-Authenticate response
+        headers.
+      </t>
+
+      <figure>
+        <preamble>Syntax (using the augmented Backus-Naur Form (BNF) defined
+          in Section 2.1 of <xref target="RFC2616"/>):</preamble>
+        <artwork type="abnf2616"><![CDATA[
+challenge           =  "Cookie" cookie-challenge
+
+cookie-challenge    = 1#( realm | [ form-action ] | cookie-name |
+                      [ secure-cookie-name ] | [auth-param] )
+
+form-action         = "form-action" "=" <"> URI <">
+URI                 = absolute-URI | ( path-absolute [ "?" query ] )
+cookie-name         = "cookie-name" "=" token
+secure-cookie-name  = "secure-cookie-name" "=" token
+
+path-absolute  = <defined in [RFC3986], Section 3.3>
+quoted-string  = <defined in [RFC2616], Section 2.2>
+query          = <defined in [RFC3986], Section 3.4>
+token          = <defined in [RFC2616], Section 2.2>
+]]></artwork></figure>
+
+      <t>
+        The meanings of the values of the directives used above are as follows:
+        <list style="hanging">
+          <t hangText="form-action">
+            OPTIONAL. The value of the "form-action" attribute is the URI reference
+            of the resource that will set the cookies used for authenticating the user
+            in subsequent requests. The value must resolve to an URI reference where
+            the "scheme" part MUST be "http" or "https", the "authority" part contains
+            no "userinfo", the "host" and "abs_path" parts have the same contraints as
+            the "Domain" and "Path" attributes of a Set-Cookie2 response header
+            respectively.
+          </t>
+          <t hangText="cookie-name">
+            REQUIRED. The value of the "cookie-name" attribute is the name of the
+            cookie that is checked by the server to authenticate the user; an UA thus
+            could then inform the user this cookie is necessary to gain access to the
+            protected resource, and eventually use a different, more secure, storage
+            than for other cookies.
+          </t>
+          <t hangText="secure-cookie-name">
+            OPTIONAL. In case the application uses a mix of secured and unsecured
+            channels, the value of the "secure-cookie-name" attribute is the name of
+            the cookie that is checked by the server to authenticate the user when the
+            communication uses a secured channel, while the cookie named by the
+            "cookie-name" attribute will be used for unsecured channel.
+          </t>
+        </list>
+      </t>
+      <t>
+        The applicability of the cookie(s) (its Domain, Port and Path attributes)
+        defines the protection space.
+      </t>
+    </section>
+
+    <section anchor="Acknowledgements" title="Acknowledgements">
+    </section>
+
+    <!-- Possibly a 'Contributors' section ... -->
+
+    <section anchor="IANA" title="IANA Considerations">
+      <t>This memo includes no request to IANA.</t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>
+        As with any use of cookies, care should be taken by servers to avoid cookie
+        spoofing, and clients to prevent unexpected cookie sharing (see Section 6 and Section 7 of <xref target="RFC2965"/>).
+      </t>
+
+      <t>
+        However, using cookies for account information requires that some additional
+        measures be taken. Using <xref target="RFC2818">HTTP Over TLS</xref> or other
+        means of encrypting the conversation is sufficient to mitigate most threats,
+        though it requires that some additional measures be taken, as described in this
+        section.
+      </t>
+
+      <t>
+        To mitigate replay attacks (re-use of a sniffed cookie), the value of the
+        cookie used for authentication SHOULD NOT contain the users credentials but
+        rather a key associated with the authentication session, and this key SHOULD
+        be renewed (and expired) frequently.
+      </t>
+      
+      <t>
+        Sensitive information (such as the user's IBAN on an online store) and
+        sensitive actions (such as confirming an order) SHOULD only happen on a
+        secure channel such as <xref target="RFC2818">HTTP Over TLS</xref>, and
+        protected with a secure cookie (a cookie with the "Secure" bit set) so that
+        it cannot be stolen on a unsecured channel.
+      </t>
+      
+      <t>
+        This document does not specify how credentials are sent to the "form-action"
+        URL, though care should be taken that those credentials cannot be sniffed.
+        In the case of an HTML form, the "form-action" SHOULD use a secure channel
+        such as <xref target="RFC2818">HTTP Over TLS</xref>.
+      </t>
+      
+      <t><cref>
+        TODO: document how secure-cookie-name helps with security by preventing
+        replay-attacks. The cookie must obviously have the Secure attribute set.
+      </cref></t>
+      
+      <t><cref>
+        TODO: add some words about CSRF (and find a normative reference). Mention
+        "logout" as a mean to mitigate CSRF.
+      </cref></t>
+    </section>
+  </middle>
+
+  <!--  *****BACK MATTER ***** -->
+
+  <back>
+    <!-- References split into informative and normative -->
+
+    <references title="Normative References">
+      <reference anchor="RFC2119">
+        <front>
+          <title abbrev="RFC Key Words">Key words for use in RFCs to Indicate Requirement Levels</title>
+          <author initials="S." surname="Bradner" fullname="Scott Bradner">
+          <organization>Harvard University</organization>
+          <address>
+            <email>sob@harvard.edu</email>
+          </address></author>
+          <date month="March" year="1997"/>
+        </front>
+        <seriesInfo name="BCP" value="14"/>
+        <seriesInfo name="RFC" value="2119"/>
+      </reference>
+      
+      <reference anchor="RFC2616">
+        <front>
+          <title>Hypertext Transfer Protocol -- HTTP/1.1</title>
+          <author initials="R." surname="Fielding" fullname="R. Fielding">
+            <organization>University of California, Irvine</organization>
+            <address><email>fielding@ics.uci.edu</email></address>
+          </author>
+          <author initials="J." surname="Gettys" fullname="J. Gettys">
+            <organization>W3C</organization>
+            <address><email>jg@w3.org</email></address>
+          </author>
+          <author initials="J." surname="Mogul" fullname="J. Mogul">
+            <organization>Compaq Computer Corporation</organization>
+            <address><email>mogul@wrl.dec.com</email></address>
+          </author>
+          <author initials="H." surname="Frystyk" fullname="H. Frystyk">
+            <organization>MIT Laboratory for Computer Science</organization>
+            <address><email>frystyk@w3.org</email></address>
+          </author>
+          <author initials="L." surname="Masinter" fullname="L. Masinter">
+            <organization>Xerox Corporation</organization>
+            <address><email>masinter@parc.xerox.com</email></address>
+          </author>
+          <author initials="P." surname="Leach" fullname="P. Leach">
+            <organization>Microsoft Corporation</organization>
+            <address><email>paulle@microsoft.com</email></address>
+          </author>
+          <author initials="T." surname="Berners-Lee" fullname="T. Berners-Lee">
+            <organization>W3C</organization>
+            <address><email>timbl@w3.org</email></address>
+          </author>
+          <date month="June" year="1999"/>
+        </front>
+        <seriesInfo name="RFC" value="2616"/>
+      </reference>
+
+      <reference anchor="RFC2617">
+        <front>
+          <title abbrev="HTTP Authentication">HTTP Authentication: Basic and Digest Access Authentication</title>
+          <author initials="J." surname="Franks" fullname="John Franks">
+            <organization>Northwestern University, Department of Mathematics</organization>
+            <address>
+            <postal>
+            <street>Northwestern University</street>
+            <city>Evanston</city>
+            <region>IL</region>
+            <code>60208-2730</code>
+            <country>USA</country></postal>
+            <email>john@math.nwu.edu</email></address></author>
+          <author initials="P.M." surname="Hallam-Baker" fullname="Phillip M. Hallam-Baker">
+            <organization>Verisign Inc.</organization>
+            <address>
+            <postal>
+            <street>301 Edgewater Place</street>
+            <street>Suite 210</street>
+            <city>Wakefield</city>
+            <region>MA</region>
+            <code>01880</code>
+            <country>USA</country></postal>
+            <email>pbaker@verisign.com</email></address></author>
+          <author initials="J.L." surname="Hostetler" fullname="Jeffery L. Hostetler">
+            <organization>AbiSource, Inc.</organization>
+            <address>
+            <postal>
+            <street>6 Dunlap Court</street>
+            <city>Savoy</city>
+            <region>IL</region>
+            <code>61874</code>
+            <country>USA</country></postal>
+            <email>jeff@AbiSource.com</email></address></author>
+          <author initials="S.D." surname="Lawrence" fullname="Scott D. Lawrence">
+            <organization>Agranat Systems, Inc.</organization>
+            <address>
+            <postal>
+            <street>5 Clocktower Place</street>
+            <street>Suite 400</street>
+            <city>Maynard</city>
+            <region>MA</region>
+            <code>01754</code>
+            <country>USA</country></postal>
+            <email>lawrence@agranat.com</email></address></author>
+          <author initials="P.J." surname="Leach" fullname="Paul J. Leach">
+            <organization>Microsoft Corporation</organization>
+            <address>
+            <postal>
+            <street>1 Microsoft Way</street>
+            <city>Redmond</city>
+            <region>WA</region>
+            <code>98052</code>
+            <country>USA</country></postal>
+            <email>paulle@microsoft.com</email></address></author>
+          <author initials="A." surname="Luotonen" fullname="Ari Luotonen">
+            <organization>Netscape Communications Corporation</organization>
+            <address>
+            <postal>
+            <street>501 East Middlefield Road</street>
+            <city>Mountain View</city>
+            <region>CA</region>
+            <code>94043</code>
+            <country>USA</country></postal></address></author>
+          <author initials="L." surname="Stewart" fullname="Lawrence C. Stewart">
+            <organization>Open Market, Inc.</organization>
+            <address>
+            <postal>
+            <street>215 First Street</street>
+            <city>Cambridge</city>
+            <region>MA</region>
+            <code>02142</code>
+            <country>USA</country></postal>
+            <email>stewart@OpenMarket.com</email></address></author>
+          <date year="1999" month="June"/>
+          <abstract>
+            <t>
+               "HTTP/1.0", includes the specification for a Basic Access
+               Authentication scheme. This scheme is not considered to be a secure
+               method of user authentication (unless used in conjunction with some
+               external secure system such as SSL ), as the user name and
+               password are passed over the network as cleartext.
+                  </t>
+            <t>
+               This document also provides the specification for HTTP's
+               authentication framework, the original Basic authentication scheme
+               and a scheme based on cryptographic hashes, referred to as "Digest
+               Access Authentication".  It is therefore also intended to serve as a
+               replacement for RFC 2069 .  Some optional elements specified by
+               RFC 2069 have been removed from this specification due to problems
+               found since its publication; other new elements have been added for
+               compatibility, those new elements have been made optional, but are
+               strongly recommended.
+                  </t>
+            <t>
+               Like Basic, Digest access authentication verifies that both parties
+               to a communication know a shared secret (a password); unlike Basic,
+               this verification can be done without sending the password in the
+               clear, which is Basic's biggest weakness. As with most other
+               authentication protocols, the greatest sources of risks are usually
+               found not in the core protocol itself but in policies and procedures
+               surrounding its use.
+                </t></abstract></front>
+
+        <seriesInfo name="RFC" value="2617"/>
+        <format type="TXT" octets="77638" target="ftp://ftp.isi.edu/in-notes/rfc2617.txt"/>
+        <format type="HTML" octets="116625" target="http://xml.resource.org/public/rfc/html/rfc2617.html"/>
+        <format type="XML" octets="88198" target="http://xml.resource.org/public/rfc/xml/rfc2617.xml"/>
+      </reference>
+
+      
+      <reference anchor="RFC2818">
+
+        <front>
+          <title>HTTP Over TLS</title>
+          <author initials="E." surname="Rescorla" fullname="E. Rescorla">
+            <organization/></author>
+          <date year="2000" month="May"/>
+          <abstract>
+            <t>This memo describes how to use Transport Layer Security (TLS) to secure Hypertext Transfer Protocol (HTTP) connections over the Internet.  This memo provides information for the Internet community.</t></abstract></front>
+
+        <seriesInfo name="RFC" value="2818"/>
+        <format type="TXT" octets="15170" target="ftp://ftp.isi.edu/in-notes/rfc2818.txt"/>
+      </reference>
+
+
+      <reference anchor="RFC2965">
+
+        <front>
+          <title>HTTP State Management Mechanism</title>
+          <author initials="D. M." surname="Kristol" fullname="David M. Kristol">
+            <organization>Bell Laboratories, Lucent Technologies</organization>
+            <address>
+              <postal>
+                <street>600 Mountain Ave.  Room 2A-333</street>
+                <city>Murray Hill</city>
+                <region>NJ</region>
+                <code>07974</code></postal>
+              <phone>(908) 582-2250</phone>
+              <facsimile>(908) 582-1239</facsimile>
+              <email>dmk@bell-labs.com</email></address></author>
+          <author initials="L." surname="Montulli" fullname="Lou Montulli">
+            <organization>Epinions.com, Inc.</organization>
+            <address>
+              <postal>
+                <street>2037 Landings Dr.</street>
+                <city>Mountain View</city>
+                <region>CA</region>
+                <code>94301</code></postal>
+              <email>lou@montulli.org</email></address></author>
+          <date year="2000" month="October"/>
+          <abstract>
+            <t>
+                 This document specifies a way to create a stateful session with
+                 Hypertext Transfer Protocol (HTTP) requests and responses.  It
+                 describes three new headers, Cookie, Cookie2, and Set-Cookie2, which
+                 carry state information between participating origin servers and user
+                 agents.  The method described here differs from Netscape's Cookie
+                 proposal , but it can interoperate with HTTP/1.0 user
+                 agents that use Netscape's method.  (See the HISTORICAL section.)
+                </t>
+            <t>
+                 This document reflects implementation experience with RFC 2109 and
+                 obsoletes it.
+                 </t></abstract></front>
+
+        <seriesInfo name="RFC" value="2965"/>
+        <format type="TXT" octets="56176" target="ftp://ftp.isi.edu/in-notes/rfc2965.txt"/>
+        <format type="HTML" octets="84336" target="http://xml.resource.org/public/rfc/html/rfc2965.html"/>
+        <format type="XML" octets="60779" target="http://xml.resource.org/public/rfc/xml/rfc2965.xml"/>
+      </reference>
+
+      <reference anchor="RFC3986">
+        <front>
+          <title abbrev="URI Generic Syntax">Uniform Resource Identifier (URI): Generic Syntax</title>
+          <author initials="T." surname="Berners-Lee" fullname="Tim Berners-Lee">
+          <organization abbrev="W3C/MIT">World Wide Web Consortium</organization>
+          <address>
+          <postal>
+          <street>Massachusetts Institute of Technology</street>
+          <street>77 Massachusetts Avenue</street>
+          <city>Cambridge</city>
+          
+          <region>MA</region>
+          <code>02139</code>
+          <country>USA</country></postal>
+          <phone>+1-617-253-5702</phone>
+          <facsimile>+1-617-258-5999</facsimile>
+          <email>timbl@w3.org</email>
+          <uri>http://www.w3.org/People/Berners-Lee/</uri></address></author>
+          <author initials="R." surname="Fielding" fullname="Roy T. Fielding">
+          <organization abbrev="Day Software">Day Software</organization>
+          
+          <address>
+          <postal>
+          <street>5251 California Ave., Suite 110</street>
+          <city>Irvine</city>
+          <region>CA</region>
+          <code>92617</code>
+          <country>USA</country></postal>
+          <phone>+1-949-679-2960</phone>
+          <facsimile>+1-949-679-2972</facsimile>
+          <email>fielding@gbiv.com</email>
+          
+          <uri>http://roy.gbiv.com/</uri></address></author>
+          <author initials="L." surname="Masinter" fullname="Larry Masinter">
+          <organization abbrev="Adobe Systems">Adobe Systems Incorporated</organization>
+          <address>
+          <postal>
+          <street>345 Park Ave</street>
+          <city>San Jose</city>
+          <region>CA</region>
+          <code>95110</code>
+          <country>USA</country></postal>
+          
+          <phone>+1-408-536-3024</phone>
+          <email>LMM@acm.org</email>
+          <uri>http://larry.masinter.net/</uri></address></author>
+          <date year="2005" month="January"/>
+        </front>
+        <seriesInfo name="RFC" value="3986"/>
+      </reference>
+    </references>
+
+    <references title="Informative References">
+      <reference anchor="W3C.REC-html401-19991224" target="http://www.w3.org/TR/1999/REC-html401-19991224">
+          <front>
+            <title>HTML 4.01 Specification</title>
+
+            <author initials="I." surname="Jacobs" fullname="Ian Jacobs">
+              <organization/>
+            </author>
+
+            <author initials="A." surname="Hors" fullname="Arnaud Le Hors">
+              <organization/>
+            </author>
+
+            <author initials="D." surname="Raggett" fullname="David Raggett">
+              <organization/>
+            </author>
+
+            <date month="December" day="24" year="1999"/>
+          </front>
+
+          <seriesInfo name="World Wide Web Consortium Recommendation" value="REC-html401-19991224"/>
+          <format type="HTML" target="http://www.w3.org/TR/1999/REC-html401-19991224"/>
+        </reference>
+
+      <reference anchor="W3C.NOTE-authentform-19990203">
+        <front>
+          <title>User Agent Authentication Forms</title>
+
+          <author initials="S" surname="Lawrence" fullname="Scott Lawrence">
+            <organization/>
+          </author>
+
+          <author initials="P" surname="Leach" fullname="Paul Leach">
+            <organization/>
+          </author>
+
+          <date month="February" day="3" year="1999"/>
+        </front>
+
+        <seriesInfo name="W3C NOTE" value="NOTE-authentform-19990203"/>
+        <format type="HTML" target="http://www.w3.org/TR/1999/NOTE-authentform-19990203"/>
+      </reference>
+
+    </references>
+
+    <section title="Examples" anchor="examples">
+    
+      <t>
+        Most detail of request and response headers has been omitted. Assume that the
+        user agent has no stored cookies.
+      </t>
+
+      <section title="Simple example (everything goes through TLS)">
+      
+<!-- JRE: examples: why are protocol & authority in the Request-URI?? -->      
+        <list style="numbers">
+          <t>
+            User Agent -&gt; Server
+            <figure><artwork type="message/http; msgtype=&quot;request&quot;"><![CDATA[
+GET https://www.example.com/acme/ HTTP/1.1
+]]></artwork></figure>
+          </t>
+          <t>
+            Server -&gt; User Agent
+            <figure><artwork type="message/http; msgtype=&quot;response&quot;"><![CDATA[
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Cookie realm="Acme"
+        form-action="/acme/login"
+        cookie-name=ACME_TICKET
+Content-Type: text/html
+
+<title>Unauthorized</title>
+<form action="/acme/login" method=POST>
+<input type=hidden name=referer value="/acme/">
+<p><label>Username: <input name=user></label>
+<p><label>Password: <input name=pwd type=password></label>
+<p><button type=submit>Sign in</button>
+<p><a href="/acme/register">Register for an account</a>
+</form>
+]]></artwork></figure>
+          </t>
+          <t>
+            User Agent -&gt; Server
+            <figure><artwork type="message/http; msgtype=&quot;request&quot;"><![CDATA[
+POST https://www.example.com/acme/login HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+referer=%2Facme%2F&user=Aladdin&password=open%20sesame
+]]></artwork></figure>
+          </t>
+          <t>
+            Server -&gt; User Agent
+            <figure><artwork type="message/http; msgtype=&quot;response&quot;"><![CDATA[
+HTTP/1.1 303 See Other
+Location: https://www.example.com/acme/
+Set-Cookie2: ACME_TICKET="sdf354s5c1s8e1s"; Version="1";
+        Path="/acme"; Secure
+]]></artwork></figure>
+          </t>
+          <t>
+            User Agent -&gt; Server
+            <figure><artwork type="message/http; msgtype=&quot;request&quot;"><![CDATA[
+GET https://www.example.com/acme/ HTTP/1.1
+Cookie: $Version="1"; ACME_TICKET="sdf354s5c1s8e1s"; $Path="/acme"
+]]></artwork></figure>
+          </t>
+          <t>
+            Server -&gt; User Agent
+            <figure><artwork type="message/http; msgtype=&quot;response&quot;"><![CDATA[
+HTTP/1.1 200 OK
+]]></artwork></figure>
+          </t>
+        </list>
+      </section>
+      
+      <section title="Mixed HTTP/HTTPS example">
+        <list style="numbers">
+          <t>
+            User Agent -&gt; Server
+            <figure><artwork type="message/http; msgtype=&quot;request&quot;"><![CDATA[
+GET http://www.example.com/acme/ HTTP/1.1
+]]></artwork></figure>
+          </t>
+          <t>
+            Server -&gt; User Agent
+            <figure><artwork type="message/http; msgtype=&quot;response&quot;"><![CDATA[
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Cookie realm="Acme"
+        form-action="https://secure.example.com/acme/login"
+        cookie-name=ACME_TICKET
+        secure-cookie-name=ACME_SECURE_TICKET
+Content-Type: text/html
+
+<title>Unauthorized</title>
+<form action="https://secure.example.com/acme/login" method=POST>
+<input type=hidden name=referer
+       value="http://www.example.com/acme/">
+<p><label>Username: <input name=user></label>
+<p><label>Password: <input name=pwd type=password></label>
+<p><button type=submit>Sign in</button>
+<p><a href="/acme/register">Register for an account</a>
+</form>
+]]></artwork></figure>
+          </t>
+          <t>
+            User Agent -&gt; Server
+            <figure><artwork type="message/http; msgtype=&quot;request&quot;"><![CDATA[
+POST https://secure.example.com/acme/login HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+referer=http%3A%2F%2Fwww.example.com%2Facme%2F&user=Aladdin&password=open%20sesame
+]]></artwork></figure>
+          </t>
+          <t>
+            Server -&gt; User Agent
+            <figure><artwork type="message/http; msgtype=&quot;response&quot;"><![CDATA[
+HTTP/1.1 303 See Other
+Location: http://www.example.com/acme/
+Set-Cookie2: ACME_TICKET="sdf354s5c1s8e1s"; Version="1";
+        Path="/acme"; Domain=".example.com"
+Set-Cookie2: ACME_SECURE_TICKET="drg53d51fd535rg"; Version="1";
+        Path="/acme"; Domain=".example.com"; Secure
+]]></artwork></figure>
+          </t>
+          <t>
+            User Agent -&gt; Server
+            <figure><artwork type="message/http; msgtype=&quot;request&quot;"><![CDATA[
+GET http://www.example.com/acme/ HTTP/1.1
+Cookie: $Version="1"; ACME_TICKET="sdf354s5c1s8e1s";
+        $Path="/acme"; $Domain=".example.com"
+]]></artwork></figure>
+          </t>
+          <t>
+            Server -&gt; User Agent
+            <figure><artwork type="message/http; msgtype=&quot;response&quot;"><![CDATA[
+HTTP/1.1 200 OK
+]]></artwork></figure>
+          </t>
+          <t>
+            User Agent -&gt; Server
+            <figure><artwork type="message/http; msgtype=&quot;request&quot;"><![CDATA[
+GET https://secure.example.com/acme/ HTTP/1.1
+Cookie: $Version="1"; ACME_SECURE_TICKET="drg53d51fd535rg";
+        $Path="/acme"; $Domain=".example.com"
+]]></artwork></figure>
+          </t>
+          <t>
+            Server -&gt; User Agent
+            <figure><artwork type="message/http; msgtype=&quot;response&quot;"><![CDATA[
+HTTP/1.1 200 OK
+]]></artwork></figure>
+          </t>
+        </list>
+      </section>
+      
+      <section title="Cross-domain example">
+        <t><cref>
+          TODO: using CSRF and server-to-server communication to achieve cross-domain
+          single sign-on between sso.some-co.com and www.some-tm.net.
+        </cref></t>
+        <t>
+          At some-tm.net, the 401 response body loads a javascript from
+          sso.some-co.com that sets a "temporary" cookie if already authenticated
+          or redirects to sso.some-co.com otherwise. In the former case, the
+          server validates the "temporary" cookie by calling sso.some-co.com and
+          then sets the appropriate cookie to authenticate the user at some-tm.net.
+          On the latter case, the server then redirects the browser back to
+          some-tm.net with some token in the URL; this token is validated the same
+          way as with the "temporary" cookie and the browser is then redirected
+          back to the protected resource.
+        </t>
+        <t>
+          Fallback in case javascript is not available is a &lt;meta refresh&gt;
+          (in a &lt;noscript&gt;) to redirect the browser to sso.some-co.com. The
+          process is then similar to JA-SIG Central Authentication Service (CAS).
+        </t>
+        <t>
+          Or maybe these should be two distinct examples?
+        </t>
+        <t>
+          And do not forget the "single-logout" issue.
+        </t>
+      </section>
+    </section>
+
+  </back>
+</rfc>

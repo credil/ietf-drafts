@@ -1,0 +1,1275 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?xml-stylesheet type="text/xsl" href="rfc2629.xslt" ?>
+
+<rfc category="info" ipr="trust200811" docName="draft-hammer-discovery-02">
+
+  <?rfc strict="yes" ?>
+  <?rfc toc="yes" ?>
+  <?rfc tocdepth="2" ?>
+  <?rfc symrefs="yes" ?>
+  <?rfc sortrefs="yes" ?>
+  <?rfc compact="yes" ?>
+  <?rfc subcompact="no" ?>
+
+  <front>
+    
+    <title abbrev="Descriptor Discovery">Link-based Resource Descriptor Discovery</title>
+
+    <author initials="E" surname="Hammer-Lahav" fullname="Eran Hammer-Lahav">
+      <organization>
+        Yahoo!
+      </organization>
+      <address>
+        <email>eran@hueniverse.com</email>
+        <uri>http://hueniverse.com</uri>
+      </address>
+    </author>
+
+    <date year="2009"/>
+
+    <abstract>
+      <t>
+        This memo describes a process for obtaining information about a resource identified
+        by a URI. The 'information about a resource', a resource descriptor, provides machine-readable
+        information that aims to increase interoperability and enhance the interaction with the
+        resource. This memo only defines the process for locating and obtaining the descriptor, but
+        leaves the descriptor format and its interpretation out of scope.
+      </t>
+    </abstract>
+  
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>
+        This memo defines a process for locating descriptors for resources identified with URIs.
+        Resource descriptors are documents (usually based on well known serialization languages
+        such as XML, RDF, and JSON) which provide machine-readable information about resources
+        (resource metadata) for the purpose of promoting interoperability and assist in
+        interacting with unknown resources that support known interfaces.
+      </t>
+      <t>
+        While many methods provide the ability to link a resource to its metadata, none of these
+        methods fully address the requirements of a uniform and easily implementable process. These
+        requirements include the ability for resources to self-declare the location of their
+        descriptors, the ability to access descriptors directly without interacting with the
+        resource, and support a wide range of platforms and scale of deployment. They must also
+        be fully compliant with existing web protocols, and support extensibility.
+        These requirements, and the analysis used as the basis for this memo are explains in
+        detail in <xref target="analysis" />.
+      </t>
+      <t>
+        For example, a web page about an upcoming meeting can provide in its descriptor document
+        the location of the meeting organizer's free/busy information to potentially negotiate a
+        different time. A social network profile page descriptor can identify the location of the
+        user's address book as well as accounts on other sites. A web service implementing an API
+        with optional components can advertise which of these are supported.
+      </t>
+      <t>
+        This memo describes the first step in the discovery process in which the resource
+        descriptor document is located and retrieved. Other steps, which are outside the scope of
+        this memo, include parsing the descriptor document based on its format (such as POWDER
+        <xref target="POWDER" />, XRD <xref target="XRD" />, and Metalink
+        <xref target="I-D.bryan-metalink" />) and utilizing it based on the application.
+      </t>
+      <t>
+        Discovery can be performed before, after, or without obtaining a representation of the
+        resource. Performing discovery ahead of accessing a representation allows the client not to
+        reply on assumptions about the properties of the resource. Performing discovery after a
+        representation has been obtained enables further interaction with it.
+      </t>
+      <t>
+        Given the wide range of 'information about a resource', no single descriptor format can
+        adequately accommodate such scope. However, there is great value in making the process
+        locating the descriptor uniform across formats. While HTTP is the most common protocol
+        used in association with discovery and is explicitly specified in this memo, other protocols
+        MAY be used.
+      </t>
+	  <t>
+	     Please discuss this draft on the
+		 <eref target="http://lists.w3.org/Archives/Public/www-talk/">www-talk@w3.org</eref>
+		 mailing list.
+      </t>
+    </section>
+
+    <section title="Notational Conventions">
+      <t>
+        The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+        "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in
+        <xref target="RFC2119" />.
+      </t>
+      <t>
+        This document uses the Augmented Backus-Naur Form (ABNF) notation of <xref target="RFC2616" />.
+        Additionally, the following rules are included from <xref target="RFC3986" />: reserved and
+        unreserved, and from <xref target="I-D.nottingham-http-link-header" />: link-param.
+      </t>
+    </section>
+    
+    <section title="The describedby Link Relation">
+      <t>
+        The methods described in this memo express the location of the resource descriptor as a link
+        relation, utilizing the link framework defined by <xref target="I-D.nottingham-http-link-header" />.
+        The association of a descriptor document with the resource it describes is declared using
+        the "describedby" link relation type.
+      </t>
+      <t>
+        The "describedby" link relation is defined in <xref target="POWDER" /> and registered as:
+        <list style="empty">
+          <t>
+            The relationship A "describedby" B asserts that resource B provides a description of
+            resource A. There are no constraints on the format or representation of either A or B,
+            neither are there any further constraints on either resource.
+          </t>
+        </list>
+      </t>
+      <t>
+        Since a single resource can have many descriptors, the "describedby" link relation has a
+        one-to-many structure (the question whether a single descriptor can describe multiple
+        resources is outside the scope of this memo). In the case of multiple "describedby" links
+        obtained from a single method, selecting which link to use is application-specific.
+      </t>
+      <t>
+        To promote interoperability, applications referencing this memo SHOULD clearly define the
+        application-specific criteria used to select between "describedby" links. This MAY be done by:
+
+        <list style="symbols">
+          <t>
+            Supporting a single descriptor format, or defining an order of precedence for multiple
+            descriptor formats. Applications MAY require the presence of the link "type" attribute
+            with the mime-type of the required format.
+          </t>
+          <t>
+            Using the "describedby" relation type together with another application-specific
+            relation type in the same link. The application-specific relation type can be
+            registered or an extension.
+          </t>
+          <t>
+            Specifying additional link attributes using link-extensions.
+          </t>
+        </list>
+      </t>
+      <t>
+        Link selection MUST NOT depend on the order in which multiple links are obtained from a
+        single method. Applications MUST NOT impose constraints on the usage of the "describedby"
+        relation type as it is likely to be used by other applications in association with the same
+        resource.
+      </t>
+    </section>
+
+    <section title="Identifying Descriptor Location">
+      <t>
+        The descriptor location (URI) is a function of the resource URI. This section defines three
+        methods which together satisfy the requirements defined in <xref target="analysis" />. While
+        each method on its own satisfies the requirements partially, together they provide enough
+        flexibility for most use cases. Each of the following three methods is performed by using
+        the resource URI to identify its descriptor URI.
+      </t>
+      <t>
+        In many cases, a request for one URI leads to requesting other URIs, as is the case with
+        HTTP redirections. Because the decision whether to use such URIs is application-specific,
+        discovery is constrained to a single URI identifying the resource. Any other resource URIs
+        received MUST be considered as a separate and discrete input into the discovery function.
+        If a resource URI obtained during the performance of these methods is found to be more
+        relevant to the application, the discovery process MUST be restarted with the new resource
+        URI as its input.
+      </t>
+      <t>
+        For example, an HTTP HEAD request for URI A returns a redirect (307) response with a set of
+        "describedby" links, and identifies the temporary location of the representation at URI B.
+        An HTTP HEAD request for URI B returns a successful (200) response with its own set of
+        "describedby" links. An application MAY choose to define a process in which the two
+        sets of links are obtained, prioritized, and utilized, however, it MUST do so by
+        explicitly instructing the client to perform discovery multiple times, as each is
+        considered separate and distinct discovery.
+      </t>
+
+      <section title="Method Selection">
+        <t>
+          Each method presents a different set of requirements. The criteria used to determine
+          which methods a server SHOULD support and client SHOULD attempt are based on a
+          combination of factors:
+
+          <list style="symbols">
+            <t>
+              The ability to offer and obtain a representation of the resource by dereferencing its
+              URI.
+            </t>
+            <t>
+              The availability of a representation supporting &lt;LINK&gt; markup
+              compatible with <xref target="I-D.nottingham-http-link-header" />.
+            </t>
+            <t>
+              The availability of an HTTP representation of the resource and the ability to provide
+              and access link information in its response header.
+            </t>
+          </list>
+        </t>
+        <t>
+          The methods are listed is based on the restrictiveness of their requirements in
+          descending order, from the most specialized to the most generic. This ordering however,
+          does not imply the order in which multiple applicable methods should be attempted.
+          Because different methods are more appropriate in different circumstances, it is up to
+          each application to define how they should be used together.
+        </t>
+        <t>
+          To promote interoperability, applications referencing this memo MUST clearly define the
+          relationship between the three methods as either:
+
+          <list style="symbols">
+            <t>
+              equal, all methods MUST produce the same set of resource descriptors and clients MAY
+              attempt either method according to their capabilities, or
+            </t>
+            <t>
+              with an application-specific order of precedence, where methods MUST be attempted in
+              a specific order.
+            </t>
+          </list>
+        </t>
+      </section>
+
+      <section title="The &lt;LINK&gt; Element">
+        <t>
+          The &lt;LINK&gt; element method is limited to resources with an available markup
+          representation that supports typed-relations using the &lt;LINK&gt; element, such as
+          HTML <xref target="W3C.REC-html401-19991224" />, XHTML
+          <xref target="W3C.REC-xhtml1-20020801" />, and Atom <xref target="RFC4287" />. Other
+          markup formats are permitted as long as the semantics of their &lt;LINK&gt; elements are
+          fully compatible with the link framework defined in
+          <xref target="I-D.nottingham-http-link-header" />. This method requires the retrieval of
+          a resource representation. While HTTP is the most common transport for such documents,
+          this method is transport independent.
+        </t>
+        <figure>
+          <preamble>
+            For example:
+          </preamble>
+          <artwork>
+  &lt;LINK href="http://example.com/resource;about"
+          rel="describedby" type="application/powder+xml"&gt;
+          </artwork>
+        </figure>
+        <t>
+          A client trying to obtain the location of the resource's descriptor using this method
+          SHALL:
+
+          <list style="numbers">
+            <t>
+              Retrieve a representation of the resource using the applicable transport for that
+              resource URI. If the markup document is obtained using HTTP, it MUST only be used
+              by the client if the document is a valid representation of the resource identified
+              by the HTTP request URI, typically in a response with a successful (2xx) or
+              redirection (3xx) status code. If no such valid representation of the request URI is
+              found, the method fails.
+            </t>
+            <t>
+              Parse the document as defined by its format specification and look for &lt;LINK&gt;
+              elements with a "rel" attribute value containing the "describedby" relation. The
+              client MUST obey the document markup schema and ignore any invalid elements (such as
+              &lt;LINK&gt; elements outside the &lt;HEAD&gt; section of an HTML document). This is
+              done to avoid unintentional markup from other parts of the document to be used for
+              discovery purposes, which can have vast impact on usability and security.
+            </t>
+            <t>
+              Narrow down the selection if more than one "describedby" link is found, following the
+              application-specific criteria. The descriptor location is obtained from the value of
+              the "href" attribute in the selected &lt;LINK&gt; element.
+            </t>
+          </list>
+        </t>
+        <t>
+          &lt;LINK&gt; elements MAY include other relation types together with "describedby" in
+          a single "rel" attribute (for example 'rel="describedby copyright"'). Clients MUST be
+          properly process use such multiple relation "rel" attributes as defined by the format
+          specification.
+        </t>
+      </section>
+
+      <section title="The HTTP Link Header">
+        <t>
+          The HTTP Link header method is limited to resources for which an HTTP GET or HEAD request
+          returns a 2xx, 3xx, or 4xx HTTP response <xref target="RFC2616" />. This method uses the
+          Link header defined in <xref target="I-D.nottingham-http-link-header" /> and requires the
+          retrieval of a resource representation header.
+        </t>
+        <figure>
+          <preamble>
+            For example:
+          </preamble>
+          <artwork>
+  Link: &lt;http://example.com/resource;about&gt;; rel="describedby";
+            type="application/powder+xml"
+          </artwork>
+        </figure>
+        <t>
+          A client trying to obtain the location of the resource's descriptor using this method
+          SHALL:
+
+          <list style="numbers">
+            <t>
+              Make an HTTP (or HTTPS as required) GET or HEAD request to the resource URI to obtain
+              a valid response header. If the HTTP response carries a status code
+              other than successful (2xx), redirection (3xx), or client error (4xx), the method
+              fails.
+            </t>
+            <t>
+              Parse the HTTP response header and look for Link headers with a "rel" parameter value
+              containing the "describedby" relation.
+            </t>
+            <t>
+              Narrow down the selection if more than one "describedby" link is found, following the
+              application-specific criteria. The descriptor location is obtained from the "&lt;&gt;"
+              enclosed URI-reference in the selected Link header.
+            </t>
+          </list>
+        </t>
+        <t>
+          Link headers MAY include other relation types together with "describedby" in
+          a single "rel" parameter (for example 'rel="describedby copyright"'). Clients MUST be
+          properly process use such multiple relation "rel" attributes as defined by
+          <xref target="I-D.nottingham-http-link-header" />.
+        </t>
+      </section>
+
+      <section title="The Host Metadata Document">
+        <t>
+          The host metadata document method is available for any resource identified by a URI whose
+          authority supports the host-meta document defined in <xref target="I-D.nottingham-site-meta" />.
+          This method does not require obtaining any representation of the resource, and operates solely
+          using the resource URI.
+        </t>
+        <t>
+          The link relation between the resource URI and the descriptor URI is obtained by using a
+          template contained in the host-meta document. By applying the host-wide template to
+          an individual resource URI, a resource-specific link is produced which can be used to
+          indicate the location of the descriptor document for that resource, bypassing the need to
+          access or provide a representation for it.
+        </t>
+        <figure>
+          <preamble>
+            For example (line breaks are for formatting only, and are not allowed in the document):
+          </preamble>
+          <artwork>
+  Link-Pattern: &lt;{uri};about"&gt; rel="describedby"
+                   type="application/powder+xml"
+          </artwork>
+        </figure>
+        <t>
+          A client trying to obtain the location of the resource's descriptor using this method
+          SHALL:
+
+          <list style="numbers">
+            <t>
+              Retrieve the host-meta document for URI's authority as defined by
+              <xref target="I-D.nottingham-site-meta" /> section 4. If the request fails to
+              retrieve a valid host-meta document, the method fails.
+            </t>
+            <t>
+              Parse host-meta document and look for Link-Pattern fields with a "rel" attribute
+              value containing the "describedby" relation.
+            </t>
+            <t>
+              Narrow down the selection if more than one "describedby" link is found, following the
+              application-specific criteria. The descriptor location is constructed by applying the
+              template obtained from the selected Link-Pattern field to the resource URI as
+              described by <xref target="template_syntax" />.
+            </t>
+          </list>
+        </t>
+        <t>
+          Link-Pattern MAY include other relation types together with "describedby" in
+          a single "rel" parameter (for example 'rel="describedby copyright"'). Clients MUST be
+          properly process use such multiple relation "rel" attributes as defined by
+          <xref target="link_pattern" />.
+        </t>
+      </section>
+
+    </section>
+
+    <section title="Obtaining Resource Descriptor">
+      <t>
+        Once the desired descriptor URI has been obtained, the descriptor document is retrieved. If
+        the descriptor URI scheme is "http" or "https", the document is obtained via an HTTP (or
+        HTTPS as required) GET request to the identified URI. The client MUST obey HTTP
+        redirections (3xx), and the descriptor document is considered valid only if retrieved with
+        a successful HTTP response status (2xx).
+      </t>
+    </section>
+
+    <section title="The Link-Pattern host-meta Field" anchor="link_pattern">
+      <t>
+        The Link host-meta field <xref target="I-D.nottingham-site-meta" /> conveys a link relation
+        between all resource URIs under the host-meta authority and a common target URI. However,
+        there are cases in which relations of different resources with the same authority do not
+        share the same target URI, but do follow a common pattern in how the target URI is
+        constructed.
+      </t>
+      <figure>
+        <preamble>
+          For example, a news site with multiple authors can provide information about each article's
+          author, but appending a suffix (such as ";by") to the URI of each article. Each article
+          has a unique author, but all share the same pattern of where that information is located.
+          The same information can be provided using an HTTP link header or HTML &lt;LINK&gt; element,
+          but in a less efficient manner when a single pattern can provide the same information:
+        </preamble>
+        <artwork>
+  Link-Pattern: &lt;{uri};by&gt; rel="author"
+        </artwork>
+      </figure>
+      <t>
+        The Link-Pattern host-meta field uses a slightly modified syntax of the HTTP Link header
+        <xref target="I-D.nottingham-http-link-header" /> to convey relations whose context is
+        individual resources with the same authority as the host-meta document, and whose target
+        is constructed by applying a template to the context URI. The field is not specific to any
+        relation type and MAY be used to express any relations supported by the Link header
+        <xref target="I-D.nottingham-http-link-header" />.
+      </t>
+      <t>
+        The Link-Pattern host-meta field differs from the HTTP Link header in the following
+        respects:
+        
+        <list style="symbols">
+          <t>
+            The "&lt;&gt;" enclosed token is not a valid URI, but instead contains a template
+            as defined in <xref target="template_syntax" />.
+          </t>
+          <t>
+            Its context URI is defined as the individual resource URI used as input to the
+            template.
+          </t>
+          <t>
+            If the resulting target URI expressed by the template is relative, its base URI is the
+            root resource of the authority.
+          </t>
+        </list>
+      </t>
+      <figure>
+        <artwork>
+  Link-Pattern   = "Link-Pattern" ":" #pattern-value
+  
+  pattern-value  = "&lt;" template "&gt;" *( ";" link-param )
+  
+  template       = *( uri-char | "{" [ "%" ] var-name "}" )
+
+  uri-char       = ( reserved | unreserved )
+  
+  var-name       = "scheme" | "authority" | "path"
+                 | "query"  | "fragment"  | "userinfo"
+                 | "host"   | "port"      | "uri"
+        </artwork>
+      </figure>
+      <t>
+        [[ should this spec define a filter/map parameter that will allow applying link patterns
+        to subsets of the host-meta scope? This can use a regular expression match or something
+        similar to robots.txt. If the spec will end up not directly supporting this feature, I
+        will add a note suggesting that such a feature could be defined elsewhere as an extension. ]]
+      </t>
+
+      <section title="Template Syntax" anchor="template_syntax">
+        <t>
+          The template syntax provides a simple format for URI transformation. A template is a
+          string containing brace-enclosed ("{}") variable names marking the parts of the string
+          that are to be substituted by the variable values.  A template is transformed into a
+          URI by substituting the variables with their calculated value. If a variable name is
+          prefixed by "%", any character in the variable value other than unreserved MUST be
+          percent-encoded per <xref target="RFC3986" />.
+        </t>
+        <t>
+          To construct a URI using a template, the input URI is parsed into its URI components
+          and each component value assigned to a variable name. The template variable substitution
+          is based on the URI vocabulary defined by <xref target="RFC3986" /> section 3 and
+          includes: "scheme", "authority", "path", "query", "fragment", "userinfo", "host", and
+          "port". In addition, it defines the "uri" variable as the entire input URI excluding the
+          fragment component and the "#" fragment separator.
+        </t>
+        <figure>
+          <artwork>
+  foo://william@example.com:8080/over/there?name=ferret#nose
+  \_/   \______________________/\_________/ \_________/ \__/
+   |              |                  |           |        |
+  scheme      authority             path       query   fragment
+  
+  foo://william@example.com:8080/over/there?name=ferret#nose
+        \_____/ \_________/ \__/
+           |         |        |
+       userinfo     host     port
+       
+  foo://william@example.com:8080/over/there?name=ferret#nose
+  \___________________________________________________/
+                           |
+                          uri
+          </artwork>
+        </figure>
+        <figure>
+          <preamble>
+            For example, given the input URI "http://example.com/r/1?f=xml#top", each of the
+            following templates will produce the associated output URI:
+          </preamble>
+          <artwork>
+  http://example.org?q={%uri} -->
+  http://example.org?q=http%3A%2F%2Fexample.com%2Fr%2F1%3Ff%3Dxml
+  
+  http://meta.{host}:8080{path}?{query} -->
+  http://meta.example.com:8080/r/1?f=xml
+  
+  https://{authority}/v1{path}#{fragment} -->
+  https://example.com/v1/r/1#top
+          </artwork>
+        </figure>
+      </section>
+
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>
+        The methods used to perform discovery are not secure, private or integrity-guaranteed, and due caution should be
+        exercised when using them. Applications that perform discovery should consider the attack vectors opened by automatically
+        following, trusting, or otherwise using links gathered from &lt;LINK&gt; elements, HTTP Link headers, or host-meta documents.
+      </t>
+    </section>
+
+    <section title="IANA Considerations">
+      
+      <section title="The Link-Pattern host-meta Field">
+        <t>
+          This specification registers the Link-Pattern host-meta field in the host-meta Field Registry
+          <xref target="I-D.nottingham-site-meta" />.
+
+          <list style="hanging">
+            <t hangText="Field Name:">
+              Link-Pattern
+            </t>
+            <t hangText="Change controller:">
+              IETF
+            </t>
+            <t hangText="Specification document(s):">
+              [[ this document ]]
+            </t>
+            <t hangText="Related information:">
+              <xref target="I-D.nottingham-http-link-header" />
+            </t>
+          </list>
+        </t>
+      </section>
+
+      <section title="The describedby Relation Type">
+        <t>
+          [[ this section will be removed if the "describedby" relation type is registered by the
+          time it is published ]]
+        </t>
+        <t>
+          This specification registers the "describedby" relation type in the Link Relation Type Registry
+          <xref target="I-D.nottingham-http-link-header" />.
+
+          <list style="symbols">
+            <t>
+              Relation Name: describedby
+            </t>
+            <t>
+              Description: The relationship A "describedby" B asserts that resource B provides a
+              description of resource A. There are no constraints on the format or representation
+              of either A or B, neither are there any further constraints on either resource.
+            </t>
+            <t>
+              Documentation: <xref target="POWDER" />
+            </t>
+          </list>
+        </t>
+      </section>
+      
+    </section>
+
+    <appendix title="Descriptor Discovery vs. Service Discovery">
+      <t>
+        Descriptor discovery provides a process for obtaining information about a resource identified with a URI.
+        It allows servers to describe their resources in a machine-readable format, enabling automatic
+        interoperability by user-agents and resource consuming applications. Discovery enables applications to utilize a
+        wide range of web services and resources across multiple providers without the need to know about their
+        capabilities in advance, reducing the need for manual configuration and resource-specific software.
+      </t>
+      <t>
+        When discussing discovery, it is important to differentiate between descriptor discovery and service discovery.
+        Both types attempts to associate capabilities with resources, but they approach it from opposite ends.
+      </t>
+      <t>
+        Service discovery centers on identifying the location of qualified resources, typically finding an endpoint
+        capable of certain protocols and capabilities. In contrast, descriptor discovery begins with a resource, trying
+        to find which capabilities it supports.
+      </t>
+      <t>
+        A simple way to distinguish between the two types of discovery is to define the questions they are each trying to
+        answer:
+
+        <list style="hanging">
+          <t hangText="Descriptor-Discovery:">
+            Given a resource, what are its attributes: capabilities, characteristics, and relationships
+            to other resources?
+          </t>
+          <t hangText="Service-Discovery:">
+            Given a set of attributes, which available resources match the desired set and what
+            is their location?
+          </t>
+        </list>
+      </t>
+      <t>
+        While this memo deals exclusively with descriptor discovery, it is important to note that the two discovery types
+        are closely related and are usually used in tandem. In fact, a typical use case will switch between service discovery
+        and descriptor discovery multiple times in a single workflow, and can start with either one.
+      </t>
+      <t>
+        One reason for this dependency between the two discovery types is that resource descriptors usually contain
+        not only a list of capabilities, but also relationships to other resources. Since those relationships are usually typed,
+        the process in which an application chooses which links to use is in fact service discovery.
+      </t>
+      <t>
+        Applications use descriptor discovery to obtain the list of links, and service discovery to choose the relevant links.
+        In another common example, the application uses service discovery to find a resource with a given capability, then
+        uses descriptor discovery to find out what other capabilities it supports.
+      </t>
+    </appendix>
+
+    <appendix title="Methods Suitability Analysis" anchor="analysis">
+      <t>
+        Due to the wide range of use cases requiring resource descriptors, and the desire to reuse as much as possible, no single solution
+        has been found to sufficiently cover the requirements for linking between the resource URI and the descriptor URI.
+        The following analysis attempts to list all the method proposed for addressing descriptor discovery. It is included here
+        to provide background information as to why certain methods have been selected while others rejected from the discovery
+        process. It has been updated to match the terms used in this memo and its structure.
+      </t>
+
+      <appendix title="Requirements">
+        <t>
+          Getting from a resource URI to its descriptor document can be implemented in many ways. The problem is that none of the
+          current methods address all of the requirements presented by the common use cases. The requirements are simple, but the
+          more we try to address, the less elegant and accessible the process becomes. While working on the now defunct XRDS-Simple
+          specification <xref target="XRDS-Simple" /> and talking to companies and individual about it, the following requirements
+          emerged for any proposed process:
+
+          <list style="hanging" hangIndent="6">
+            <t hangText="Self Declaration:">
+              <vspace blankLines="1" />
+              Allow resources to declare the availability of descriptor information and its location. When a resource is accessed,
+              it needs to have a way to communicate to the client that it supports the discovery protocol and to
+              indicates the location of such descriptor.
+              <vspace blankLines="1" />
+              This is useful when the client is able or is already interacting with the resource but can enhance its interaction
+              with additional information. For example, accessing a blog page enhanced if it was generated from an Atom feed or
+              Atom entry and that feed supports Atom authoring.
+            </t>
+            <t hangText="Direct Descriptor Access:">
+              <vspace blankLines="1" />
+              Enable direct retrieval of the resource descriptor without interacting with the resource itself. Before a resource
+              is accessed, the client should have a way to obtain the resource descriptor without accessing the resource.
+              This is important for two reasons.
+              <vspace blankLines="1" />
+              First, accessing an unknown resource may have undesirable consequences. After all, the information contained in the
+              descriptor is supposed to inform the client how to interact with the resource. The second is efficiency - removing
+              the need to first obtain the resource in order to get its descriptor (reducing HTTP round-trips, network bandwidth,
+              and application latency).
+            </t>
+            <t hangText="Web Architecture Compliant:">
+              <vspace blankLines="1" />
+              Work with well-established web infrastructure. This may sound obvious but it is in fact the most complex requirement.
+              Deploying new extensions to the HTTP protocol is a complicated endeavor. Beside getting applications to support a new
+              header, method, or content negotiation, existing caches and proxies must be enhanced to properly handle these
+              requests, and they must not fail performing their normal duties without such enhancements.
+              <vspace blankLines="1" />
+              For example, a new content negotiation method may cause an existing cache to serve the wrong data to a non-discovery
+              client due to its inability to distinguish the metadata request from the resource representation request.
+            </t>
+            <t hangText="Scale and Technology Agnostic:">
+              <vspace blankLines="1" />
+              Support large and small web providers regardless of the size of operations and deployment. Any solution must work for
+              a small hosted web site as well as the world largest search engine. It must be flexible enough to allow developers with
+              restricted access to the full HTTP protocol (such as limited access to request or response headers) to be able to both
+              provide and consume resource descriptors. Any solution should also support caching as much as possible and allow reuse
+              of source code and data.
+            </t>
+            <t hangText="Extensible:">
+              <vspace blankLines="1" />
+              Accommodate future enhancements and unknown descriptor formats. It should support the existing set of descriptor formats
+              such as XRD and POWDER, as well as new descriptor relationships that might emerge in the future. In addition, the solution
+              should not depend on the descriptor format itself and work equally well with any document format - it should aim to keep
+              the road and destination separate.
+            </t>
+          </list>
+        </t>
+      </appendix>
+
+      <appendix title="Analysis">
+        <t>
+          The following is a list of proposed and implemented methods trying to address descriptor discovery. Each method is reviewed for
+          its compliance with the requirements identified previously. The [-], [+], or [+-] symbols next to each requirement indicate
+          how well the method complies with the requirement.
+        </t>
+
+        <appendix title="HTTP Response Header">
+          <t>
+            When a resource representation is retrieved using and HTTP GET request, the server includes in the response a header pointing
+            to the location of the descriptor document. For example, POWDER uses the "Link" response header to create an association between
+            the resource and its descriptor. XRDS <xref target="XRDS" /> (based on the Yadis protocol <xref target="Yadis" />) uses a
+            similar approach, but since the Link header was not available when Yadis was first drafted, it defines a custom header
+            X-XRDS-Location which serves a similar but less generic purpose.
+          </t>
+          <t>
+            <list style="hanging">
+              <t hangText="[+] Self Declaration -">
+                using the Link header, any resource can point to its descriptor documents.
+              </t>
+              <t hangText="[-] Direct Descriptor Access -">
+                the header is only accessible when requesting the resource itself via an HTTP GET request. While HTTP GET is meant to be a
+                safe operation, it is still possible for some resource to have side-effects.
+              </t>
+              <t hangText="[+] Web Architecture Compliant -">
+                uses the Link header which is an IETF Internet Standard [[ currently a standard-track draft ]], and is consistent with HTTP
+                protocol design.
+              </t>
+              <t hangText="[-] Scale and Technology Agnostic -">
+                since discovery accounts for a small percent of resource requests, the extra Link header is wasteful. For some hosted servers,
+                access to HTTP headers is limited and will prevent implementation.
+              </t>
+              <t hangText="[+] Extensible -">
+                the Link header provides built-in extensibility by allowing new link relations, mime-types, and other extensions.
+              </t>
+            </list>
+
+            Minimum roundtrips to retrieve the resource descriptor: 2
+          </t>
+        </appendix>
+
+        <appendix title="HTTP Response Header Via HEAD">
+          <t>
+            Same as the HTTP Response Header method but used with an HTTP HEAD request. The idea of using the HEAD method is to solve
+            the wasteful overhead of including the Link header in every reply. By limiting the appearance of the Link header only to
+            HEAD responses, typical GET requests are not encumbered by the extra bytes.
+          </t>
+          <t>
+            <list style="hanging">
+              <t hangText="[+] Self Declaration -">
+                Same as the HTTP Response Header method.
+              </t>
+              <t hangText="[-] Direct Descriptor Access -">
+                Same as the HTTP Response Header method.
+              </t>
+              <t hangText="[-] Web Architecture Compliant -">
+                HTTP HEAD should return the exact same response as HTTP GET with the sole exception that the response body is omitted.
+                By adding headers only to the HEAD response, this solution violates the HTTP protocol and might not work properly with
+                proxies as they can return the header of the cached GET request.
+              </t>
+              <t hangText="[+] Scale and Technology Agnostic -">
+                solves the wasted bandwidth associated with the HTTP Response Header method, but still suffers from the limitation
+                imposed by requiring access to HTTP headers.
+              </t>
+              <t hangText="[+] Extensible -">
+                Same as the HTTP Response Header method.
+              </t>
+            </list>
+
+            Minimum roundtrips to retrieve the resource descriptor: 2
+          </t>
+        </appendix>
+
+        <appendix title="HTTP Content Negotiation">
+          <t>
+            Using the HTTP Accept request header or Transparent Content Negotiation as defined in <xref target="RFC2295" />,
+            the client informs the server it is interested in the descriptor and not the
+            resource itself, to which the server responds with the descriptor document or its location. In Yadis, the client
+            sends an HTTP GET (or HEAD) request to the resource URI with an Accept header and content-type application/xrds+xml.
+            This informs the server of the client's discovery interest, which in turn may reply with the descriptor document
+            itself, redirect to it, or return its location via the X-XRDS-Location response header.
+          </t>
+          <t>
+            <list style="hanging">
+              <t hangText="[-] Self Declaration -">
+                does not address as it focuses on the client declaring its intentions.
+              </t>
+              <t hangText="[+] Direct Descriptor Access -">
+                provides a simple method for directly requesting the descriptor document.
+              </t>
+              <t hangText="[-] Web Architecture Compliant -">
+                while it can be argued that the descriptor can be considered another representation of the resource, it is very
+                much external to it. Using the Accept header to request a separate resource (as opposed to a different representation
+                of the same resource) violates web architecture. It also prevents using the discovery content-type as a valid
+                (self-standing) web resource having its own descriptor.
+              </t>
+              <t hangText="[-] Scale and Technology Agnostic -">
+                requires access to HTTP request and response headers, as well as the registration of multiple handlers for the same
+                resource URI based on the Accept header. In addition, improper use or implementation of the Vary header in conjunction
+                with the Accept header will cause caches to serve the descriptor document instead of the resource itself - a great
+                concern to large providers with frequently visited front-pages.
+              </t>
+              <t hangText="[-] Extensible -">
+                applies an implicit relation type to the descriptor mime-type, limiting descriptor formats to a single purpose. It
+                also prevents using existing mime-types from being used as a descriptor format.
+              </t>
+            </list>
+
+            Minimum roundtrips to retrieve the resource descriptor: 1
+          </t>
+        </appendix>
+
+        <appendix title="HTTP Header Negotiation">
+          <t>
+            Similar to the HTTP Content Negotiation method, this solution uses a custom HTTP request header to inform the server of the client's
+            discovery intentions. The server responds by serving the same resource representation (via an HTTP GET or HEAD requests) with
+            the relevant Link headers. It attempts to solve the HTTP Response Header waste issue by allowing the client to explicitly
+            request the inclusion of Link headers. One such header can be called "Request-links" to inform the server the client would
+            like it to include certain Link headers of a given "rel" type in its reply.
+          </t>
+          <t>
+            <list style="hanging">
+              <t hangText="[+] Self Declaration -">
+                same as HTTP Response Header with the option of selective inclusion.
+              </t>
+              <t hangText="[-] Direct Descriptor Access -">
+                does not address.
+              </t>
+              <t hangText="[-] Web Architecture Compliant -">
+                HTTP does not include any mechanism for header negotiation and any custom solution will break existing caches.
+              </t>
+              <t hangText="[+-] Scale and Technology Agnostic -">
+                Requires advance access to HTTP headers on both the client and server sides, but solves the bandwidth waste
+                issue of the HTTP Response Header method.
+              </t>
+              <t hangText="[+] Extensible -">
+                builds on top of Link header extensibility.
+              </t>
+            </list>
+
+            Minimum roundtrips to retrieve the resource descriptor: 2
+          </t>
+        </appendix>
+
+        <appendix title="&lt;Link&gt; Element">
+          <t>
+            Embeds the location of the descriptor document within the resource representation by leveraging the HTML &lt;Link&gt;
+            header element (as opposed to the HTTP header). Applies to HTML resource representations or similar markup-based formats
+            with support for "Link"-like elements such as Atom. POWDER uses the &lt;Link&gt; element in this manner, while XRDS uses
+            the HTML &lt;meta&gt; element with an "http-equiv" attribute equals to X-XRDS-Location (to create an embedded version
+            of the X-XRDS-Location custom header).
+          </t>
+          <t>
+            <list style="hanging">
+              <t hangText="[+] Self Declaration -">
+                similar to HTTP Response Header method but limited to HTML resources.
+              </t>
+              <t hangText="[-] Direct Descriptor Access -">
+                the method requires fetching the entire resource representation in order to obtain the descriptor location. In addition,
+                it requires changing the resource HTML representation which makes discovery an intrusive process.
+              </t>
+              <t hangText="[+] Web Architecture Compliant -">
+                uses the &lt;Link&gt; element as designed.
+              </t>
+              <t hangText="[+] Scale and Technology Agnostic -">
+                while this solution requires direct retrieval of the resource and manipulation of its content, it is extremely accessible
+                in many platforms.
+              </t>
+              <t hangText="[-] Extensible -">
+                extensibility is restricted to HTML representations or similar markup formats with support for a similar element.
+              </t>
+            </list>
+
+            Minimum roundtrips to retrieve the resource descriptor: 2
+          </t>
+        </appendix>
+
+        <appendix title="HTTP OPTIONS Method">
+          <t>
+            The HTTP OPTIONS method is used to interact with the HTTP server with regard to its capabilities and communication-related
+            information about its resources. The OPTIONS method, together with an optional request header, can be used to request both
+            the descriptor location and descriptor content itself.
+          </t>
+          <t>
+            <list style="hanging">
+              <t hangText="[-] Self Declaration -">
+                does not address.
+              </t>
+              <t hangText="[+] Direct Descriptor Access -">
+                provides a clean mechanism for requesting descriptor information about a resource without interacting with it.
+              </t>
+              <t hangText="[+] Web Architecture Compliant -">
+                uses an existing HTTP featured.
+              </t>
+              <t hangText="[-] Scale and Technology Agnostic -">
+                requires client and server access to the OPTIONS HTTP method. Also does not support caching which makes
+                this solution inefficient.
+              </t>
+              <t hangText="[+] Extensible -">
+                built-into the OPTIONS method.
+              </t>
+            </list>
+
+            Minimum roundtrips to retrieve the resource descriptor: 1
+          </t>
+        </appendix>
+
+        <appendix title="WebDAV PROPFIND Method">
+          <t>
+            Similar to the HTTP OPTIONS method, the WebDAV PROPFIND method defined in <xref target="RFC4918" /> can be used to request
+            resource specific properties, one of which can hold the location of the descriptor document. PROPFIND, unlike
+            OPTIONS, cannot return the descriptor itself, unless it is returned in the required PROPFIND schema (a multi-status
+            XML element). Other alternatives include URIQA <xref target="URIQA" />, an HTTP extension which defines a method
+            called MGET, and ARK (Archival Resource Key) <xref target="ARK" /> - a method similar to PROPFIND that allows the
+            retrieval of resource attributes using keys (which describe the resource).
+          </t>
+          <t>
+            <list style="hanging">
+              <t hangText="[-] Self Declaration -">
+                does not address.
+              </t>
+              <t hangText="[+-] Direct Descriptor Access -">
+                does not require interaction with the resource, but does require at least two requests to get the descriptor
+                (get location, get document).
+              </t>
+              <t hangText="[+] Web Architecture Compliant -">
+                uses an HTTP extension with less support than core HTTP, but still based on published standards.
+              </t>
+              <t hangText="[-] Scale and Technology Agnostic -">
+                same as the HTTP OPTIONS Method.
+              </t>
+              <t hangText="[+-] Extensible -">
+                uses extensible protocols but at the same time depends on solutions that have already gone beyond the standard
+                HTTP protocol, which makes further extensions more complex and unsupported.
+              </t>
+            </list>
+
+            Minimum roundtrips to retrieve the resource descriptor: 2
+          </t>
+        </appendix>
+
+        <appendix title="Custom HTTP Method">
+          <t>
+            Similar to the HTTP OPTIONS Method, a new method can be defined (such as DISCOVER) to return (or redirect to) the
+            descriptor document. The new method can allow caching.
+          </t>
+          <t>
+            <list style="hanging">
+              <t hangText="[-] Self Declaration -">
+                does not address.
+              </t>
+              <t hangText="[+] Direct Descriptor Access -">
+                same as the HTTP OPTIONS Method.
+              </t>
+              <t hangText="[-] Web Architecture Compliant -">
+                depends heavily on extending every platform to support the extension. Unlikely to be supported by existing
+                proxy services and caches.
+              </t>
+              <t hangText="[-] Scale and Technology Agnostic -">
+                same as HTTP OPTIONS Method with the additional burden on smaller sites requiring access to the new protocol.
+              </t>
+              <t hangText="[+] Extensible -">
+                new protocol that can extend as needed.
+              </t>
+            </list>
+
+            Minimum roundtrips to retrieve the resource descriptor: 1
+          </t>
+        </appendix>
+
+        <appendix title="Static Resource URI Transformation">
+          <t>
+            Instead of using HTTP facilities to access the descriptor location, this method defines a template to transform
+            any resource URI to the descriptor document URI. This can be done by adding a prefix or suffix to the resource URI,
+            which turns it into a new resource URI. The new URI points to the descriptor document. For example, to fetch the
+            descriptor document for http://example.com/resource, the client makes an HTTP GET request to http://example.com/resource;about
+            using a static template that adds the ";about" suffix.
+          </t>
+          <t>
+            <list style="hanging">
+              <t hangText="[-] Self Declaration -">
+                does not address.
+              </t>
+              <t hangText="[+] Direct Descriptor Access -">
+                creates a unique URI for the descriptor document.
+              </t>
+              <t hangText="[+-] Web Architecture Compliant -">
+                uses basic HTTP facilities but intrudes on the domain authority namespace as it defines a static template for
+                URI transformation that is not likely to be compatible with many existing URI naming conventions.
+              </t>
+              <t hangText="[+-] Scale and Technology Agnostic -">
+                depending on the static mapping chosen. Some hosted environment will have a problem gaining access to the mapped URI
+                based on the URI format chosen.
+              </t>
+              <t hangText="[-] Extensible -">
+                provides a very specific and limited method to map between resources and their descriptor, since each relation
+                type must mint its own static template.
+              </t>
+            </list>
+
+            Minimum roundtrips to retrieve the resource descriptor: 1
+          </t>
+        </appendix>
+
+        <appendix title="Dynamic Resource URI Transformation">
+          <t>
+            Same as the Static Resource URI Transformation method but with the ability for each domain authority to specify its
+            own discovery transformation template. This can done by placing a configuration file at a known location (such as
+            robots.txt) which contains the template needed to perform the URL mapping. The client first obtains the configuration
+            document (which may be cached using normal HTTP facilities), parses it, then uses that information to transform the
+            resource URI and access the descriptor document.
+          </t>
+          <t>
+            <list style="hanging">
+              <t hangText="[+-] Self Declaration -">
+                does not address individual resources, but allows entire domains to declare their support (and how to use it).
+              </t>
+              <t hangText="[+-] Direct Descriptor Access -">
+                once the mapping template has been obtained, descriptors can be accessed directly.
+              </t>
+              <t hangText="[+-] Web Architecture Compliant -">
+                uses an existing known-location design pattern (such as robots.txt) and standard HTTP facilities. The use of a known-location
+                if not ideal and is considered a violation of web architecture but if it serves as the last of its kind, can be tolerated. An
+                alternative to the known-location approach can be using DNS to store either the location of the mapping or the map template itself,
+                but DNS adds a layer of complexity not always available.
+              </t>
+              <t hangText="[+-] Scale and Technology Agnostic -">
+                works well at the URI authority level (domain) but is inefficient at the URI path level (resource path) and harder to
+                implement when different paths within the same domain need to use different templates. With the decreasing cost of
+                custom domains and sub-domains hosting, this will not be an issue for most services, but it does require sharing
+                configuration at the domain/sub-domain level.
+              </t>
+              <t hangText="[+-] Extensible -">
+                can be, depending on the schema used to format the known-location configuration document.
+              </t>
+            </list>
+
+            Minimum roundtrips to retrieve the resource descriptor: initially 2, 1 after caching
+          </t>
+        </appendix>
+
+      </appendix>
+
+    </appendix>
+
+    <appendix title="Acknowledgments">
+      <t>
+        With the exception of the host-meta template extension, very little of this memo is original work. Many communities and
+        individuals have been working on solving discovery for many years and this work is a direct result of their
+        hard and dedicated efforts.
+      </t>
+      <t>
+        Inspiration for this memo derived from previous work on a descriptor format called XRDS-Simple, which in turn derived from another
+        descriptor format, XRDS. Previous discovery workflows include Yadis which is currently used by the OpenID community. While
+        suffering from significant shortcomings, Yadis was a breakthrough approach to performing discovery using extremely
+        restricted hosting environments, and this memo has strived to preserve as much of that spirit as possible.
+      </t>
+      <t>
+        The use of Link elements and headers and the introduction of the "describedby" relation type in this memo is a direct
+        result of the dedicated work and contribution of Phil Archer to the W3C POWDER specification and Jonathan Rees to the W3C
+        review of Uniform Access to Information About. The host-meta approach was first proposed by Mark Nottingham as an alternative
+        to attaching links directly to resource representations.
+      </t>
+      <t>
+        The author wishes to thanks the OASIS XRI community for their support, encouragement, and enthusiasm for this work. Special
+        thanks go to Lisa Dusseault, Joseph Holsten, Mark Nottingham, John Panzer, Drummond Reed, and Jonathan Rees for their
+        invaluable feedback.
+      </t>
+      <t>
+        The author takes all responsibility for errors and omissions.
+      </t>
+    </appendix>
+
+    <appendix title="Document History">
+      <t>
+        [[ to be removed by the RFC editor before publication as an RFC ]]
+      </t>
+      <t>
+        -02
+        
+        <list style="symbols">
+          <t>
+            Changed focus from an HTTP-based process to Link-based process.
+          </t>
+          <t>
+            Completely revised and restructured document for better clarity.
+          </t>
+          <t>
+            Realigned the methods to produce consistent results and changed the way
+            redirections and client-errors are handled.
+          </t>
+          <t>
+            Updated to use newer version of site-meta, now called host-meta, including
+            a new plaintext-based format to replace the previous XML format.
+          </t>
+          <t>
+            Renamed Link-Template to Link-Pattern to avoid future conflict with a previously
+            proposed Link-Template HTTP header.
+          </t>
+          <t>
+            Removed support for the "scheme" Link-Template parameter.
+          </t>
+          <t>
+            Replaced restrictions with interoperability recommendations.
+          </t>
+          <t>
+            Added IANA considerations per new host-meta registry requirements.
+          </t>
+        </list>
+      </t>
+      <t>
+        -01
+
+        <list style="symbols">
+          <t>
+            Rename 'resource discovery' to 'descriptor discovery'.
+          </t>
+          <t>
+            Added informative reference to Metalink.
+          </t>
+          <t>
+            Clarified that the resource descriptor URI can use any URI scheme, not just "http" or "https".
+          </t>
+          <t>
+            Removed comment regarding redirects when using &lt;LINK&gt; Elements.
+          </t>
+          <t>
+            Clarified that HTTPS must be used with "https" URIs for both Link headers and host-meta retrieval.
+          </t>
+          <t>
+            Removed DNS verification step for host-meta with schemes other then "http" and "https". Replaced with
+            a general discussion of authority and a security consideration comment.
+          </t>
+          <t>
+            Organized host-meta section into another sub-section level.
+          </t>
+          <t>
+            Enlarged the template vocabulary from a single "uri" variable to include smaller URI components.
+          </t>
+          <t>
+            Added informative reference to RFC 2295 in analysis appendix.
+          </t>
+        </list>
+      </t>
+      <t>
+        -00
+
+        <list style="symbols">
+          <t>
+            Initial draft.
+          </t>
+        </list>
+      </t>
+    </appendix>
+
+  
+</middle>
+
+  <back>
+
+    <references title="Normative References">
+
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml"?>
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2295.xml"?>
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2616.xml"?>
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2818.xml"?>
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.3986.xml"?>
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.4287.xml"?>
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.4918.xml"?>
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml4/reference.W3C.REC-html401-19991224.xml"?>
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml4/reference.W3C.REC-xhtml1-20020801.xml"?>
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml3/reference.I-D.draft-nottingham-http-link-header-03.xml"?>
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml3/reference.I-D.draft-nottingham-site-meta-01.xml"?>
+
+    </references>
+
+    <references title="Informative References">
+      
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml3/reference.I-D.draft-bryan-metalink-05.xml"?>
+      
+      <reference anchor="POWDER" target="http://www.w3.org/TR/powder-dr/">
+        <front>
+          <title>POWDER: Protocol for Web Description Resources</title>
+          <author initials="P.A" surname="Archer" fullname="Phil Archer" role="editor">
+            <organization>Family Online Safety Institute</organization>
+          </author>
+          <author initials="K.S" surname="Smith" fullname="Kevin Smith" role="editor">
+            <organization>Vodafone Group R &amp; D</organization>
+          </author>
+          <author initials="A.P" surname="Perego" fullname="Andrea Perego" role="editor">
+            <organization>UniversitC  degli Studi dell'Insubria</organization>
+          </author>
+        </front>
+        <format type="HTML" target="http://www.w3.org/TR/powder-dr/" />
+      </reference>
+
+      <reference anchor="XRD">
+        <front>
+          <title>XRD 1.0 [[ replace with new XRD specification reference ]]</title>
+          <author initials="E.HL" surname="Hammer-Lahav" fullname="Eran Hammer-Lahav" role="editor">
+            <organization />
+          </author>
+        </front>
+      </reference>
+
+      <reference anchor="XRDS" target="http://docs.oasis-open.org/xri/2.0/specs/xri-resolution-V2.0.html">
+        <front>
+          <title>Extensible Resource Identifier (XRI) Resolution V2.0</title>
+          <author initials="G.W" surname="Wachob" fullname="Gabe Wachob">
+            <organization>Visa International</organization>
+          </author>
+          <author initials="D.R" surname="Reed" fullname="Drummond Reed">
+            <organization>Cordance</organization>
+          </author>
+          <author initials="L.C" surname="Chasen" fullname="Les Chasen">
+            <organization>NeuStar</organization>
+          </author>
+          <author initials="W.T" surname="Tan" fullname="William Tan">
+            <organization>NeuStar</organization>
+          </author>
+          <author initials="S.C" surname="Churchill" fullname="Steve Churchill">
+            <organization>XDI.ORG</organization>
+          </author>
+        </front>
+        <format type="HTML" target="http://docs.oasis-open.org/xri/2.0/specs/xri-resolution-V2.0.html" />
+        <format type="PDF" target="http://docs.oasis-open.org/xri/2.0/specs/xri-resolution-V2.0.pdf" />
+      </reference>
+
+      <reference anchor="XRDS-Simple" target="http://xrds-simple.net/core/1.0/">
+        <front>
+          <title>XRDS-Simple 1.0</title>
+          <author initials="E.HL" surname="Hammer-Lahav" fullname="Eran Hammer-Lahav">
+            <organization />
+          </author>
+        </front>
+        <format type="HTML" target="http://xrds-simple.net/core/1.0/" />
+      </reference>
+
+      <reference anchor="Yadis" target="http://yadis.org/papers/yadis-v1.0.pdf">
+        <front>
+          <title>Yadis Specification 1.0</title>
+          <author initials="J.M" surname="Miller" fullname="Joaquin Miller">
+            <organization>NetMesh</organization>
+          </author>
+        </front>
+        <format type="PDF" target="http://yadis.org/papers/yadis-v1.0.pdf" />
+        <format type="ODT" target="http://yadis.org/papers/yadis-v1.0.odt" />
+      </reference>
+
+      <reference anchor="URIQA" target="http://sw.nokia.com/uriqa/URIQA.html">
+        <front>
+          <title>The URI Query Agent Model</title>
+          <author initials="" surname="" fullname="">
+            <organization>Nokia</organization>
+          </author>
+        </front>
+        <format type="HTML" target="http://sw.nokia.com/uriqa/URIQA.html" />
+      </reference>
+
+      <reference anchor="ARK" target="http://www.cdlib.org/inside/diglib/ark/arkspec.html">
+        <front>
+          <title>The ARK Identifier Scheme</title>
+          <author initials="J.A.K" surname="Kunze" fullname="John A. Kunze">
+            <organization>California Digital Library</organization>
+          </author>
+          <author initials="R.P.C.R" surname="Rodgers" fullname="R. P. C. Rodgers">
+            <organization>US National Library of Medicine</organization>
+          </author>
+        </front>
+        <format type="HTML" target="http://www.cdlib.org/inside/diglib/ark/arkspec.html" />
+      </reference>
+
+    </references>
+  </back>
+
+</rfc>

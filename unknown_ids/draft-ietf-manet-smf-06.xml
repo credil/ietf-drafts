@@ -1,0 +1,2572 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes" ?>
+<?rfc tocdepth="4" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<rfc category="exp" docName="draft-ietf-manet-smf-06" ipr="full3978">
+  <front>
+    <title abbrev="SMF for MANET">Simplified Multicast Forwarding for
+    MANET</title>
+
+    <author fullname="Joseph Macker" initials="J" surname="Macker, editor">
+      <organization>NRL</organization>
+
+      <address>
+        <postal>
+          <street></street>
+
+          <city>Washington</city>
+
+          <region>DC</region>
+
+          <country>USA</country>
+
+          <code>20375</code>
+        </postal>
+
+        <email>macker@itd.nrl.navy.mil</email>
+      </address>
+    </author>
+
+    <author fullname="SMF Design Team" initials="" surname="SMF Design Team">
+      <organization>IETF MANET WG</organization>
+
+      <address>
+        <email>manet@ietf.org</email>
+      </address>
+    </author>
+
+    <date day="17" month="November" year="2007" />
+
+    <abstract>
+      <t>This document describes a Simplified Multicast Forwarding (SMF)
+      mechanism that provides basic IP multicast forwarding suitable for
+      wireless mesh and mobile ad hoc network (MANET) use. SMF specifies
+      techniques for multicast duplicate packet detection (DPD) to assist the
+      forwarding process. SMF also specifies DPD maintenance and checking
+      operations consistent with both IPv4 and IPv6. SMF takes advantage of
+      reduced relay sets for efficient MANET multicast forwarding within a
+      mesh topology and the document describes protocol interaction with a
+      number of approaches. Candidate algorithms for selecting reduced relay
+      sets and related discussion is provided in the Appendices. Basic issues
+      relating to the operation of multicast MANET border routers are
+      discussed but ongoing work remains in this area beyond the scope of this
+      document.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Requirements Notation">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119"></xref>.</t>
+    </section>
+
+    <section title="Introduction and Scope">
+      <t>MANET unicast routing protocol designs have demonstrated effective
+      and efficient mechanisms to flood routing control plane packets
+      throughout a wireless routing region. For example, algorithms specified
+      within <xref target="RFC3626"></xref>and <xref target="RFC3684"></xref>
+      provide distributed methods of dynamically electing reduced relay sets
+      that attempt to optimize control packet flooding of routing control
+      packets amongst MANET routing peers. Simplified Multicast Forwarding
+      (SMF) extends the efficient flooding concept to the forwarding plane for
+      IP multicast packets. When localized, efficient flooding is deemed an
+      effective technique, SMF provides an appropriate multicast forwarding
+      capability. The SMF baseline design limits the scope to basic, best
+      effort multicast forwarding intended to be constrained within a MANET or
+      wireless mesh routing region. The main design goals of this SMF
+      specification are to adapt efficient relay sets in MANET environments
+      <xref target="RFC2901"></xref> and define the needed IPv4 and IPv6
+      multicast duplicate packet detection (DPD) mechanisms to support
+      multi-hop, packet forwarding. Figure 1 provides an overview of the
+      logical SMF node architecture, consisting of "Neighborhood Discovery",
+      "Relay Set Selection" and "Forwarding Process" components. Typically,
+      relay set selection (or self-election) will occur based on input from a
+      neighborhood discovery process, and the forwarding process will be
+      controlled by status based upon relay set selection. Note the
+      neighborhood discovery and/or relay set selection information MAY be
+      obtained from a coexistent process (e.g., MANET unicast routing protocol
+      using relay sets). In some cases, the forwarding decision for a packet
+      can also depend on previous hop or incoming interface information. The
+      asterisks (*) in Figure 1 mark the primitives and relationships needed
+      by relay set algorithms requiring previous-hop packet forwarding
+      knowledge.</t>
+
+      <t><figure>
+          <preamble></preamble>
+
+          <artwork><![CDATA[    ______________                _____________
+   |              |              |             |
+   | Neighborhood |              |  Relay Set  |
+   |  Discovery   |------------->|  Selection  |
+   |   Protocol   |   neighbor   |  Algorithm  |
+   |______________|     info     |_____________|
+          \                              /
+           \                            /
+    neighbor\                          /forwarding
+      info*  \      ____________      /  status
+              \    |            |    /
+               `-->| Forwarding |<--'
+                   |  Process   |
+ ~~~~~~~~~~~~~~~~~>|____________|~~~~~~~~~~~~~~~~~>
+ incoming packet,                 forwarded packets
+ interface id, and
+ previous hop*
+
+        Fig. 1 - SMF Node Architecture]]></artwork>
+
+          <postamble></postamble>
+        </figure></t>
+
+      <t>Interoperable SMF implementations MUST use a common DPD approach and
+      be able to process the header options defined in this document for IPv6
+      operation. We define Classical Flooding (CF), as the simplest case of
+      SMF multicast forwarding. With CF, each SMF router forwards each
+      received packet once. In this case, the need for any relay set selection
+      or neighborhood topology information is eliminated but DPD is still
+      required. While CF may be used, in general practice, a form of efficient
+      relay set selection is RECOMMENDED. An efficient, reduced relay set is
+      realized by selecting a <spanx>subset</spanx> of all possible SMF
+      routers in a MANET routing region as the forwarding relay set. Known
+      relay set selection algorithms have demonstrated the ability to provide
+      and maintain a dynamic distribution mesh for forwarding user multicast
+      data <xref target="MDC04"></xref>. A few such relay set selection
+      algorithms are described in the Appendices of this document and the
+      basic designs borrow directly from previous work. Additional relay set
+      algorithms or extensions may be specified in the future for use with
+      SMF.</t>
+
+      <t>Dynamic neighborhood topology information is needed to determine and
+      maintain an optimized set of relay (forwarding) nodes. Neighborhood
+      topology discovery functions MAY be externally provided by a MANET
+      unicast routing protocol or by using the MANET NeighborHood Discovery
+      Protocol (NHDP) <xref target="NHDP"></xref> running in concurrence with
+      SMF. Additionally, this specification does not preclude a lower protocol
+      layer from providing necessary neighborhood information. Fundamentally,
+      an SMF implementation SHOULD provide the ability for multicast
+      forwarding state to be dynamically managed per operating network
+      interface. Some of the relay state maintenance options and interactions
+      are outlined later in <xref target="Relays"></xref>. This document
+      states specific requirements for neighborhood discovery with respect to
+      the forwarding process and relay set selection algorithms described
+      herein. In the absence of a MANET unicast protocol or lower layer
+      information interface, SMF relies on the MANET NHDP specification to
+      assist in 2-hop neighborhood state discovery and maintenance for relay
+      set election when not operating in a CF mode.</t>
+
+      <section title="Abbreviations">
+        <t><list style="empty">
+            <t>MANET : Mobile Ad hoc Network</t>
+
+            <t>SMF : Simplified Multicast Forwarding</t>
+
+            <t>CF : Classical Flooding</t>
+
+            <t>CDS : Connected Dominating Set</t>
+
+            <t>MCDS : Minimum Connected Domination Set</t>
+
+            <t>MPR : Multi-point Relay</t>
+
+            <t>S-MPR: Source-based MPR</t>
+
+            <t>CDS-MPR: CDS-based MPR</t>
+
+            <t>E-CDS: Essential Connected Dominating Set</t>
+
+            <t>DPD: Duplicate Packet Detection</t>
+
+            <t>NHDP: Neighborhood Discovery Protocol</t>
+
+            <t>I-DPD: Identification-based Duplicate Packet Detection</t>
+
+            <t>H-DPD: Hash-based Duplicate Packet Detection</t>
+
+            <t>HAV: Hash Assist Value</t>
+
+            <t>FIB: Forwarding Information Base</t>
+          </list></t>
+      </section>
+    </section>
+
+    <section title="Applicability">
+      <t>Within dynamic, mobile routing topologies, maintaining traditional
+      forwarding trees to support a multicast routing protocol MAY not be
+      sensible or needed. A basic packet forwarding service that reaches all
+      MANET SMF routers participating within a localized MANET routing region
+      MAY provide a useful group communication mechanism for various classes
+      of applications. Applications that could take advantage of a simple
+      multicast forwarding service within a MANET routing region include
+      multimedia streaming, interactive group-based messaging and
+      applications, peer-to-peer middleware multicasting, and multi-hop mobile
+      discovery or registration services.</t>
+
+      <t>Note again that Figure 1 provides a notional architecture for
+      <spanx>typical</spanx> MANET SMF-capable nodes. However, a goal is that
+      simple end-system (non-forwarding) wireless nodes may also participate
+      in multicast traffic transmission and reception with standard IP network
+      layer semantics (e.g., special or unnecessary encapsulation of IP
+      packets should be avoided in this case). A multicast border router or
+      proxy mechanism MUST be used when deployed alongside more
+      fixed-infrastructure IP multicast routing such Protocol Independent
+      Multicast (PIM) variants <xref target="RFC3973"></xref> and <xref
+      target="RFC4601"></xref>. With present experimental implementations,
+      proxy methods have demonstrated gateway functionality at MANET border
+      routers operating with external IP multicast routing protocols. SMF may
+      be extended or combined with other mechanisms to provide increased
+      reliability and group specific filtering, but the details for this are
+      not discussed here.</t>
+    </section>
+
+    <section anchor="Forwarding" title="SMF Packet Processing and Forwarding">
+      <t>The SMF Packet Processing and Forwarding actions are conducted with
+      the following packet handling activities: <list style="numbers">
+          <t>Processing of outbound, locally-generated multicast packets.</t>
+
+          <t>Reception and processing of inbound packets on a specific network
+          interface(s).</t>
+        </list></t>
+
+      <t>The purpose of intercepting outbound, locally-generated multicast
+      packets is to enforce any of the DPD requirements described later so
+      that proper forwarding may be conducted.</t>
+
+      <t>Inbound multicast packets will be received by the SMF implementation
+      and processed for possible forwarding. This document does not presently
+      support forwarding of directed broadcast addresses <xref
+      target="RFC2644"></xref>. SMF implementations MUST be capable of
+      forwarding packets for "global scope" multicast groups to support
+      generic multicast application needs or to distribute designated
+      multicast traffic that ingresses the MANET routing region via border
+      routers. The set of destination addresses to be forwarded will be
+      maintained by an <spanx style="emph">a priori</spanx> list or a dynamic
+      forwarding information base (FIB) that may interact with future MANET
+      dynamic group membership extensions. There will be a well-known
+      multicast group for flooding to all SMF forwarders. This multicast group
+      is specified to contain all MANET SMF routers of a connected MANET
+      routing region, so that packets transmitted to the multicast address
+      associated with the group will be delivered to all connected SMF
+      routers. For IPv6, the multicast address is specified to be
+      "site-local". The name of the multicast group is "SL-MANET-ROUTERS".
+      Minimally SMF SHALL forward, as instructed by the relay set selection
+      algorithm, unique (non-duplicate) packets received for this well-known
+      group address when the TTL or hop count value in the IP header is
+      greater than 1. SMF SHALL forward all additional global scope addresses
+      specified within the FIB as well. In all cases, the following rules
+      SHALL be observed for SMF multicast forwarding:</t>
+
+      <t><list style="numbers">
+          <t>Multicast packets with TTL &lt;= 1 MUST NOT be forwarded*.</t>
+
+          <t>Link local multicast packets MUST NOT be forwarded.</t>
+
+          <t>Incoming multicast packets with an IP source address matching one
+          of those of the local SMF router interface(s) MUST NOT be
+          forwarded.</t>
+
+          <t>Received packet frames with the MAC source address matching the
+          local SMF router interface(s) MUST NOT be forwarded.</t>
+
+          <t>Received packets for which SMF cannot reasonably ensure temporal
+          DPD uniqueness MUST NOT be forwarded.</t>
+
+          <t>When packets are forwarded, TTL or hop limit SHALL be decremented
+          by one.</t>
+        </list></t>
+
+      <t>Note that rule #3 is important because in wireless networks, the
+      local SMF router may receive re-transmissions of its own packets when
+      they are forwarded by neighboring nodes. This rule avoids unnecessary
+      retransmission of locally-generated packets even when other forwarding
+      decision rules would apply.</t>
+
+      <t>As mentioned in <xref target="Security"></xref>, there may be concern
+      in some SMF deployments that bad-behaving nodes could conduct a
+      denial-of-service attack by remotely "previewing" (e.g., via a
+      directional receive antenna) packets that an SMF node would be
+      forwarding and conduct a "pre-play" attack by transmitting the packet
+      before the SMF node would otherwise receive it but with a reduced TTL
+      (or Hop Limit) field value. This form of attack could cause an SMF node
+      to create a DPD entry that would block the proper forwarding of the
+      valid packet (with correct TTL) through the SMF area. A RECOMMENDED
+      approach to prevent this attack, when it is a concern, would be to cache
+      temporal packet TTL values along with the DPD state (hash value(s)
+      and/or identifier). Then, if a subsequent matching (with respect to DPD)
+      packet arrives with a <spanx style="emph">larger</spanx> TTL value than
+      the packet that was previously forwarded, then SMF should forward the
+      new packet <spanx style="emph">and</spanx> update the TTL cached with
+      corresponding DPD state to the new, larger TTL value. There may be some
+      isolated, temporary cases where SMF may unnecessarily forward some
+      duplicate packets using this approach, but those case are expected to be
+      exceptional.</t>
+
+      <t>Once these criteria have been met, an SMF implementation MUST examine
+      a forwarding decision algorithm to determine the next steps in packet
+      processing. If the SMF implementation is operating in a classical
+      flooding (CF) mode the forwarding decision is implicit after DPD
+      uniqueness is determined. Otherwise, a forwarding decision requires
+      additional information, including interface specific relay set state.
+      Relay set selection algorithms described later MAY be used to determine
+      the local SMF router's status with respect to forwarding. Some
+      algorithms control forwarding based on a relay set election and previous
+      hop identifier (e.g. S-MPR forwarding), while others designate the local
+      SMF router as a forwarder of all neighbor packets based on the
+      neighborhood topology (e.g. Essential CDS (E-CDS) and MPR-CDS). A
+      specific SMF node within a deployment may perform redundant forwarding,
+      but each forwarder MUST at a minimum support a distributed election
+      process that ensures a consistent dynamic CDS.</t>
+    </section>
+
+    <!-- Beginning of Duplicate Packet Detection Section -->
+
+    <section anchor="DPD" title="SMF Duplicate Packet Detection">
+      <t>Duplicate packet detection (DPD) is a common requirement in MANET
+      packet flooding because packets may be forwarded out the same physical
+      interface upon which they arrived and nodes may also receive copies of
+      previously-transmitted packets from other forwarding neighbors. SMF
+      implementations MUST detect and avoid forwarding duplicate multicast
+      packets using a temporal packet identification scheme. It is RECOMMENDED
+      this be implemented by keeping a history of recently-processed multicast
+      packets for comparison to incoming packets. For both IPv4 and IPv6, this
+      document describes two basic approaches to multicast duplicate packet
+      detection: header content identification-based (I-DPD) and hash-based
+      (H-DPD) duplicate detection. The two approaches are described for
+      experimental purposes. Trade-offs of the two approaches to DPD may merit
+      different consideration depending upon specific SMF deployment
+      scenarios. Because of the potential addition of a hop-by-hop option
+      header with IPv6, SMF deployments MUST be configured to use a common
+      mechanism and DPD algorithm. The main difference between IPv4 and IPv6
+      SMF DPD specification is the avoidance of any additional header options
+      or encapsulation in the IPv4 case.</t>
+
+      <t>For each network interface, SMF implementations MUST maintain DPD
+      packet state as needed to support the forwarding heuristics of the relay
+      set algorithm used. The specific requirements of several relay set
+      selection algorithms and their forwarding rules are described in the
+      Appendices of this document. In general this involves keeping track of
+      previously forwarded packets so that duplicates are not forwarded, but
+      some relay techniques (e.g., S-MPR) may have additional
+      considerations.</t>
+
+      <t>For I-DPD, packets are identified using explicit identifiers from the
+      IP header. The specific identifier to use depends upon the IP protocol
+      version and the type of packet. For example, IPv4 provides an
+      "Identification" field that may be used for DPD purposes, and packets
+      that contain IPSec protocol headers also provide a suitable packet
+      identifier. These identifier fields are unique within the context of
+      source address, destination address, protocol type, and/or other header
+      fields depending upon the type of identifier used for DPD. Similarly,
+      for H-DPD, it is expected that packet hash values will be kept with
+      respect to at least the source address to help ensure hash collision
+      avoidance. SMF implementations MUST maintain DPD history per the
+      applicable packet flow context (e.g., &lt;protocol:srcAddr:dstAddr&gt;
+      for DPD based upon IPv4 ID). The details for I-DPD and H-DPD for
+      different types of packets are described in the sections below. In
+      either case, this history SHOULD be kept long enough to span the maximum
+      network traversal lifetime, MAX_PACKET_LIFETIME, of multicast packets
+      being forwarded within an SMF operating area. The required size of the
+      DPD cache is governed by this timeout value and is also a function of
+      the packet forwarding rates. The DPD mechanism SHOULD avoid keeping
+      unnecessary state for packet flows such as those that are
+      locally-generated or link local destinations that would not be
+      considered for forwarding.</t>
+
+      <section anchor="DPDv6" title="IPv6 Duplicate Packet Detection">
+        <t>This section describes the mechanisms and options for SMF IPv6 DPD.
+        The core IPv6 packet header does not provide any explicit
+        identification header field that can be exploited for I-DPD. The
+        following areas are described to support IPv6 DPD:<list
+            style="numbers">
+            <t>a hop-by-hop SMF-DPD option header (with supporting identifier
+            or hash assistance value),</t>
+
+            <t>the use of IPv6 fragment header fields for I-DPD when they
+            exist,</t>
+
+            <t>the use of IPSec sequencing for I-DPD when a non-fragmented,
+            IPSec header is detected, and</t>
+
+            <t>an H-DPD approach assisted, as needed, by the SMF-DPD option
+            header.</t>
+          </list>SMF MUST provide a DPD marking module that can insert the
+        hop-by-hop IPv6 header option defined in this section. This process
+        MUST come after any source-based fragmentation that may occur with
+        IPv6. As with IPv4, SMF IPv6 DPD is presently specified to allow
+        either a packet hash or header identification method for DPD. An SMF
+        implementation MUST be configured to operate either in H-DPD or I-DPD
+        mode and perform the appropriate routines outlined in the following
+        sections.</t>
+
+        <section anchor="Opt-DPD" title="IPv6 SMF-DPD Header Option">
+          <t>As previously mentioned, the base IPv6 packet header does not
+          contain a unique identifier suitable for DPD. This section defines
+          an IPv6 hop-by-hop header option to serve this purpose for IPv6
+          I-DPD. Additionally, the header option provides an opportunity to
+          help guarantee non-collision of hash values for different packets
+          when H-DPD is used. This header option format supports both of these
+          purposes.</t>
+
+          <t>The first bit of the data field of the SMF-DPD option is the
+          "H-bit" that determines the format of the data field. Two different
+          formats are supported. When the "H-bit" is cleared (zero value), the
+          SMF-DPD format to support I-DPD operation is specified as shown in
+          Figure 5 and defines the extension header in accordance with <xref
+          target="RFC2460"></xref>.</t>
+
+          <t><figure>
+              <preamble></preamble>
+
+              <artwork><![CDATA[    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                  ...              |0|0|0| OptType | Opt. Data Len |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |0|TidTyp|TidLen|             TaggerId (optional) ...           |
+   +-+-+-+-+-+-+-+-+               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                               |            Identifier  ...
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   
+              Fig. 5 - IPv6 SMF-DPD Header Option in I-DPD mode ]]></artwork>
+
+              <postamble></postamble>
+            </figure>The "TidType" is a 3-bit field indicating the presence
+          and type of the optional "TaggerId" field. The optional "TaggerId"
+          is used to differentiate multiple ingressing border gateways that
+          may commonly apply the SMF-DPD option header to packets from a
+          particular source. This is provided for experimental purposes. The
+          following table lists the valid TaggerId types:</t>
+
+          <texttable>
+            <preamble></preamble>
+
+            <ttcol>Name</ttcol>
+
+            <ttcol>Value</ttcol>
+
+            <ttcol>Purpose</ttcol>
+
+            <c>NULL</c>
+
+            <c>0</c>
+
+            <c>Indicates no "taggerId" field is present. "TidLen" MUST also be
+            set to ZERO.</c>
+
+            <c>DEFAULT</c>
+
+            <c>1</c>
+
+            <c>A "TaggerId" of non-specific context is present. "TidLen + 1"
+            defines the length of the TaggerId field in bytes.</c>
+
+            <c>IPv4</c>
+
+            <c>2</c>
+
+            <c>A "TaggerId" representing an IPv4 address is present. The
+            "TidLen" MUST be set to 3.</c>
+
+            <c>IPv6</c>
+
+            <c>3</c>
+
+            <c>A "TaggerId" representing an IPv6 address is present. The
+            "TidLen" MUST be set to 15.</c>
+
+            <c>ExtId</c>
+
+            <c>7</c>
+
+            <c>RESERVED FOR FUTURE USE (possible extended ID)</c>
+
+            <postamble></postamble>
+          </texttable>
+
+          <t>This format allows a quick check of the "TidType" field to
+          determine if a "TaggerId" field is present. If the &lt;TidType&gt;
+          is NULL, then the length of the DPD packet &lt;Identifier&gt; field
+          corresponds to the (&lt;Opt. Data Len&gt; - 1). If the
+          &lt;TidType&gt; is non-NULL, then the length of the "TaggerId" field
+          is equal to (&lt;TidLen&gt; - 1) and the remainder of the option
+          data comprises the DPD packet &lt;Identifier&gt; field. When the
+          "TaggerId" field is present, the &lt;Identifier&gt; field can be
+          considered a unique packet identifier in the context of the
+          &lt;taggerId:srcAddr:dstAddr&gt; tuple. When the "TaggerId" field is
+          not present, then it is assumed the source host applied the SMF-DPD
+          option and the &lt;Identifier&gt; can be considered unique in the
+          context of the IPv6 packet header &lt;srcAddr:dstAddr&gt; tuple.
+          Details on IPV6 I-DPD operation are described in <xref
+          target="I-DPDv6"></xref>.</t>
+
+          <t>When the "H-bit" in the SMF-DPD option data is set, the data
+          content value is interpreted as a Hash-Assist Value (HAV) used to
+          facilitate H-DPD operation. In this case, source hosts or ingressing
+          gateways apply the SMF-DPD with a HAV only when required to
+          differentiate the hash value of a new packet with respect to older
+          packets in the current DPD history cache. This helps to guarantee
+          the uniqueness of generated hash values when H-DPD is used.
+          Additionally, this also avoids the added overhead of applying the
+          SMF-DPD option header to every packet. For many hash algorithms, it
+          is expected that only sparse use of the SMF-DPD option may be
+          required. The following table illustrates the format of the SMF-DPD
+          header option for H-DPD operation:</t>
+
+          <t><figure>
+              <preamble></preamble>
+
+              <artwork><![CDATA[    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                  ...              |0|0|0| OptType | Opt. Data Len |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |0|    Hash Assist Value (HAV) ... 
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   
+              Fig. 6 - IPv6 SMF-DPD Header Option in H-DPD mode ]]></artwork>
+
+              <postamble></postamble>
+            </figure>The SMF-DPD option should be applied with a HAV to
+          produce a unique hash digest for packets within the context of the
+          IPv6 packet header &lt;srcAddr&gt;. The size of the HAV field is
+          implied by the "Opt. Data Len". The appropriate size of the field
+          depends upon the collision properties of the specific hash algorithm
+          used. More details on IPv6 H-DPD operation are provided in <xref
+          target="H-DPDv6"></xref>.</t>
+        </section>
+
+        <section anchor="I-DPDv6"
+                 title="IPv6 Identification-based DPD Operation">
+          <t>The following table summarizes the IPv6 I-DPD processing
+          approach. Within the table '*' indicates a don't care condition.</t>
+
+          <texttable>
+            <preamble>IPv6 I-DPD Processing Rules</preamble>
+
+            <ttcol>IPv6 Fragment Header</ttcol>
+
+            <ttcol>IPv6 IPSEC Header</ttcol>
+
+            <ttcol>IPv6 I-DPD Header</ttcol>
+
+            <ttcol>SMF IPv6 I-DPD Mode Action</ttcol>
+
+            <c>Present</c>
+
+            <c>*</c>
+
+            <c>*</c>
+
+            <c>Use Fragment Header I-DPD Check and Process for Forwarding</c>
+
+            <c>Not Present</c>
+
+            <c>Present</c>
+
+            <c>*</c>
+
+            <c>Use IPSEC Header I-DPD Check and Process for Forwarding</c>
+
+            <c>Present</c>
+
+            <c>*</c>
+
+            <c>Present</c>
+
+            <c>Invalid, do not Forward</c>
+
+            <c>Not Present</c>
+
+            <c>Present</c>
+
+            <c>Present</c>
+
+            <c>Invalid, do not Forward</c>
+
+            <c>Not Present</c>
+
+            <c>Not Present</c>
+
+            <c>Not Present</c>
+
+            <c>Add I-DPD Header,and Process for Forwarding</c>
+
+            <c>Not Present</c>
+
+            <c>Not Present</c>
+
+            <c>Present</c>
+
+            <c>Use I-DPD Header Check and Process for Forwarding</c>
+          </texttable>
+
+          <t>If the IPv6 multicast packet is an IPv6 fragment, SMF MUST use
+          the fragment extension header fields for packet identification. This
+          identifier can be considered unique in the context of the
+          &lt;srcAddr:dstAddr&gt; of the IP packet. If the packet is an
+          unfragmented IPv6 IPSEC packet, SMF MUST use IPSec fields for packet
+          identification. The IPSec header &lt;sequence&gt; field can be
+          considered a unique identifier in the context of the
+          &lt;IPSecType:srcAddr:dstAddr:SPI&gt; where the "IPSecType" is
+          either AH or ESP. For unfragmented, non-IPSec, IPv6 packets, the use
+          of the SMF DPD header option is necessary to support I-DPD
+          operation. The SMF DPD header option is applied in the context of
+          the &lt;srcAddr&gt; of the IP packet. End systems or ingressing SMF
+          gateways are responsible for applying this option to support DPD.
+          The following table summarizes these packet identification
+          types:</t>
+
+          <texttable>
+            <preamble><spanx style="strong">IPv6 I-DPD Packet Identification
+            Types</spanx></preamble>
+
+            <ttcol>IPv6 Packet Type</ttcol>
+
+            <ttcol>Packet DPD ID Context</ttcol>
+
+            <ttcol>Packet DPD ID</ttcol>
+
+            <c>Fragment</c>
+
+            <c>&lt;srcAddr:dstAddr&gt;</c>
+
+            <c>&lt;fragmentOffset:id&gt;</c>
+
+            <c>IPSec Packet</c>
+
+            <c>&lt;IPSecType:srcAddr:dstAddr:SPI&gt;</c>
+
+            <c>&lt;sequence&gt;</c>
+
+            <c>Regular Packet</c>
+
+            <c>&lt;[taggerId:]srcAddr:dstAddr&gt;</c>
+
+            <c>&lt;SMF-DPD option header id&gt;</c>
+
+            <postamble></postamble>
+          </texttable>
+
+          <t>"IPSecType" is either Authentication Header (AH) or Encapsulating
+          Security Payload (ESP).</t>
+
+          <t>The "taggerId" is an optional feature of the IPv6 SMF-DPD header
+          option.</t>
+        </section>
+
+        <section anchor="H-DPDv6" title="IPv6 Hash-based DPD Operation">
+          <t>A default hash-based DPD approach (H-DPD) for use by SMF is
+          specified as follows. An MD5 <xref target="RFC1321"></xref> hash of
+          the non-mutable header fields, options fields, and data content of
+          the IPv6 multicast packet is used to produce a 128-bit digest. The
+          lower 64 bits of this digest (MD5_64) is used for SMF packet
+          identification. The approach for calculating this hash value SHOULD
+          follow the same guidelines described for calculating the Integrity
+          Check Value (ICV) described in <xref target="RFC4302"></xref> with
+          respect to non-mutable fields. This approach should have a
+          reasonably low probability of digest collision when packet headers
+          and content are varying. MD5 is being applied in SMF only to provide
+          a low probability of collision and is not being used for
+          cryptographic or authentication purposes. A history of the packet
+          hash values SHOULD be maintained within the context of the IPv6
+          packet header &lt;srcAddr&gt;. This history is used by forwarding
+          SMF nodes (non-ingress points) to avoid forwarding duplicates. SMF
+          ingress points (i.e., source hosts or gateways) use this history to
+          confirm that new packets are unique with respect to their hash
+          value. The Hash-assist Value (HAV) field described in <xref
+          target="Opt-DPD"></xref> is provided as a differentiating field when
+          a digest collision would otherwise occur. Note that the HAV is an
+          immutable option field and SMF MUST use any included H-DPD hash
+          assist value (HAV) option header (see <xref
+          target="Opt-DPD"></xref>) in its hash calculation.</t>
+
+          <t>If a packet results in a digest collision (i.e., by checking the
+          H-DPD digest history) within the limited history kept by SMF
+          forwarders, the packet should be silently dropped. If a digest
+          collision is detected at an SMF ingress point (i.e., including
+          SMF-aware sources), the H-DPD option header is applied with a HAV.
+          The packet is retested for collision and the HAV is re-applied as
+          needed to produce a non-colliding hash value. The multicast packet
+          is then forwarded with the added IPv6 SMF-DPD header option.</t>
+
+          <t>The MD5 indexing and IPv6 HAV approaches are specified at present
+          for consistency and robustness to suit experimental application.
+          Future approaches and experimentation may discover designs tradeoffs
+          in hash robustness and efficiency worth considering. This MAY
+          include reducing the maximum payload length that is processed,
+          determining shorter indexes, or applying more efficient hashing
+          algorithms. Use of the HAV may allow for application of
+          "lighter-weight" hashing techniques that might have been not
+          considered due to poor collision properties otherwise.</t>
+        </section>
+      </section>
+
+      <section anchor="DPDv4" title="IPv4 Duplicate Packet Detection">
+        <t>This section describes the mechanisms and options for IPv4 DPD. The
+        IPv4 packet header 16-bit "Identification" field MAY be used for DPD,
+        but its limitations may require alternative approaches in some
+        situations. The following areas are described to support IPv4
+        DPD::<list style="numbers">
+            <t>the use of IPv4 fragment header fields for I-DPD when they
+            exist,</t>
+
+            <t>the use of IPSec sequencing for I-DPD when a non-fragmented
+            IPv4 IPSec packet is detected, and</t>
+
+            <t>a H-DPD approach.</t>
+          </list>A specific SMF-DPD marking option is not specified for IPv4
+        since header options are not as tractable for end systems as for IPv6.
+        IPv4 packets from a particular source are assumed to be marked with a
+        temporally unique value in the "Identification" field of the packet
+        header <xref format="title" target="RFC0791"></xref> that can serve
+        for SMF DPD purposes. However, in present operating system networking
+        kernels, the IPv4 header "Identification" value is not always
+        generated properly, especially when the "don't fragment" (DF) bit is
+        set. The IPv4 I-DPD mode of this specification requires that IPv4
+        "Identification" fields are managed reasonably by source hosts and
+        that temporally unique values are set within the context of the packet
+        header &lt;protocol:srcAddr:dstAddr&gt; tuple. If this is not expected
+        during an SMF deployment, then it is RECOMMENDED that the H-DPD method
+        be used as a more reliable approach.</t>
+
+        <t>Since IPv4 SMF does not specify an options header, the
+        interoperability constraints are looser than the IPv6 version and
+        forwarders may be operate with mixed H-DPD and I-DPD modes as long as
+        they consistently perform the appropriate DPD routines outlined in the
+        following sections. However, it is RECOMMENDED that a deployment be
+        configured with a common mode for operational consistency.</t>
+
+        <section title="IPv4 Identification-based DPD Operation">
+          <t>The following table summarizes the IPv4 I-DPD processing approach
+          once a packet has passed the basic forwardable criteria described in
+          earlier SMF sections. Within the table '*' indicates a don't care
+          condition.</t>
+
+          <texttable>
+            <preamble></preamble>
+
+            <ttcol>df</ttcol>
+
+            <ttcol>mf</ttcol>
+
+            <ttcol>fragment offset</ttcol>
+
+            <ttcol>IPSEC</ttcol>
+
+            <ttcol>IPv4 I-DPD Action</ttcol>
+
+            <c>1</c>
+
+            <c>1</c>
+
+            <c>*</c>
+
+            <c>*</c>
+
+            <c>Invalid, Do Not Forward</c>
+
+            <c>1</c>
+
+            <c>0</c>
+
+            <c>nonzero</c>
+
+            <c>*</c>
+
+            <c>Invalid, Do Not Forward</c>
+
+            <c>*</c>
+
+            <c>0</c>
+
+            <c>zero</c>
+
+            <c>not Present</c>
+
+            <c>Tuple I-DPD Check and Process for Forwarding</c>
+
+            <c>*</c>
+
+            <c>0</c>
+
+            <c>zero</c>
+
+            <c>Present</c>
+
+            <c>IPSEC enhanced Tuple I-DPD Check and Process for Forwarding</c>
+
+            <c>0</c>
+
+            <c>0</c>
+
+            <c>nonzero</c>
+
+            <c>*</c>
+
+            <c>Extended Fragment Offset Tuple I-DPD Check and Process for
+            Forwarding</c>
+
+            <c>0</c>
+
+            <c>1</c>
+
+            <c>zero or nonzero</c>
+
+            <c>*</c>
+
+            <c>Extended Fragment Offset Tuple I-DPD Check and Process for
+            Forwarding</c>
+          </texttable>
+
+          <t>For performance reasons, IPv4 network fragmentation and
+          reassembly of multicast packets within wireless MANET networks
+          should be minimized, yet SMF provides the forwarding of fragments
+          when they occur. If the IPv4 multicast packet is a fragment, SMF
+          MUST use the fragmentation header fields for packet identification.
+          This identification can be considered temporally unique in the
+          context of the &lt;protocol:srcAddr:dstAddr&gt; of the IPv4 packet.
+          If the packet is an unfragmented IPv4 IPSEC packet, SMF MUST use
+          IPSec fields for packet identification. The IPSec header
+          &lt;sequence&gt; field can be considered a unique identifier in the
+          context of the &lt;IPSecType:srcAddr:dstAddr:SPI&gt; where the
+          "IPSecType" is either AH or ESP. Finally, for unfragmented,
+          non-IPSec, IPv4 packets, the "Identification" field can be used for
+          I-DPD purposes. The "Identification" field can be considered unique
+          in the context of the IPv4 &lt;protocol:scrAddr:dstAddr&gt; tuple.
+          The following table summarizes these packet identification
+          types:</t>
+
+          <texttable>
+            <preamble><spanx style="strong">IPv4 I-DPD Packet Identification
+            Types</spanx></preamble>
+
+            <ttcol>IPv4 Packet Type</ttcol>
+
+            <ttcol>Packet Identification Context</ttcol>
+
+            <ttcol>Packet Identifier</ttcol>
+
+            <c>Fragment</c>
+
+            <c>&lt;protocol:srcAddr:dstAddr&gt;</c>
+
+            <c>&lt;fragmentOffset:id&gt;</c>
+
+            <c>IPSec Packet</c>
+
+            <c>&lt;IPSecType:srcAddr:dstAddr:SPI&gt;</c>
+
+            <c>&lt;sequence&gt;</c>
+
+            <c>Regular Packet</c>
+
+            <c>&lt;protocol:srcAddr:dstAddr&gt;</c>
+
+            <c>&lt;id&gt;</c>
+
+            <postamble></postamble>
+          </texttable>
+
+          <t>"IPSecType" is either Authentication Header (AH) or Encapsulating
+          Security Payload (ESP).</t>
+
+          <t>The limited size (16 bits) of the IPv4 header "Identification"
+          field may result in the value rapidly wrapping, particularly if a
+          common sequence space is used by a source for multiple destinations.
+          If I-DPD operation is required, the use of the "internal hashing"
+          technique described in <xref target="I-HASH"></xref> may mitigate
+          this limitation of the IPv4 "Identification" field for SMF DPD. In
+          this case the "internal hash" value would be concatenated with the
+          "Identification" value for I-DPD operation.</t>
+        </section>
+
+        <section title="IPv4 Hash-based DPD Operation">
+          <t>To ensure consistent IPv4 H-DPD operation among SMF nodes, a
+          default hashing approach is specified. This is similar to that
+          specified for IPv6, but the H-DPD header option with HAV is not
+          considered. SMF MUST perform an MD5 <xref target="RFC1321"></xref>
+          hash of the immutable header fields, option fields and data content
+          of the IPv4 multicast packet resulting in a 128-bit digest. The
+          lower 64 bits of this digest (MD5_64) is used for SMF packet
+          identification. The approach for calculating the hash value SHOULD
+          follow the same guidelines described for calculating the Integrity
+          Check Value (ICV) described in <xref target="RFC4302"></xref> with
+          respect to non-mutable fields. A history of the packet hash values
+          SHOULD be maintained in the context of
+          &lt;protocol:srcAddr:dstAddr&gt;. The context for IPv4 is more
+          specific than that of IPv6 since the SMF-DPD HAV cannot be employed
+          to mitigate hash collisions.</t>
+
+          <t>The MD5 hash is specified at present for consistency and
+          robustness. Future approaches and experimentation may discover
+          designs tradeoffs in hash robustness and efficiency worth
+          considering for future versions of SMF. This MAY include reducing
+          the packet payload length that is processed, determining shorter
+          indexes, or applying a more efficient hashing algorithm.</t>
+        </section>
+      </section>
+
+      <section anchor="I-HASH" title="Internal Hash Computation">
+        <t>Forwarding protocols that use DPD techniques, such as SMF, may be
+        vulnerable to denial-of-service (DoS) attacks based on spoofing
+        packets with apparently valid packet identifier fields. Such a
+        consideration is pointed out in <xref target="Security"></xref>. In
+        wireless environments where SMF will most likely be used, the
+        opportunity for badly-behaving nodes to conduct such attacks is more
+        prevalent than in wired networks. In the case of IPv4 packets,
+        fragmented IP packets or packets with IPSec headers applied, the DPD
+        "identifier" of potential future packets that might be forwarded is
+        very predictable and easily subject to denial-of-service attacks
+        against forwarding. A RECOMMENDED technique to counter this concern is
+        for SMF implementations to generate an "internal" hash value that is
+        concatenated with the explicit I-DPD packet identifier to form a
+        unique identifier that is a function of the packet content as well as
+        the visible identifier. SMF implementations could seed their hash
+        generation with a random value to make it unlikely that an external
+        observer could guess how to spoof packets used in a denial-of-service
+        attack against forwarding. Since the hash computation and state is
+        kept completely internal to SMF nodes, the cryptographic properties of
+        this hashing would not need to be extensive and thus possibly of low
+        complexity. Experimental implementations may determine that a
+        lightweight hash of even only portions of packets may suffice to serve
+        this purpose.</t>
+
+        <t>For IPv4 I-DPD based on the limited 16-bit "Identification" field,
+        it is possible that use of this "internal hash" technique may also
+        enhance I-DPD performance in cases where the IPv4 "Identification"
+        field may wrap quickly due to the source supporting high data rate
+        flows.</t>
+
+        <t>While H-DPD is not as readily susceptible to this form of DoS
+        attack, it is possible that a sophisticated adversary could use side
+        information to construct spoofing packets to mislead forwarders using
+        a well-known hash algorithm. Thus, similarly, a separate "internal"
+        hash value could be concatenated with the well-known hash value to
+        alleviate this security concern.</t>
+      </section>
+    </section>
+
+    <!-- End of Duplicate Packet Detection Section -->
+
+    <!-- Beginning of Relay Set Section -->
+
+    <section anchor="Relays"
+             title="Reduced Relay Set Forwarding and Relay Selection Capability">
+      <t>SMF MUST support CF-based forwarding as a basic forwarding mechanism
+      when reduced relay set information is not available or not selected for
+      operation. In CF mode, each node transmits a locally generated or newly
+      received packet exactly once. The DPD techniques described in <xref
+      target="DPD"></xref> are critical to proper operation and prevent
+      duplicate packet retransmissions by the same forwarding node.</t>
+
+      <t>A goal of SMF is to apply reduced relay sets for more efficient
+      multicast dissemination within dynamic topologies. To accomplish this
+      SMF MUST support the ability to modify its multicast packet forwarding
+      rules based upon relay set state received dynamically during operation.
+      In this way, SMF forwarding can continue to operate effectively as
+      neighbor adjacencies or multicast forwarding policies within the
+      topology change.</t>
+
+      <t>In early SMF experimental deployments, the relay set information has
+      been derived from a coexistent unicast MANET protocol calculation of a
+      reduced relay set for control plane traffic. From this experience, extra
+      pruning considerations are sometimes required when utilizing a relay set
+      from a independent routing protocol process, since a relay set formed
+      for the unicast control plane flooding MAY include a more redundant set
+      of nodes than desired for multicast forwarding use (e.g., biconnected
+      control plane CDS meshes).</t>
+
+      <t>Here is a recommended criteria list for relay set selection algorithm
+      candidates:</t>
+
+      <t><list style="numbers">
+          <t>Robustness to topological dynamics and mobility</t>
+
+          <t>Localized election or coordination of any relay sets</t>
+
+          <t>Heuristic support for preference or election metrics (Better
+          enables scenario-specific management of relay set)</t>
+        </list></t>
+
+      <t>Some relay set algorithms meeting these criteria are described in the
+      Appendices of this document. Different algorithms may be more suitable
+      for different MANET routing types or deployments. Additional relay set
+      selection algorithms may be specified in separate specifications in the
+      future. The Appendices in this document can serve as a template for the
+      content of such potential future specifications.</t>
+
+      <t>Figure 7 depicts a state information diagram of possible relay set
+      control options. There are basically three style of SMF operation with
+      reduced relay sets as follows.</t>
+
+      <t><list style="numbers">
+          <t>Unicast dependent operation with a coexisting MANET unicast
+          routing protocol in which the relay set state is derived from the
+          unicast control plane CDS information.</t>
+
+          <t>Unicast independent operation in which SMF performs its own Relay
+          Set Selection and derives dynamic neighborhood information from a
+          MANET NHDP process. In this case, additional TLV definitions for
+          related CDS collection SHOULD be used as discussed in <xref
+          target="Neighborhood"></xref>.</t>
+
+          <t>Possible crosslayer implementation that uses L2 neighborhood
+          information and possible triggers to assist the dynamic relay set
+          selection and maintenance process.</t>
+        </list></t>
+
+      <figure>
+        <preamble></preamble>
+
+        <artwork><![CDATA[ 
+
+                        Possible L2 Trigger/Information
+                                      | 
+                                      |
+ ______________                _______v_____         __________________
+|    MANET     |              |             |       |                  |
+| Neighborhood |              |  Relay Set  |       | Other Heuristics |
+|  Discovery   |------------->|  Selection  |<------| (Preference,etc) |
+|   Protocol   |   neighbor   |  Algorithm  |       |                  |
+|______________|     info     |_____________|       |__________________|
+       \                              /
+        \                            /
+ neighbor\                          / Dynamic Relay
+   info*  \      ____________      /    Set Status
+           \    |    SMF     |    / (State, {neighbor info})
+            `-->| Relay Set  |<--'
+                |   State    |
+             -->|____________|
+            /
+           /
+ ______________            
+|  Coexistent  |   
+|    MANET     |
+|   Unicast    |
+|   Process    |     
+|______________|
+
+
+        Fig. 7 - SMF Relay Set Control Options]]></artwork>
+
+        <postamble></postamble>
+      </figure>
+    </section>
+
+    <!-- End of Relay Set Section -->
+
+    <!-- Begin Neighborhood Discovery Section -->
+
+    <section anchor="Neighborhood"
+             title="SMF Neighborhood Discovery  Requirements">
+      <t>In absence of a compatible, coexisting unicast routing protocol or
+      lower layer protocol providing neighborhood topology information
+      sufficient for relay set selection, this section defines the issues and
+      additional requirements for a MANET Neighborhood Discovery Protocol
+      (NHDP) that MAY be used by SMF nodes.</t>
+
+      <t>With respect to neighborhood topology knowledge and/or discovery,
+      there are three basic modes of SMF operation: <list style="numbers">
+          <t>Classical Flooding (CF) mode: with no requirements for discovery
+          or knowledge of neighborhood topology,</t>
+
+          <t>External CDS control mode: an external process dynamically
+          determines the local SMF relay status (e.g., SMF prototypes have
+          leveraged neighborhood topology information collected by MANET
+          unicast routing protocol instantiations), and</t>
+
+          <t>Independent CDS control mode: SMF uses the <xref
+          target="NHDP">MANET Neighborhood Discovery Protocol (NHDP)</xref> to
+          collect localized link information required for the various CDS
+          algorithm modes discussed in the Appendices.</t>
+        </list>Core NHDP messages and the neighborhood information base are
+      described separately within the NHDP specification (IETF work in
+      progress). In this mode, SMF uses and relies upon an implementation of
+      NHDP. The NHDP protocol provides the following basic functions: <list
+          style="numbers">
+          <t>1-hop Neighbor link sensing: maintaining neighbor lists and
+          performing bidirectionality checks of neighbor links</t>
+
+          <t>2-hop Neighborhood Discovery: collecting 2-hop bidirectional
+          neighborhood information and any information relevant to relay set
+          election</t>
+
+          <t>The collection and maintenance of the above information across
+          multiple interfaces.</t>
+
+          <t>Relay Set Signaling: signal relay set selection to neighbor nodes
+          if the relay set algorithm requires such information</t>
+        </list>The Appendices discuss a set of implemented SMF CDS approaches
+      that may be needed by an NHDP implementation to support each approach.
+      The following subsections define TLVs consistent with <xref
+      target="PacketBB"></xref>that SHOULD be used when deploying SMF in
+      Independent CDS control mode.</t>
+
+      <section title="SMF Relay Set Algorithm ID Message TLV">
+        <t>The following TLV, SMF_RELAYALG_ID, is used within NHDP messages to
+        provide an indicator of the operating relay set selection algorithm.
+        When NHDP messages are used by SMF for independent CDS control mode a
+        SMF_RELAYALG_ID TLV SHOULD be included. Nodes receiving a NHDP message
+        with a SMF_RELAYALG_ID value differing from its own type the entire
+        message SHOULD NOT be used for relay set processing.</t>
+
+        <t>type=SMF_RELAYALG_ID, length=1 byte, value = &lt;id&gt;</t>
+
+        <t>&lt;id&gt; is an 8 bit value identifying the present relay
+        algorithm of the SMF node represented by the originator address of the
+        NHDP message.</t>
+
+        <t>Values are defined in <xref target="IdTLVValues"></xref>. The table
+        provides present value assignments, future IANA reserved space, and an
+        experimental space. Experimental space use MUST not assume uniqueness
+        properties and should be used only for experimentation prior to any
+        IANA assignment..</t>
+
+        <texttable anchor="IdTLVValues">
+          <preamble></preamble>
+
+          <ttcol align="center" width="30%">Value</ttcol>
+
+          <ttcol align="center" width="60%">Algorithm</ttcol>
+
+          <c>0</c>
+
+          <c>S-MPR</c>
+
+          <c>1</c>
+
+          <c>E-CDS</c>
+
+          <c>2</c>
+
+          <c>MPR-CDS</c>
+
+          <c>3-127</c>
+
+          <c>Reserved for Future Assignment</c>
+
+          <c>128-255</c>
+
+          <c>Experimental Space</c>
+        </texttable>
+      </section>
+
+      <section title="Router Priority Message TLV">
+        <t>For some relay set election operations, a value of Router Priority
+        (RtrPri) must be given or assumed for each address with the two-hop
+        neighborhood which is consistent for all nodes. More specific
+        discussions are provided in the Appendices.</t>
+
+        <t>The following TLV communicates router priority values among 1-hop
+        router neighbors.</t>
+
+        <t>type=SMF_RTR_PRI, length=1 byte, value = &lt;priority&gt;</t>
+
+        <t>&lt;priority&gt; is an 8 bit field which contains a number 0-255
+        which represents RtrPri value of the node represented by the
+        originator address of the NHDP message.</t>
+
+        <t>Message TLVs of type SMF_RTR_PRI SHOULD only be used within NHDP
+        messages.</t>
+      </section>
+
+      <section title="Router Priority Address Block TLV">
+        <t>For some relay set election operations, a value of Router Priority
+        (RtrPri) must be given or assumed for each address with the two-hop
+        neighborhood that is consistent for all nodes. More specific
+        discussions are provided in the Appendices.</t>
+
+        <t>The following TLV is defined to support the communication of router
+        priority values between 2-hop router neighbors. When generating
+        address block TLV router priority messages the RtrPri values included
+        MUST be consistent with advertised values contained within previously
+        received router priority message TLVs.</t>
+
+        <t>type=SMF_RTR_PRI, length=&lt;num_addresses&gt; bytes, value =
+        &lt;priorities&gt;</t>
+
+        <t>&lt;num_addresses&gt; is the number of addresses which the TLV
+        applies to. This value MUST be consistent with the TLV semantics,
+        length, and index fields.</t>
+
+        <t>&lt;priorities&gt; is a single or multivalue field containing a
+        &lt;priority&gt; value field for each node represented by the
+        address(es) the TLV applies to.</t>
+      </section>
+
+      <texttable anchor="tlvtypes">
+        <preamble></preamble>
+
+        <ttcol align="center" width="30%">Mnemonic</ttcol>
+
+        <ttcol align="center">Value</ttcol>
+
+        <ttcol align="left" width="60%">Description</ttcol>
+
+        <c>SMF_ALGORITHM_ID</c>
+
+        <c>TBD</c>
+
+        <c>A message TLV which contains the an id value representing the
+        algorithm being used by the originator address in the NHDP message</c>
+
+        <c>SMF_ROUTER_PRIORITY</c>
+
+        <c>TBD</c>
+
+        <c>A message TLV or address block TLV which contains a router priority
+        value for each node represented by the associated address(es).</c>
+      </texttable>
+    </section>
+
+    <!-- End of Neighborhood Discovery Requirements Section -->
+
+    <section anchor="Gateways" title="SMF Border Gateway Considerations">
+      <t>It is expected that SMF will be used to provide simple forwarding of
+      multicast traffic <spanx style="emph">within</spanx> a MANET mesh
+      routing topology. A border router approach should be used to allow
+      interconnection of SMF areas with networks using other multicast routing
+      protocols (e.g., PIM). It is important to note that there are many
+      scenario-specific issues that should be addressed when discussing border
+      routers. At the present time, experimental deployments of SMF and PIM
+      border router approaches are being used.</t>
+
+      <t>Some of the functionality border routers may need to address include
+      the following:</t>
+
+      <t><list style="numbers">
+          <t>Determining which multicast groups should transit the border
+          router whether entering or exiting the attached MANET routing
+          region(s).</t>
+
+          <t>Enforcement of TTL threshold or other scoping policies.</t>
+
+          <t>Any marking or labeling to enable DPD on ingressing packets.</t>
+
+          <t>Interface with exterior multicast routing protocols.</t>
+
+          <t>Possible operation with multiple border routers (presently beyond
+          scope of this document).</t>
+
+          <t>Provisions for participating non-SMF nodes.</t>
+        </list></t>
+
+      <t>Note the behavior of border router SMF nodes is the same as that of
+      non-border SMF nodes when forwarding packets on interfaces within the
+      MANET routing region. Packets that are passed outbound to interfaces
+      operating fixed-infrastructure multicast routing protocols SHOULD be
+      evaluated for duplicate packet status since present standard multicast
+      forwarding mechanisms do not usually perform this function.</t>
+
+      <section anchor="ForwardedGroups" title="Forwarded Multicast Groups">
+        <t>Determining which groups should be forwarded into a MANET SMF
+        routing region is an evolving technology area. Ideally, only groups
+        for which there is active group membership should be injected into the
+        SMF domain. This might be accomplished by providing an IPv4 Internet
+        Group Membership Protocol (IGMP) or IPV6 Multicast Listener Discovery
+        (MLD) proxy protocol so that MANET SMF nodes can inform attached
+        border routers (and hence multicast networks) of their current group
+        membership status. For specific systems and services it may be
+        possible to statically configure group membership joins in border
+        routers, but it is RECOMMENDED that some form of IGMP/MLD proxy or
+        other explicit, dynamic control of membership be provided.
+        Specification of such an IGMP/MLD proxy protocol is beyond the scope
+        of this document.</t>
+
+        <t>Outbound traffic is less problematic. SMF border routers can
+        perform duplicate packet detection and forward non-duplicate traffic
+        that meets TTL/hop limit and scoping criteria to other interfaces.
+        Appropriate IP multicast routing (PIM, etc) on those interfaces can
+        then make further forwarding decisions with respect to the given
+        traffic and its MANET source address. Note that the presence of
+        multiple border routers associated with a MANET routing region may
+        create some additional issues. This is further discussed in <xref
+        target="MultipleGateways"></xref>.</t>
+      </section>
+
+      <section title="Multicast Group Scoping">
+        <t>Multicast scoping is used by network administrators to control the
+        network routing regions which are reached by multicast packets. This
+        is usually done by configuring external interfaces of border routers
+        in the border of an routing region to not forward multicast packets
+        which must be kept within the routing region. This is commonly done
+        based on TTL of messages or the basis of group addresses. These
+        schemes are known respectively as:</t>
+
+        <t><list style="numbers">
+            <t>TTL scoping.</t>
+
+            <t>Administrative scoping.</t>
+          </list></t>
+
+        <t>For IPv4, network administrators can configure border routers with
+        the appropriate TTL thresholds or administratively scoped multicast
+        groups in the router's interfaces as with any traditional multicast
+        router. However, for the case of TTL scoping it must be taken into
+        account that the packet could traverse multiple hops within the MANET
+        SMF routing region before reaching the border router. Thus, TTL
+        thresholds must be selected carefully.</t>
+
+        <t>For IPv6, multicast address spaces include information about the
+        scope of the group. Thus, border routers of an SMF routing region know
+        if they must forward a packet based on the IPv6 multicast group
+        address. For the case of IPv6, it is RECOMMENDED that a MANET SMF
+        routing region be designated a site. Thus, all IPv6 multicast packets
+        in the range FF05::/16 SHOULD be kept within the MANET SMF routing
+        region by border routers. IPv6 packets in any other wider range scopes
+        (i.e. FF08::/16, FF0B::/16 and FF0E::16) MAY traverse border routers
+        unless other restrictions different from the scope applies.</t>
+
+        <t>Given that scoping of multicast packets is performed at the border
+        routers, and given that existing scoping mechanisms are not designed
+        to work with mobile routers, it is assumed that non-border SMF routers
+        will not stop forwarding multicast data packets because of their
+        scope. That is, it is assumed that the entire MANET SMF routing region
+        is a non-divisible scoping area except in the case of link-local
+        addresses that are not forwarded by SMF.</t>
+      </section>
+
+      <section title="Interface with Exterior Multicast Routing Protocols">
+        <t>The traditional operation of multicast routing protocols is tightly
+        integrated with the group membership function. Leaf routers are
+        configured to periodically gather group membership information, while
+        intermediate routers conspire to create multicast trees connecting
+        routers with directly-connected multicast sources and routers with
+        active multicast receivers. In the concrete case of SMF, border
+        routers can be considered leaf routers. Mechanisms for multicast
+        sources and receivers to interoperate with border routers over the
+        multihop MANET SMF routing region as if they were directly connected
+        to the router need to be defined. The following issues need to be
+        addressed:</t>
+
+        <t><list style="numbers">
+            <t>Mechanism by which border routers gather membership
+            information.</t>
+
+            <t>Mechanism by which multicast sources are known by the border
+            router.</t>
+
+            <t>Exchange of exterior routing protocol messages across the MANET
+            routing region if the MANET routing region is to provide transit
+            connectivity for multicast traffic.</t>
+          </list></t>
+
+        <t>It is beyond the scope of this document to address implementation
+        solutions to these issues. As described in <xref
+        target="ForwardedGroups"></xref>, IGMP/MLD proxy mechanisms can be
+        deployed to address some of these issues. Similarly, exterior routing
+        protocol messages could be tunneled or conveyed across the MANET
+        routing region. But, because MANET routing regions are multi-hop and
+        potentially unreliable, as opposed to the single-hop LAN
+        interconnection that neighboring IP Multicast routers might typically
+        enjoy, additional provisions may be required to achieve successful
+        operation.</t>
+
+        <t>The need for the border router to receive traffic from recognized
+        multicast sources within the MANET SMF routing region is important to
+        achieve a smooth interworking with existing routing protocols. For
+        instance, PIM-S requires routers with locally attached multicast
+        sources to register them to the Rendezvous Point (RP) so that other
+        people can join the multicast tree. In addition, if those sources are
+        not advertised to other autonomous systems (AS) using MSDP, receivers
+        in those external networks are not able to join the multicast tree for
+        that source.</t>
+      </section>
+
+      <section anchor="MultipleGateways" title="Multiple Border Routers">
+        <t>A MANET might be deployed with multiple participating nodes having
+        connectivity to external (to the MANET), fixed-infrastructure
+        networks. Allowing multiple nodes to forward multicast traffic to/from
+        the MANET routing region can be beneficial since it can increase
+        reliability, and provide better service. For example, if the MANET
+        routing region were to fragment with different MANET nodes maintaining
+        connectivity to different border routers, multicast service could
+        still continue successfully. But, the case of multiple border routers
+        connecting a MANET routing region to external networks presents
+        several challenges for SMF:</t>
+
+        <t><list style="numbers">
+            <t>Detection/hash collision/sequencing of duplicate unmarked IPv4
+            or IPv6 (without IPSec encapsulation or DPD option) packets
+            possibly injected by multiple border routers.</t>
+
+            <t>Source-based relay algorithms handling of duplicate traffic
+            injected by multiple border routers.</t>
+
+            <t>Determination of which border router(s) will forward outbound
+            multicast traffic.</t>
+
+            <t>Additional challenges with interfaces to exterior multicast
+            routing protocols.</t>
+          </list>One of the most obvious issues is when multiple border
+        routers are present and may be alternatively (due to route changes) or
+        simultaneously injecting common traffic into the MANET routing region
+        that has not been previously marked for SMF DPD. Different border
+        routers would not be able to implicitly synchronize sequencing of
+        injected traffic since they may not receive exactly the same messages
+        due to packet losses. For IPv6 I-DPD operation, the optional
+        "TaggerId" field described for the SMF-DPD header option can be used
+        to mitigate this issue. When multiple border routers are injecting a
+        flow into a MANET routing region, there are two forwarding policies
+        that SMF DPD-S nodes may implement:</t>
+
+        <t><list style="numbers">
+            <t>Redundantly forward the multicast flows (identified by
+            &lt;sourceAddress:destinationAddress&gt;) from each border router,
+            performing DPD processing on a &lt;taggerID:destinationAddress&gt;
+            or &lt;taggerID:sourceAddress:destinationAddress&gt; basis, or</t>
+
+            <t>Use some basis to select the flow of one tagger (border router)
+            over the others and forward packets for applicable flows
+            (identified by &lt;sourceAddress:destinationAddress&gt;) only for
+            that "Tagger ID" until timeout or some other criteria to favor
+            another tagger occurs.</t>
+          </list>It is RECOMMENDED that the first approach be used in the case
+        of I-DPD operation unless the SMF system is specifically designed to
+        implement the second option. Additional specification may be required
+        to describe an interoperable forwarding policy based on this second
+        option. Note that the implementation of the second option requires
+        that per-flow (i.e., &lt;sourceAddress::destinationAddress&gt;) state
+        be maintained for the selected "Tagger ID".</t>
+
+        <t>The deployment of a H-DPD operational mode may alleviate DPD
+        resolution when ingressing traffic comes from multiple border routers.
+        Non-colliding hash indexes (those not requiring the H-DPD options
+        header in IPv6) should be resolved effectively.</t>
+      </section>
+    </section>
+
+    <section title="Non-SMF MANET Node Interaction">
+      <t>There may be scenarios in which some neighboring wireless MANET node
+      is not running SMF and/or conduct forwarding, but is interested in
+      receiving multicast data. For example, a MANET service might be deployed
+      that is accessible to wireless edge devices that does not participate in
+      MANET routing and/or SMF forwarding operation. These devices
+      include:</t>
+
+      <t><list style="numbers">
+          <t>Devices that opportunistically receive multicast traffic due to
+          proximity with SMF relays (possibly with asymmetric IP connectivity
+          e.g., sensor network device).</t>
+
+          <t>Devices that participate in NHDP (directly or via routing
+          protocol signaling) but do not forward traffic.</t>
+        </list>Note there is no guarantee of traffic delivery with category 1
+      above, but the election heuristics shown in Figure 2 may be adjusted via
+      management to better support such devices. It is RECOMMENDED that nodes
+      participate in NHDP when possible. Such devices may also transmit
+      multicast traffic, but it is important to note that SMF routing regions
+      using source-specific relay set algorithms such as (S-MPR) may not
+      forward such traffic. These devices SHOULD also listen for any IGMP/MLD
+      Queries that are provided and transmit IGMP/MLD Reports for groups they
+      have joined per usual IP Multicast operation. While it is not in the
+      scope of this document, IGMP/MLD proxy mechanisms may be in place to
+      convey group membership information to any border routers or
+      intermediate systems providing IP Multicast routing functions.</t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>Gratuitous use of option headers can cause problems in routers.
+      Routers outside of MANET routing regions should ignore SMF-specific
+      header options if encountered. The header options types are encoded
+      appropriately for this behavior.</t>
+
+      <t>Sequence-based packet identifiers are predictable and thus provide an
+      opportunity for a denial-of-service attack against forwarding. The use
+      of the "internal hashing" as described in <xref target="I-HASH"></xref>
+      for the I-DPD operation helps to mitigate denial-of-service attacks on
+      predictable packet identifiers. In this case, spoofed packets MAY be
+      forwarded but the additional internal history identifier will protect
+      against false collision events that may result from a predictive
+      denial-of-service attack.</t>
+
+      <t>Another potential denial-of-service attack against SMF forwarding is
+      possible when a bad-behaving node has a form of "wormhole" access (via a
+      directional antenna, etc) to preview packets before a particular SMF
+      node would receive them. The bad-behaving node could reduce the TTL or
+      Hop Limit of the packet and transmit it to the SMF node causing it to
+      forward the packet with a limited TTL (or even drop it) and make a DPD
+      entry that would block forwarding of the subsequently-arriving valid
+      packet with appropriate TTL value. This would be a relatively low-cost,
+      high-payoff attack that would be hard to detect and thus attractive to
+      potential attackers. An approach of caching TTL information with DPD
+      state and taking appropriate forwarding actions is identified in <xref
+      target="Forwarding"></xref> to mitigate this form of attack.</t>
+
+      <t>The support of forwarding non-fragmented IPSEC datagrams without
+      further modification for both IPv4 and IPv6 is supported by this
+      specification.</t>
+
+      <t>Authentication mechanisms to identify the source of IPv6 option
+      headers should be considered to reduce vulnerability to a variety of
+      attacks.</t>
+    </section>
+
+    <section title="IANA Considerations">
+      <t>There are number of discussions within this SMF specification that
+      will be subject to IANA registration and consideration. The IPv6 SMF-DPD
+      hop-by-hop Header Extension being defined within this document MUST have
+      an IANA registry established upon publication of the first RFC.
+      Additionally, well-known site-scoped multicast addresses intended as
+      default forwardable addresses by the SMF forwarding process for both
+      IPv4 and IPv6 should be registered and defined by the first RFC
+      published. Also, SMF specific TLV types and definitions MUST be
+      registered in the context of packetbb and NHDP use.</t>
+    </section>
+
+    <section title="Acknowledgments">
+      <t>Many of the concepts and mechanisms used and adopted by SMF resulted
+      from many years of discussion and related work within the MANET WG since
+      the late 1990s. There are obviously many contributors to past
+      discussions and related draft documents within the WG that have
+      influenced the development of SMF concepts that deserve acknowledgment.
+      In particular, the document is largely a direct product of the earlier
+      SMF design team within the IETF MANET WG and borrows text and
+      implementation ideas from the related individuals. Some of the
+      contributors who have been involved in design, content editing,
+      prototype implementation, and core discussions are listed below in
+      alphabetical order. We appreciate input from many others we may have
+      missed in this list as well.<list style="empty">
+          <t>Design contributors in alphabetical order:</t>
+
+          <t>Brian Adamson</t>
+
+          <t>Teco Boot</t>
+
+          <t>Ian Chakeres</t>
+
+          <t>Thomas Clausen</t>
+
+          <t>Justin Dean</t>
+
+          <t>Brian Haberman</t>
+
+          <t>Charles Perkins</t>
+
+          <t>Pedro Ruiz</t>
+
+          <t>Fred Templin</t>
+
+          <t>Maoyu Wang</t>
+        </list></t>
+
+      <t>The RFC text was produced using Marshall Rose's xml2rfc tool and Bill
+      Fenner's XMLmind add-ons.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <reference anchor="RFC2460">
+        <front>
+          <title abbrev="IPv6 Specification">Internet Protocol, Version 6
+          (IPv6) Specification</title>
+
+          <author fullname="Stephen E. Deering" initials="S.E."
+                  surname="Deering">
+            <organization>Cisco Systems, Inc.</organization>
+
+            <address>
+              <postal>
+                <street>170 West Tasman Drive</street>
+
+                <street>San Jose</street>
+
+                <region>CA</region>
+
+                <code>95134-1706</code>
+
+                <country>USA</country>
+              </postal>
+
+              <phone>+1 408 527 8213</phone>
+
+              <facsimile>+1 408 527 8254</facsimile>
+
+              <email>deering@cisco.com</email>
+            </address>
+          </author>
+
+          <author fullname="Robert M. Hinden" initials="R.M." surname="Hinden">
+            <organization>Nokia</organization>
+
+            <address>
+              <postal>
+                <street>232 Java Drive</street>
+
+                <street>Sunnyvale</street>
+
+                <region>CA</region>
+
+                <code>94089</code>
+
+                <country>USA</country>
+              </postal>
+
+              <phone>+1 408 990 2004</phone>
+
+              <facsimile>+1 408 743 5677</facsimile>
+
+              <email>hinden@iprg.nokia.com</email>
+            </address>
+          </author>
+
+          <date month="December" year="1998" />
+
+          <area>Internet</area>
+
+          <keyword>internet protocol version 6</keyword>
+
+          <keyword>IPv6</keyword>
+
+          <abstract>
+            <t>This document specifies version 6 of the Internet Protocol
+            (IPv6), also sometimes referred to as IP Next Generation or
+            IPng.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="2460" />
+
+        <format octets="85490" target="ftp://ftp.isi.edu/in-notes/rfc2460.txt"
+                type="TXT" />
+
+        <format octets="99496"
+                target="http://xml.resource.org/public/rfc/html/rfc2460.html"
+                type="HTML" />
+
+        <format octets="93343"
+                target="http://xml.resource.org/public/rfc/xml/rfc2460.xml"
+                type="XML" />
+      </reference>
+
+      <reference anchor="RFC2119">
+        <front>
+          <title abbrev="RFC Key Words">Key words for use in RFCs to Indicate
+          Requirement Levels</title>
+
+          <author fullname="Scott Bradner" initials="S." surname="Bradner">
+            <organization>Harvard University</organization>
+
+            <address>
+              <postal>
+                <street>1350 Mass. Ave.</street>
+
+                <street>Cambridge</street>
+
+                <street>MA 02138</street>
+              </postal>
+
+              <phone>- +1 617 495 3864</phone>
+
+              <email>sob@harvard.edu</email>
+            </address>
+          </author>
+
+          <date month="March" year="1997" />
+
+          <area>General</area>
+
+          <keyword>keyword</keyword>
+
+          <abstract>
+            <t>In many standards track documents several words are used to
+            signify the requirements in the specification. These words are
+            often capitalized. This document defines these words as they
+            should be interpreted in IETF documents. Authors who follow these
+            guidelines should incorporate this phrase near the beginning of
+            their document: <list style="empty">
+                <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+                "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and
+                "OPTIONAL" in this document are to be interpreted as described
+                in RFC 2119.</t>
+              </list></t>
+
+            <t>Note that the force of these words is modified by the
+            requirement level of the document in which they are used.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="BCP" value="14" />
+
+        <seriesInfo name="RFC" value="2119" />
+
+        <format octets="4723" target="ftp://ftp.isi.edu/in-notes/rfc2119.txt"
+                type="TXT" />
+
+        <format octets="14486"
+                target="http://xml.resource.org/public/rfc/html/rfc2119.html"
+                type="HTML" />
+
+        <format octets="5661"
+                target="http://xml.resource.org/public/rfc/xml/rfc2119.xml"
+                type="XML" />
+      </reference>
+
+      <reference anchor="RFC2644">
+        <front>
+          <title abbrev="Default Change for Directed Broadcast">Changing the
+          Default for Directed Broadcasts in Routers</title>
+
+          <author fullname="Daniel Senie" initials="D." surname="Senie">
+            <organization>Amaranth Networks Inc.</organization>
+
+            <address>
+              <postal>
+                <street>324 Still River Road</street>
+
+                <city>Bolton</city>
+
+                <region>MA</region>
+
+                <code>01740</code>
+
+                <country>US</country>
+              </postal>
+
+              <phone>+1 978 779 6813</phone>
+
+              <email>dts@senie.com</email>
+            </address>
+          </author>
+
+          <date month="August" year="1999" />
+        </front>
+
+        <seriesInfo name="BCP" value="34" />
+
+        <seriesInfo name="RFC" value="2644" />
+
+        <format octets="6820" target="ftp://ftp.isi.edu/in-notes/rfc2644.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC1321">
+        <front>
+          <title abbrev="MD5 Message-Digest Algorithm">The MD5 Message-Digest
+          Algorithm</title>
+
+          <author fullname="Ronald L. Rivest" initials="R." surname="Rivest">
+            <organization>Massachusetts Institute of Technology, (MIT)
+            Laboratory for Computer Science</organization>
+
+            <address>
+              <postal>
+                <street>545 Technology Square</street>
+
+                <street>NE43-324</street>
+
+                <city>Cambridge</city>
+
+                <region>MA</region>
+
+                <code>02139-1986</code>
+
+                <country>US</country>
+              </postal>
+
+              <phone>+1 617 253 5880</phone>
+
+              <email>rivest@theory.lcs.mit.edu</email>
+            </address>
+          </author>
+
+          <date month="April" year="1992" />
+        </front>
+
+        <seriesInfo name="RFC" value="1321" />
+
+        <format octets="35222" target="ftp://ftp.isi.edu/in-notes/rfc1321.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC0791">
+        <front>
+          <title abbrev="Internet Protocol">Internet Protocol</title>
+
+          <author fullname="Jon Postel" initials="J." surname="Postel">
+            <organization>University of Southern California (USC)/Information
+            Sciences Institute</organization>
+
+            <address>
+              <postal>
+                <street>4676 Admiralty Way</street>
+
+                <city>Marina del Rey</city>
+
+                <region>CA</region>
+
+                <code>90291</code>
+
+                <country>US</country>
+              </postal>
+            </address>
+          </author>
+
+          <date day="1" month="September" year="1981" />
+        </front>
+
+        <seriesInfo name="STD" value="5" />
+
+        <seriesInfo name="RFC" value="791" />
+
+        <format octets="97779" target="ftp://ftp.isi.edu/in-notes/rfc791.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC3626">
+        <front>
+          <title>Optimized Link State Routing Protocol</title>
+
+          <author fullname="Thomas Clausen" initials="T" surname="Clausen">
+            <organization>INRIA</organization>
+          </author>
+
+          <author fullname="Phillipe Jacquet" initials="P" surname="Jacquet">
+            <organization>INRIA</organization>
+          </author>
+
+          <date year="2003" />
+        </front>
+      </reference>
+
+      <reference anchor="E-CDS">
+        <front>
+          <title>MANET Extension of OSPF Using CDS Flooding</title>
+
+          <author fullname="Richard Ogier" initials="R" surname="Ogier">
+            <organization></organization>
+          </author>
+
+          <date month="March" year="2005" />
+        </front>
+
+        <seriesInfo name="Proceedings of the 62nd IETF" value="" />
+      </reference>
+
+      <reference anchor="PacketBB">
+        <front>
+          <title>Generalized MANET Packet/Message Format</title>
+
+          <author fullname="Thomas Clausen" initials="T" surname="Clausen">
+            <organization></organization>
+          </author>
+
+          <author fullname="" initials="" surname="et al">
+            <organization></organization>
+          </author>
+
+          <date month="March" year="2006" />
+        </front>
+
+        <seriesInfo name="draft-ietf-manet-packetbb-00, Work in progress"
+                    value="" />
+      </reference>
+
+      <reference anchor="NHDP">
+        <front>
+          <title>Neighborhood Discovery Protocol</title>
+
+          <author fullname="Thomas Clausen" initials="T" surname="Clausen">
+            <organization></organization>
+          </author>
+
+          <author fullname="" initials="" surname="et al">
+            <organization></organization>
+          </author>
+
+          <date month="July" year="2006" />
+        </front>
+
+        <seriesInfo name="draft-ietf-manet-ndp-00, Work in progress" value="" />
+      </reference>
+
+      <reference anchor="OLSRv2">
+        <front>
+          <title>Optimized Link State Routing Protocol version 2</title>
+
+          <author fullname="Thomas Clausen" initials="T" surname="Clausen">
+            <organization></organization>
+          </author>
+
+          <author fullname="" initials="" surname="et al">
+            <organization></organization>
+          </author>
+
+          <date month="March" year="2006" />
+        </front>
+
+        <seriesInfo name="draft-ietf-manet-olsrv2-00, Work in progress"
+                    value="" />
+      </reference>
+
+      <reference anchor="MPR-CDS">
+        <front>
+          <title>Computing Connected Dominating Sets with Multipoint
+          Relays</title>
+
+          <author fullname="Cedrid Adjih" initials="C" surname="Adjih">
+            <organization>INRIA</organization>
+          </author>
+
+          <author fullname="Phillipe Jacquet" initials="P" surname="Jacquet">
+            <organization>INRIA</organization>
+          </author>
+
+          <author fullname="Laurent Viennot" initials="L" surname="Viennot">
+            <organization>INRIA</organization>
+          </author>
+
+          <date month="January" year="2005" />
+        </front>
+
+        <seriesInfo name="Ad Hoc and Sensor Wireless Networks" value="" />
+      </reference>
+
+      <reference anchor="RFC4302">
+        <front>
+          <title>IP Authentication Header</title>
+
+          <author fullname="Stephen Kent" initials="S" surname="Kent">
+            <organization>BBN Technologies</organization>
+          </author>
+
+          <date month="December" year="2005" />
+        </front>
+      </reference>
+    </references>
+
+    <references title="Informative References">
+      <reference anchor="RFC2901">
+        <front>
+          <title>Mobile Ad hoc Networking (MANET): Routing Protocol
+          Performance Issues and Evaluation Considerations</title>
+
+          <author fullname="Joseph Macker" initials="JP" surname="Macker">
+            <organization>NRL</organization>
+          </author>
+
+          <author fullname="Scot Corson" initials="MS" surname="Corson">
+            <organization>Univ of Md</organization>
+          </author>
+
+          <date year="1999" />
+        </front>
+      </reference>
+
+      <reference anchor="RFC3973">
+        <front>
+          <title>Protocol Independent Multicast - Dense Mode (PIM-DM):
+          Protocol Specification (Revised)</title>
+
+          <author fullname="A. Adams" initials="A." surname="Adams">
+            <organization></organization>
+          </author>
+
+          <author fullname="J. Nicholas" initials="J." surname="Nicholas">
+            <organization></organization>
+          </author>
+
+          <author fullname="W. Siadak" initials="W." surname="Siadak">
+            <organization></organization>
+          </author>
+
+          <date month="January" year="2005" />
+
+          <abstract>
+            <t>This document specifies Protocol Independent Multicast - Dense
+            Mode (PIM-DM). PIM-DM is a multicast routing protocol that uses
+            the underlying unicast routing information base to flood multicast
+            datagrams to all multicast routers. Prune messages are used to
+            prevent future messages from propagating to routers without group
+            membership information. This memo defines an Experimental Protocol
+            for the Internet community.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3973" />
+
+        <format octets="136708"
+                target="ftp://ftp.isi.edu/in-notes/rfc3973.txt" type="TXT" />
+      </reference>
+
+      <reference anchor="RFC4601">
+        <front>
+          <title>Protocol Independent Multicast - Sparse Mode (PIM-SM):
+          Protocol Specification (Revised)</title>
+
+          <author fullname="B. Fenner" initials="B." surname="Fenner">
+            <organization></organization>
+          </author>
+
+          <author fullname="M. Handley" initials="M." surname="Handley">
+            <organization></organization>
+          </author>
+
+          <author fullname="H. Holbrook" initials="H." surname="Holbrook">
+            <organization></organization>
+          </author>
+
+          <author fullname="I. Kouvelas" initials="I." surname="Kouvelas">
+            <organization></organization>
+          </author>
+
+          <date month="August" year="2006" />
+
+          <abstract>
+            <t>This document specifies Protocol Independent Multicast - Sparse
+            Mode (PIM-SM). PIM-SM is a multicast routing protocol that can use
+            the underlying unicast routing information base or a separate
+            multicast-capable routing information base. It builds
+            unidirectional shared trees rooted at a Rendezvous Point (RP) per
+            group, and optionally creates shortest-path trees per source.</t>
+
+            <t>This document obsoletes RFC 2362, an Experimental version of
+            PIM-SM. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="4601" />
+
+        <format octets="340632"
+                target="ftp://ftp.isi.edu/in-notes/rfc4601.txt" type="TXT" />
+
+        <format octets="304538"
+                target="ftp://ftp.isi.edu/in-notes/rfc4601.pdf" type="PDF" />
+      </reference>
+
+      <reference anchor="RFC3684">
+        <front>
+          <title>Topology Dissemination Based on Reverse-Path
+          Forwarding</title>
+
+          <author fullname="Richard Ogier" initials="R" surname="Ogier">
+            <organization>SRI</organization>
+          </author>
+
+          <author fullname="Fred Templin" initials="F" surname="Templin">
+            <organization>Nokia</organization>
+          </author>
+
+          <author fullname="Mark Lewis" initials="M" surname="Lewis">
+            <organization>SRI</organization>
+          </author>
+
+          <date year="2003" />
+        </front>
+      </reference>
+
+      <reference anchor="NTSC99">
+        <front>
+          <title>The Broadcast Storm Problem in Mobile Ad hoc Networks</title>
+
+          <author initials="S" surname="Ni">
+            <organization></organization>
+          </author>
+
+          <author initials="Y" surname="Tseng">
+            <organization></organization>
+          </author>
+
+          <author initials="Y" surname="Chen">
+            <organization></organization>
+          </author>
+
+          <author initials="J" surname="Sheu">
+            <organization></organization>
+          </author>
+
+          <date year="1999" />
+        </front>
+
+        <seriesInfo name="Proceedings Of ACM Mobicom 99" value="" />
+      </reference>
+
+      <reference anchor="MDDA07">
+        <front>
+          <title>Evaluation of distributed cover set algorithms in mobile ad
+          hoc network for simplified multicast forwarding</title>
+
+          <author initials="J" surname="Macker">
+            <organization></organization>
+          </author>
+
+          <author initials="I" surname="Downard">
+            <organization></organization>
+          </author>
+
+          <author initials="J" surname="Dean">
+            <organization></organization>
+          </author>
+
+          <author initials="R.B." surname="Adamson">
+            <organization></organization>
+          </author>
+
+          <date day="1" month="July" year="2007" />
+        </front>
+
+        <seriesInfo name="ACM SIGMOBILE Mobile Computing and Communications Review "
+                    value="Volume 11 ,  Issue 3  (July 2007)" />
+      </reference>
+
+      <reference anchor="GJ79">
+        <front>
+          <title>Computers and Intractability: A Guide to the Theory of
+          NP-Completeness.</title>
+
+          <author initials="M.R." surname="Garey">
+            <organization></organization>
+          </author>
+
+          <author initials="D.S." surname="Johnson">
+            <organization></organization>
+          </author>
+
+          <date year="1979" />
+        </front>
+
+        <seriesInfo name="Freeman and Company" value="" />
+      </reference>
+
+      <reference anchor="WC02">
+        <front>
+          <title>Comparison of Broadcasting Techniques for Mobile Ad hoc
+          Networks</title>
+
+          <author initials="B." surname="Williams">
+            <organization></organization>
+          </author>
+
+          <author initials="T" surname="Camp">
+            <organization></organization>
+          </author>
+
+          <date year="2002" />
+        </front>
+
+        <seriesInfo name="Proceedings of ACM Mobihoc 2002" value="" />
+      </reference>
+
+      <reference anchor="JLMV02">
+        <front>
+          <title>Performance of multipoint relaying in ad hoc mobile routing
+          protocols</title>
+
+          <author initials="P" surname="Jacquet">
+            <organization></organization>
+          </author>
+
+          <author initials="V" surname="Laouiti">
+            <organization></organization>
+          </author>
+
+          <author initials="P" surname="Minet">
+            <organization></organization>
+          </author>
+
+          <author initials="L" surname="Viennot">
+            <organization></organization>
+          </author>
+
+          <date year="2002" />
+        </front>
+
+        <seriesInfo name="Networking" value="" />
+      </reference>
+
+      <reference anchor="MDC04">
+        <front>
+          <title>Simplified Multicast Forwarding in Mobile Ad hoc
+          Networks</title>
+
+          <author initials="J" surname="Macker">
+            <organization></organization>
+          </author>
+
+          <author initials="J" surname="Dean">
+            <organization></organization>
+          </author>
+
+          <author initials="W" surname="Chao">
+            <organization></organization>
+          </author>
+
+          <date year="2004" />
+        </front>
+
+        <seriesInfo name="IEEE MILCOM 2004 Proceedings" value="" />
+      </reference>
+    </references>
+
+    <section title="Reduced Relay Set Forwarding Algorithms and Considerations">
+      <t>This Appendix discusses candidate SMF reduced relay set algorithms
+      that have been used in practice. Basic algorithm operation is described
+      along with related issues (e.g., TLV use).</t>
+
+      <t>The following definitions are used to describe algorithm operation
+      within sections to follow.</t>
+
+      <t><list style="empty">
+          <t>node : A MANET router operating SMF.</t>
+
+          <t>n_0 : The node performing the SMF algorithm computation.</t>
+
+          <t>N_1 : A set of 1-hop neighbors of n_0. Initially set to all 1-hop
+          neighbors.</t>
+
+          <t>N_2 : A set of 2-hop neighbors reachable by n_0, excluding n_0
+          and all nodes in N_1. Initially set to all 2-hop neighbors excluding
+          n_0 and all nodes in N_1.</t>
+
+          <t>N_2(y) : The subset of N_2 nodes which are 1-hop neighbors of
+          node y, where node y is in N_1.</t>
+
+          <t>N_1(z) : The subset of N_1 nodes which are 1-hop neighbors of
+          node z, where z is in N_2.</t>
+
+          <t>RtrPri : an expression of router priority. In the case of a
+          RtrPri value tie, higher address values are equivalent to a higher
+          priority value result.</t>
+
+          <t>rp_max_1 : The node with the largest RtrPri of N_1.</t>
+
+          <t>MPRs : The subset of N_1 which have been selected by n_0 to
+          forward packets from n_0.</t>
+
+          <t>MPR-Selectors : The subset of N_1 for whom n_0 has been selected
+          to forward packets.</t>
+        </list></t>
+    </section>
+
+    <section title="Source-based Multipoint Relay (S-MPR)">
+      <t>The source-based multipoint relay (S-MPR) set selection algorithm
+      enables individual nodes, using two-hop topology information, to select
+      relays from their set of neighboring nodes. Relays are selected so that
+      a nodes two-hop neighbor set is covered. This distributed technique has
+      been shown to approximate selection of a minimal connected dominating
+      set (MCDS) in <xref target="JLMV02"></xref>. Individual nodes must
+      collect two-hop neighborhood information from neighbors, determine an
+      appropriate current relay set, and inform selected neighbors of their
+      relay status. The Optimized Link State Routing (OLSR) protocol has used
+      this algorithm and protocol for relay of link state updates and other
+      control information <xref target="RFC3626"></xref> and it has been
+      demonstrated operationally in dynamic network environments.</t>
+
+      <section title="S-MPR Relay Set Selection">
+        <t>If SMF is operating S-MPR relay set election is operating with
+        independent CDS control, the election algorithm and TLVs defined
+        within <xref target="OLSRv2"></xref> SHOULD be used. In this case,
+        NHDP messages SHOULD also include a message TLV of type
+        SMF_RELAYALG_ID specifying S-MPR relay election.</t>
+
+        <t>With S-MPR, a node's status as a relay is with respect to
+        neighboring nodes who have selected it (i.e., its "selectors".) This
+        requires nodes to inform neighbors of who they have selected as
+        forwarders. These relaying nodes must have previous-hop knowledge of
+        packets received to make forwarding decisions. Additionally, it is
+        important that relay nodes forward packets for only those nodes
+        identified as symmetric, one-hop neighbors to maintain correctness.
+        The selection of relays does not result in a common set among
+        neighboring nodes, so relays MUST mark in their duplicate table
+        packets from non-selector, symmetric, one-hop neighbors (for a given
+        interface) and not forward subsequent duplicates of that packet if
+        received on that interface. Deviation here can result in unnecessary,
+        repeated packet forwarding throughout the network, or incomplete
+        flooding. When multiple interfaces are present, the S-MPR SMF
+        forwarder must keep independent state for each interface with regards
+        to duplicate packets. In these respects, flooding for SMF based on the
+        S-MPR algorithm is more complex than previous hop independent relay
+        set selection algorithms, yet S-MPR is a known technique that has
+        significant experimental and operational experience and may have other
+        performance advantages.</t>
+      </section>
+
+      <section title="S-MPR Forwarding Rules">
+        <t><list style="numbers">
+            <t>Upon reception of a packet, it is checked against the incoming
+            interfaces duplicate table. If a duplicate exists no further
+            action is taken.</t>
+
+            <t>Once uniqueness is verified and if the previous-hop transmitter
+            is a one-hop symmetric neighbor, the packet is added to the
+            duplicate table of the incoming interface. If the previous-hop
+            transmitter is not a one-hop symmetric neighbor the packet SHOULD
+            NOT be forwarded and SHOULD NOT be added to the duplicat
+            table.</t>
+
+            <t>If the previous-hop transmitter has selected the current node,
+            on the incoming interface, as an MPR, the packet is forwarded out
+            all interfaces. If the node is not an MPR for the previous-hop, on
+            the incoming interface, no further action is taken.</t>
+
+            <t>Any packet sourced or forwarded through a node is added to the
+            duplicate tables of all of the nodes interfaces.</t>
+          </list></t>
+
+        <t>Basic S-MPR relay forwarding will not forward packets in which the
+        previous hop is not known through the neighbor discovery mechanism,
+        therefore nodes not participating in neighbor discovery and relay set
+        selection will not be able to source multicast packets into the MANET
+        and have SMF forward them. Correct S-MPR relay behavior will occur
+        with the introduction of repeaters (non SMF participant nodes that
+        relay multicast packets using duplicate detection and CF) but the
+        repeaters will be dead ends with regards to S-MPR SMF forwarding. SMF
+        participant nodes may not provide extra forwarding, forwarding packets
+        which are not selected by the algorithm, as this can break network
+        wide S-MPR flooding.</t>
+      </section>
+
+      <section title="S-MPR Neighborhood Discovery Requirements">
+        <t>S-MPR election operation requires 2-hop neighbor knowledge as
+        provided by the NHDP protocol <xref target="NHDP"></xref> or as
+        available from external sources. MPRs are dynamically selected by each
+        node and selections MUST be advertised and dynamically updated within
+        NHDP or equivalent protocol. In this mode, the MPR specific TLVs
+        defined in OLSRv2 <xref target="OLSRv2"></xref> are also required to
+        be implemented by NHDP.</t>
+      </section>
+
+      <section anchor="SMPRmain" title="S-MPR Selection Algorithm">
+        <t><list style="numbers">
+            <t>1. Calculate N_1(z) for all nodes z in N_2.</t>
+
+            <t>2. Calculate N_2(y) for all nodes y in N_1.</t>
+
+            <t>3. For each z in N_2 where |N_1(z)| is equal to 1, select the
+            node in N_1(z) as an MPR by using <xref
+            target="SMPRsub"></xref>.</t>
+
+            <t>4. While N_2 is not empty select the node y, with the largest
+            |N_2(y)|, as MPR by using <xref target="SMPRsub"></xref>.</t>
+
+            <t>5. Restore N_1 and N_2.</t>
+
+            <t>6. Node n_0 shares its MPRs with N_1.</t>
+
+            <t>7. Each node in n_0's MPRs set add n_0 to their MPR-Selectors
+            set.</t>
+
+            <t>8. Nodes forward all unique multicast packets which are first
+            received from a node in their MPR-Selectors set.</t>
+          </list></t>
+
+        <section anchor="SMPRsub" title="MPR Node Selection Procedure">
+          <t><list style="numbers">
+              <t>Add n to the MPRs set.</t>
+
+              <t>Remove node n from N_1.</t>
+
+              <t>For each y in N_2(n), remove y from N_2.</t>
+
+              <t>Calculate N_1(z) for all nodes z in N_2</t>
+
+              <t>Calculate N_2(y) for all nodes y in N_1.</t>
+            </list></t>
+        </section>
+      </section>
+    </section>
+
+    <section title="Essential Connecting Dominating Set (E-CDS) Algorithm">
+      <t>The "Essential Connected Dominating Set" (E-CDS) algorithm <xref
+      target="E-CDS"></xref> allows nodes to use two-hop topology information
+      to dynamically elect <spanx>themselves</spanx> as relay nodes to form an
+      efficient (for flooding) CDS. Its forwarding rules within SMF are
+      non-dependent upon previous hop information. Semantics for multiple
+      interface support are simplified as compared to S-MPR as only one
+      duplicate table is required. Packets which are received from
+      non-symmetric neighbors may be forwarded without compromising flooding
+      efficiency or algorithm correctness. The E-CDS based relay set selection
+      algorithm is based upon Richard Ogier's original summary within <xref
+      target="E-CDS"></xref>. E-CDS was originally discussed in the context of
+      forming partial adjacencies and efficient flooding for MANET OSPF
+      extensions work but its core algorithm is applied here.</t>
+
+      <t>If SMF is operating E-CDS relay set election with independent CDS
+      control, NHDP messages SHOULD also include a message TLV of type
+      SMF_RELAYALG_ID specifying E-CDS relay election.</t>
+
+      <section title="E-CDS Relay Set Selection">
+        <t>E-CDS requires two-hop neighbor information collected through NHDP
+        or other process. Each router has a Router Identifier (that may be
+        represented by an interface address) and Router Priority
+        value(RtrPri). The Router Priority value may be dynamic and may
+        represent such metrics as node degree. The fundamental election steps
+        are as follows: <list style="numbers">
+            <t>If an SMF node has a higher (Router Priority, Router ID) than
+            all of its symmetric neighbors, it elects itself to the relay
+            set.</t>
+
+            <t>Else, if there does not exist a path from neighbor j with
+            largest (Router Priority, Router ID) to some other neighbor, via
+            neighbors with larger values of (Router Priority, Router ID), then
+            it elects itself to the relay set.</t>
+          </list></t>
+
+        <t>The basic form of E-CDS described and applied within this
+        specification does not at present define redundant relay set election
+        but such capability is supported by the basic E-CDS design.</t>
+      </section>
+
+      <section title="E-CDS Forwarding Rules">
+        <t>Upon electing itself as an E-CDS relay set forwarder, SMF nodes
+        perform DPD functions and forward all ranges of non-duplicative
+        multicast traffic allowed by the present forwarding policy. Knowledge
+        of a packets previous hop is not needed for forwarding decisions when
+        using E-CDS.</t>
+
+        <t><list style="numbers">
+            <t>Upon reception of a packet, it is checked against the duplicate
+            table. If a duplicate exists no further action is taken. E-CDS and
+            all other shared relay selection algorithms only require one
+            duplicate table for all interfaces of which the algorithm
+            covers.</t>
+
+            <t>Once uniqueness is verified, the packet is added to the
+            duplicate table.</t>
+
+            <t>A unique packet is forwarded out all interfaces if the local
+            node has selected itself as a relay node according to the E-CDS
+            algorithm.</t>
+
+            <t>Any packet sourced or forwarded through a node is added to the
+            duplicate table.</t>
+          </list></t>
+
+        <t>Using E-CDS relay forwarding, nodes which are not participating in
+        neighbor discovery and relay set selection will have directly injected
+        multicast packets forwarded by SMF if they are received at a relay
+        node. Correct E-CDS relay behavior will occur with the introduction of
+        repeaters (non SMF participant nodes which relay multicast packets
+        using duplicate detection) and these repeaters can be used to connect
+        otherwise separate SMF relay sets. SMF participant nodes may provide
+        extra forwarding, becoming a relay node when not selected by the E-CDS
+        algorithm, without breaking correct flooding throughout the
+        network.</t>
+      </section>
+
+      <section title="E-CDS Neighborhood Discovery Requirements">
+        <t>Two-hop knowledge is needed during the election process, but unlike
+        the MPR method, E-CDS is a self-electing algorithm. For E-CDS
+        operation, some value of RtrPri must be given or assumed for each
+        address with the two-hop neighborhood which is consistent for all
+        nodes. If RtrPri is a non-default value it MUST be shared with all
+        immediate neighbor and 2-hop neighbor nodes. To support this the
+        SMF_RTR_PRI TLVs MAY be used to transmit RtrPri for each address
+        within a NHDP message. If a NHDP message originator does not provide a
+        RtrPri value for given address(es) using the SMF_RTR_PRI TLVs, a
+        default value RTRPRI_DEFAULT = 128 should be assumed.</t>
+
+        <t>Local determination of a node RtrPri value can be done in multiple
+        ways as described in the <xref target="E-CDS"></xref>. An early
+        experimental deployment of an SMF prototype and E-CDS has used node
+        degree as the default priority value computed during neighbor
+        discovery, yet it is still unclear if this is the best method.
+        Nonetheless, this is recommended as the default mode on all SMF nodes
+        to enable interoperability.</t>
+      </section>
+
+      <section title="E-CDS Selection Algorithm (2-Hop)">
+        <t><list style="numbers">
+            <t>If |N_1| &lt; 2 than n_0 does not select itself as a forwarder
+            and no further steps need to be taken</t>
+
+            <t>If n_0 has a larger value of RtrPri than all nodes in N_1 and
+            N_2, then n_0 selects itself as a forwarder for all nodes. Unless
+            otherwise set, n_0 should assume a default RtrPri of 128. RtrPri
+            ties should be broken by comparing addresses.</t>
+
+            <t>If there does not exist a path from r_max_1 to every other node
+            in N_1 and N_2 using only N_1 and N_2 nodes that have RtrPri
+            larger than n_0's, then n_0 selects itself as a forwarder for all
+            nodes.</t>
+          </list></t>
+      </section>
+    </section>
+
+    <section title="Multipoint Relay Connected Dominating Set (MPR-CDS) Algorithm">
+      <t>The MPR-CDS algorithm is an extension to the basic MPR election
+      algorithm and results in a shared relay set that forms a CDS. Its
+      forwarding rules within SMF are non-dependent upon previous hop
+      information similar to E-CDS. An overview of the MPR-CDS selection
+      algorithm is provided in <xref target="MPR-CDS"></xref>.</t>
+
+      <t>If SMF is operating MPR-CDS relay set election with independent CDS
+      control, NHDP messages SHOULD also include a message TLV of type
+      SMF_RELAYALG_ID specifying MPR-CDS relay election.</t>
+
+      <section title="MPR-CDS Relay Set Selection">
+        <t>The basic requirements for election are similar to the basic MPR
+        algorithm with the addition that some node ordering knowledge is
+        required. This is similar to the E-CDS requirement and can be based
+        upon node IP address or some other unique router identifier. The rules
+        for election are as follows: <list style="empty">
+            <t>A node decides it is in the relay set if:</t>
+          </list><list style="numbers">
+            <t>n_0 has a larger RtrPri than all of N_1 (Rule 1)</t>
+
+            <t>or n_0 is an MPR of rp_max_1 (Rule 2)</t>
+          </list></t>
+      </section>
+
+      <section title="MPR-CDS Forwarding Rules">
+        <t>MPR-CDS forms a shared relay set so the forwarding rules do not
+        require previous previous hop information for making forwarding
+        decisions. Upon election as a MPR-CDS relay set forwarder, SMF nodes
+        perform DPD functions and forward all ranges of multicast traffic
+        allowed.</t>
+
+        <t><list style="numbers">
+            <t>Upon reception of a packet, it is checked against the duplicate
+            table. If a duplicate exists no further action is taken. E-CDS and
+            all other shared relay selection algorithms only require one
+            duplicate table for all interfaces.</t>
+
+            <t>Once uniqueness is verified, the packet is added to the
+            duplicate table.</t>
+
+            <t>A unique packet is forwarded out all interfaces if the local
+            node has selected itself as a relay node according to the MPR-CDS
+            algorithm.</t>
+
+            <t>Any packet sourced or forwarded through a node is added to the
+            duplicate table.</t>
+          </list></t>
+
+        <t>Correct MPR-CDS relay behavior will occur with the introduction of
+        repeaters (non SMF participant nodes which relay multicast packets
+        using duplicate detection) and these repeaters can be used to connect
+        otherwise separate SMF relay sets. SMF participant nodes may provide
+        extra forwarding, becoming a relay node when not selected by the
+        MPR-CDS algorithm, without breaking correct flooding throughout the
+        network.</t>
+      </section>
+
+      <section title="MPR-CDS Neighborhood Discovery Requirements">
+        <t>MPR-CDS election operation requires 2-hop neighbor knowledge as
+        provided by the NHDP protocol <xref target="NHDP"></xref> or as
+        available from external sources. MPR-CDS require the MPR specific TLVs
+        defined in OLSRv2 <xref target="OLSRv2"></xref> and MAY use
+        SMF_RTR_PRI message TLVs to convey router priority values.</t>
+      </section>
+
+      <section title="MPR-CDS Selection Algorithm">
+        <t><list style="numbers">
+            <t>Perform steps 1-7 of <xref target="SMPRmain"></xref>.</t>
+
+            <t>If n_0 RtrPri value is greater than rp_max_1's RtrPri value,
+            and |MPR-Selectors| &gt; 0, then n_0 selects itself as a forwarder
+            for all nodes.</t>
+
+            <t>If rp_max_1 is in the MPR-Selectors set, then n_0 selects
+            itself as a forwarder for all nodes.</t>
+          </list></t>
+      </section>
+    </section>
+  </back>
+</rfc>

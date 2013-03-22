@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+
+<rfc category="std" ipr="full3978" docName="draft-shalunov-alto-infoexport-00.txt">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="no" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="no" ?>
+
+    <front>
+        <title>ALTO Information Export Service</title>
+        <author initials='S' surname="Shalunov" fullname='Stanislav Shalunov'>
+            <organization>BitTorrent</organization>
+			<address>
+				<email>shalunov@bittorrent.com</email>
+				<uri>http://shlang.com/</uri>
+			</address>
+			
+        </author>
+		<author initials='R' surname="Penno" fullname="Reinaldo Penno">
+			<organization>Juniper Networks</organization>
+			<address>
+				<email>rpenno@juniper.net</email>
+			</address>
+		</author>
+		<author initials='R' surname='Woundy' fullname='Richard Woundy'>
+			<organization>Comcast</organization>
+			<address>
+				<email>Richard_Woundy@cable.comcast.com</email>
+			</address>
+		</author>
+        <date/>
+		<abstract>
+			<t>The ALTO Information Export Service is a simple way to convey ISP routing policy preferences to applications.  Applications that could use this service are those that have a choice in connection endpoints.  Examples of such applications are peer-to-peer and content delivery networks.</t>
+			<t>Applications already have access to great amount of underlying topology information.  For example, views of the Internet routing table are easily available at looking glass servers and entirely practical to download to every client.  What is missing is the routing policy information -- what does the local ISP actually prefer?</t>
+			<t>This document describes a very simple mechanism that would allow to export such information to applications.  While such service would primarily be provided by the network, i.e., the local ISP, third parties could also operate this service.</t>
+		</abstract>
+    </front>
+
+    <middle>
+        <section title="Requirements notation">
+            <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+            "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+            and "OPTIONAL" in this document are to be interpreted as
+            described in <xref target="RFC2119"/>.</t>
+        </section>
+
+		<section title="Overview">
+			<t>Each network region can choose to support the ALTO service.  (A network region in this context is an Autonomous System, an ISP, or perhaps a smaller region -- the details depend on the mechanism of discovery.)</t>
+			<t>The service works as follows:
+				<list style="numbers">
+					<t>The ISP prepares the ALTO information.  This maps some IP prefixes or AS numbers into priority values.  Higher priority values indicate higher desirability of the prefix.  There is a default treatment for IP numbers that are in none of the prefixes or AS numbers.</t>
+					<t>The ISP serializes the information into a sequence of octets (<xref target="format" />).</t>
+					<t>The application, running on a given host, discovers the resource and fetches the serialized ALTO information (<xref target="discovery" />).</t>
+					<t>The application makes use of the information by preferring IP numbers with higher priority (<xref target="semantics" />).</t>
+				</list>
+				The part of the ISP MAY be implemented, to give a few examples that do not preclude other implementation options,
+				<list>
+					<t>by running a script connecting to existing equipment, fetching routing information, and then generating and uploading the requisite file;</t>
+					<t>by running a database-backed application that is obtains routing information from existing equipment and generates the requisite file dynamically;</t>
+					<t>by modifying the software or hardware of existing equipment to support these functions; or</t>
+					<t>by using new equipment for the purpose of operating this network service.</t>
+				</list>
+			</t>
+		</section>
+		
+		<section title="Discovery" anchor="discovery">
+			<t>Discovery per se is out of scope for this document and will be handled separately.</t>
+			
+			<t>The necessary property of discovery is that a client, starting from nothing on today's Internet that does not yet universally support global-scope multicast and may include NATs, can find a URL that describes the location of the local ALTO service, as configured by the ISP.</t>
+			
+			<t>Subsequent sections assume that this URL is found.  So that maximum number of clients can use the ALTO service, the URL schema SHOULD be "http" or "https".</t>
+		</section>
+
+		<section title="Information format" anchor="format">
+			<t>The URL discovered through the mechanism mentioned in <xref target="discovery" /> points to a resource that consists of a sequence of octets.  The content MAY change with every request or depend on the source of the request, but it MAY also be fairly static and change, for example, monthly.</t>
+			
+			<t>The sequence of octets is a text file in US-ASCII and consists of records.  Records are lines, terminated by network newlines (carriage return, followed by linefeed).  Each record consists of three parts, separated by colon characters:
+				<list style="numbers">
+					<t>Type designator, one of two values: "asn" or "cidr" (quotes do not appear literally in the file).  Other type designators could be added in the future.  When interpreting the file, lines with unknown designators MUST be ignored.</t>
+					<t>An AS number or an IP prefix in CIDR notation.  If the type for the line is "asn", an AS number MUST appear, rendered in US-ASCII as an unsigned integer in decimal.  If the type for the line is "cidr", an IP prefix in CIDR notation MUST appear.  For IPv4, the IP prefix uses US-ASCII representation of decimal dot-separated octets.  For IPv6, the IP prefix uses the "[" character, followed by single-colon-separated hex-encoded bytes, followed by the "]" character.  For both IPv4 and IPv6, this is followed by the "/" character, followed by the bitmask length.</t>
+					<t>A US-ASCII rendering of decimal representation of an integer, representing priority.  The integer MAY be preceded by a minus sign and MUST NOT contain a plus sign.  (The plus sign is implied.)</t>
+				</list>
+				The file MUST NOT contain any whitespace other than newlines.  Any extraneous whitespace found MUST be ignored (with a warning if practical).  The following is an example of a valid format:
+				<figure><artwork>
+cidr:10/8:10
+asn:0:5
+cidr:10.1/16:20
+cidr:10.2/16:-10
+cidr:[de:ad:be:ef:fe:ed]/48:20
+				</artwork></figure>
+				(This example may contain leading whitespace on each of the lines.  This whitespace, if present, is a typographic artifact caused by the way this document is rendered.  Actual examples MUST NOT include any such whitespace.)
+			</t>
+			
+			<t>When the file is interpreted any line that is malformed or not understood MUST be discarded and ignored, but subsequent lines MUST still be paid attention to.</t>
+		</section>
+
+		<section title="Semantics" anchor="semantics">
+			<t>IP prefixes with positive priorities are more desirable than the default.  IP prefixes with negative priorities are less desirable than the default.  In general, greater values are more desirable.  Zero priority is the default.  IPs not covered by the file are treated as if they had priority zero.</t>
+			
+			<t>The absolute value of the priorities does not matter.  Only their relative order is meaningful.  Higher values are more desirable.  For example, multiplying all the priority values in a given file by the same positive integer constant does not change the semantics of the file.</t>
+			
+			<t>Some ISPs already convey information such as "traffic in the local country is free" to their customers.  These ISPs will find the ALTO service an excellent means of conveying similar information in a machine-readable form.  Only one (positive) priority value is needed for such use.</t>
+			
+			<t>It is up to the ISP deploying the file to choose how much information to publish in it.</t>
+		</section>
+		
+		<section title='Example Use by Application'>
+			<t>The semantics of the information are intentionally flexible, because:
+				<list>
+					<t>Different applications will necessarily use the information differently.  For example, an application that connects to just one address is going to have a different algorithm for selecting it than an application that connects to many.</t>
+					<t>Given lack of Internet-scale experimentation with using the information, we don't yet know what the best ways are.  We want to give different approaches a chance to compete.</t>
+				</list>
+				However, it's important to provide at least a non-normative example of how such routing policy information could be used.
+			</t>
+			<t>Consider a BitTorrent client that wishes to use the ALTO information.  The client will have a list of perhaps up to 200 initial candidate peers, out of which it will select perhaps 50 peers to try to connect to.  In an initial implementation, the client could:
+				<list>
+					<t>Split the candidates into three sets: preferred (those with positive priorities), to-be-avoided (those with negative priorities), and default (0 or unspecified priority)</t>
+					<t>Select up to 25 candidates randomly from the preferred set.  In particular, if there are fewer than 25 in the preferred set, select them all.</t>
+					<t>Fill remaining slots up to 50 with candidates from the default set.</t>
+					<t>If this didn't fill the slots (i.e., fewer than 50 of the candidates were in the union of preferred and default sets), fill the rest by candidates from the to-be-avoided set.</t>
+					<t>When establishing connections after the initial startup, continue using the policy of giving up to half the slots to preferred with the rest for default and to-be-avoided only as last resort.</t>
+					<t>When selecting a peer to optimistically unchoke, half the time select a preferred peer if there is one.</t>
+				</list>
+				(The particular numbers could be different.)  If the preferred peers perform better than default ones, they will dominate the transfers.  To-be-avoided peers are largely not contacted, unless the prohibitive policy is broad enough or the swarm is small enough that it is necessary to contact them to fill the slots. 
+			</t>
+			<t>In addition, the application might use some form of randomized test to see if it performs better or worse when the ALTO service use is on.</t>
+		</section>
+		
+		<section title="Mapping IPs to ASNs">
+			<t>DISCUSSION: Applications can already map IPs to ASNs using information from a BGP looking glass.  To do so, they have to download a file of about 1.5MB when compressed (as of October 2008, with all information not needed for IP to ASN mapping removed) and periodically (perhaps monthly) refresh it.</t>
+			<t>Alternatively, the ALTO service as defined in this document could be expanded so that there is another file that expands every ASN mentioned in the policy file into a set of IP prefixes.  In that case, the ASNs in the policy file, from a client's perspective, would be treated like macros.  The mapping file provided by the ISP would be be both smaller and more authoritative.</t>
+			<t>For simplicity of implementation, it's highly desirable that clients only have to implement exactly one mechanism of mapping IPs to ASNs.</t>
+			<t>We're interested in perspectives of others on this.</t>
+		</section>
+
+		<section title="Security Considerations">
+			<t>The ISP publishing the ALTO policy information has to treat it as publishing to the entire world.</t>
+			<t>Applications using the information must be cognizant of the possibility that the information is malformed or incorrect.  Even when it is correct, its use might harm the performance.  When an application concludes that it would get better performance disregarding the ALTO information, the decision to discontinue the use of ALTO information is likely best left to the user.</t>
+			<t>The use of TLS (using the "https" URL schema) will make it easier for clients to verify the origin of ALTO information.</t>
+		</section>
+
+	</middle>
+
+	<back>
+		<references title='Normative References'>&rfc2119;</references>
+	</back>
+
+</rfc>

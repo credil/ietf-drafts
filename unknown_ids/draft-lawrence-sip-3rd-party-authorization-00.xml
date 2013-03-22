@@ -1,0 +1,973 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc strict="yes" ?>
+<?rfc comments="yes" ?>
+<?rfc inline="yes" ?>
+<?rfc symrefs="yes" ?>
+
+<rfc docName="draft-lawrence-sip-3rd-party-authorization-00"
+     category="info"
+     ipr="trust200902"
+     >
+
+  <front>
+    <title abbrev="Third Party Authorization in SIP ">
+      Third Party Authorization in the Session Initiation Protocol
+    </title>
+
+    <author initials= "S." surname="Lawrence" fullname="Scott Lawrence">
+      <organization>Nortel Networks, Inc.</organization>
+      <address>
+        <postal>
+          <street>600 Technology Park</street>
+          <city>Billerica</city>
+          <region>MA</region> <code>01821</code>
+          <country>USA</country>
+        </postal>
+        <phone>+1 978 288 5508</phone>
+        <email>scott.lawrence@nortel.com</email>
+      </address>
+    </author>
+
+    <date month="May" day="03" year="2009" />
+
+    <area>Real-Time Applications and Infrastructure</area>
+
+    <workgroup>DISPATCH</workgroup>
+
+    <keyword>I-D</keyword>
+    <keyword>Internet-Draft</keyword>
+
+    <abstract>
+      <t>
+        This draft describes some circumstances that are common in SIP
+        deployments which lack a rigorous authorization model, and points
+        out some ways in which this has resulted in poor security
+        characteristics. 
+      </t>
+      <t>
+        The purpose of this document is to stimulate discussion of the
+        identified problem and proposed requirements for any solution.
+      </t>
+      <t>
+        Comments are solicited, and should be directed to the DISPATCH
+        working group list at 'dispatch@ietf.org'.
+      </t>
+    </abstract>
+
+  </front>
+
+  <middle>
+    <section anchor='intro'
+             title='Introduction'
+             >
+      <t>
+        This draft attempts to make the case that SIP lacks a mechanism
+        needed to provide for the implementation and enforcement of
+        security policy in typical deployments.  It's purpose is to present
+        the problem, outline some requirements for a solution, and to pose
+        the question of whether or not is is an area the IETF community
+        considers worth designing solutions for.
+      </t>
+
+      <t>
+        This draft does not propose any mechanisms to address the problem
+        it describes; it also does not comprehensively evaluate the
+        relevance of existing SIP security mechanisms (either standardize
+        or proposed) in addressing this problem.  Both are possible areas
+        for future work.
+      </t>
+
+    </section>
+
+    <section anchor='problem'
+             title="Problem Description"
+             >
+      <t>
+        The Session Initiation Protocol (SIP) <xref target='RFC3261'/>, by
+        design, distributes functionality broadly throughout the network -
+        it is often characterised as "pushing intellegence out to the
+        edge".  This sometimes means that important security policy
+        enforcement must also be distributed.  SIP currently lacks some
+        features that facilitate this distribution of security enforcement.
+      </t>
+
+      <section title="Authentication vs Authorization">
+        <t>
+          It is important when considering the problems described in this
+          memo to keep in mind the difference between Authentication and
+          Authorization:
+          <list style='hanging'>
+            <t hangText='Authentication'>
+              <vspace blankLines="0"/>
+              is the process of confirming some identity.
+            </t>
+            <t hangText='Authorization'>
+              <vspace blankLines="0"/>
+              is the process of deciding whether or not something is
+              permitted by a security policy.
+            </t>
+          </list>
+          Usually an Authorization decision depends upon an Authentication.
+          For example, if Alice tries to call Bob and a proxy between them
+          is deciding whether or not to allow the call, it must first
+          Authenticate that the request is from Alice, and then consult the
+          policy to see whether or not Alice is Authorized to make calls to
+          Bob.
+
+          <list style='empty'>
+            <t>
+              It is an unfortunate historical error that the header name used
+              to carry Authentication information in a SIP (or HTTP) request
+              is named "Authorization", which only increases the confusion
+              between these two concepts.
+            </t>
+          </list>
+        </t>
+
+        <t>
+          In the remainder of this document, the modifier "Authorizing" is
+          applied to various entities to designate the party that is making
+          an Authorization decision - consulting a security policy and any
+          relevant information - to determine whether or not a SIP request
+          is permitted by the policy.
+        </t>
+
+      </section>
+
+      <section title="The Locality of Authority and Enforcement">
+        <t>
+          In a distributed system, the ultimate enforcement of a security
+          policy is best implemented as closely as possible to the object
+          of that policy.  In less abstract terms: if the goal of a policy
+          is to control access to a resource, then the ultimate enforcement
+          of whether or not to grant access to the resource is best made by
+          an entity local to that resource.  Any separation between the
+          resource that is the object of the policy and the entity
+          implementing the enforcement of that policy introduces a gap
+          which an attacker may be able to exploit.  Because it is not
+          always possible to colocate the policy decision at the point of
+          enforcement, it is sometimes necessary to have an Authorizing
+          entity in one part of a distributed system that then conveys the
+          appropriate decision to another at which the enforcement action
+          takes place.
+        </t>
+
+        <t>
+          In SIP, the optimal enforcement point is often at either the
+          ultimate UAS that is the target of a request, or at an 
+          Intermediate Entity whose role includes the enforcement of policy
+          at the edge of an administrative domain.  In this document, the
+          term:
+          <list style='hanging'>
+            <t hangText='Intermediate Entity'>
+              <vspace blankLines="0"/>
+              is used to mean any SIP entity that receives SIP requests and
+              sends requests somehow related to those received requests to
+              other targets.  The term includes Proxies, Application
+              Servers, Back To Back User Agents, and any other entity that
+              acts as forwarding or translating entity with SIP on both
+              "sides".
+            </t>
+          </list>
+          However, these systems, and especially User Agents, are often not
+          the appropriate place to actually make the Authorization
+          decision.  For various reasons it is sometimes appropriate to
+          make the Authorization decision somewhere other than the point of
+          enforcement, and in these cases at present SIP lacks a standard
+          means to convey the results of that decision.
+        </t>
+
+        <t>
+          Most specifications of SIP mechanisms expect that a request will
+          be subjected to an authorization decision by the receiving User
+          Agent Server.  If the Alice's UA sends a request to Bob's UA, it
+          is Bob's UA that decides (presumably after authenticating that the
+          request is really from Alice) whether or not Alice should be
+          allowed whatever access the request requires.  This model is the
+          correct one in many cases, especially those in which the actual
+          authorization decision can be made by the human user: if the
+          request is for Bob's presence information, the UA can let Bob
+          decide whether Alice should be allowed to see his presence and
+          respond appropriately.
+        </t>
+        <t>
+          Using the user to make the authorization decision is not always
+          appropriate, however - it fits poorly or not at all when:
+
+          <list style="hanging">
+
+            <t hangText="There is no way to consult a user">
+              <vspace blankLines="1" />
+              Many kinds of UAs either don't have a "user" to consult (such
+              as a PSTN gateway or a ceiling-mounted paging system
+              speaker), or don't have a user interface adequate to
+              construct a query (an ATA).
+            </t>
+
+            <t hangText="Consulting the user is the wrong thing to do">
+              <vspace blankLines="1" />
+              The nature of the request may be such that consulting the
+              user would be counter to the nature of the request.  If the
+              request is that Alice, a call center manager, be silently
+              conferenced in order to monitor a call between a customer and
+              Bob, a service representative under her supervision, then
+              alerting Bob that Alice wishes to listen to the call would
+              defeat the purpose.
+            </t>
+
+            <t hangText="Asking the user would be ambiguous">
+              <vspace blankLines="1" />
+              The request might be such that the user either could not
+              understand the question or be such that the user cannot
+              reasonably be expected to understand why permission should be
+              granted.  If Bob were asked whether or not Alice should be
+              allowed to receive dialog event notices regarding the call he
+              is on now, he would probably not understand the question and
+              be annoyed at the interruption of his call; he could not tell
+              whether this was in support of a future request to Join the
+              call, a future request that Alice be able to call him when he
+              becomes available, or just in support of lighting the Busy
+              Lamp for his line on Alice's phone.
+            </t>
+          </list>
+        </t>
+
+        <section title="User Agent Based Authorization Scales Poorly">
+
+          <t>
+            Placing the authorization decision in the ultimate User Agent
+            Server suffers from a scaling problem: the size and complexity
+            of the authorization decision scales with the number of
+            possible interactions.  While Bob's UA may be able to
+            authenticate that a particular request came from Alices UA, if
+            Alice and Bob are in a large administrative domain, the problem
+            of deciding which users in that domain are authorized to make
+            which requests grows too large to reasonably implement inside
+            many UAs.  Even if the problem is just one of storing the
+            appropriate access control lists, it is not reasonable to
+            replicate the lists into all UAs (and perhaps not desirable
+            from a security perspective, since this decreases the security
+            of the lists themselves).
+          </t>
+
+          <t>
+            Even aside from the problem of database sizes that may be
+            required for authorization decisions in the ultimate UAS, the
+            non-uniformity of facilities in UAS makes central control of
+            security policy impractical.  If an organization wishes to
+            create a security policy for a particular kind of request, the
+            capabilities offered by UAs are too limited for any but the
+            most primitive of possiblities (and often not even that).
+            For example, one might want to make different rules for whether
+            a particular request be allowed at one time of day but not at
+            another.  Since few UAs will have that capability (and since
+            the means of expressing it probably vary even among those that
+            did), an organization that needed such a policy would have to
+            make the authorization decision elsewhere, but other than
+            preventing delivery of the request, there is no standard way to
+            communicate the result of that authorization decision to the
+            UAS.
+          </t>
+
+        </section>
+
+        <section
+            anchor='delivery'
+            title="Request Delivery as an Authorization Indication"
+            >
+          <t>
+            Today, authorization control that is not local to the target
+            UAS usually takes the form of delivery control: an Intermediate
+            entity makes an authorization decision and either delivers the
+            request onwards toward the target UAS or rejects it.  The fact
+            that the target UAS recieves the request from the authorizing
+            entity is the indication that the request has been authorized.
+            There are a number of problems with this as a security policy
+            enforcement architecture:
+
+            <list style="hanging">
+
+              <t hangText="Passive participation by the recipient">
+                <vspace blankLines="1" />
+                In many cases, the agent that is the recipient of the
+                "authorized" request is not enforcing the requirement that
+                the request be processed by the authorizing entity.  It
+                will act on any request it receives, and only the fact that
+                the rest of the well behaved requestors will route through
+                the Authorizing Intermediate allows the security policy to
+                be enforced at all.  An attacker who can find a way to
+                route requests such that they do not pass through the
+                Authorizing entity will find the target UAS happy to accept
+                them.
+              </t>
+
+              <t hangText="Use of IP addresses as authenticators">
+                <vspace blankLines="1" />
+                The most common form that "delivery as authorization" takes
+                is that the IP address(es) of one or more Authorizing
+                Intermediates is configured into the UAS such that only
+                requests from those Intermediates are to be considered to
+                have been authorized.  Most often, the UAS uses the peer
+                address from the UDP or TCP level as the authentication
+                indication.  Since techniques for spoofing IP addresses are
+                well known, this is a very weak basis upon which to build
+                any security.  In some particularly weak implementations,
+                the presence of an IP address value in the Via headers has
+                been seen to be used as an authenticator; this does not
+                even merit further discussion.
+              </t>
+
+              <t hangText="TLS peer authentication">
+                <vspace blankLines="1" />
+                A much stronger but unfortunately less common version of
+                "delivery as authorization" is the use of a mutually
+                authenticated TLS transport between an Intermediate and the
+                point of enforcement.  This has the advantage that it is
+                based on the identities in the certificates, so given a
+                usable certificate infrastructure and good implementations,
+                at least the authentication component of the decision is a
+                strong one.  This solution is especially well suited to
+                authorizing requests as they cross a boundary between one
+                administrative domain and another (such as between an
+                enterprise and a telephony service provider).  It is,
+                however, limited by the fact that it only allows one degree
+                of separation between the Authorizing entity and the
+                Enforcing entity - they may not be more than a single SIP
+                hop apart for this to be a usable authorization indication.
+                It is also worth noting that even in this limited
+                deployment mode, there is no well-defined indication
+                included in the SIP signalling that explicitly communicates
+                that a particular message has been authorized by the
+                sender; the indication is always implicit.
+              </t>
+            </list>
+
+            This last problem - the fact that for delivery to work as an
+            authorization indication, the authorizing and enforcing
+            entities must be adjacent - creates another more subtle
+            architectural problem.  The requirement for adjacency
+            interferes with a property of SIP that is otherwise one of its
+            great strengths: that a proxy (or other well-behaved
+            Intermediate) need not understand every aspect of the requests
+            and responses it forwards.  It is this property that allows
+            User Agents to evolve new capabilities, and, so long as they
+            are able to find other UAs with complementary features, to use
+            those capabilities without the SIP routing fabric between them
+            needing to be upgraded.  If there is a security property of
+            some new capability, and authorization decisions appropriate to
+            that new capability are not easily implementable in the
+            originating and terminating UAs themselves, then there is only
+            one place in the SIP routing fabric where the authorization
+            decision can be placed: adjacent to the target UAS.
+          </t>
+        </section>
+
+      </section>
+
+      <section
+          anchor='examples'
+          title="Examples of Distributed Authorization and Enforcement in SIP"
+          >
+          <t>
+            The following are examples of SIP operations that currently
+            suffer from poor security properties in many deployments and/or
+            are not well supported by User Agents in part because providing
+            appropriate security is problematic.  It is by no means an
+            exhaustive list.
+          </t>
+
+        <section
+            anchor='example.dialog-event'
+            title="Dialog Event Subscriptions"
+            >
+          <t>
+            The dialog event package <xref target='RFC4235'/>:
+            <list style='empty'>
+              <t>
+                allows users to subscribe to another
+                user and to receive notification of the changes in state of INVITE-
+                initiated dialog usages in which the subscribed-to user is involved.
+              </t>
+            </list>
+            A SUBSCRIBE request <xref target='RFC3265'/> for the "dialog"
+            package allows the requesting UA to ask for NOTIFY messages
+            that include the dialog state and identifiers (call-id and tag
+            values) for, potentially, all dialogs at the recieving UA.
+            There are many legitimate purposes for such a request, since
+            they are needed to implement a number of desirable features in
+            a distributed communications system.  However, the SUBSCRIBE
+            request does not communicate what feature the request is being
+            made to support, nor can the NOTIFY communicating the dialog
+            information restrict the purposes for which it is used.  The
+            dialog package specification includes some recommendations on
+            how to construct security policies in a UAS so as to restrict
+            access to dialog identifiers and other sensitive information,
+            but because leaving out parts of the information would often
+            disable desired features in a distributed system, it is common
+            for implementations to include all the dialog information, and
+            to accept any requests they receive (in effect passively
+            implementing a request delivery authorization policy as
+            described in <xref target='delivery'/>).
+          </t>
+
+          <t>
+            <xref target='RFC4538'/> defines the SIP Target-Dialog header field
+            <list style='empty'>
+              <t>
+                This header field is used in requests that create SIP
+                dialogs.  It indicates to the recipient that the sender is aware of
+                an existing dialog with the recipient, either because the sender is
+                on the other side of that dialog, or because it has access to the
+                dialog identifiers.  The recipient can then authorize the request
+                based on this awareness.
+              </t>
+            </list>
+            This authorization by awareness of dialog identifiers is used
+            in many SIP services, so having weak authorization mechanisms
+            in the UASes responsible for those identifiers creates
+            vulnerabilities elsewhere.
+          </t>
+        </section>
+
+        <section
+            anchor='example.invite.gateway'
+            title="INVITE at a PSTN Gateway"
+            >
+          <t>
+            One of the most common operations in SIP telephony is the
+            gateway function - receiving a SIP INVITE request and using the
+            information in it to initiate a PSTN call setup request.
+            Because a PSTN call is often a potentially expensive billable
+            event, enforcement of access control is important.  In many
+            (perhaps most) SIP telephony deployments, the actual
+            authorization decision is not implemented in the gateway
+            itself, but in some Intermediate system between the requesting
+            UAC and the gateway; gateways typically implement at most a
+            request delivery authorization policy as described in <xref
+            target='delivery'/>.
+          </t>
+        </section>
+
+        <section
+            anchor='example.join'
+            title="INVITE with Join"
+            >
+          <t>
+            <xref target='RFC3911'/> defines the Join header field "to logically
+            join an existing SIP dialog with a new SIP dialog"; the
+            specification notes that:
+            <list style='empty'>
+              <t>
+                This primitive can be used to enable a variety of features,
+                for example: "Barge-In", answering-machine-style "Message
+                Screening" and "Call Center Monitoring".
+              </t>
+            </list>
+            The Join mechanism is a good example of a primitive that,
+            depending on the service it is being used to implement, can
+            have very different authorization requirements - but the UAS
+            may not be able to easily distinguish what the service is and
+            therefor know which to requirements to apply.  A simple example
+            is an INVITE-with-Join request received by a phone, containing
+            SDP that requests that the joining phone receive media but not
+            provide any to be mixed into the call: this request may have
+            resulted from
+            <list style='symbols'>
+              <t>
+                The human User using the receiving UAS may have (through
+                out-of-band means) asked a colleague to listen to the call
+                so as to provide advice or to be available as a
+                witness to what transpired on a sensitive call.
+              </t>
+              <t>
+                The request may come from that Users supervisor in order to
+                determine (as allowed by the management policies that
+                govern their relationship) whether or not the User is
+                conducting the call appropriately.
+              </t>
+            </list>
+            At the protocol level, these two requests may be
+            indistinguishable, but in the former case it would be
+            appropriate for the UAS to query the user to authorize the Join
+            request (and useful to that User to receive an indication that
+            the monitoring has begun), while in the latter case it would
+            defeat the purpose of the request to do so.  In any case, it
+            would clearly be inappropriate for a phone to unconditionally
+            and without notice accept any such request.
+          </t>
+        </section>
+
+      </section>
+
+    </section>
+
+    <section title="Candidate Solution Requirements" anchor='requirements'>
+
+      <t>
+        This draft argues that SIP would be improved by a mechanism that
+        allowed for a small number of entities in a given deployment to
+        make Authorization decisions with respect to SIP requests according
+        to a locally defined policy, and have a secure means of
+        communicating that a given has been authorized.  This would allow
+        other SIP entities (whether Intermediate Systems or User Agent
+        Servers) to make very simple enforcement decisions based on whether
+        or not a request had been authorized by an authority they
+        recognize.  The complexity of the security configuration for most
+        SIP entities would be reduced to recognition and validation of a
+        small number of valid authorizors.
+      </t>
+
+      <t>
+        This section proposes some requirements that any solution would
+        need to meet in order to address the problem described in <xref
+        target='problem'/> and be usable and incrementally deployable in
+        existing SIP usage.
+      </t>
+
+      <t>
+        <list style='empty'>
+          <t>
+            The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
+            "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be
+            interpreted as described in <xref target= "RFC2119">RFC-2119</xref>.
+          </t>
+        </list>
+      </t>
+
+      <t>
+        These proposed requirements use the following terms (the
+        definitions of which are admittedly somewhat vague):
+
+        <list style='hanging'>
+
+          <t hangText="Authorization Indication">
+            <vspace blankLines="0"/>
+            The information incorporated into a SIP message that
+            indicates that a request is authorized within some security
+            policy.  No specific forms are suggested for Authorization
+            Indications in this draft.
+          </t>
+
+          <t hangText="Authorizing Third Party">
+            <vspace blankLines="0"/>
+            Any implementation that can receive a SIP message generated by
+            some originating UAC, evaluate that request with respect to
+            some security policy, and generate an Authorization Indication
+            to be incorporated into some other SIP message such that a
+            later recipient of that SIP message or one derived from it can
+            be assured that the request is allowed under the security
+            policy.
+          </t>
+
+        </list>
+      </t>
+
+      <section title="Authorizing Third Party Requirements" anchor="ThirdParty">
+        <t>
+          SIP deployments often contain many different 'types' of
+          implementations: some, like User Agents and Proxies, that are
+          well defined by the existing formal specifications, and others
+          that are less rigorously defined but meet practical needs and are
+          essential to functionality required by end users.  This reality
+          must be recognized in order for any solution to be deployable in
+          real (rather than just hypothetical architecturally "pure") SIP
+          networks.  This implies that the definition of an Authorizing
+          Third Party is very flexible:
+
+          The following are suggested requirements relating to which
+          implementation roles can act as an Authorizing Third Party:
+
+          <list counter="reqs" hangIndent="8" style="format R%d">
+            <t>
+              It MUST be possible for a UAS to act as an Authorizing Third
+              Party, incorporating an Authorization Indication in a
+              response (see <xref target="redirector-pattern"/> and
+              <xref target="redirector-intermediate-pattern"/>).
+            </t>
+
+            <t>
+              It MUST be possible for a Proxy to act as an Authorizing Third Party,
+              incorporating an Authorization Indication in requests it
+              forwards (see <xref target="intermediate-pattern"/> and
+              <xref target="redirector-intermediate-pattern"/>).
+            </t>
+
+            <t>
+              It MUST be possible for other non-Proxy intermediate systems,
+              such as Back-To-Back User Agents to act as an Authorizing Third
+              Party, incorporating an Authorization Indication in requests
+              they forward.
+            </t>
+          </list>
+
+          The following are suggested requirements relating to the kinds
+          of SIP messages a Third Party Authentication could be used with:
+
+          <list counter="reqs" hangIndent="8" style="format R%d">
+            <t>
+              It MUST be possible to include an Authorization
+              Indication in a REFER request such that when the UA that
+              is the target of the REFER makes a request as directed by
+              the REFER, that new request can include an Authorization
+              Indication (see <xref target="refer-pattern"/>).
+            </t>
+
+            <t>
+              It MUST be possible to include an Authorization Indication in
+              both dialog-forming and in-dialog requests.
+            </t>
+          </list>
+        </t>
+
+        <section title="Third Party Topologies">
+          <t>
+            In real SIP networks, Intermediate entites can appear in
+            unexpected places - a solution that does not recognize that
+            fact will not be useful.
+
+            <list counter="reqs" hangIndent="8" style="format R%d">
+              <t>
+                It MUST be possible for an Authorization Indication to be
+                usefully forwarded by an Intermediate system that does not
+                implement the Third Party Authorization mechanisms.  
+              </t>
+            </list>
+
+            The requirement above does NOT mean that it must be possible to
+            forward any Authorization Indication through any intermediate
+            system at all and always be useful - such a requirement would not be
+            possible to meet.  The objective is that at least "well
+            behaved" intermediates have some chance of forwarding; defining
+            "well behaved" in this context will be an important part of
+            evaluating any proposed mechanism.
+          </t>
+
+          <t>
+            <xref target='intermediate-pattern'/> illustrates a topology in which an
+            Intermediate system adds the authorizing information, changing
+            the original request (r1) into the authorized request (ar):
+            <figure align="center" title="Authorizing Intermediate" anchor="intermediate-pattern">
+              <artwork align="left"><![CDATA[
+       +----\  \-------+              +----\  \-------+
+   +-->|    other      >--r1-+    +-->|    other      >--ar-+
+   |   | intermediates |     |    |   | intermediates |     |
+   |   +-----\  \------+     |    |   +-----\  \------+     |
+  r1                         |   ar                         |
+   |                         V    |                         V
++--^--------------+     +--------------+       +---------------+
+| Originating UAC |     | Authorizing  |       | Enforcing UAS |
++-----------------+     | Intermediate |       +---------------+
+                        +--------------+
+]]>
+              </artwork>
+
+            </figure>
+          </t>
+
+          <t>
+            <xref target='redirector-pattern'/> illustrates a topology in which a
+            Redirecting system includes the authorizing information in a
+            redirect (3xx) response (r1r) to the original request (r1),
+            causing the UAC to generate the authorized request (ar):
+
+            <figure align="center"
+                    title="Authorizing Redirector"
+                    anchor="redirector-pattern">
+              <artwork align="left"><![CDATA[
++--------------+
+| Authorizing  |
+| Redirector   |
++--------------+
+    ^     |
+   r1    r1r
+    |     V
++-----------------+       +----\  \-------+       +---------------+
+| Originating UAC |--ar-->|    other      >--ar-->| Enforcing UAS |
++-----------------+       | intermediates |       +---------------+
+                          +-----\  \------+
+]]>
+              </artwork>
+            </figure>
+          </t>
+
+          <t>
+            <xref target="redirector-intermediate-pattern"/> combines
+            elements of the previous two topologies; the Originating UAC
+            sends the original request (r1) to an Intermediate system,
+            which then sends a request (r2) to a Redirecting system (r2),
+            which then adds the authorizing information to its redirect
+            (3xx) response (r2r), causing the Intermediate system to
+            generate the authorized request (ar).  Either the r1 path or
+            the ar path might contain other intermediates.
+
+            <figure align="center"
+                    title="Authorizing Redirection At Intermediate"
+                    anchor="redirector-intermediate-pattern">
+              <artwork align="left"><![CDATA[
+                           +--------------+
+                           | Authorizing  |
+                           | Redirector   |
+                           +--------------+
+                               ^     |
+                              r2    r2r
+                               |     V
++-----------------+       +----\  \-------+       +---------------+
+| Originating UAC |--r1-->|    other      >--ar-->| Enforcing UAS |
++-----------------+       | intermediates |       +---------------+
+                          +-----\  \------+
+]]>
+
+
+              </artwork>
+            </figure>
+          </t>
+
+          <t>
+            <xref target="refer-pattern"/> illustrates a topology in which the
+            Originating UAC incorporates an Authorization Indication into a
+            REFER request sent to some other UAC.  The Referred UAC incorporates the
+            Authorization Indication into the resulting request (ar), 
+            communicating to the Enforcing UAS that the Originating UAC
+            authorized the request.
+            <figure align="center"
+                    title="Authorizing Referror"
+                    anchor="refer-pattern">
+              <artwork align="left"><![CDATA[
++--------------+
+| Originating  |
+|  UAC         |
++--------------+
+    |
+   REFER
+    |
+    V
++--------------+       +----\  \-------+       +---------------+
+| Referred UAC |--ar-->|    other      >--ar-->| Enforcing UAS |
++--------------+       | intermediates |       +---------------+
+                       +-----\  \------+
+]]>
+              </artwork>
+            </figure>
+          </t>
+
+        </section>
+      </section>
+
+      <section title="Authorization and Integrity Protection">
+        <t>
+          It is tempting to suggest the requirement that it be impossible
+          for an attacker to modify a SIP message containing an
+          Authorization Indication, or to copy an Authorization Indication
+          from one SIP message to another without detection.
+          Unfortunately, it is an integral part of the SIP architecture
+          that SIP messages are modified as they move from one system to
+          another; these modifications are not only unavoidable but
+          essential to the correct operation of the SIP protocol as
+          currently defined.  There are also important use cases (see <xref
+          target='refer-pattern'/>) in which an Authorization Indication is
+          explicitly meant to be copied from one request to another.  The
+          following requirements for message integrity protection are
+          suggested:
+
+          <list counter="reqs" hangIndent="8" style="format R%d">
+            <t>
+              It MUST be possible for an Authorization Indication to
+              include integrity protection of the parts of a request
+              that it authorizes.
+            </t>
+
+            <t>
+              It MUST be possible for an Intermediate system to detect
+              what parts of a request are integrity protected so that
+              the Intermediate system can either avoid changing the
+              protected parts or return an error that indicates that
+              the request cannot be satisified because of the
+              protection.
+            </t>
+
+            <t>
+              It MUST be possible for an Enforcing system to determine
+              what parts of a request are integrity protected by the
+              Authorization Indication and what parts are not.
+            </t>
+
+            <t>
+              It MUST be possible for an Enforcing system to determine
+              the identity of the party that provided the Authorization
+              Indication as distinct from the Originating UAC.
+            </t>
+          </list>
+        </t>
+
+      </section>
+
+    </section>
+
+    <section title= "IANA Considerations" >
+
+      <t>
+        None until a solution is described.
+      </t>
+
+    </section>
+
+    <section title= "Security Considerations" >
+      <t>
+        This memo attempts to make the case that the current definition and
+        deployment of the Session Inition Protocol is missing a mechanism
+        important to appropriately secured operation in at least many of
+        the environments in which it is used.  <xref
+        target='requirements'/> attempts to bound a solution space,
+        and as such should be read carefully to determine whether or not
+        appropriate goals have been described.
+      </t>
+    </section>
+
+
+    <section title="Acknowledgments">
+      <t>
+        The author would like to thank Hadriel Kaplan, 
+        Michael Procter, Mary Barnes, and Marek Dutkiewicz for invaluable
+        feedback on pre-publication drafts of this document.
+      </t>
+    </section>
+
+
+  </middle>
+
+  <back>
+    <references title="Informative References">
+
+      <reference anchor='RFC2119'>
+        <front>
+          <title abbrev='RFC Key Words'>Key words for use in RFCs to Indicate Requirement Levels</title>
+          <author initials='S.' surname='Bradner' fullname='Scott Bradner'>
+            <organization>Harvard University</organization>
+            <address>
+              <postal>
+                <street>1350 Mass. Ave.</street>
+                <street>Cambridge</street>
+              <street>MA 02138</street></postal>
+              <phone>- +1 617 495 3864</phone>
+          <email>sob@harvard.edu</email></address></author>
+          <date year='1997' month='March' />
+          <area>General</area>
+          <keyword>keyword</keyword>
+          <abstract>
+            <t>
+              In many standards track documents several words are used to signify
+              the requirements in the specification.  These words are often
+              capitalized.  This document defines these words as they should be
+              interpreted in IETF documents.  Authors who follow these guidelines
+              should incorporate this phrase near the beginning of their document:
+
+              <list>
+                <t>
+                  The key words &quot;MUST&quot;, &quot;MUST NOT&quot;, &quot;REQUIRED&quot;, &quot;SHALL&quot;, &quot;SHALL
+                  NOT&quot;, &quot;SHOULD&quot;, &quot;SHOULD NOT&quot;, &quot;RECOMMENDED&quot;,  &quot;MAY&quot;, and
+                  &quot;OPTIONAL&quot; in this document are to be interpreted as described in
+                  RFC 2119.
+            </t></list></t>
+            <t>
+              Note that the force of these words is modified by the requirement
+              level of the document in which they are used.
+        </t></abstract></front>
+        <seriesInfo name='BCP' value='14' />
+        <seriesInfo name='RFC' value='2119' />
+        <format type='TXT' octets='4723' target='ftp://ftp.isi.edu/in-notes/rfc2119.txt' />
+        <format type='HTML' octets='14486' target='http://xml.resource.org/public/rfc/html/rfc2119.html' />
+        <format type='XML' octets='5661' target='http://xml.resource.org/public/rfc/xml/rfc2119.xml' />
+      </reference>
+
+      <reference anchor='RFC3261'>
+        <front>
+          <title>SIP: Session Initiation Protocol</title>
+          <author initials='J.' surname='Rosenberg' fullname='J. Rosenberg'>
+          <organization /></author>
+          <author initials='H.' surname='Schulzrinne' fullname='H. Schulzrinne'>
+          <organization /></author>
+          <author initials='G.' surname='Camarillo' fullname='G. Camarillo'>
+          <organization /></author>
+          <author initials='A.' surname='Johnston' fullname='A. Johnston'>
+          <organization /></author>
+          <author initials='J.' surname='Peterson' fullname='J. Peterson'>
+          <organization /></author>
+          <author initials='R.' surname='Sparks' fullname='R. Sparks'>
+          <organization /></author>
+          <author initials='M.' surname='Handley' fullname='M. Handley'>
+          <organization /></author>
+          <author initials='E.' surname='Schooler' fullname='E. Schooler'>
+          <organization /></author>
+        <date year='2002' month='June' /></front>
+
+        <seriesInfo name='RFC' value='3261' />
+        <format type='TXT' octets='647976' target='ftp://ftp.isi.edu/in-notes/rfc3261.txt' />
+      </reference>
+
+      <reference anchor='RFC3265'>
+        <front>
+          <title>Session Initiation Protocol (SIP)-Specific Event Notification</title>
+          <author initials='A.B.' surname='Roach' fullname='A.B. Roach'>
+          <organization /></author>
+          <date year='2002' month='June' />
+          <abstract>
+        <t>This document describes an extension to the Session Initiation Protocol (SIP).  The purpose of this extension is to provide an extensible framework by which SIP nodes can request notification from remote nodes indicating that certain events have occurred. [STANDARDS TRACK]</t></abstract></front>
+
+        <seriesInfo name='RFC' value='3265' />
+        <format type='TXT' octets='89005' target='ftp://ftp.isi.edu/in-notes/rfc3265.txt' />
+      </reference>
+
+      <reference anchor='RFC3911'>
+        <front>
+          <title>The Session Initiation Protocol (SIP) "Join" Header</title>
+          <author initials='R.' surname='Mahy' fullname='R. Mahy'>
+          <organization /></author>
+          <author initials='D.' surname='Petrie' fullname='D. Petrie'>
+          <organization /></author>
+          <date year='2004' month='October' />
+          <abstract>
+        <t>This document defines a new header for use with SIP multi-party applications and call control.  The Join header is used to logically join an existing SIP dialog with a new SIP dialog.  This primitive can be used to enable a variety of features, for example: "Barge-In", answering-machine-style "Message Screening" and "Call Center Monitoring".  Note that definition of these example features is non-normative. [STANDARDS TRACK]</t></abstract></front>
+
+        <seriesInfo name='RFC' value='3911' />
+        <format type='TXT' octets='35373' target='ftp://ftp.isi.edu/in-notes/rfc3911.txt' />
+      </reference>
+
+      <reference anchor='RFC4235'>
+        <front>
+          <title>An INVITE-Initiated Dialog Event Package for the Session Initiation Protocol (SIP)</title>
+          <author initials='J.' surname='Rosenberg' fullname='J. Rosenberg'>
+          <organization /></author>
+          <author initials='H.' surname='Schulzrinne' fullname='H. Schulzrinne'>
+          <organization /></author>
+          <author initials='R.' surname='Mahy' fullname='R. Mahy'>
+          <organization /></author>
+          <date year='2005' month='November' />
+          <abstract>
+        <t>This document defines a dialog event package for the SIP Events architecture, along with a data format used in notifications for this package.  The dialog package allows users to subscribe to another user and to receive notification of the changes in state of INVITE-initiated dialog usages in which the subscribed-to user is involved. [STANDARDS TRACK]</t></abstract></front>
+
+        <seriesInfo name='RFC' value='4235' />
+        <format type='TXT' octets='83268' target='ftp://ftp.isi.edu/in-notes/rfc4235.txt' />
+      </reference>
+
+      <reference anchor='RFC4538'>
+        <front>
+          <title>Request Authorization through Dialog Identification in the Session Initiation Protocol (SIP)</title>
+          <author initials='J.' surname='Rosenberg' fullname='J. Rosenberg'>
+          <organization /></author>
+          <date year='2006' month='June' />
+          <abstract>
+        <t>This specification defines the Target-Dialog header field for the Session Initiation Protocol (SIP), and the corresponding option tag, tdialog.  This header field is used in requests that create SIP dialogs.  It indicates to the recipient that the sender is aware of an existing dialog with the recipient, either because the sender is on the other side of that dialog, or because it has access to the dialog identifiers.  The recipient can then authorize the request based on this awareness. [STANDARDS TRACK]</t></abstract></front>
+
+        <seriesInfo name='RFC' value='4538' />
+        <format type='TXT' octets='36089' target='ftp://ftp.isi.edu/in-notes/rfc4538.txt' />
+      </reference>
+
+    </references>
+
+  </back>
+</rfc>

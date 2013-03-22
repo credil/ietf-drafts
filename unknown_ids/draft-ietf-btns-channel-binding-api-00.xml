@@ -1,0 +1,370 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml' -->
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc0768 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.0768.xml'>
+    <!ENTITY rfc0793 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.0793.xml'>
+    <!ENTITY rfc1034 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.1034.xml'>
+    <!ENTITY rfc2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+    <!ENTITY rfc4301 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4301.xml'>
+    <!ENTITY rfc4306 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4306.xml'>
+    <!ENTITY rfc4960 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4960.xml'>
+    <!ENTITY rfc5056 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.5056.xml'>
+    <!ENTITY rfc5061 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.5061.xml'>
+    <!ENTITY rfc5386 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.5386.xml'>
+    <!ENTITY rfc5387 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.5387.xml'>
+    <!ENTITY x690 PUBLIC    '' 'http://xml.resource.org/public/rfc/bibxml2/reference.CCITT.X690.2002.xml'>
+    <!ENTITY conn-latching PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-btns-connection-latching.xml'>
+    <!ENTITY btns-abstract-api PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-btns-abstract-api.xml'>
+    <!ENTITY bellovin-useipsec PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.bellovin-useipsec.xml'>
+    <!ENTITY dondeti-useipsec PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.dondeti-useipsec-430x.xml'>
+    <!ENTITY ipsec-channel-binding PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.williams-ipsec-channel-binding.xml'>
+]>
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc tocompact="yes" ?>
+<?rfc tocindent="no" ?>
+<?rfc autobreaks="no" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+<rfc category="std" ipr="trust200902" docName="draft-ietf-btns-channel-binding-api-00.txt">
+    <front>
+	<title abbrev="IPsec Channel Bindings/API">IPsec End-Point Channel Bindings and API</title>
+	<author initials='N.' surname="Williams" fullname='Nicolas
+	    Williams'>
+	    <organization abbrev="Sun">Sun Microsystems</organization>
+	    <address>
+		<postal>
+		    <street>5300 Riata Trace Ct</street>
+		    <city>Austin</city> <region>TX</region>
+		    <code>78727</code> <country>US</country>
+		</postal>
+		<email>Nicolas.Williams@sun.com</email>
+	    </address>
+	</author>
+	<date month="April" year="2009"/>
+	<area>Security</area>
+	<workgroup>NETWORK WORKING GROUP</workgroup>
+	<keyword>Internet-Draft</keyword>
+	<abstract>
+
+	    <t>This document defines channel bindings for IPsec and
+		describes an abstract API and a BSD sockets API
+		extension for obtaining channel bindings of "connection
+		latches".</t>
+
+	</abstract>
+    </front>
+
+    <middle>
+
+	<section title="Introduction">
+
+	    <t>With connection latching <xref
+		    target='I-D.ietf-btns-connection-latching'/> IPsec
+		now has a notion of "secure channel" that can be used in
+		conjunction with channel binding <xref
+		    target='RFC5056'/>.  This document defines the
+		channel bindings for IPsec channels where each peers use
+		public keys to authenticate to the other.  It also
+		provides an abstract API for accessing the channel
+		bindings of an IPsec channel.  And it provides a BSD
+		sockets C language binding of that abstract API.</t>
+
+	    <t>We assume reader familiarity with channel binding <xref
+		    target='RFC5056'/>, IPsec <xref target='RFC4301'/>
+		and connection latching <xref
+		    target='I-D.ietf-btns-connection-latching'/>.</t>
+
+	    <t>These channel binding types also work with Better Than
+		Nothing Security (BTNS) <xref target='RFC5386'/> <xref
+		    target='RFC5387'/>, and make its use safe.</t>
+
+	    <section anchor='conventions' title="Conventions used in this document">
+
+		<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+		    "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+		    and "OPTIONAL" in this document are to be interpreted as
+		    described in <xref target="RFC2119"/>.</t>
+
+	    </section>
+
+	</section>
+
+	<section anchor='connection_latching' title="End-Point Channel Binding Types for IPsec">
+
+	    <t>We define several end-point channel bindings suitable for
+		any IPsec channel where one or both peers are
+		authenticated by a public key.  These channel binding
+		types use a hash function whereas they could use the raw
+		un-hashed inputs.  We use a hash function so as to
+		produce manageably sized channel binding data (consider
+		that this data often has to be held in kernel
+		memory).</t>
+
+	    <section title="ipsec-end-point-sha256">
+
+		<t>Given a channel C, initiator public key PKi, and
+		    responder public key PKr:</t>
+
+		<figure>
+		    <artwork>
+   ipsec-end-point-sha256(C) := SHA256(PKi) XOR SHA256(PKr)
+		    </artwork>
+		</figure>
+
+		<t>The reason for the XOR is that in IPsec there's no
+		    deterministic rule for which peer will be an IKE
+		    initiator or responder.  It is possible for both
+		    peers to have been initiators of Security
+		    Associtiations (SAs) used in the connection latching
+		    <xref target='I-D.ietf-btns-connection-latching'/>
+		    process, thus we need an operation that binds both
+		    peers' public keys without any kind of order (we
+		    don't want to do any sorting).</t>
+
+		<t>PKi and PKr MUST be the bytes that appear as the
+		    value of the subjectPublicKeyInfo field (including
+		    the DER/BER TLV <xref target='CCITT.X690.2002'/>) of
+		    the corresponding certificates as sent in CERT
+		    payloads, or, in the case of Raw RSA keys, the bytes
+		    that appear in the peer's CERT payload (see section
+		    3.6 of <xref target='RFC4306'/>).</t>
+
+	    </section>
+
+	    <section title="ipsec-responder-end-point">
+
+		<t>Given a channel C where only one peer authenticated via a
+		    public key PKp (and the other, presumably, via EAP):</t>
+
+		<figure>
+		    <artwork>
+   ipsec-single-end-point-sha256(C) := SHA256(PKp)
+		    </artwork>
+		</figure>
+
+		<t>PKp is encoded as described in the previous
+		    section.</t>
+
+	    </section>
+
+	    <section anchor='hash_agility' title="Hash Agility and Channel Binding Type Negotiation">
+
+		<t>Hash agility is obtained by negotiating channel binding
+		    types.  Variants of ipsec-end-point-sha256 based on
+		    other hash functions can be added as needed.</t>
+
+		<t>Note that there's no in-band channel binding type
+		    negotiation in IKEv2 <xref target='RFC4306'/>.  It's
+		    possible and preferable that the peer's available
+		    channel binding types be determined from IKEv2
+		    context.</t>
+
+		<t>The algorithm or protocol for deciding the availability
+		    of any given variant of ipsec-end-point-sha256 MUST be
+		    specified by any such variant.  For example, a putative
+		    ipsec-end-point-sha3 could be available if a putative
+		    SHA-3 function were used in any part of the IKEv2
+		    exchanges that setup an SA linked to a connection latch.
+		    Or NOTIFY payloads might be added to IKEv2 for
+		    negotiating the use of a putative
+		    ipsec-end-point-sha3.</t>
+
+		<t>ipsec-end-point-sha256 MUST always be available (at least
+		    until SHA-256 is deprecated).</t>
+
+	    </section>
+
+	</section>
+
+	<section title="Abstract API">
+
+	    <t>To use channel binding to IPsec channels applications MUST
+		first indicate their intention to do so and MAY provide a
+		set of channel binding types that the application prefers.
+		This should be done as part of the procedure to actively
+		connect to peers or passively accept connections from
+		peers.</t>
+
+	    <t>Once an IPsec channel is established the application may then
+		request the channel's channel binding data for a specific
+		channel binding type.</t>
+
+	</section>
+
+	<section title="BSD Sockets C API">
+
+	    <t>We define three socket options for the IPPROTO_IP socket
+		level:
+
+		<list style='symbols'>
+
+		    <t>IP_SEC_CBINDING, a socket option to be used prior
+			to calling connect() and listen() or accept().
+			Applications MUST use this socket option to
+			indicate their intention to used channel
+			binding.  This option does not take an argument;
+			the actual socket option argument passed by the
+			caller MUST be NULL.</t>
+
+		    <t>IP_SEC_CBINDING_TYPES, a socket option that
+			applications can use after a connection is
+			established to determine what channel binding
+			types are available.  This option takes as
+			argument a pointer to a memory buffer into which
+			an ordered list of channel binding type names
+			will be written, separated by ASCII colons (':')
+			and terminated by a NUL.  If the provided buffer
+			is too small then an error must be returned
+			(EOVERFLOW?).</t>
+
+		    <t>IP_SEC_CBINDING_DATA, a socket option that
+			applications can use after a connection is
+			established to obtain the channel binding data
+			for the given socket and the given channel
+			binding type.  This option takes as argument a
+			pointer to a memory buffer containing the name
+			of the requested channel binding type followed
+			by an ASCII colon (':') and enough space for the
+			system to place the channel binding data in
+			return.  If the provided buffer is too small
+			then an error must be returned (EOVERFLOW?).</t>
+
+		</list>
+
+	    </t>
+
+	    <figure title="<ipsecapi.h>">
+		<artwork>
+		    <![CDATA[
+#define IP_SEC_CBINDING               <OS-specific value>
+#define IP_SEC_CBINDING_TYPES         <OS-specific value>
+#define IP_SEC_CBINDING_DATA          <OS-specific value>
+
+#define IP_SEC_CBINDING_TYPES_BUFSIZE <OS-specific value>
+#define IP_SEC_CBINDING_DATA_BUFSIZE  <OS-specific value>
+
+#define IP_SEC_CBINDING_ENDPOINT_SHA256_NAME \
+    "ipsec-end-point-sha256"
+#define IP_SEC_CBINDING_ENDPOINT_SHA256_NAME \
+    "ipsec-single-end-point-sha256"
+		    ]]>
+		</artwork>
+	    </figure>
+
+	    <t>IP_SEC_CBINDING_TYPES_BUFSIZE and
+		IP_SEC_CBINDING_DATA_BUFSIZE are advisory.  Applications
+		may need to resize their buffers.  A pair of "sysconf"
+		system variables providing actual maximum buffer sizes
+		SHOULD be provided, and MUST be named
+		_SC_IP_SEC_CBINDING_TYPES_BUFSIZE and
+		_SC_IP_SEC_CBINDING_DATA_BUFSIZE.</t>
+
+	    <figure title="Example code">
+		<artwork>
+		    <![CDATA[
+int rc;
+char cbinding_types[IP_SEC_CBINDING_TYPES_BUFSIZE];
+char cbinding_data[IP_SEC_CBINDING_DATA_BUFSIZE];
+
+/* create and bind a socket, then: */
+...
+rc = setsockopt(sock_fd, IPPROTO_IP, IP_SEC_CBINDING, NULL, 0)
+if (rc != 0)
+    ...
+
+/* connect() or listen()/accept() */
+...
+
+/*
+ * get the channel binding types available in order of
+ * system preference
+ */
+rc = getsockopt(sock_fd, IPPROTO_IP, IP_SEC_CBINDING_TYPES,
+    cbinding_types, sizeof (cbinding_types));
+if (rc != 0)
+    ...
+
+/*
+ * Pick a channel binding type (possibly by looking for types
+ * listed in cbinding_types[] that are listed in an application
+ * configuration file or command-line argument, possibly by
+ * negotiation with the application's peer).
+ */
+...
+
+/* Get the channel bindings */
+(void) strlcpy(cbinding_data,
+    <selected channel binding type>, sizeof(cbinding_data));
+(void) strlcat(cbinding_data, ":", sizeof(cbinding_data));
+rc = getsockopt(sock_fd, IPPROTO_IP, IP_SEC_CBINDING_DATA,
+    cbinding_data, sizeof (cbinding_data));
+if (rc != 0)
+    ...
+
+/*
+ * Use the channel bindings (by passing them to GSS-API or SASL
+ * functions).
+ */
+...
+		    ]]>
+		</artwork>
+	    </figure>
+
+	</section>
+
+	<section title="IANA Considerations">
+
+	    <t>[Add text about the two IPsec channel binding type
+		registrations for the IANA channel binding type
+		registry.]</t>
+
+	</section>
+
+	<section title="Security Considerations">
+
+	    <t>All the security considerations of <xref
+		    target='RFC5056'/> apply.</t>
+
+	    <t>This specification makes used of cryptographic hash
+		functions.  As such hash agility concerns arise.  We do
+		not provide a method for negotiation of future new
+		channel binding types -- we leave it to their authors to
+		do so.  We do describe a couple of methods that they
+		might use to do this.</t>
+
+	    <t>[NOTE: Perhaps we should specify new NOTIFYs now.
+		Comments?  -Nico]</t>
+
+	</section>
+
+	<section title="Acknowledgements">
+
+	    <t>...</t>
+
+	</section>
+
+    </middle>
+
+    <back>
+	<references title="Normative References">
+	    &rfc2119;&rfc5386;&rfc4306;&rfc4301;
+	    &rfc5056;
+	    &conn-latching;
+	    &btns-abstract-api;
+	    &x690;
+	</references>
+	<references title="Informative References">
+	    &bellovin-useipsec;&dondeti-useipsec;
+	    &rfc5387;
+	</references>
+    </back>
+
+</rfc>

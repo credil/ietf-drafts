@@ -1,0 +1,379 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes"?>
+
+<rfc ipr="full3978" docName="draft-mase-manet-loopdetect-00">
+ 
+<front>
+    <title abbrev="Loop Detection for MANET">
+      Loop Detection for MANET
+    </title>
+ 
+    <author initials="K.M." surname="Mase" fullname="Kenichi Mase">
+      <organization>
+	Graduate School of Science and Technology, Niigata University
+      </organization>
+      <address>
+	<street>8050 Ikarashi2</street>
+	<city>Nishi-ku, Niigata-shi, Niigata</city>
+	<code>950-2181</code>
+	<country>Japan</country>
+	<phone>+81 25 262 7446</phone>
+	<email>mase@ie.niigata-u.ac.jp</email>
+	<uri>http://www.net.ie.niigata-u.ac.jp/</uri>
+      </address>
+    </author>
+
+    <author initials="L.S." surname="Speakman" fullname="Lee Speakman">
+      <organization>
+	Graduate School of Science and Technology, Niigata University
+      </organization>
+      <address>
+	<street>8050 Ikarashi2</street>
+	<city>Nishi-ku, Niigata-shi, Niigata</city>
+	<code>950-2181</code>
+	<country>Japan</country>
+	<email>delta@net.ie.niigata-u.ac.jp</email>
+	<uri>http://www.net.ie.niigata-u.ac.jp/</uri>
+      </address>
+    </author>
+
+    <author initials="K.A." surname="Akima" fullname="Kazuki Akima">
+      <organization>
+	Graduate School of Science and Technology, Niigata University
+      </organization>
+      <address>
+	<street>8050 Ikarashi2</street>
+	<city>Nishi-ku, Niigata-shi, Niigata</city>
+	<code>950-2181</code>
+	<country>Japan</country>
+	<email>kakima@net.ie.niigata-u.ac.jp</email>
+	<uri>http://www.net.ie.niigata-u.ac.jp/</uri>
+      </address>
+    </author>
+
+    <author initials="Y.O." surname="Owada" fullname="Yasunori Owada">
+      <organization>
+	Research Center for Natural Hazard and Disaster Recovery, Niigata University
+      </organization>
+      <address>
+	<street>8050 Ikarashi2</street>
+	<city>Nishi-ku, Niigata-shi, Niigata</city>
+	<code>950-2181</code>
+	<country>Japan</country>
+	<email>owada@ie.niigata-u.ac.jp</email>
+	<uri>http://www.net.ie.niigata-u.ac.jp/</uri>
+      </address>
+    </author>
+   
+    <date day='10' month='November' year='2007'/>
+    <area>Internet</area>
+    <workgroup>MANET</workgroup>
+    <keyword>I-D</keyword>
+    <keyword>Internet Draft</keyword>
+
+    <abstract>
+      <t>
+      We consider looping issue of a mobile ad hoc network (MANET). Transient routing 
+      loops have been observed to form in Ad-hoc Networks running the MANET routing 
+      protocol with Link Layer Notification (LLN). Even when only a small quantity 
+      of the traffic may enter these loops and only for brief time, the effect is to 
+      significantly increase the impact on the surrounding network and its traffic 
+      thus degrading end-to-end transmission. The use of MANET routing protocols with LLN, 
+      together with loop detection and discarding of looping packet to negate the 
+      detrimental effects on surrounding traffic is found to improve performance significantly.
+      </t>
+    </abstract>
+</front>
+
+<middle>
+ 
+<section anchor="Introduction" title="Introduction">
+<t>
+  Some MANET routing protocols define Link Layer Notification (LLN). This allows a node's 
+  interface over which a unicast packet is sent to notify the routing protocol if 
+  the link layer fails to receive an acknowledgment of reception, indicating that 
+  the packet has likely been lost.
+</t>
+
+<t>
+  The routing protocol may then act on the given LLN trigger, usually simply by removing 
+  a record of link from its Information Bases that store necessary information for routing 
+  and neighbor discovery to be able to calculate and update routing table.
+</t>
+
+<t>
+  To maintain loop-free routes to a destination, it is necessary that the same topological 
+  image is perceived between neighboring nodes and thus across the network as a whole, 
+  and to make routing and forwarding decision which are consistent with this. However, 
+  it has been observed that a network operating under routing is not always loop-free, and 
+  therefore is exacerbated by the use of LLN. Although LLN may result in a performance 
+  gain, the loops may have been seen to increase the hop-by-hop datagrams in networks and to 
+  also significantly impact the surrounding traffic.
+</t>
+
+<t>
+  In this document, we propose novel loop detection method to negate the 
+  detrimental effects of looping and improve performance significantly.
+</t>
+
+<t>
+  The keywords "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", 
+  "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be 
+  interpreted as described in [1].
+</t>
+</section>
+
+<section anchor="Terminology" title="Terminology">
+  <t>
+     This document uses the terminology defined in [2]-[4], as well as the following terms:
+  </t>
+ <list style="hanging">
+   
+   <t hangText="Loop Detection:">
+     Detecting looping unicast IP packets. 
+   </t>
+   
+   <t hangText="Mid Detection:">
+     Loop detection before actual looping occur by chcking source and next hop of unicast IP packets.
+   </t>
+   
+   <t hangText="Post Detection:">
+     Loop detection after actual looping have occurred by using DPD algorithms.
+   </t>
+   
+   <t hangText="Duplicate Packet Detection (DPD):">
+     Detecting packet which have been received.
+   </t>
+   
+   <t hangText="Packet Discard:">
+     Discarding unicast IP packet which is in the loop to suppress the effect of packet looping. 
+   </t>
+
+ </list>
+</section>
+
+<section anchor="Overview" title="Overview">
+  <t>
+    In this document, novel "Loop Detection" methods for MANET are defined. There is 
+    LS (Loop Suppression) approach that can be used to avoid or suppress the effect of loops. 
+    "Loop Detection" techniques can be implemented separately from routing protocol. 
+    There are two different approaches called "Mid Detection" and "Post Detection" that 
+    can be used to detect loop in this document. 
+  </t>
+
+  <t>
+    "Mid Detection" is loop detection algorithm before actual packet looping occur, and it is performed 
+    between MAC Layer and Network Layer. 
+    Each node checks received packet and its routing table. If source MAC address of received 
+    unicast IP packet is equal to next hop MAC address associate with destination of this unicast 
+    IP packet, node consider that loop will occur.
+  </t>
+
+  <t>
+    "Post Detection" is loop detection algorithm after actual packet looping have occurred, 
+    and it is performed at Network Layer.
+    Each node use Duplicate Packet Detection (DPD) algorithms for unicast IP packets in the 
+    Post Detection, and duplicate packets are detected. These detected duplicate packet indicate 
+    packet looping. Thus node consider that loop have occurred. Note that DPD means duplicate 
+    unicast IP packet detection in this document. DPD algorithms specified in [2] is based 
+    on multicast packets, and it is different from algorithms specified in this document.    
+  </t>
+
+  <t>
+    Even when only a small quantity of the traffic may enter these loops and only for brief 
+    time, the effect of this packet looping is to siginificantly increase the impact on the 
+    surrounding network. Therefore, detected loop must be removed from routing table and packet in the loop 
+    must be discarded. In case that node detect loop in this method, node stops forwarding
+    and discards looping packet to negate the detriminal effects of looping traffic in this method.
+  </t>
+
+  <t>
+    Fig. 1 shows an example topology of these algorithms, and Fig. 2 shows protocol 
+    stack model for loop detection.
+  </t>
+
+  <artwork>
+                      +--------+
+                      |        | Destination
+	    	      +--------+
+		     /          \  (1)Link breakage  
+            +--------+           X
+	    |        |            \
+            +--------+             \
+		   |                +--------+ (2)update
+		   |      Mid       |        |    routing
+            +--------+    Detection +--------+    table
+	    |        |          ^  /  
+            +--------+  Packet /  /  /
+                     \        /  /  / Looping Packet
+                      \         /  v
+                      +--------+ Post
+                      |        | Detection
+                      +--------+
+                          |
+                      +--------+
+                      |        | Source
+                      +--------+
+
+   Fig. 1  An example topology of loop detection algorithms 
+
+               +---------------------------------------+
+               |              Transport Layer          |
+               +---------------------------------------+
+               |               ip_output()             | \  
+               +-------- ^ ----------------------------+  +
+               |         |          +----------------+ |  | Network
+               |         +---------&gt;| Packet Forward | |  | Layer
+               |         |          +----------------+ |  | 
+   +---------+ | +----------------+          |         |  | 
+   | Packet  |&lt;--| Post Detection |          |         |  |
+   | Discard | | +----------------+          |         |  |
+   +---------+ |         ^                   |         |  | 
+               +-------- | --------+-------- v --------+  +
+               |      ip_input()   |     ip_output()   | / 
+               +-------- ^ --------+-------- | --------+
+               |         |         |         |         |
+   +---------+ | +---------------+ |         |         |
+   | Packet  |&lt;--| Mid Detection | |         |         |
+   | Discard | | +---------------+ |         |         |
+   +---------+ +-------- ^ --------+-------- v --------+
+               |         |      MAC Layer              |
+               +---------------------------------------+
+
+    Fig. 2  Protocol stack model for loop detection.
+  </artwork>
+
+</section>
+
+<section anchor="Loop Detection" title="Loop Detection">
+  <t>
+    This section defines two algorithms of the loop detection to avoid the effect of loops. 
+  </t>
+
+  <section anchor="Mid Detection" title="Mid Detection">
+    <t>
+      "Mid Detection" is loop detection algorithm, and it detects looping before actual 
+      looping occur, and basically, it is performed between MAC Layer and Network Layer. 
+      When a unicast IP packet are received, the following tasks MUST be performed.
+    </t>
+
+    <list style="hanging">
+
+      <t hangText="1.">
+	Source MAC address of received frame is temporary stored. Afterwards, it is named 
+	source MAC address.
+      </t>
+
+      <t hangText="2.">
+	To check the next hop MAC address equal to the source MAC address, the next hop 
+	MAC address is resolved from the destination IP address of received frame. This 
+	address resolution would be achievwd from routing table and address resolution 
+	protocols, shown as follows,
+      </t>
+
+      <list style="hanging">
+	<t hangText="* ">
+	  In case of IPv4, Mid Detection gets MAC address from Address Resolution Protocol [3] cash. 
+	</t>
+	<t hangText="* ">
+	  In case of IPv6, Mid Detection gets MAC address information from Neighbor Discovery Protocol for IP Version 6 (NDP) [4]. 
+	</t>
+      </list>
+
+      <t hangText="3.">
+	If source MAC address is equal to next hop MAC address,
+	then Mid Detection consider that loop occur. Therefore "Packet Discard" MUST be performed
+	to suppress the effect of looping packets. 
+      </t>
+    </list>
+
+  </section>
+
+  <section anchor="Post Detection" title="Post Detection">
+    <t>
+      "Post Detection" is loop detection algorithm after actual packet looping have occurred, 
+      and basically, it is performed at Network Layer.
+    </t>
+    
+    <t>
+      "Post Detection" mechanism is based on DPD technique. DPD detects packet which have been received already. 
+      DPD algorithms such as S-DPD and H-DPD specified in [2] MAY be sufficiently usable in this "Post Detection" mechanism. 
+      But DPD algorithms specified in [2] are only for multicast IP packets, and they are operated only when node receives 
+      packets with multicast address. Therefore these DPD algorithms MUST be extended for unicast IP packets, and they MUST 
+      be operated when node receives ANY packets to detect the loops.
+    </t>
+
+    <t>
+      Duplicate packet which detected by DPD algorithms indicates that packet looping have occured. Therefore 
+      "Packet Discard" MUST be performed to suppress the effect of looping packets.
+    </t>
+  </section>
+
+</section>
+  
+<section anchor="Packet Discard" title="Packet Discard">
+  <t>
+    In case that looping is detected by "Mid Detection" or "Post Detection", 
+    following tasks MUST be performed about received unicast IP packets which is in loop.
+  </t>
+    
+  <list style="hanging">
+    <t hangText="- " >
+      In case that looping is detected by "Mid Detection", received unicast IP packet MUST NOT be 
+      send to Network Layer, and this received unicast IP packet MUST be discarded. 
+    </t>
+    
+    <t hangText="- ">
+      In case that looping is detected by "Post Ditection", received unicast IP packet MUST NOT be 
+      forwarded even if it is considered to be forwarded, and this received IP packet MUST be discarded.
+    </t>      
+  </list>
+</section>
+
+<section anchor="MANET Routing Protocol Considerations" title="MANET Routing Protocol Considerations">
+  <t>
+    This loop detection techniques are implemented separately from routing protocol. Thus both 
+    pro-active and re-active routing can be applied this loop detection. Detected loop information MAY 
+    be used by routing protocol for route calculation and other purposes. How this detected loop informations 
+    are used in routing protocol is out of the specification.   
+  </t>
+</section>
+
+<section anchor="Security Considerations" title="Security Considerations">
+  <t>
+    This document does not specify any security considerations. 
+  </t>
+</section>
+
+</middle>
+
+<section anchor="References" title="References">
+<list>
+
+<t>
+[1] Bradner, S., "Key words for use in RFCs to Indicate Requirement Levels", 
+BCP 14, RFC 2119, March 1997.
+</t>
+
+<t>
+[2] J.Macker, et al., "Simplified Multicast Forwarding for MANET", 
+draft-ietf-manet-smf-05 (work in progress), June 2007
+</t>
+
+<t>
+[3] David C. Plummer, "An Ethernet Address Resolution Protocol", RFC 826, November 1982
+</t>
+
+<t>
+[4] T. Narten, E. Nordmark, W. Simpson, "Neighbor Discovery for IP Version 6 (IPv6)", 
+RFC 2461, December 1998
+</t>
+
+</list>
+</section>
+
+<back></back>
+
+</rfc>

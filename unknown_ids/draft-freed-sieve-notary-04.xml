@@ -1,0 +1,429 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<rfc ipr="trust200811" docName="draft-freed-sieve-notary-04">
+<?rfc toc="no" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<?rfc comments="yes" ?>
+	
+<front>
+
+<title abbrev="Sieve DSN Extension">
+Sieve Email Filtering: 
+Delivery Status Notifications Extension
+</title>
+<author initials="N." surname="Freed" fullname="Ned Freed">
+<organization>Sun Microsystems</organization>
+<address>
+<postal>
+<street>800 Royal Oaks</street>
+<city>Monrovia</city> <region>CA</region>  <code>91016-6347</code>
+<country>USA</country>
+</postal>
+<phone>+1 909 457 4293</phone>
+<email>ned.freed@mrochek.com</email>
+</address>
+</author>
+<date year="2009" />
+<area>Applications</area>
+<keyword>RFC</keyword>
+<keyword>Request for Comments</keyword>
+<keyword>SMTP</keyword>
+<keyword>ESMTP</keyword>
+<keyword>Sieve</keyword>
+<keyword>I-D</keyword>
+<keyword>Internet-Draft</keyword>
+
+<abstract><t>
+This document describes the "envelope-dsn" and "redirect-dsn" extensions to the
+Sieve email filtering language. The "envelope-dsn" extension provides access to
+additional envelope information provided by the delivery status notification
+extension to SMTP defined in RFC 3461. The "redirect-dsn" extension extends
+Sieve's redirect action to provide control over delivery status notification
+parameters.
+</t></abstract>
+
+<note title='Change History (to be removed prior to publication as an RFC'>
+<t>
+Fixed several typos.
+</t>
+<t>
+Changed name of extension from notary to envelope-dsn.
+</t>
+<t>
+Added the redirect-dsn extension.
+</t>
+<t>
+Updated references.
+</t>
+<t>
+Added a note about the use of ADDRESS-PART arguments with the new envelope-part
+strings defined by the envelope-dsn extension.
+</t>
+<t>
+Fleshed out the redirect-dsn extension.
+</t>
+<t>
+Changed document title to agree with new extension names.
+</t>
+<t>
+Added some examples.
+</t>
+<t>
+Fixed more typos.
+</t>
+<t>
+Changed dsn-envelope and dsn-redirect to envelope-dsn and redirect-dsn,
+respectively.
+</t>
+<t>
+Added a redirect-dsn example.
+</t>
+</note>
+
+</front>
+
+<middle>
+
+<section anchor="intro" title="Introduction">
+
+<t>
+Sieve <xref target='RFC5228' /> is a language for filtering email
+messages at or around the time of final delivery.  It is designed to be
+implementable on either a mail client or mail server. It is suitable for
+running on a mail server where users may not be allowed to execute arbitrary
+programs, such as on black box Internet Message Access Protocol
+<xref target="RFC3501" /> servers, as it has no user-controlled loops or the
+ability to run external programs.
+</t>
+
+<t>
+The base sieve specification defines the envelope extension and test to access
+information in the message envelope. Only information available in regular
+SMTP is provided; additional information added to the SMTP envelope by SMTP
+extensions cannot be accessed. The "envelope-dsn" extension extends the envelope
+test to allow access to the additional envelope fields defined by the
+SMTP extension for delivery status notification specified in
+<xref target="RFC3461">RFC 3461</xref>.
+</t>
+
+<t>
+The base sieve specification also defines the redirect action which
+sends the message to a different address. Redirect only allows
+specification of the new recipient address. The "redirect-dsn" extension extends
+redirect to allow specification of some fields defined by the delivery status
+notification SMTP extension.
+</t>
+
+</section>
+
+<section anchor="conventions" title="Conventions used in this document">
+
+<t>
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and "OPTIONAL" in this
+document are to be interpreted as described in <xref target='RFC2119' />.
+</t>
+
+<t>
+The terms used to describe the various components of the Sieve
+language are taken from Section 1.1 of <xref target='RFC5228' />.
+</t>
+
+<t>
+This document uses the ABNF notation specified in <xref target='RFC5234' /> and
+refers to the ABNF production notify-esmtp-value
+defined in Section 4.1 of <xref target='RFC3461' />.
+</t>
+
+</section>
+
+<section title='Capability Identifier'>
+
+<t>
+The capability strings associated with the extensions defined in this
+document are "envelope-dsn" and "redirect-dsn".
+</t>
+
+</section>
+
+<section anchor="envelope-dsn" title="envelope-dsn extension">
+
+<t>
+The "envelope-dsn" extension does not define any new tests or actions, rather,
+it adds four values to the list of possible (case-insensitive) envelope-part
+strings defined in Section 5.4 of <xref target='RFC5228' />:
+</t>
+
+<t>
+<list style="hanging">
+
+<t hangText="notify">
+Match the list of notification conditions, or NOTIFY values, associated with
+TO address used in the SMTP RCPT TO command that resulted in this message getting
+delivered to this user. More than one notification condition can be in
+effect at once; each condition that is in effect is tested separately and any
+match causes the text to succeed. The syntax and semantics of the NOTIFY
+parameter are defined in <xref target="RFC3461">RFC 3461</xref> section 4.1.
+Currently the possible notification condition values are "NEVER", "SUCCESS",
+"FAILURE" and "DELAY". Note that the value "NEVER" cannot be combined with any
+other value.
+</t>
+
+<t hangText='orcpt'>
+Match the original recipient, or ORCPT, value in decoded form associated with the
+TO address used in the SMTP RCPT TO command that resulted in this message getting
+delivered to this user. The syntax and semantics of the ORCPT parameter are
+defined in Section 2.2 of <xref target="RFC3461">RFC 3461</xref>. 
+</t>
+
+<t hangText='ret'>
+Match the return of content, or RET, value given in the SMTP MAIL FROM command.
+The syntax and semantics of the RET parameter are
+defined in <xref target="RFC3461">RFC 3461</xref> section 4.3. Currently the
+possible return of content values are "FULL" and "HDRS".
+</t>
+
+<t hangText='envid'>
+Match the envelope identifier, or ENVID, value in decoded form given in the
+SMTP MAIL FROM command. The syntax and semantics of the ENVID parameter are
+defined in Section 4.4 of <xref target="RFC3461">RFC 3461</xref>. 
+</t>
+</list>
+</t>
+
+<t>
+All of these tests fail unconditionally if the specified envelope parameter
+does not exist for the current message or recipient.
+</t>
+
+<t>
+The envelope test's ADDRESS-PART argument assumes the string being tested
+has the syntax of an email address. None of the new envelope parts defined
+here have address syntax, accordingly, it is an error to specify an ADDRESS-PART
+argument in conjunction with these new envelope parts.
+</t>
+
+<t>
+The "relational" extension <xref target='RFC5231' /> adds a match
+type called ":count".  The count of an envelope test with an envelope-part of
+"orcpt", "ret", and "envid" is 1 if the corresponding SMTP parameter is present
+and 0 otherwise. The count of an envelope test with an envelope-part of "notify"
+is equal to the number of notification conditions
+specified and 0 if the NOTIFY parameter is not present.
+</t>
+
+<section anchor="envelope-dsn-examples" title="Examples">
+
+<t>
+The fact that the NOTIFY envelope parameter is multivalued and
+the notify envelope-part  turns this into list of values makes 
+it easy to check to see if a given value is present without having to worry
+about other values:
+</t>
+
+<figure><artwork><![CDATA[
+require ["envelope", "envelope-dsn"];
+
+# Check whether SUCCESS notifications were requested,
+# irrespective of any other requests that were made
+if envelope "notify" "SUCCESS"
+{
+    # do whatever
+}
+]]></artwork></figure>
+
+<t>
+Checking to see if a given request is the only one present
+is a little trickier, however:
+</t>
+
+<figure><artwork><![CDATA[
+require ["envelope", "envelope-dsn", "relational",
+         "comparator-i;ascii-numeric"];
+
+# Check whether only FAILURE notifications were requested
+if allof ( envelope "notify" "FAILURE",
+           envelope :comparator "i;ascii-numeric"
+                    :count "eq" "notify" "1"
+         )
+{
+    # do whatever
+}
+]]></artwork></figure>
+
+<t>
+The orcpt envelope-part always contains an address type indicator prefix
+in addition to an address, which must be taken into account in any
+tests:
+</t>
+
+<figure><artwork><![CDATA[
+require ["envelope", "envelope-dsn"];
+
+# See if the orcpt is an RFC822 address in the example.com
+# domain
+if envelope :matches "orcpt" "rfc822;*@example.com"
+{
+    # do whatever
+}
+]]></artwork></figure>
+
+</section>
+
+</section>
+
+<section anchor="redirect-dsn" title="redirect-dsn extension">
+
+<t>
+The "redirect-dsn" extension does not define any new tests or actions, rather,
+it adds two new arguments, NOTIFY and RET, to the redirect action 
+defined in Section 4.2 of <xref target='RFC5228' />. This updates the usage
+description for redirect to:
+</t>
+
+<figure><artwork><![CDATA[[
+Usage:   redirect [:notify "value"] [:ret "FULL"|"HDRS"]
+                  <address: string>
+]]></artwork></figure>
+
+<t>
+The syntax for the NOTIFY and RET arguments are:
+</t>
+
+<figure><artwork><![CDATA[
+NOTIFY = ":notify" notify-value
+notify-value = DQUOTE notify-esmtp-value DQUOTE
+
+RET = ":ret" ret-value
+ret-value = DQUOTE ("FULL" / "HDRS") DQUOTE
+]]></artwork></figure>
+
+<t>
+The notify-esmtp-value production is defined in Section 4.1 of <xref target='RFC3461' />.
+</t>
+
+<t>
+When these arguments are specified, they set the corresponding NOTIFY ESMTP RCPT TO
+and RET ESMTP MAIL FROM parameters, respectively.
+These parameters are only available when the delivery status
+notification (DSN) ESMTP extension is available. When the DSN
+extension is not available, the parameters MUST be ignored and
+MUST NOT cause an error.
+</t>
+
+<section anchor="redirect-dsn-examples" title="Example">
+
+<t>
+One possible use of :notify on redirect is to combine the copy
+extension <xref target='RFC3894' /> with the ability to
+suppress nondelivery notifications to generate a private
+copy of selected messages with no side effects or error
+notifications:
+</t>
+
+<figure><artwork><![CDATA[
+require ["copy", "redirect-dsn"];
+
+# Make a private copy of messages from user@example.com
+if address "from" "user@example.com"
+{
+    redirect :copy :notify "NEVER" "elsewhere@example.com";
+}
+]]></artwork></figure>
+
+</section>
+
+</section>
+
+<section anchor="security" title="Security Considerations">
+
+<t>
+The envelope-dsn extension provides access to additional message envelope
+information. This is not believed to raise any additional
+security issues beyond those for the Sieve "envelope" test.
+</t>
+
+<t>
+The redirect-dsn extension allows specification of the delivery status
+notification's NOTIFY parameter which can cause the generation of notification
+messages that might otherwise not be generated, especially if notification in
+the event of successful delivery is required. Sites which limit the ability
+to request success notifications will also need to restrict the ability
+to request them using the redirect-dsn extension.
+</t>
+
+<t>
+All of the security considerations given in the base Sieve
+specification also apply to this extension. 
+</t>
+
+</section>
+
+<section anchor="IANA" title="IANA Considerations">
+
+<figure>
+<preamble>
+The following template specifies the IANA registration of the Sieve
+extension specified in this document:
+</preamble>
+<artwork>
+   To: iana@iana.org
+   Subject: Registration of new Sieve extensions
+
+   Capability name: envelope-dsn
+   Description:     The "envelope-dsn" extension extends the envelope
+                    test to allow checking of information associated
+                    with the DSN ESMTP extension defined in RFC 3461.
+   RFC number:      RFC &rfc.number;
+   Contact address: Sieve discussion list &lt;ietf-mta-filters@imc.org&gt;
+   
+   Capability name: redirect-dsn
+   Description:     The "redirect-dsn" extension extends the redirect
+                    action to allow specification of the NOTIFY and
+                    RET ESMTP parameters associated with the DSN SMTP
+                    extension defined in RFC 3461.
+   RFC number:      RFC &rfc.number;
+   Contact address: Sieve discussion list &lt;ietf-mta-filters@imc.org&gt;
+
+   This information should be added to the list of sieve extensions
+   given on http://www.iana.org/assignments/sieve-extensions.
+</artwork>
+</figure>
+</section>
+
+</middle>
+
+<back>
+
+<references title="Normative references">
+
+<?rfc include="reference.RFC.2119" ?>
+<?rfc include="reference.RFC.3461" ?>
+<?rfc include="reference.RFC.5228" ?>
+<?rfc include="reference.RFC.5231" ?>
+<?rfc include="reference.RFC.5234" ?>
+
+</references>
+
+<references title="Informative references">
+
+<?rfc include="reference.RFC.3501" ?>
+<?rfc include="reference.RFC.3894" ?>
+
+</references>
+
+<section title='Acknowledgements'>
+
+<t>
+Cyrus Daboo, Derek Diget, Philip Guenther, Arnt Gulbrandsen, Alexey Melnikov,
+Aaron Stone, and Alexandros Vellis provided helpful suggestions and corrections.
+</t>
+
+</section>
+
+</back>
+
+</rfc>

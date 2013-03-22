@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM 'rfc2629.dtd'>
+<?rfc rfcedstyle="yes" ?>
+<?rfc tocompact="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc comments="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc strict="yes" ?>
+<?rfc iprnotified="no" ?>
+<rfc category="info"
+  ipr="trust200811"
+  docName="draft-denis-v6ops-nat-addrsel-00">
+
+  <front>
+    <title abbrev="NAT &amp; RFC3484">Problems with IPv6 source address
+     selection and IPv4 NATs</title>
+    <author initials="R." surname="Denis-Courmont"
+        fullname="R&eacute;mi Denis-Courmont">
+      <organization abbrev="Nokia">Nokia Corporation</organization>
+      <address>
+        <postal>
+          <street>P.O. Box 407</street>
+          <city>NOKIA GROUP</city>
+          <code>00045</code>
+          <country>FI</country>
+        </postal>
+        <phone>+358 50 487 6315</phone>
+        <email>remi.denis-courmont@nokia.com</email>
+      </address>
+    </author>
+    <date year="2009" month="February" day="17" />
+    <area>Internet</area>
+    <workgroup>Network Working Group</workgroup>
+
+    <keyword>NAT</keyword>
+    <keyword>address</keyword>
+    <keyword>selection</keyword>
+
+    <abstract>
+      <t> This memo details a problem and potential solution,
+        when using the IPv6 source address selection algorithm
+        with private IPv4 address space.
+      </t>
+    </abstract>
+  </front>
+  <middle>
+    <section title="Introduction">
+      <t> When a host initiates an IP communication flow with a remote host,
+        a pair of local and remote IP addresses to use must be chosen.
+        If either or both hosts is assigned multiple IP addresses,
+        an address selection mechanism is required.
+        That can happen, for instance,
+        if either or both hosts are dual-stacked.
+        The default address selection scheme<xref target="RFC3484"/>
+        was specified to address this problem.
+      </t>
+      <t> One fundamental design assumption of this scheme is the ability
+        to determine a scope for any address (IPv4 or IPv6).
+        To that end, static scoping rules were defined.
+        This memo explains why and how the current rules are inadequate
+        when Network Address Translation (NAT) is involved,
+        which is a common occurence in modern-day IPv4 deployments.
+      </t>
+    </section>
+    <section title="IPv4 address scopes">
+      <t> As defined in <xref target="RFC3484"/>, a unicast IPv4 address
+        has one of three scopes:
+        <list style="hanging">
+          <t hangText="Link-local scope:">
+            Loopback addresses (127.0.0.0/8)
+            and autoconfigured addresses (169.254.0.0/16).
+          </t>
+          <t hangText="Site-local scope:">
+            Private addresses as defined in <xref target="RFC1918"/>.
+          </t>
+          <t hangText="Global scope:">
+            All other unicast addresses.
+          </t>
+        </list>
+      </t>
+      <t> The address scopes are supposed to be universal;
+        and hence they are statically defined.
+        Furthermore, per <xref target="RFC3484"/>,
+        scope matching rules (Rule 2) are normally applied
+        before any other rule,
+        except for the identical address rule (Rule 1).
+        In other words, apart from the corner case whereby
+        the local and remote hosts are one and the same,
+        the scope matching rule always &quot;wins&quot;.
+      </t>
+    </section>
+
+    <section title="NAT and address scope">
+      <t> When it crosses a NAT, either the source or destination address
+        of a packet will change.
+        As a consequence, the scope of that address might change as well.
+        In any case, the result of the source address selection scheme
+        could be different when the original address is substitued
+        with the translated address.
+      </t>
+      <t> In fact, many real-world NAT deployments use private addresses
+        on one side of the NAT, and public addresses on the other side.
+        This is probably the most common scenario with IPv4 network in
+        SOHO environment: a single public IPv4 address is provisioned
+        to a customer, and all hosts on the customer network
+        &quot;share&quot; that address using a NAT function
+        within the Customer Premises Equipment (CPE).
+      </t>
+      <t> <xref target="RFC3484"/> assumes that a source address
+        with a small scope cannot reach a destination address
+        with a larger scope.
+        However, if private IPv4 addresses and a NAT are used
+        to reach public IPv4 addresses,
+        then this assumption does not hold.
+        In other words, the private IPv4 addresses behind NATs
+        effectively have a global scope,
+        provided that the protocols above the IP network layer
+        can cope with network address translation.
+      </t>
+    </section>
+
+    <section title="Applicability to IPv6 transition mechanisms">
+      <t> <xref target="RFC3484"/> states that
+        &quot;the use of transitional addresses
+        when native addresses are available [should be avoided]&quot;.
+        Indeed, transitional addresses and transition mechanisms in general
+        tend to be less reliable than native connectivity,
+        including native IPv4 connectivity.
+      </t>
+      <t> However, in a typical IPv4 NAT'ed private address deployments,
+        if IPv6 transition mechanisms are available,
+        a dual-stack host will typically have the following addresses.
+        They are the candidate source addresses:
+        <list style="symbols">
+          <t> a link-local IPv6 address (autoconfigured),
+          </t>
+          <t> a site-local scope private IPv4 address
+                (e.g. assigned by DHCPv4),
+          </t>
+          <t> a global scope transitional IPv6 address,
+            such as Teredo<xref target="RFC4380"/>,
+            or 6to4<xref target="RFC3056"/>
+            (e.g. if the CPE is a 6to4 gateway).
+          </t>
+        </list>
+        If the destination host is also dual-stacked, then it will typically
+        have two public addresses (though the number is not relevant).
+        They are the candidate destination addresses:
+        <list style="symbols">
+          <t> a global native IPv6 address (e.g. from DNS AAAA record),
+          </t>
+          <t> a global IPv4 address (e.g. from DNS A record).
+          </t>
+        </list>
+      </t>
+      <t> Because the candidate source IPv4 address have a smaller scope
+        (site-local) than the candidate destination IPv4 address (global),
+        it will be eliminated.
+        The address selection algorithm will always select
+        the IPv6 address pair:
+        <list style="symbols">
+          <t> the transitional IPv6 address as source,
+          </t>
+          <t> the global native IPv6 address as destination.
+          </t>
+        </list>
+        Thus, the transitional (IPv6) address will be used
+        instead of the native (IPv4) address,
+        even though that should have been avoided.
+      </t>
+      <t> There is no way to override this result with a compliant
+        implementation of source address selection.
+        In particular, the policy table does not affect this result,
+        because the scope rules preempt the policy table rules.
+      </t>
+    </section>
+
+    <section title="Solutions">
+      <section title="Changing the private IPv4 address scope">
+        <t> Several operating system vendors appear to work around this issue
+          by assigning a global scope to IPv4 address.
+          Thus, rule 2 is no longer discriminating
+          against the IPv4 address pair.
+        </t>
+        <t> In that case, provided the policy table has separate labels
+          for transitional addresses,
+          the IPv4 addresses pair will be selected.
+          IPv4 addresses normally all have the same label.
+        </t>
+        <t> Note that the default policy table has a separate label
+          for 6to4 addresses.
+          However, as it predates Teredo,
+          it lacks a distinct label for the Teredo prefix, 2001:0:/32.
+          An adequate extra label would be as follow:
+        </t>
+        <t> Prefix: 2001:0:/32, Precedence: 5, Label: 5
+        </t>
+      </section>
+
+      <section title="Address selection parameter for NAT">
+        <t> With the previous solution,
+          IPv4 is always selected.
+          This is a potential drawback
+          if the upper-layer protocol combination is not NAT-friendly.
+        </t>
+        <t> As an alternative, a &quot;translation-friendly&quot;
+          source address selection parameter could be specified,
+          as in <xref target="RFC5014"/>.
+          However, a default value will be needed
+          for the many existing applications
+          that would fail to set this parameter.
+        </t>
+      </section>
+    </section>
+
+    <section title="IPv6 Address Translation">
+      <t> The implications of IPv6 Address Translation
+        and protocol translation are left beyond the scope of this document.
+        However, it can only be recommended that RFC3484 be taken into account
+        when designing such translation systems.
+      </t>
+    </section>
+
+    <section anchor="security" title="Security Considerations">
+      <t> TBD.
+      </t>
+    </section>
+
+    <section anchor="iana" title="IANA Considerations">
+      <t>This document raises no IANA considerations.
+      </t>
+    </section>
+
+  </middle>
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.RFC.1918" ?>
+      <?rfc include="reference.RFC.3484" ?>
+      <?rfc include="reference.RFC.5014" ?>
+    </references>
+    <references title="Informative References">
+      <?rfc include="reference.RFC.3056" ?>
+      <?rfc include="reference.RFC.4380" ?>
+    </references>
+  </back>
+</rfc>

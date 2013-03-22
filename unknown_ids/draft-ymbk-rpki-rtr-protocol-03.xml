@@ -1,0 +1,909 @@
+<?xml version="1.0"?>
+<?rfc comments="yes"?><?rfc compact="yes"?><?rfc inline="yes"?><?rfc sortrefs="yes"?><?rfc subcompact="no"?><?rfc symrefs="yes" ?><?rfc symrefs="yes"?><?rfc toc="yes"?><?rfc tocdepth="3"?><?rfc tocindent="yes"?><?rfc tocompact="yes"?><!-- $Id: draft-ymbk-rpki-rtr-protocol.xml 824 2009-04-20 00:02:18Z sra $ -->
+<rfc category="std" docName="draft-ymbk-rpki-rtr-protocol-03" ipr="noDerivativesTrust200902">
+  <front>
+    <title>The RPKI/Router Protocol</title> 
+
+    <author fullname="Randy Bush" initials="R.B." surname="Bush">
+      <organization abbrev="IIJ">Internet Initiative Japan, Inc.</organization>
+      <address>
+        <postal>
+          <street>5147 Crystal Springs</street>
+          <city>Bainbridge Island</city>
+          <region>Washington</region>
+          <code>98110</code>
+          <country>US</country>
+          </postal>
+        <phone>+1 206 780 0431 x1</phone>
+        <email>randy@psg.com</email>
+        <!-- uri and facsimile elements may also be added -->
+        </address>
+      </author>
+
+<!--
+    <author fullname="Megumi Ninomiya" Initials="M.N." surname="Ninomiya">
+      <organization abbrev="IIJ">Internet Initiative Japan, Inc.</organization>
+      <address>
+        <postal>
+          <street>Jinbocho Mitsui Building, 1-105</street>
+          <city>Tokyo</city>
+          <code>101-0051</code>
+          <country>JP</country>
+          </postal>
+        <phone>+81 (0)03 5205 6464</phone>
+        <email>ninomiya@iij.ad.jp</email>
+        </address>
+      </author>
+-->
+
+    <author initials="R." surname="Austein" fullname="Rob Austein">
+      <organization abbrev="ISC">Internet Systems Consortium</organization>
+      <address>
+	<postal>
+	  <street>    950 Charter Street      </street>
+	  <city>      Redwood City            </city>
+	  <region>    CA                      </region>
+	  <code>      94063                   </code>
+	  <country>   USA                     </country>
+	</postal>
+	<email>       sra@isc.org             </email>
+      </address>
+    </author>
+
+    <date month="April" year="2009"/>
+
+    <abstract>
+      <t>In order to formally validate the origin ASes of BGP
+        announcements, routers need a simple but reliable mechanism to
+        receive RPKI <xref target="I-D.ietf-sidr-arch"/> or analogous
+        prefix origin data from a trusted cache.  This document
+        describes a protocol to deliver validated prefix origin data to
+        routers over ssh.</t>
+      </abstract>
+
+    <note title="Requirements Language">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+        NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and
+        "OPTIONAL" in this document are to be interpreted as described
+        in <xref target="RFC2119">RFC 2119</xref>.</t>
+      </note>
+
+    </front>
+
+  <middle>
+
+    <section anchor="Intro" title="Introduction">
+      <t>In order to formally validate the origin ASes of BGP
+        announcements, routers need a simple but reliable mechanism to
+        receive RPKI <xref target="I-D.ietf-sidr-arch"/> or analogous
+        formally validated prefix origin data from a trusted cache.
+        This document describes a protocol to deliver validated prefix
+        origin data to routers over ssh.</t>
+      <t> <xref target="Struct"/> describes the deployment structure and
+        <xref target="OpOvr"/> then presents an operational overview.
+        The binary payloads of the protocol are formally described in
+        <xref target="pdus"/>, and the expected PDU sequences are
+        described in <xref target="protocol"/>.  And the transport
+        protocol is described in <xref target="Transport"/>.
+        <xref target="Setup"/> details how routers and caches are
+        configured to connect and authenticate.
+        <xref target="Scenarios"/> describes likely deployment
+        scenarios.  The traditional security and IANA considerations end
+        the document.</t>
+      </section>
+
+    <section anchor="Struct" title="Deployment Structure">
+      <t>Deployment of the RPKI to reach routers has a three level
+        structure as follows:
+      <list style="hanging">
+        <t hangText="Global RPKI:">
+          The authoritative data of the RPKI are published in a
+          distributed set of servers, RPKI publication repositories,
+          e.g. the IANA, RIRs, NIRs, and ISPs, see
+          <xref target="I-D.ietf-sidr-repos-struct"/>.</t>
+        <t hangText="Local Caches:">
+          A local set of one or more collected and verified
+          non-authoritative caches.  A relying party, e.g. router or other
+          client, MUST have a formally authenticated trust relationship
+          with, and a secure transport channel to, any non-authoritative
+          cache(s) it uses.</t>
+        <t hangText="Routers:">
+          A router fetches data from a local cache using the protocol
+          described in this document.  It is said to be a client of the
+          cache.  There are mechanisms for the router to assure itself
+          of the authenticity of the cache and to authenticate itself to
+          the cache.</t>
+        </list></t>
+      </section>
+
+    <section anchor="OpOvr" title="Operational Overview">
+      <t>A router establishes and keeps open an authenticated connection
+        to a cache with which it has an client/server relationship.  It
+        is configured with a semi-ordered list of caches, and
+        establishes a connection to the highest preference cache that
+        accepts one.</t>
+      <t>Periodically, the router sends to the cache the serial number
+        of the highest numbered data record it has received from that
+        cache, i.e. the router's current serial number.  When a router
+        establishes a new connection to a cache, or wishes to reset a
+        current relationship, it sends a Reset Query.</t>
+      <t>The Cache responds with all data records which have serial
+        numbers greater than that in the router's query.  This may be
+        the null set, in which case the End of Data PDU is still sent.
+        Note that 'greater' must take wrap-around into account,
+        see <xref target="RFC1982"/>.</t>
+      <t>When the router has received all data records from the cache,
+        it sets its current serial number to that of the serial number
+        in the End of Data PDU.</t>
+      <t>When the cache updates its database, it sends a Notify
+        message to every currently connected router.  This is a hint
+        that now would be a good time for the router to poll for an
+        update, but is only a hint.  The protocol requires the router
+        to poll for updates periodically in any case.</t>
+      <t>Strictly speaking, a router could track a cache simply by
+        asking for a complete data set every time it updates, but this
+        would be very inefficient.  The serial number based
+        incremental update mechanism allows an efficient transfer of
+        just the data records which have changed since last update.
+        As with any update protocol based on incremental transfers,
+        the router must be prepared to fall back to a full transfer if
+        for any reason the cache is unable to provide the necessary
+        incremental data.  Unlike some incremental transfer protocols,
+        this protocol requires the router to make an explicit request
+        to start the fallback process; this is deliberate, as the
+        cache has no way of knowing whether the router has also
+        established sessions with other caches that may be able to
+        provide better service.</t>
+	</section>
+
+    <section anchor="pdus" title="Protocol Data Units (PDUs)">
+      <t>The exchanges between the cache and the router are sequences of
+        exchanges of the following PDUs according to the rules described
+        in <xref target="protocol"/>.</t>
+
+      <section anchor="notify" title="Serial Notify">
+        <t>The cache notifies the router that the cache has new
+          data.</t>
+        <figure>
+          <artwork>
+0          8          16         24        31
+.-------------------------------------------.
+| Protocol |   PDU    |                     |
+| Version  |   Type   |   reserved = zero   |
+|    0     |    0     |                     |
++-------------------------------------------+
+|                                           |
+|               Serial Number               |
+|                                           |
+`-------------------------------------------'
+            </artwork>
+          </figure>
+        </section>
+
+      <section anchor="serialquery" title="Serial Query">
+        <t>Serial Query: The router sends Serial Query to ask the cache
+          for all payload PDUs which have serial numbers higher than the
+          serial number in the Serial Query.</t>
+	<t>The cache replys to this query with a Cache
+        Response PDU (<xref target="cacheresponse"/>)
+	if the cache has a record of the changes since the
+        serial number specified by the router; otherwise, the cache
+        responds with a Cache Reset PDU (<xref target="cachereset"/>).</t>
+        <figure>
+          <artwork>
+0          8          16         24        31
+.-------------------------------------------.
+| Protocol |   PDU    |                     |
+| Version  |   Type   |   reserved = zero   |
+|    0     |    1     |                     |
++-------------------------------------------+
+|                                           |
+|               Serial Number               |
+|                                           |
+`-------------------------------------------'
+            </artwork>
+          </figure>
+        </section>
+
+      <section anchor="resetquery" title="Reset Query">
+        <t>Reset Query: The router tells the cache that it wants to
+          receive the total active, current, non-withdrawn, database.
+          The cache responds with a Cache Response PDU
+	  (<xref target="cacheresponse"/>).</t>
+        <figure>
+          <artwork>
+0          8          16         24        31
+.-------------------------------------------.
+| Protocol |   PDU    |                     |
+| Version  |   Type   |    reserved = zero  |
+|    0     |    2     |                     |
+`-------------------------------------------'
+            </artwork>              
+          </figure>                    
+        </section>                     
+                                       
+      <section anchor="cacheresponse" title="Cache Response">
+        <t>Cache Response: The cache responds with zero or more
+          payload PDUs.  When replying to a Serial Query request
+          (<xref target="serialquery"/>), the cache sends the set of
+          all data records it has with serial numbers greater than
+          that sent by the client router.  When replying to a Reset
+          Query, the cache sends the set of all data records it has;
+          in this case the announce/withdraw field in the payload PDUs
+          MUST have the value 1 (announce).</t>
+        <figure>                       
+          <artwork>           
+0          8          16         24        31
+.-------------------------------------------.
+| Protocol |   PDU    |                     |
+| Version  |   Type   |   reserved = zero   |
+|    0     |    3     |                     |
+`-------------------------------------------'
+            </artwork>
+          </figure>
+	</section>
+
+      <section anchor="ipv4" title="IPv4 Prefix">
+        <figure>
+          <artwork>
+0          8          16         24        31
+.-------------------------------------------.
+| Protocol |   PDU    |                     |
+| Version  |   Type   |        Color        |
+|    0     |    4     |                     |
++-------------------------------------------+
+| Announce |  Prefix  |   Max    |  Data    |
+| Withdraw |  Length  |  Length  |  Source  |
+|   0/1    |   0..32  |   0..32  | RPKI/IRR |
++-------------------------------------------+
+|                                           |
+|                IPv4 prefix                |
+|                                           |
++-------------------------------------------+
+|                                           |
+|         Autonomous System Number          |
+|                                           |
+`-------------------------------------------'
+            </artwork>
+          </figure>
+        <t>Due to the nature of the RPKI and the IRR, there can be
+          multiple identical IPvX PDUs.  Hence the router will likely
+          keep an internal ref-count on each IPvX PDU.</t>
+        <t>In the RPKI, nothing prevents a signing certificate from
+	  issuing two identical ROAs, and nothing prohibits the
+	  existence of two identical route: or route6: objects in the
+	  IRR.  In this case there would be no semantic difference
+	  between the objects, merely a process redundancy.</t>
+	<t>In the RPKI, there is also an actual need for what will
+	  appear to the router as identical IPvX PDUs.  This occurs when
+	  an upstream certificate is being reissued or a site is
+	  changing providers, often a 'make and break' situation.  The
+	  ROA is identical in the router sense, i.e. has the same
+	  {prefix, len, max-len, asn}, but has a different validation
+	  path in the RPKI.  This is important to the RPKI, but not to
+	  the router.</t>
+        </section>
+                                       
+      <section anchor="ipv6" title="IPv6 Prefix">
+        <figure>
+          <artwork>
+0          8          16         24        31
+.-------------------------------------------.
+| Protocol |   PDU    |                     |
+| Version  |   Type   |        Color        |
+|    0     |    6     |                     |
++-------------------------------------------+
+| Announce |  Prefix  |   Max    |  Data    |
+| Withdraw |  Length  |  Length  |  Source  |
+|   0/1    |  0..128  |  0..128  | RPKI/IRR |
++-------------------------------------------+
+|                                           |
++---                                     ---+
+|                                           |
++---            IPv6 prefix              ---+
+|                                           |
++---                                     ---+
+|                                           |
++-------------------------------------------+
+|                                           |
+|         Autonomous System Number          |
+|                                           |
+`-------------------------------------------'
+            </artwork>
+          </figure>
+        </section>
+                                       
+      <section anchor="eod" title="End of Data">
+        <t>End of Data: Cache tells router it has no more data for the
+          request.</t>
+        <figure>
+          <artwork>
+0          8          16         24        31
+.-------------------------------------------.
+| Protocol |   PDU    |                     |
+| Version  |   Type   |   reserved = zero   |
+|    0     |    7     |                     |
++-------------------------------------------+
+|                                           |
+|               Serial Number               |
+|                                           |
+`-------------------------------------------'
+            </artwork>
+          </figure></section>
+
+      <section anchor="cachereset" title="Cache Reset">
+        <t>The cache may respond to a Serial Query informing the router
+          that the cache cannot provide an incremental update
+          starting from the serial number specified by the router.
+          The router must decide whether to issue a Reset Query or
+          switch to a different cache.</t>
+        <figure>
+          <artwork>
+0          8          16         24        31
+.-------------------------------------------.
+| Protocol |   PDU    |                     |
+| Version  |   Type   |    reserved = zero  |
+|    0     |    8     |                     |
+`-------------------------------------------'
+            </artwork>              
+          </figure>                    
+        </section>                     
+                                       
+      <section anchor="error" title="Error Report">
+        <t>This PDU is used by either party to report an error to the
+          other.</t>
+	<t>If the error is not associated with any particular PDU, the
+	  Erroneous PDU field should be empty and the Length of
+	  Encapsulated PDU field should be zero.</t>
+	<t>The diagnostic text is optional, if not present the Length
+	  of Error Text field should be zero.  If error text is
+	  present, it SHOULD be a string in US-ASCII, for maximum
+	  portability; if non-US-ASCII characters are absolutely
+	  required, the error text MUST use UTF-8 encoding.</t>
+        <figure>
+          <artwork>
+0          8          16         24        31
+.-------------------------------------------.
+| Protocol |   PDU    |                     |
+| Version  |   Type   |    Error Number     |
+|    0     |    10    |                     |
++-------------------------------------------+
+|      Length of      |     Length of       |
+|     Encapsulated    |       Error         |
+|         PDU         |       Text          |
++-------------------------------------------+
+|                                           |
+~           Copy of Erroneous PDU           ~
+|                                           |
++-------------------------------------------+
+|                                           |
+|              Arbitrary Text               |
+|                    of                     |
+~          Error Diagnostic Message         ~
+|                                           |
+`-------------------------------------------'
+            </artwork>              
+          </figure>                    
+        </section>                     
+                                       
+      <section anchor="fields" title="Fields of a PDU">
+        <t>PDUs contain the following data elements:
+        <list style="hanging">
+          <t hangText="Protocol Version:">
+            A cardinal, currently 0, denoting the version of this
+            protocol.</t>
+          <t hangText="Serial Number:">
+            The serial number of the RPKI Cache when this ROA was
+            received from the cache's up-stream cache server or gathered
+            from the global RPKI.  A cache increments its serial number
+            when completing an rcynic from a parent cache.
+            See <xref target="RFC1982"/> on DNS Serial Number
+            Arithmetic for too much detail on serial number
+            arithmetic.</t>
+          <t hangText="Color:">
+            An arbitrary 16 bit field that might be used in some
+            way.</t>
+          <t hangText="Announce/Withdraw:">
+            Whether this PDU announces a new right to announce the
+            prefix or withdraws a previously announced right.  The
+            allowed values are 0 for withdraw and 1 for announce.
+            A withdraw effectively deletes all previously announced
+            IPvX Prefix PDUs with the exact same Prefix, Length,
+            Max-Len, ASN, Data Source, and Color.</t>
+          <t hangText="Prefix Length:">
+            A cardinal denoting the shortest prefix allowed for the
+            prefix.</t>
+          <t hangText="Max Length:">
+            A cardinal denoting the longest prefix allowed by the
+            prefix.  This MUST NOT be less than the Prefix Length
+            element.</t>
+          <t hangText="Data Source:">
+            A cardinal denoting the source of the data, e.g. for RPKI
+            data, it is 0, for IRR data it is 1.</t>
+          <t hangText="Prefix:">
+            The IPv4 or IPv6 prefix of the ROA.</t>
+          <t hangText="Autonomous System Number:">
+            ASN allowed to announce this prefix, a 32 bit cardinal.</t>
+          </list></t>
+        </section>
+
+      </section>
+
+    <section anchor="protocol" title="Protocol Sequences">
+      <t>The sequences of PDU transmissions fall into three
+        conversations as follows:</t>
+
+      <section anchor="start" title="Start or Restart">
+        <figure>
+          <artwork>
+Cache                         Router
+  ~                             ~
+  | &lt;----- Reset Query -------- | R requests data
+  |                             |
+  | ----- Cache Response -----&gt; | C confirms request
+  | ------- IPvX Prefix ------&gt; | C sends zero or more
+  | ------- IPvX Prefix ------&gt; |   IPv4 and IPv6 Prefix
+  | ------- IPvX Prefix ------&gt; |   Payload PDUs
+  | ------  End of Data ------&gt; | C sends End of Data
+  |                             |   and sends new serial
+  ~                             ~
+            </artwork>
+          </figure>
+        <t>When a transport session is first established, the router
+          sends a Reset Query and the cache responds with a data
+          sequence of all data it contains.</t>
+        <t>This Reset Query sequence is also used when the router
+          receives a Cache Reset, chooses a new cache, or fears that
+          it has otherwise lost its way.</t>
+        <t>To limit the length of time a cache must keep the data
+	  necessary to generate incremental updates, a router MUST
+	  send either a Serial Query or a Reset Query no less
+	  frequently than once an hour.  This also acts as a keep
+	  alive at the application layer.</t>
+        </section>
+
+      <section anchor="query" title="Typical Exchange">
+        <figure>
+          <artwork>
+Cache                         Router
+  ~                             ~
+  | -------- Notify ----------&gt; |  (optional)
+  |                             |
+  | &lt;----- Serial Query ------- | R requests data
+  |                             |
+  | ----- Cache Response -----&gt; | C confirms request
+  | ------- IPvX Prefix ------&gt; | C sends zero or more
+  | ------- IPvX Prefix ------&gt; |   IPv4 and IPv6 Prefix
+  | ------- IPvX Prefix ------&gt; |   Payload PDUs
+  | ------  End of Data ------&gt; | C sends End of Data
+  |                             |   and sends new serial
+  ~                             ~
+            </artwork>
+          </figure>
+	<t>The cache server SHOULD send a notify PDU with its current
+          serial number when the cache's serial changes, with the
+          expectation that the router MAY then issue a serial query
+          earlier than it otherwise might.  This is analogous to DNS
+          NOTIFY in <xref target="RFC1996"/>.  The cache SHOULD
+          rate limit Serial Notifies to no more frequently than one per
+          minute.</t>
+        <t>When the transport layer is up and either a timer has gone
+          off in the router, or the cache has sent a Notify, the router
+          queries for new data by sending a Serial Query, and the cache
+          sends all data newer than the serial in the Serial Query.</t>
+        <t>To limit the length of time a cache must keep old withdraws, a
+          router MUST send either a Serial Query or a Reset Query no
+          less frequently than once an hour.</t>
+        </section>
+
+      <section anchor="nodiff" title="No Incremental Update Available ">
+        <figure>
+          <artwork>
+Cache                         Router
+  ~                             ~
+  | &lt;-----  Serial Query ------ | R requests data
+  | ------- Cache Reset ------&gt; | C cannot supply update
+  |                             |   from specified serial
+  | &lt;------ Reset Query ------- | R requests new data
+  | ----- Cache Response -----&gt; | C confirms request
+  | ------- IPvX Prefix ------&gt; | C sends zero or more
+  | ------- IPvX Prefix ------&gt; |   IPv4 and IPv6 Prefix
+  | ------- IPvX Prefix ------&gt; |   Payload PDUs
+  | ------  End of Data ------&gt; | C sends End of Data
+  |                             |   and sends new serial
+  ~                             ~
+            </artwork>
+          </figure>
+        <t>The cache may respond to a Serial Query with a Cache Reset,
+          informing the router that the cache cannot supply an
+          incremental update from the serial number specified by the
+          router.  This might be because the cache has lost state, or
+          because the router has waited too long between polls and the
+          cache has cleaned up old data that it no longer believes it
+          needs, or because the cache has run out of storage space and
+          had to expire some old data early.  Regardless of how this
+          state arose, the cache replies with a Cache Reset to tell
+          the router that it cannot honor the request.  When a router
+          receives this, the router SHOULD attempt to connect to any
+          more preferred caches in its cache list.  If there are no
+          more preferred caches it MUST issue a Reset Query and get an
+          entire new load from the cache</t>
+        </section>
+
+      <section anchor="nodata" title="Cache has No Data Available">
+        <figure>
+          <artwork>
+Cache                         Router
+  ~                             ~
+  | &lt;-----  Serial Query ------ | R requests data
+  | ---- Error Report PDU ----&gt; | C cannot supply update
+  ~                             ~
+
+Cache                         Router
+  ~                             ~
+  | &lt;-----  Reset Query ------- | R requests data
+  | ---- Error Report PDU ----&gt; | C cannot supply update
+  ~                             ~
+            </artwork>
+          </figure>
+        <t>The cache may respond to either a Serial Query or a Reset
+	  Query informing the router that the cache cannot supply any
+	  update at all.  The most likely cause is that the cache has
+	  lost state, perhaps due to a restart, and has not yet
+	  recovered.  While it is possible that a cache might go into
+	  such a state without dropping any of its active sessions,
+	  a router is more likely to see this behavior when it
+	  initially connects and issues a Reset Query while the cache
+	  is still rebuilding its database.</t>
+	<t>When a router receives this kind of error, the router
+          SHOULD attempt to connect to any other caches in its cache
+          list, in preference order.  If no other caches are
+          available, the router MUST issue periodic Reset Queries
+          until it gets a new usable load from the cache</t>
+	</section>
+
+      </section>
+
+    <section anchor="Transport" title="SSH Transport">
+      <t>The transport layer session between a router and a cache
+        carries the binary Protocol Data Units (PDUs) in a persistent
+        SSH session.</t>
+      <t>To run over SSH, the client router first establishes an SSH
+	transport connection using the SSH transport protocol, and the
+	client and server exchange keys for message integrity and
+	encryption.  The client then invokes the "ssh-userauth" service
+	to authenticate the application, as described in the SSH
+	authentication protocol <xref target="RFC4252">RFC 4252</xref>.
+	Once the application has been successfully authenticated, the
+	client invokes the "ssh-connection" service, also known as the
+	SSH connection protocol.</t>
+      <t>After the ssh-connection service is established, the client
+    	opens a channel of type "session", which results in an SSH
+    	session.</t>
+      <t>Once the SSH session has been established, the application
+	invokes the application transport as an SSH subsystem called
+	"rpki-rtr".  Subsystem support is a feature of SSH version 2
+	(SSHv2) and is not included in SSHv1.  Running this protocol as
+	an SSH subsystem avoids the need for the application to
+	recognize shell prompts or skip over extraneous information,
+	such as a system message that is sent at shell start-up.</t>
+      <t>It is assumed that the router and cache have exchanged keys
+        out of band by some reasonably secured means.</t>
+      </section>
+
+    <section anchor="Setup" title="Router-Cache Set-Up">
+      <t>A cache has the public authentication data for each router it
+        is configured to support.</t>
+      <t>A router may be configured to peer with a selection of caches,
+        and a cache may be configured to support a selection of routers.
+        So each must have the name of each peer and authentication data
+        for each.  In addition, in a router, this list has a non-unique
+        preference value for each server in order of preference.  The
+        client router attempts to establish a session with each
+        potential serving cache in preference order, and then starts to
+        load data from the highest preference cache to which it can
+        connect and authenticate.  The router's list of caches has the
+        following elements:
+      <list style="hanging">
+        <t hangText="Preference:">
+          A cardinal denoting the router's preference to use that cache,
+          the lower the value the more preferred.</t>
+        <t hangText="Name:">
+          The IP Address or fully qualified domain name of the cache.</t>
+        <t hangText="Key:">
+          The public ssh key of the cache.</t>
+        <t hangText="MyKey:">
+          The private ssh key of this client.</t>
+          </list></t>
+      <t>As caches can not be rigorously synchronous, a client which
+        changes servers can not combine data from different parent
+        caches.  Therefore, when a lower preference cache becomes
+        available, if resources allow, it would be prudent for the
+        client to start a new buffer for that cache's data, and only
+        switch to those data when that buffer is fully up to date.</t>
+      </section>
+
+    <section anchor="Scenarios" title="Deployment Scenarios">
+      <t>For illustration, we present three likely deployment
+      scenarios.
+      <list style="hanging">
+        <t hangText="Small End Site:">
+          The small multi-homed end site may wish to outsource the RPKI
+          cache to one or more of their upstream ISPs.  They would exchange
+          authentication material with the ISP using some out of band
+          mechanism, and their router(s) would connect to one or more
+          up-streams' caches.  The ISPs would likely deploy caches intended
+          for customer use separately from the caches with which their own
+          BGP speakers peer.</t>
+        <t hangText="Large End Site:">
+          A larger multi-homed end site might run one or more caches,
+          arranging them in a hierarchy of client caches, each fetching
+          from a serving cache which is closer to the global RPKI.  They
+          might configure fall-back peerings to up-stream ISP caches.</t>
+        <t hangText="ISP Backbone:">
+          A large ISP would likely have one or more redundant caches in
+          each major PoP, and these caches would fetch from each other
+          in an ISP-dependent topology so as not to place undue load on
+          the global RPKI publication infrastructure. </t>
+        </list></t>
+      <t>Experience with large DNS cache deployments has shown that
+        complex topologies are ill-advised as it is easy to make errors
+        in the graph, e.g. not maintaining a loop-free condition.</t>
+      <t>Of course, these are illustrations and there are other possible
+        deployment strategies.  It is expected that minimizing load on
+        the global RPKI servers will be a major consideration.</t>
+      <t>To keep load on global RPKI services from unnecessary peaks, it
+        is recommended that primary caches which load from the
+        distributed global RPKI not do so all at the same times, e.g. on
+        the hour.  Choose a random time, perhaps the ISP's AS number
+        modulo 60 and jitter the inter-fetch timing.</t>
+      </section>
+
+    <section anchor="errorcodes" title="Error Codes">
+      <t>This section contains a preliminary list of error codes.
+        The authors expect additions to this section during
+        development of the initial implementations.  Eventually, these
+        error codes will probably need to reside in an IANA registry.
+      <list style="hanging">
+        <t hangText="0: Reserved."/>
+        <t hangText="1: Internal Error:">
+	  The party reporting the error experienced some kind of
+          internal error unrelated to protocol operation (ran out of
+          memory, a coding assertion failued, etcetera).</t>
+	<t hangText="2: No Data Available:">
+	  The cache believes itself to be in good working order, but
+          is unable to answer either a Serial Query or a Reset Query
+          because it has no useful data available at this time.  This
+          is likely to be a temporary error, and most likely indicates
+          that the cache has not yet completed pulling down an initial
+          current data set from the global RPKI system after some kind
+          of event that invalidated whatever data it might have
+          previously held (reboot, network partition, etcetera).</t>
+        </list></t>
+
+      </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>As this document describes a security protocol, many aspects of
+        security interest are described in the relevant sections.  This
+        section points out issues which may not be obvious in other
+        sections.
+      <list style="hanging">
+        <t hangText="Cache Validation:">
+          In order for a collection of caches as described in
+          <xref target="Scenarios"/> to guarantee a consistent view,
+          they need to be given consistent trust anchors to use in their
+          internal validation process.  Distribution of a consistent
+          trust anchor is assumed to be out of band.</t>
+        <t hangText="Cache Peer Identification:">
+          As the router initiates an ssh transport session to a cache
+          which it identifies by either IP address or fully qualified
+          domain name, a DNS or address spoofing attack could make the
+          correct cache unreachable.  No session would be established,
+          as the authorization keys would not match.</t>
+        <t hangText="Transport Security:">
+          The RPKI relies on object, not server or transport, trust.
+          I.e. the IANA root trust anchor is distributed to all caches
+          through some out of band means, and can then be used by each
+          cache to validate certificates and ROAs all the way down the
+          tree.  The inter-cache relationships are based on this object
+          security model, hence the inter-cache transport can be lightly
+          protected.</t>
+          <t>But this protocol document assumes that the routers can not
+          do the validation cryptography.  Hence the last link, from
+          cache to router, is secured by server authentication and
+          transport level security.  This is dangerous, as server
+          authentication and transport have very different threat models
+          than object security.</t>
+          <t>So the strength of the trust relationship and the transport
+          between the router(s) and the cache(s) are critical.  You're
+          betting your routing on this.</t>
+          <t>While we can not say the cache must be on the same LAN, if
+          only due to the issue of an enterprise wanting to off-load the
+          cache task to their upstream ISP(s), locality, trust, and
+          control are very critical issues here.  The cache(s) really
+          SHOULD be as close, in the sense of controlled and protected
+          (against DDoS, MITM) transport, to the router(s) as possible.
+          It also SHOULD be topologically close so that a minimum of
+          validated routing data are needed to bootstrap a router's access
+          to a cache.</t>
+        </list></t>
+      </section>
+
+    <section anchor="Glossary" title="Glossary">
+      <t>The following terms are used with special meaning:
+      <list style="hanging">
+        <t hangText="Global RPKI:">
+          The authoritative data of the RPKI are published in a
+          distributed set of servers at the IANA, RIRs, NIRs, and ISPs,
+          see <xref target="I-D.ietf-sidr-repos-struct"/>.</t>
+        <t hangText="Non-authorative Cache:">
+          A coalesced copy of the RPKI which is periodically
+          fetched/refreshed directly or indirectly from the global RPKI
+          using the <xref target="rcynic"/> protocol/tools</t>
+        <t hangText="Cache:">
+          The rcynic system is used to gather the distributed data of
+          the RPKI into a validated cache.  Trusting this cache further
+          is a matter between the provider of the cache and a relying
+          party.</t>
+        <t hangText="Serial Number:">
+          A 32-bit monotonically increasing, cardinal which wraps from
+          2^32-1 to 0.  It denotes the logical version of a cache.  A
+          cache increments the value by one when it successfully updates
+          its data from a parent cache or from primary RPKI data.  As a
+          cache is rcynicing, new incoming data, and implicit deletes,
+          are marked with the new serial but MUST not be sent until the
+          fetch is complete.  A serial number is not commensurate
+          between caches, nor need it be maintained across resets of the
+          cache server.  See <xref target="RFC1982"/> on DNS
+          Serial Number Arithmetic for too much detail on serial number
+          arithmetic.</t>
+        </list></t>
+      </section>
+
+    <section anchor="IANA" title="IANA Considerations">
+      <t>This document requests the IANA to create a registry for PDU
+        types.</t>
+      <t>This document requests the IANA to create a registry for Error
+        Codes.</t>
+      <t>In addition, a registry for Version Numbers would be needed if
+        new Version Number is defined in a new RFC.</t>
+      <t>Note to RFC Editor: this section may be replaced on publication
+        as an RFC.</t>
+      </section>
+
+    <section anchor="Acknowledgments" title="Acknowledgments">
+      <t>The authors wish to thank Steve Bellovin, Rex Fernando, Russ
+      Housley, Pradosh Mohapatra, Sandy Murphy, Megumi Ninomiya,
+      Robert Raszuk, John Scudder, Ruediger Volk, David Ward, and Bert
+      Wijnen.</t>
+    </section>
+
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <!-- Begin inclusion: reference.RFC.1982.xml --><reference anchor="RFC1982">
+  <front>
+    <title>Serial Number Arithmetic</title>
+    <author fullname="R. Elz" initials="R." surname="Elz">
+      <organization/>
+    </author>
+    <author fullname="R. Bush" initials="R." surname="Bush">
+      <organization/>
+    </author>
+    <date month="August" year="1996"/>
+    <keyword> SNA</keyword>
+    <keyword>domain</keyword>
+    <keyword>name</keyword>
+    <keyword>system</keyword>
+    <keyword>DNS </keyword>
+    <abstract>
+      <t>The DNS has long relied upon serial number arithmetic, a concept which has never really been defined, certainly not in an IETF document, though which has been widely understood.  This memo supplies the missing definition.  It is intended to update RFC1034 and RFC1035. [STANDARDS- TRACK]</t>
+    </abstract>
+  </front>
+  <seriesInfo name="RFC" value="1982"/>
+  <format type="TXT" octets="14440" target="http://www.rfc-editor.org/rfc/rfc1982.txt"/>
+  <!-- updates RFC1034 RFC1035 -->
+  <!-- current-status PROPOSED STANDARD -->
+  <!-- publication-status PROPOSED STANDARD -->
+</reference><!-- End inclusion: reference.RFC.1982.xml -->
+      <!-- Begin inclusion: reference.RFC.2119.xml --><reference anchor="RFC2119">
+  <front>
+    <title>Key words for use in RFCs to Indicate Requirement Levels</title>
+    <author fullname="S. Bradner" initials="S." surname="Bradner">
+      <organization/>
+    </author>
+    <date month="March" year="1997"/>
+    <keyword> Standards</keyword>
+    <keyword>Track</keyword>
+    <keyword>Documents </keyword>
+    <abstract>
+      <t>In many standards track documents several words are used to signify the requirements in the specification.  These words are often capitalized.  This document defines these words as they should be interpreted in IETF documents.  This document specifies an Internet Best Current Practices for the Internet Community, and requests discussion and suggestions for improvements.</t>
+    </abstract>
+  </front>
+  <seriesInfo name="RFC" value="2119"/>
+  <seriesInfo name="BCP" value="14"/>
+  <format type="TXT" octets="4723" target="http://www.rfc-editor.org/rfc/rfc2119.txt"/>
+  <!-- current-status BEST CURRENT PRACTICE -->
+  <!-- publication-status BEST CURRENT PRACTICE -->
+</reference><!-- End inclusion: reference.RFC.2119.xml -->
+      <!-- Begin inclusion: reference.RFC.4252.xml --><reference anchor="RFC4252">
+  <front>
+    <title>The Secure Shell (SSH) Authentication Protocol</title>
+    <author fullname="T. Ylonen" initials="T." surname="Ylonen">
+      <organization/>
+    </author>
+    <author fullname="C. Lonvick" initials="C." surname="Lonvick">
+      <organization/>
+    </author>
+    <date month="January" year="2006"/>
+    <keyword>remote login</keyword>
+    <keyword>public key</keyword>
+    <keyword>password</keyword>
+    <keyword>host-based client authentication</keyword>
+    <abstract>
+      <t>The Secure Shell Protocol (SSH) is a protocol for secure remote login and other secure network services over an insecure network.  This document describes the SSH authentication protocol framework and public key, password, and host-based client authentication methods.  Additional authentication methods are described in separate documents.  The SSH authentication protocol runs on top of the SSH transport layer protocol and provides a single authenticated tunnel for the SSH connection protocol. [STANDARDS TRACK]</t>
+    </abstract>
+  </front>
+  <seriesInfo name="RFC" value="4252"/>
+  <format type="TXT" octets="34268" target="http://www.rfc-editor.org/rfc/rfc4252.txt"/>
+  <!-- current-status PROPOSED STANDARD -->
+  <!-- publication-status PROPOSED STANDARD -->
+</reference><!-- End inclusion: reference.RFC.4252.xml -->
+      <reference anchor="rcynic" target="https://subvert-rpki.hactrn.net/rcynic/">
+        <front>
+          <title>rcynic protocol</title>
+          <author initials="R" surname="Austein" fullname="Rob Austein">
+            <organization/>
+            </author>
+          </front>
+        </reference>
+      </references>
+    <references title="Informative References">
+      <!-- Begin inclusion: reference.I-D.ietf-sidr-arch.xml --><!-- Automatically generated, do not edit. --><reference anchor="I-D.ietf-sidr-arch">
+  <front>
+    <title>An Infrastructure to Support Secure Internet Routing</title>
+    <author initials="M." surname="Lepinski" fullname="Matt Lepinski"><organization/></author>
+    <author initials="S." surname="Kent" fullname="Stephen Kent"><organization/></author>
+    <date day="9" month="March" year="2009"/>
+  </front>
+  <seriesInfo name="Internet-Draft" value="draft-ietf-sidr-arch-06"/>
+  <format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-sidr-arch-06.txt"/>
+</reference><!-- End inclusion: reference.I-D.ietf-sidr-arch.xml -->
+      <!-- Begin inclusion: reference.I-D.ietf-sidr-repos-struct.xml --><!-- Automatically generated, do not edit. --><reference anchor="I-D.ietf-sidr-repos-struct">
+  <front>
+    <title>A Profile for Resource Certificate Repository Structure</title>
+    <author initials="G." surname="Huston" fullname="Geoff Huston"><organization/></author>
+    <author initials="R." surname="Loomans" fullname="Robert Loomans"><organization/></author>
+    <author initials="G." surname="Michaelson" fullname="George Michaelson"><organization/></author>
+    <date day="4" month="October" year="2008"/>
+  </front>
+  <seriesInfo name="Internet-Draft" value="draft-ietf-sidr-repos-struct-01"/>
+  <format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-sidr-repos-struct-01.txt"/>
+</reference><!-- End inclusion: reference.I-D.ietf-sidr-repos-struct.xml -->
+      <!-- Begin inclusion: reference.RFC.1996.xml --><reference anchor="RFC1996">
+  <front>
+    <title>A Mechanism for Prompt Notification of Zone Changes (DNS NOTIFY)</title>
+    <author fullname="P. Vixie" initials="P." surname="Vixie">
+      <organization/>
+    </author>
+    <date month="August" year="1996"/>
+    <keyword> DNS-NOTIFY</keyword>
+    <keyword>Domain</keyword>
+    <keyword>Name</keyword>
+    <keyword>System </keyword>
+    <abstract>
+      <t>This memo describes the NOTIFY opcode for DNS, by which a master server advises a set of slave servers that the master's data has been changed and that a query should be initiated to discover the new data. [STANDARDS-TRACK]</t>
+    </abstract>
+  </front>
+  <seriesInfo name="RFC" value="1996"/>
+  <format type="TXT" octets="15247" target="http://www.rfc-editor.org/rfc/rfc1996.txt"/>
+  <!-- updates RFC1035 -->
+  <!-- current-status PROPOSED STANDARD -->
+  <!-- publication-status PROPOSED STANDARD -->
+</reference><!-- End inclusion: reference.RFC.1996.xml -->
+      </references>
+  </back>
+
+</rfc>

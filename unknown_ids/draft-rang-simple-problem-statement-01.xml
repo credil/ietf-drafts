@@ -1,0 +1,1186 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+
+<rfc category="std" ipr="full3978" docName="draft-rang-simple-problem-statement-01.txt">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="no" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+    <front>
+        <title>Problem Statement for SIP/SIMPLE</title>
+
+    <author initials="A." surname="Houri" fullname="Avshalom Houri">
+      <organization>IBM</organization>
+      <address>
+	<postal>
+	  <street>Science Park Building 18/D</street>
+	  <city>Rehovot</city> <region></region> <code></code>
+	  <country>Israel</country>
+ 	</postal>
+	<email>avshalom@il.ibm.com</email>
+      </address>
+    </author>
+
+    <author initials="T." surname="Rang" fullname="Tim Rang">
+      <organization>Microsoft Corporation</organization>
+      <address>
+	<postal>
+	  <street>One Microsoft Way</street>
+	  <city>Redmond</city> <region>WA</region> <code>98052</code>
+	  <country>USA</country>
+ 	</postal>
+	<email>timrang@microsoft.com</email>
+      </address>
+    </author>
+
+    <author initials="E." surname="Aoki" fullname="Edwin Aoki">
+      <organization>AOL LLC</organization>
+      <address>
+	<postal>
+	  <street>360 W. Caribbean Drive</street>
+	  <city>Sunnyvale</city> <region>CA</region> <code>94089</code>
+	  <country>USA</country>
+ 	</postal>
+	<email>aoki@aol.net</email> </address> </author>
+
+    <date month="October" year="2006"/>
+       <area>Real Time</area> 
+    <workgroup>SIMPLE WG</workgroup> <keyword>I-D</keyword> <keyword>Internet-
+    Draft</keyword> <keyword>SIMPLE</keyword> <keyword>problem 
+    statement</keyword>
+
+    <abstract>
+
+       <t>As more experience of deploying SIMPLE based presence systems is 
+       accumulated, it seems that deploying a large SIMPLE presence system is 
+       actually a very hard task. The document analyzes several aspects of SIMPLE based 
+       presence system deployment and shows that difficulties around the amount 
+       of messages (network), state management (memory) and processing load 
+       (cpu).</t>
+
+  <t>Although this document is a problem statement document and not a BCP 
+  document, several possible optimizations and directions are listed at the end 
+  of the document in addition to an initial set of requirements for what should 
+  be the characteristic of the solution to the problem stated in the document</t>
+
+    <t>This document is intended to be used by the SIMPLE WG in order to work on 
+    possible solutions that will make the deployment of a presence server more 
+    reasonable task. Note that the document does not try to compare the SIP 
+    based presence server to other types of presence servers but only analyzes 
+    the SIP based presence server.</t>
+
+    </abstract>
+
+    </front>
+
+    <middle>
+
+    <section title="Requirements notation">
+
+    <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", 
+    "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this 
+    document are to be interpreted as described in <xref target="RFC2119"/>.</t>
+
+    </section>
+
+    <section title="Introduction">
+
+    <t>As more experience of deploying SIMPLE based presence systems is 
+    accumulated, it seems that deploying a large SIMPLE presence system is actually a very 
+    hard task. The document analyzes several aspects of SIMPLE based presence 
+    system deployment and shows that difficulties around the amount of messages 
+    (network), state management (memory) and processing load (cpu).</t>
+
+    <t>Although this document is a problem statement document and not a BCP 
+    document, several possible optimizations and directions are listed at the end 
+    of the document in addition to an initial set of requirements for what 
+    should be the characteristic of the solution to the problem stated in the 
+    document</t>
+
+   <t>This document is intended to be used by the SIMPLE WG in order to work on 
+    possible solutions that will make the deployment of a presence server more 
+    reasonable task. Note that the document does not try to compare the SIP 
+    based presence server to other types of presence servers but only analyzes 
+    the SIP based presence server.</t>
+
+		<t>The document discusses the following areas. In each area we try to show 
+		the complexity and the load that the presence server has to handle in order 
+		to provide its service.</t>
+
+		<t><list style="symbols">
+
+    <t>Messages load - By computing the number of messages that are required for 
+    connecting presence systems the document shows that the number of messages 
+    is enormous and it is quite obvious that some optimizations are needed.</t>
+
+    <t>State management - Due to the nature of the service that the presence 
+    server provides, the presence server has to manage a relatively 
+    big and complex state and some computations are provided in the document.</t>
+
+    <t>Processing complexities - The presence server maintains many small objects
+    and has to do frequent operations on these objects. We show that these operations
+    and especially the optimizations that are intended to save on the amount of data that
+    is being sent between watchers and presence servers, are not so simple and may create
+    a very heavy processing load on the presence server.</t>
+
+    <t>Groups - Resource List Servers <xref target="RFC4662"/> optimize that 
+    number of sessions that are created between the watchers and the presence 
+    server. On the other hand, this optimization may create an exponential size 
+    of subscription due to the unbearable ease of subscribing to large 
+    groups.</t>
+
+    </list></t>
+
+    <t>The term presence domain or presence system appears in this document 
+    several time. By this term we refer to a presence system that provides 
+    presence subscription and notification services to its users. The system can 
+    be a system that is deployed in a small enterprise or in a very large 
+    consumer network.</t>
+
+</section>
+
+<section title="Message Load">
+
+    <t>Even though some optimizations are approved or are being defined, we show 
+    in this section that a very large number of messages are needed in order to 
+    establish federation between presence systems of large communities.  Further 
+    thinking is needed in order to make large deployment of presence systems 
+    less resource demanding. Note that very similar situations occur between RLSs  <xref target="RFC4662"/>
+    and presence  servers due to the amount of subscriptions that RLSs may need to create to presence servers in order
+    to handle the resource list subscriptions</t>
+
+<section title="Known Optimizations">
+
+<t>The current optimizations that are approved or considered in the SIMPLE group 
+    can be divided into two categories:</t>
+
+<t><list style="symbols">
+
+    <t>Dialogs saving optimization - Here we refer to optimizations as the resource 
+    list RFC <xref target="RFC4662"/> or to the Uri list subscriptions draft 
+    <xref target="I-D.ietf-sipping-uri-list-subscribe"/>. These documents define 
+    ways to reduce the number of dialogs that are required between the 
+    subscriber and the presence system.</t>
+
+    <t>Notification optimizations - Here we refer to the optimizations that are 
+    suggested in the subnot-etags draft <xref target="I-D.niemi-sip-subnot-etags"/>.
+    This draft suggests ways to suppress the sending of unnecessary 
+    notifies when for example a subscription is refreshed. There are other 
+    drafts that reduce the size of messages as partial notifies or filtering but 
+    in this document we mostly care about the amount of messages.</t> 
+
+</list></t>
+
+</section>
+
+<section title="Analysis">
+
+    <t>The basic SIMPLE subscription dialog involves the following message-
+    transfer:</t>
+
+		<t><list style="symbols"> <t>SUBSCRIBE/200</t>
+
+    <t>Initial NOTIFY/200</t>
+
+    <t>(j) NOTIFY/200 where ‘j’ is the number of presence changes seen by the 
+    watcher</t>
+
+    <t>(k) SUBSCRIBE/200 where ‘k’ is the number of subscription dialog refresh 
+    periods</t>
+
+    <t>SUBSCRIBE/200 with Expires = 0 to terminate the dialog</t>
+
+    <t>NOTIFY/200 ending the dialog</t> </list></t>
+
+    <t>An individual watcher will generate X number of SIMPLE subscription 
+    dialogs corresponding to the number of presentities it chooses to watch. The 
+    amount of traffic generated is significantly affected by several 
+    factors:</t>
+
+    <t><list style="symbols"> <t>Number of watchers connected to the system</t> 
+    <t>Number of presentities connected to the system</t> <t>Complexity of 
+    presence & frequency of presence change</t> </list></t>
+
+    <t>This document contains several calculations that show the expected 
+    message rate between presence domains. The following explains the 
+    assumptions and methods behind the calculations:</t>
+
+	<t><list style="symbols">
+
+    <t>(A01) Subscription lifetime (hours)- The assumed lifetime of a 
+    subscription in hours. Here we assume 8 hours for all calculations.</t>
+
+    <t>(A02) Presence state changes / hour - The average time that a presentity 
+    changes his/hers status in one hour. We assumed 3 times a hour for most 
+    calculations. Note that for some users in consumer messaging systems, the 
+    actual numbers are likely to be much higher.</t>
+
+    <t>(A03) Subscription refresh interval / hour - The duration of the 
+    SUBSCRIBE session after which it needs to be refreshed. We assumed that the 
+    duration is one hour.</t>
+
+    <t>(A04) Total federated presentities per watcher - The number of 
+    presentities that the watcher is watching. The number here changes in this 
+    document according to the type of the specific deployment</t>
+
+    <t>(A05) Number of dialogs to maintain per watcher - The number of the 
+    SUBSCRIBE dialogs that are maintained per watcher. if a dialog optimization 
+    is not assumed this number is equal to A4, otherwise it is 1</t>
+
+    <t>(A06) Number of watchers in a federated presence domain - The number of 
+    watchers in one presence domain that watch users in the other domain. The 
+    number here varies according to the assumptions for a specific 
+    deployment</t>
+
+    <t>(A07) Initial SUBSCRIBE/200 per watcher = A5*2 (message and an OK)</t>
+
+    <t>(A08) Initial NOTIFY/200 per watcher = A5*2 (message and an OK)</t>
+
+    <t>(A09) Total initial messages = (A7+A8)*A6</t>
+
+    <t>(A10) NOTIFY/200 per watched presentity = (A2*A1*A4*2) (message and an 
+    OK)</t>
+
+    <t>(A11) SUBSCRIBE/200 refreshes = (A1/A3)*A5*2 (message and an OK)</t>
+
+    <t>(A12) NOTIFY/200 due to subscribe refresh - In a deployment where the 
+    notification optimization is not deployed this number will be ((A1/A3)*A5), 
+    otherwise it is 0</t>
+
+    <t>(A13) Number of steady state messages = (A10+A11+A12)*A6</t>
+
+    <t>(A14) SUBSCRIBE termination = A5*2 (message and an OK)</t>
+
+    <t>(A15) NOTIFY terminated = A5*2 (message and an OK)</t>
+
+    <t>(A16) Number of sign-out messages = (A7+A8)*A6</t>
+
+    <t>(A17) Total messages between domains (both directions where users from 
+    domain A subscribe to users from domain B and vice versa)= 
+    (A9+A13+A16)*2</t>
+
+    <t>(A18) Total number of messages / second = A17/A1/3600 (seconds in 
+    hour)</t>
+
+</list></t>
+
+</section>
+
+<section title="SIMPLE with no optimizations">
+
+    <t>The following table uses some common presence characteristics to 
+    demonstrate the effect these factors have on state and message rate within a 
+    presence domain using base SIMPLE protocols without any proposed 
+    optimizations.  In this example, there are two presence domains, each with 
+    20,000 federating users with an average of 4 contacts in the peer domain</t>
+
+<figure><artwork><![CDATA[
+(A01) Subscription lifetime (hours)...........................8
+(A02) Presence state changes / hour...........................3
+(A03) Subscription refresh interval / hour....................1
+(A04) Total federated presentities per watcher................4
+(A05) Number of dialogs to maintain per watcher...............4
+(A06) Number of watchers in a federated presence domain..20,000 
+	
+(A07) Initial SUBSCRIBE/200 per watcher.......................8
+(A08) Initial NOTIFY/200 per watcher..........................8
+(A09) Total initial messages............................320,000
+
+(A10) NOTIFY/200 per watched presentity.....................192
+(A11) SUBSCRIBE/200 refreshes................................64
+(A12) NOTIFY/200 due to subscribe refresh....................64
+(A13) Number of steady state messages.................6,400,000
+
+(A14) SUBSCRIBE termination...................................8
+(A15) NOTIFY terminated.......................................8
+(A16) Number of sign-out messages.......................320,000
+
+(A17) Total messages between domains.................14,080,000
+(A18) Total number of messages / second.....................489
+
+                  SIMPLE with no optimizations
+]]></artwork></figure>
+
+</section>
+
+<section title="SIMPLE with suggested optimizations">
+
+    <t>The same analysis provided above is repeated here with the assumption 
+    that both the dialog and the notification optimizations are applied. Note 
+    that while the sign-in (ramp up) and sign-out messages flows are positively 
+    affected, the steady state rates are not.</t>
+
+    <t>The optimizations enable the creation of a single dialog to the other 
+    domain from each subscriber for the set of presentities it is subscribing 
+    to. The optimizations also enable that there will be no need for a NOTIFY 
+    upon refreshing a SUBSCRIBE since the NOTIFY should not be sent in the 
+    refresh since it should be the same one as was sent when there was a state 
+    change for the presentity.</t>
+
+<figure><artwork><![CDATA[ 
+(A01) Subscription lifetime (hours)...........................8
+(A02) Presence state changes /hour............................3
+(A03) Subscription refresh interval / hour....................1
+(A04) Total federated presentities per watcher................4
+(A05) Number of dialogs to maintain per watcher...............1
+(A06) Number of watchers in a federated presence domain..20,000
+
+(A07) Initial SUBSCRIBE/200 per watcher.......................2
+(A08) Initial NOTIFY/200 per watcher..........................2
+(A09) Total initial messages.............................80,000
+
+(A10) NOTIFY/200 per watched presentity.....................192
+(A11) SUBSCRIBE/200 refreshes................................16
+(A12) NOTIFY/200 due to subscribe refresh.....................0
+(A13) Number of steady state messages.................4,160,000
+
+(A14) SUBSCRIBE termination...................................2
+(A15) NOTIFY terminated.......................................2
+(A16) Number of sign-out messages........................80,000
+
+(A17) Total messages between domains..................8,640,000
+(A18) Total number of messages / second.....................300 
+
+                    SIMPLE with optimizations
+]]></artwork></figure>
+
+</section>
+
+<section title="Presence Federations">
+
+    <t>While these scalability issues exist in any large deployment, certain 
+    characteristics make the deployment conducive to the existing resource-
+    list optimizations, and others have characteristics that cannot be 
+    exploited with the existing SIMPLE model.  Following is a list of 
+    federation relationships that have varying usage characteristics.  For 
+    each, a message rate table is provided reflecting typical changes 
+    message rates.  Those characteristics can alter the overall 
+    effectiveness of existing optimizations.</t>
+
+<section title="Widely distributed inter-domain presence">
+
+    <t>In some environments presence federation may be very common, perhaps 
+    even more common than intra-domain presence.  An example of this type of 
+    environment is a small ISV or public server.  Users in that small ISV 
+    are not likely to subscribe to the presence of other users in the their 
+    server since they do not necessarily have any relationship with each 
+    other aside from receiving service from the same provider.  They are 
+    much more likely to be subscribed to the presence of users in one of the 
+    federated domains (whether in consumer domains, academic, other ISVs, 
+    etc).  Common characteristics of this deployment are:</t>
+
+    <t><list style="symbols">
+    <t>Federated subscriptions are the majority of subscription traffic</t>
+    <t>Individual users are likely to subscribe to multiple users in any one 
+    domain</t>
+    <t>The intersection of users in the deployment watching the same 
+    presentities is quite small (i.e., probability that watchers in the 
+    domain subscribe to the same presentity)</t>
+    </list></t>
+
+    <t>To account for the extraordinarily high percentage of federation 
+    traffic, the number of federated presentities is increased to 20.  The 
+    number of watchers in the domain could also be adjusted to account for 
+    an expected larger community of users being peered with, it is omitted 
+    here for simplification</t>
+
+    <t>The first table below provides the calculations without optimizations 
+    the second table provides the calculations with optimization. Note that 
+    the number of messages per second decreases by a quarter with the 
+    optimizations but it is still quite big.</t>
+
+<figure><artwork><![CDATA[
+(A01) Subscription lifetime (hours)...........................8
+(A02) Presence state changes / hour...........................3
+(A03) Subscription refresh interval / hour....................1
+(A04) Total federated presentities per watcher...............20
+(A05) Number of dialogs to maintain per watcher..............20
+(A06) Number of watchers in a federated presence domain..20,000
+	
+(A07) Initial SUBSCRIBE/200 per watcher......................40
+(A08) Initial NOTIFY/200 per watcher.........................40
+(A09) Total initial messages..........................1,600,000
+
+(A10) NOTIFY/200 per watched presentity.....................960
+(A11) SUBSCRIBE/200 refreshes...............................320
+(A12) NOTIFY/200 due to subscribe refresh...................320
+(A13) Number of steady state messages................32,000,000
+
+(A14) SUBSCRIBE termination..................................40
+(A15) NOTIFY terminated......................................40
+(A16) Number of sign-out messages.....................1,600,000
+
+(A17) Total messages between domains.................70,400,000
+(A18) Total number of messages / second...................2,444
+
+     Widely distributed inter-domain with no optimizations
+]]></artwork></figure>
+
+<figure><artwork><![CDATA[
+(A01) Subscription lifetime (hours)...........................8
+(A02) Presence state changes / hour...........................3
+(A03) Subscription refresh interval / hour....................1
+(A04) Total federated presentities per watcher...............20
+(A05) Number of dialogs to maintain per watcher...............1
+(A06) Number of watchers in a federated presence domain..20,000
+	
+(A07) Initial SUBSCRIBE/200 per watcher.......................2
+(A08) Initial NOTIFY/200 per watcher..........................2
+(A09) Total initial messages.............................80,000
+
+(A10) NOTIFY/200 per watched presentity.....................960
+(A11) SUBSCRIBE/200 refreshes................................16
+(A12) NOTIFY/200 due to subscribe refresh.....................0
+(A13) Number of steady state messages................19,520,000
+
+(A14) SUBSCRIBE termination...................................2
+(A15) NOTIFY terminated.......................................2
+(A16) Number of sign-out messages........................80,000
+
+(A17) Total messages between domains.................39,360,000
+(A18) Total number of messages / second...................1,367 
+
+      Widely distributed inter-domain with optimizations
+]]></artwork></figure>
+
+</section>
+
+<section title="Associated inter-domain presence">
+
+    <t>In this type of environment, the domain is a collection of associated 
+    users such as an enterprise.  Here, federation is once again very 
+    common.  However, there is also a strong association between some users 
+    in the deployment.  These associations make it somewhat more likely that 
+    users in that domain will be watchers of the same presentity.  This can 
+    occur because of business relationships (e.g. two co-workers on a project 
+    federating with a partner company).</t>
+
+<t>Common characteristics of this deployment are:</t>
+
+    <t><list style="symbols">
+    <t>Federated subscriptions are large minority or small majority of 
+    subscription traffic</t>
+    <t>Individual users are likely to subscribe to multiple users in any one 
+    domain, especially their own</t>
+    <t>The intersection of users in the deployment watching the same 
+    presentities increases</t>
+    </list></t>
+
+    <t>This federation type has traffic rates similar to the previous examples 
+    but with different levels of association of the users. </t>
+
+</section>
+
+<section title="Very large network peering">
+
+    <t>In this environment, two or more very large networks create a peering 
+    relationship allowing their users to subscribe to presence in the other 
+    domains.  Where as the number of users in other deployment types ranges 
+    from hundreds to several hundred thousand, these large networks host up 
+    to hundreds of millions of users.  Examples of these networks are large 
+    wireless carriers at the low end and consumer IM networks at the high 
+    end.</t>
+
+    <t>Common characteristics of this deployment are:</t>
+
+    <t><list style="symbols">
+    <t>As users become accustomed to network 
+    boundaries disappearing, federated subscriptions become as common as 
+    subscriptions within the same domain</t>
+    <t>Individual users are highly 
+    likely to want to see presence of multiple presentities in the peer 
+    network</t>
+    <t>The intersection of users in the deployment watching the 
+    same presentities is very high (i.e., two or more users in network A are 
+    extremely likely to be watching a same user in network B)</t>
+    <t>Status 
+    changes increase greatly due to typical observed consumer behavior</t> 
+    </list></t>
+
+    <t>The first table below provides the calculations without optimizations 
+    the second table provides the calculations with optimization. Even 
+    though the optimization help a lot (almost cut the number of messages by 
+    half), the numbers are still very concerning.</t>
+
+<figure><artwork><![CDATA[
+(A01) Subscription lifetime (hours)..............................8
+(A02) Presence state changes / hour..............................6
+(A03) Subscription refresh interval / hour.......................1
+(A04) Total federated presentities per watcher..................10
+(A05) Number of dialogs to maintain per watcher.................10
+(A06) Number of watchers in a federated presence domain.10,000,000
+	
+(A07) Initial SUBSCRIBE/200 per watcher.........................20
+(A08) Initial NOTIFY/200 per watcher............................20
+(A09) Total initial messages...........................400,000,000
+
+(A10) NOTIFY/200 per watched presentity........................960
+(A11) SUBSCRIBE/200 refreshes..................................160
+(A12) NOTIFY/200 due to subscribe refresh......................160
+(A13) Number of steady state messages...............12,800,000,000
+
+(A14) SUBSCRIBE termination.....................................20
+(A15) NOTIFY terminated.........................................20
+(A16) Number of sign-out messages....................4,000,000,000
+
+(A17) Total messages between domains................27,200,000,000
+(A18) Total number of messages / second....................944,444 
+
+          Very large network peering with no optimizations
+]]></artwork></figure>
+
+<figure><artwork><![CDATA[
+(A01) Subscription lifetime (hours)..............................8
+(A02) Presence state changes / hour..............................6
+(A03) Subscription refresh interval / hour.......................1
+(A04) Total federated presentities per watcher..................10
+(A05) Number of dialogs to maintain per watcher..................1
+(A06) Number of watchers in a federated presence domain.10,000,000
+	
+(A07) Initial SUBSCRIBE/200 per watcher..........................2
+(A08) Initial NOTIFY/200 per watcher.............................2
+(A09) Total initial messages............................40,000,000
+
+(A10) NOTIFY/200 per watched presentity........................960
+(A11) SUBSCRIBE/200 refreshes...................................16
+(A12) NOTIFY/200 due to subscribe refresh........................0
+(A13) Number of steady state messages................9,760,000,000
+
+(A14) SUBSCRIBE termination......................................2
+(A15) NOTIFY terminated..........................................2
+(A16) Number of sign-out messages.......................40,000,000
+
+(A17) Total messages between domains................19,680,000,000
+(A18) Total number of messages / second....................683,333 
+
+           Very large network peering with optimizations
+]]></artwork></figure>
+
+</section>
+
+<section title="Intra-domain peering">
+
+    <t>Within a particular domain, multiple presence infrastructures are 
+    deployed with users split between the two.  This scenario is unique in 
+    that federated messages do not pass outside the administrative domain's 
+    network.  The two infrastructures peer directly inside the domain.  A 
+    common example of this is an enterprise IT system with multiple 
+    independent vendor presence solutions deployed(e.g., a presence solution 
+    for desktop messaging deployed alongside a presence solution for IP 
+    telephony).</t>
+
+    <t>Common characteristics of this deployment are</t>
+
+    <t><list style="symbols">
+    <t>The difference between subscriptions to presentities in one system vs. 
+    the other are completely arbitrary.  Any one presentity is as likely to 
+    be homed on one infrastructure as the other</t>
+    <t>Active users are almost guaranteed of subscribing to many users in the 
+    peer infrastructure</t>
+    <t>The level of intersection of presentities is extremely high</t>
+    </list></t>
+
+    <t>The first table below provides the calculations without optimizations 
+    the second table provides the calculations with optimization. Even 
+    though the relatively conservative numbers are used, the amount of 
+    messages is still very high even though optimization may cut the 
+    traffic by more then half </t>
+
+<figure><artwork><![CDATA[
+
+(A01) Subscription lifetime (hours)..............................8
+(A02) Presence state changes / hour..............................3
+(A03) Subscription refresh interval / hour.......................1
+(A04) Total federated presentities per watcher..................10
+(A05) Number of dialogs to maintain per watcher.................10
+(A06) Number of watchers in a federated presence domain.....60,000
+	
+(A07) Initial SUBSCRIBE/200 per watcher.........................20
+(A08) Initial NOTIFY/200 per watcher............................20
+(A09) Total initial messages.............................2,400,000
+
+(A10) NOTIFY/200 per watched presentity........................480
+(A11) SUBSCRIBE/200 refreshes..................................160
+(A12) NOTIFY/200 due to subscribe refresh......................160
+(A13) Number of steady state messages...................48,400,000
+
+(A14) SUBSCRIBE termination.....................................20
+(A15) NOTIFY terminated.........................................20
+(A16) Number of sign-out messages........................2,400,000
+
+(A17) Total messages between domains...................105,600,000
+(A18) Total number of messages / second......................3,667 
+
+            Inter-domain peering with no optimizations
+]]></artwork></figure>
+
+<figure><artwork><![CDATA[
+(A01) Subscription lifetime (hours)..............................8
+(A02) Presence state changes / hour..............................3
+(A03) Subscription refresh interval / hour.......................1
+(A04) Total federated presentities per watcher..................10
+(A05) Number of dialogs to maintain per watcher..................1
+(A06) Number of watchers in a federated presence domain.....60,000
+	
+(A07) Initial SUBSCRIBE/200 per watcher..........................2
+(A08) Initial NOTIFY/200 per watcher.............................2
+(A09) Total initial messages...............................240,000
+
+(A10) NOTIFY/200 per watched presentity........................480
+(A11) SUBSCRIBE refreshes.......................................16
+(A12) NOTIFY/200 due to subscribe refresh........................0
+(A13) Number of steady state messages...................29,760,000
+
+(A14) SUBSCRIBE termination......................................2
+(A15) NOTIFY terminated..........................................2
+(A16) Number of sign-out messages..........................240,000
+
+(A17) Total messages between domains....................60,480,000
+(A18) Total number of messages / second......................2,100
+
+            Inter-domain peering with optimizations
+]]></artwork></figure>
+
+</section>
+</section>
+</section>
+
+<section title="State Management">
+
+<t>In previous section we have discussed the big amount of messages that need to 
+be sent to/from a presence server In this section the state that needs to be 
+maintained by a presence server will be analyzed and shown to be far from 
+trivial.</t>
+
+<t>The presence server has two parallel tasks.</t>
+
+<t><list style="numbers">
+<t>Maintain the state of the resources to which subscribers subscribe.</t>
+<t>Maintain the state of the subscriptions of subscribers and provide timely updates to the subscription.</t>
+</list></t>
+
+<t>For a single subscription from a single watcher on a resource, the presence server has to maintain the
+following state:</t>
+
+<t><list style="symbols">
+<t>Subscription state including all the parameter that are needed in order to maintain the subscription as timers.</t>
+<t>Optional filtering information that was requested by the subscriber. This includes enough information that is needed
+for doing the filtering. In addition additional information has to be maintained if partial notification is being supported for the subscription</t>
+<t>Optional rate management information as throttling</t>
+<t>Watcher information <xref target="RFC3857"/>, <xref target="RFC3858"/> that is resulted from the subscription
+itself so users that are subscribed to can see who is watching them</t>
+</list></t>
+
+<t>For each resource that has been subscribed to in the presence server, the presence server has to maintain the
+following state:</t>
+<t><list style="symbols">
+<t>A list of the subscriptions for the resource. Note that this is already taken care of from the size calculation
+point of view by the subscription state above.</t>
+<t>Privacy information for the resource.</t>
+</list></t>
+
+<t>For each resource for which there was any publication and the resource has a state other then a default value,
+the presence server has to maintain the current value of the resource.</t>
+
+<section title="State Size Calculations">
+
+<t>Lets assume the following sizes:</t>
+<t><list style="symbols">
+<t>Subscription size - 2K bytes. This includes watcher information that need to be created by the presence
+server for each subscription.</t>
+<t>Subscribed to resource - 1K bytes (for privacy information and other management info.
+The subscriptions themselves are already
+calculated in the previous bullet.</t>
+<t>Resource with a state - 6K bytes. This is a moderate assumption if we take into account the amount of data that is being put in a presence document as multiple devices, calendar and geographical information.</t>
+</list></t>
+
+<section title="Tiny System">
+
+<t><list style="symbols">
+<t>10K subscriptions = 19M bytes.</t>
+<t>5K subscribed to resources = 5M bytes.</t>
+<t>10K resources with state = 58M bytes.</t>
+</list></t>
+
+<t>Total is 82M bytes.</t>
+
+</section>
+
+<section title="Medium System">
+
+<t><list style="symbols">
+<t>100K subscriptions = 195M bytes.</t>
+<t>50K subscribed to resources = 49M bytes.</t>
+<t>100K resources with state = 586M bytes.</t>
+</list></t>
+
+<t>Total is 830M bytes.</t>
+
+</section>
+
+<section title="Large System">
+
+<t><list style="symbols">
+<t>6M subscriptions = 11,718M bytes.</t>
+<t>3M subscribed to resources = 2,929M bytes.</t>
+<t>4M resources with state = 23437M bytes.</t>
+</list></t>
+
+<t>Total is 38G bytes.</t>
+
+</section>
+
+<section title="Very Large System">
+
+<t><list style="symbols">
+<t>150M subscriptions = 292,969M bytes.</t>
+<t>75M subscribed to resources = 73,242M bytes.</t>
+<t>100M resources with state = 585,937M bytes.</t>
+</list></t>
+
+<t>Total is 952G bytes which is a very big number for a very dynamic storage as needed by the presence server.</t>
+
+</section>
+
+<t>Although the numbers above may seem moderate enough for the sizes that the presence server is
+handling we should consider the following:</t>
+
+<t><list style="symbols">
+
+<t>Dynamic state - Although the state may seem not so big for databases even for 
+the very large system, we need to remember that this state is a very dynamic 
+state. Subscriptions come and go all the time, the status of resources is being 
+updated and so forth. This means that the presence server has to manage its 
+state in a medium that is very dynamic and for such large sizes this task is not 
+trivial.</t>
+
+<t>Intelinked state - The subscriptions and the subscribed to resources are 
+dependent on each other. There need to be a link from the resource to the 
+subscriptions and vice versa. This means that it is not trivial to e.g. separate 
+the storage of subscriptions from the the resources. The intelinking is becoming 
+a much more complex task when the presence server is deployed as a cluster of 
+servers where each of the servers need to manage part of the overall state.</t>
+
+<t>Moderate assumptions - The size assumptions that were made above are quite 
+moderate. As presence is becoming more a core middleware functionality that holds 
+a lot of data on the user. In real-life the numbers above may be even higher and 
+the presence server can have additional overhead as managing the SIP sessions, 
+networking and more.</t>
+
+</list></t>
+
+</section>
+
+<t>Although the calculations above do not show that there is a real issue with state management of presence
+in medium systems, the state size in large and very large systems is very big and may need special technology
+to enable a presence server to handle the sate efficiently.</t>
+
+</section>
+
+<section title="Processing complexities">
+
+<t>The basic presence paradigm consists from a subscriber and a resource to which the
+subscriber subscribes to. It sounds simple enough but there are many additions and extensions
+that the presence server has to manage that make the processing of the presence server very complex one.</t>
+
+<t>In this section we show that in addition to the large amount of messages and the big state
+that the presence server has to handle, it has also to handle quite intensive processing for aggregation,
+partial notify and publish, filtering and privacy. This makes the task for the presence server challenging
+in all possible fronts: network, memory and cpu.</t>
+
+
+<section title="Aggregation">
+
+<t>A presence document does not represent a single resource only but a user may have
+many resources that update the presence documents. These resources can be devices of
+the user, external providers of presence information for the user as geographical
+and calendar information and more.</t>
+<t>The presence server need to be able to get the updates from all the resource and
+aggregate them correctly into a single presence document. Although this is just "XML processing" task,
+the amount of updates that the presence server may get, the need to keep the presence document
+aligned with its schema and the need to notify the users as soon as possible create a significant
+processing burden on the presence server</t>
+
+</section>
+
+<section title="Partial Publish and Notify">
+
+<t>Drafts <xref target="I-D.ietf-simple-partial-notify"/>, <xref target="I-D.ietf-simple-partial-publish"/>
+define a way for the subscriber to request 
+getting only what was changed in the presence document and for the publisher of 
+presence information to publish only what was changed in the presence document 
+since the last publish. Although these optimizations help in reducing the amount 
+of actual data that is sent from/to the presence server, these optimizations 
+create additional processing burden on the presence server.</t>
+
+<t>When a partial publish is arriving to the presence server, the presence 
+server has to be able to process the partial publish, change only what is 
+indicated in the partial publish while keeping the presence document in a well 
+formed shape according to the schema.</t>
+
+<t>In partial notify the processing is even more complex. In partial notify each 
+watcher need to get the partial update based on the last update that was 
+received by that watcher. Therefore <xref target="I-D.ietf-simple-partial-notify"/>
+specifies a versioning mechanism that enables the watcher to get the 
+updates based on the previous state that it has seen. However this versioning 
+mechanism has to be maintained by the presence server for each watcher to the 
+subscribed to resource that requires partial publish.</t>
+
+</section>
+
+<section title="Filtering">
+
+<t>Filtering as defined in RFCs <xref target="RFC4660"/>, <xref 
+target="RFC4661"/> enables a watcher to request to be notified only when the 
+presence document fulfills certain conditions. Although this is a very 
+convenient feature for watchers, the burden that is put on the presence server 
+is quite big. For each change in the presence document, the presence server 
+needs to compute the filtering expressions which can be very complex, decide 
+whether and what to send to the watcher that have requested filtering.</t>
+
+</section>
+
+<section title="Privacy">
+<t>Draft <xref target="I-D.ietf-simple-presence-rules"/> defines presence authorization rules
+that can be used by presentities to define who can see what from their presence documents.
+The processing that the presence server has to do here is very similar to filtering. When there
+is a change to any presence document that has filtering defined for it, the presence server needs to
+create different notification for different watchers according to what is defined in the authorization rules.</t>
+
+</section>
+
+</section>
+
+<section title="Resource List Service">
+
+<t>RFC <xref target="RFC4662"/> defines a way to subscribe on a single URI while that URI is
+actually a list of resources that are being subscribed to by a single subscription. Although
+this is quite useful mechanism and it significantly saves on the number of sessions between
+the watcher and the presence server (as we show in the message calculations), this feature has
+the potential to make the number of subscriptions in a presence system to grow exponentially.</t>
+
+<t>There are two types of groups that may be used with this feature, private
+groups that are defined for each watcher and public groups that are defined in the system
+and can be used by any user. Public groups can be a source of making the number of
+subscriptions in the system grow exponentially. They are convenient to use, usually
+system administrator do not limit the size of these groups and in many cases we can
+find public groups that cover almost all the enterprise...</t>
+
+<t>Another aspect of the exponentially of resource lists is that as it is defined
+today by <xref target="RFC4662"/> and with the current way that authorization between
+servers can be done, the RLS needs to subscribe on each resource that appear in the
+resource list even if that resource has been subscribed to by the RLS dozen times for other resource lists.
+This way of behavior creates an exponential and complex mesh of subscriptions between RLSs and presence servers.</t>
+</section>
+
+<section title="Summary">
+
+<t>In the previous sections we have shown several areas where the deployment
+of a presence system is far from being trivial, these include network load,
+memory load and CPU load. In this section we are listing an initial set of
+requirements to a possible optimizations in this area and we also list the existing
+and some suggested suggestions for opimizations.</t>
+
+<section title="Requirements">
+
+    <t>The following is an initial list requirements for 
+    optimizations that seem to be necessary in presence systems:</t>
+
+    <t>Backward compatibility requirements</t>
+
+    <t><list style="symbols">
+
+    <t>The solution should not hinder the ability of existing SIMPLE clients 
+    and/or servers from peering with a domain or client implementing the 
+    solution.  No changes may be required of existing servers to 
+    interoperate</t>
+
+    <t>It does NOT constrain any existing RFC functional or security 
+    requirements for presence</t>
+
+    <t>Systems that are not using the new additions to the protocol should 
+    operate at the same level as they do today</t>
+
+    </list></t>
+
+    <t>Policy, privacy, permissions requirements</t>
+
+    <t><list style="symbols">
+
+    <t>The solution does not limit the ability for presentities to present 
+    different views of presence to different watchers</t>
+
+    <t>The solution does not restrict the ability of a presentity to obtain 
+    its list of watchers</t>
+
+    <t>The solution MUST NOT create any new or make worse any existing 
+    privacy holes</t>
+
+    </list></t>
+
+    <t>Scalability requirements</t>
+
+    <t><list style="symbols">
+
+    <t>It is highly desirable for any presence system (intra or inter-domain) to scale linearly as 
+    number of watchers and presentities increase linearly</t>
+
+    <t>The solution SHOULD NOT require significantly more state in order to 
+    implement the solution</t>
+
+    <t>It MUST be able to scale to tens of millions of concurrent users in 
+    each domain and in each peer domain</t>
+
+    <t>It MUST support a very high level of watcher/presentity intersections 
+    in various intersection models</t>
+
+    <t>Protocol changes MUST NOT prohibit optimizations in different 
+    deployment models esp. where there is a high level of cross 
+    subscriptions between the domains</t>
+    
+    <t>New functionalities and extensions to the presence protocol SHOULD take into account
+    scalability with respect to the number of messages, state size and management
+    and processing load.</t>
+
+    </list></t>
+
+    <t>Topology requirement</t>
+
+    <t><list style="symbols">
+
+    <t>The solution SHOULD allow for arbitrary federation topologies 
+    including direct peering and intermediary routing</t>
+
+    </list></t>
+
+</section>
+
+<section title="Optimizations">
+
+<t>This section lists the current optimizations that have been defined, are being worked on or are suggested.</t>
+
+<t><list style="symbols">
+
+<t>Subnot-etags - Draft <xref target="I-D.niemi-sip-subnot-etags"/>. This draft 
+suggests ways to suppress the sending of unnecessary notifies when for example a 
+subscription is refreshed. This suggestion seems to be an efficient 
+optimization since it saves both the number of messages sent and on the 
+processing time of the presence server.</t> 
+
+<t>Resource List Service - <xref target="RFC4662"/> enable creating a single subscription
+session between the watcher and the presence server for subscribing on a list of users.
+This saves the amount of sessions that are created between watchers and presence servers.
+On the other hand, this mechanism enables creating very large amount of subscriptions in the
+presence server/RLS system thus enabling the creation of a very large number of subscriptions
+between presence servers and RLSs with relatively few clients especially if large public groups
+are used. It seems that in order to really optimize in this area, the usage of large public
+groups should not be considered as BCP and there should be a way for an RLS to create a single
+subscription for multiple occurrences of the same resource in resource lists. See consolidates
+subscriptions below.</t>
+
+<t>Partial notify/publish - Drafts <xref target="I-D.ietf-simple-partial-notify"/>,
+<xref target="I-D.ietf-simple-partial-publish"/> define a way for the 
+subscriber to request getting only what was changed in the presence document and 
+for the publisher of presence information to publish only what was changed in 
+the presence document since the last publish. Although these optimizations help 
+in reducing the amount of actual data that is sent from/to the presence server, 
+these optimizations create additional processing burden on the presence 
+server as was discussed above.</t>
+
+<t>Filtering as defined in RFCs <xref target="RFC4660"/>, <xref 
+target="RFC4661"/> enables a watcher to request to be notified only when the 
+presence document fulfills certain conditions. Although this optimization 
+enables saving on the amount of messages that are sent from the presence server to the watcher, this 
+optimization puts more burden on the processing time of the presence server as 
+was discussed above.</t>
+
+
+<t>Throttling [draft-niemi-sipping-event-throttle-04.txt - expired at the time 
+of the writing of this document] defines a mechanism in which a watcher requires 
+to be updated only in certain intervals. Although this mechanism may give some 
+extra load on the processing time of the presence server, that load is 
+negligible and the reduction on the amount of messages sent from the presence 
+server to the watchers is significant. This optimization is even more important 
+with resource lists where there can be many resources in the resource lists and 
+if the traffic of updates on resource list is not regulated, the watcher may get 
+very large amount of notifications.</t>
+
+<t>Presence specific sigcomp dictionary <xref target="I-D.garcia-simple-presence-dictionary"/>
+defines a SIGCOMP <xref target="RFC3320"/> dictionary for 
+presence. This optimization will enable to reduce the number of bytes that are 
+transferred in presence systems by compressing the textual SIP messages and using 
+the specialized presence dictionary the compression may be more significant then 
+just using SIGCOMP as is. Note that number of actual messages will remain the 
+same and a calculation of the amount of bytes that will be saved may be 
+useful here.</t>
+
+<t>Content Indirection <xref target="RFC4483"/> enables sending only the URI of the
+presence document to the watcher thus offloading the presence server from sending the
+presence document to the watcher. This optimization may be useful in some cases but in reality
+it may have several drawbacks:
+<list style="numbers">
+<t>Due to partial/privacy/filtering and other functionalities, it will be relatively a rare case where many watchers will
+get exactly the same presence document.</t>
+<t>There should be a mechanism that will enable removing the content from the content server at
+the appropriate time. Defining the appropriate time is far from trivial since the removal should be synchronized with all the
+watcher that need to get the content.</t>
+</list></t>
+
+<t>Resubscription to resource list <xref target="RFC4662"/> requires that a full 
+state will be sent for subside refreshes. In large resource lists the amount 
+of data that needs to be sent for each subscribe refresh may be very big. Having 
+an optimization that will enable sending only partial information at subscribe 
+refreshes may let RLS subscriptions be more optimized.</t>
+
+<t>No Resubscriptions - Due to the nature of SIP that is network agnostic and always assumes the
+worst for the network layer, resubscriptions are part of the SIP sub/notify model <xref target="RFC3265"/>.
+In many cases it should be possible to negotiate a special connection between watchers and presence servers,
+this type of connection will use a different mechanism of e.g. keep alives and will not necessitate resubscribes.
+This will be mostly important between presence domains and between RLSs and presence servers and may save many messages.</t>
+
+<t>Consolidated Subscriptions - In many of cases described in this document 
+there are many subscriptions between peers that may be consolidated into a single 
+subscription. One example of such subscriptions are subscriptions between 
+domains, another example of such subscriptions are subscriptions that are 
+created by the resource list server (RLS) to the presence servers that hold the 
+presence document. The reason for not being able to do consolidation of subscriptions is  
+privacy. A presence server needs to know who is the actual watcher in 
+order to know if and what to send on the subscription. Enabling a single 
+subscription from one presence server or an RLS to another presence server on 
+behalf of many watchers contradicts the privacy considerations but on the other 
+hand this single optimization can have a very big impact of the amount of the 
+subscriptions that are required in the presence system. Some suggestions have 
+been suggested but there is not concrete proposal on how to enable consolidated 
+subscriptions while adhering to the privacy requirments.</t>
+
+</list></t>
+
+</section>
+
+</section>
+
+<section title="Extremely Optimized  Model">
+
+<t>The following calculations are made assuming that the following optimizations are deployed:</t>
+
+<t><list style="symbols">
+<t>No resubscriptions are necessary.</t>
+<t>Consolidates Subscriptions are possible.</t>
+</list></t>
+
+<t>The following table shows the amount of messages that are required in this model
+using the very large network model numbers. We assume that even though there are 10M watchers
+from one domain to the other, the number of actually watched resources is only 3M.</t>
+
+<figure><artwork><![CDATA[
+(A01) Subscription lifetime (hours)..............................8
+(A02) Presence state changes / hour..............................6
+(A03) Subscription refresh interval / hour.......................0
+(A04) Total federated presentities per watcher..................10
+(A05) Number of dialogs to maintain per watcher..................1
+(A06) Number of watchers in a federated presence domain.10,000,000
+(A06-1) Number of resources watched......................3,000,000
+	
+(A07) Initial SUBSCRIBE/200 per watcher..........................2
+(A08) Initial NOTIFY/200 per watcher.............................2
+(A09) Total initial messages............................12,000,000
+
+(A10) NOTIFY/200 per watched presentity........................960
+(A11) SUBSCRIBE/200 refreshes....................................0
+(A12) NOTIFY/200 due to subscribe refresh........................0
+(A13) Number of steady state messages................2,880,000,000
+
+(A14) SUBSCRIBE termination......................................2
+(A15) NOTIFY terminated..........................................2
+(A16) Number of sign-out messages.......................12,000,000
+
+(A17) Total messages between domains.................5,808,000,000
+(A18) Total number of messages / second....................201,333 
+
+      Very large network peering with extreme optimizations
+]]></artwork></figure>
+
+<t>Note that we get almost a 3 fold less messages by only assuming that 10M absorbers
+subscribe to 3M resources while consolidated subscriptions are possible. Note that due to
+the usage of the subnot-etags <xref target="I-D.niemi-sip-subnot-etags"/> optimization the
+total removal of resubscribes does not save many messages as the following table shows:</t>
+
+<figure><artwork><![CDATA[
+(A01) Subscription lifetime (hours)..............................8
+(A02) Presence state changes / hour..............................6
+(A03) Subscription refresh interval / hour.......................1
+(A04) Total federated presentities per watcher..................10
+(A05) Number of dialogs to maintain per watcher..................1
+(A06) Number of watchers in a federated presence domain.10,000,000
+(A06-1) Number of resources watched......................3,000,000
+	
+(A07) Initial SUBSCRIBE/200 per watcher..........................2
+(A08) Initial NOTIFY/200 per watcher.............................2
+(A09) Total initial messages............................12,000,000
+
+(A10) NOTIFY/200 per watched presentity........................960
+(A11) SUBSCRIBE/200 refreshes...................................16
+(A12) NOTIFY/200 due to subscribe refresh........................0
+(A13) Number of steady state messages................2,928,000,000
+
+(A14) SUBSCRIBE termination......................................2
+(A15) NOTIFY terminated..........................................2
+(A16) Number of sign-out messages.......................12,000,000
+
+(A17) Total messages between domains.................5,904,000,000
+(A18) Total number of messages / second....................205,000
+
+     Very large network extreme optimizations+resubscribe
+]]></artwork></figure>
+
+<t>"Only" additional 3.5K messages per second are needed if we re-introduce re-subscriptions, since the
+subnot-etags <xref target="I-D.niemi-sip-subnot-etags"/> optimization is used.</t>
+
+</section>
+
+
+    <section title="Security Considerations">
+
+    <t>This document discusses scalability issues with the existing SIP/SIMPLE 
+    presence protocol and model. Therefore, there are no security considerations to be 
+    considered for this document.</t>
+
+   </section>
+
+    <section title="Acknowledgments">
+
+    <t>We would like to thank Jonathan Rosenberg, Markus Isomaki and David Viamonte for their ideas and input.</t>
+
+   </section>
+
+
+   </middle>
+
+    <back>
+			<references title="Normative References">
+				<?rfc include="reference.RFC.2119" ?>
+			</references>
+    	<references title="Informational References">
+				<?rfc include="reference.RFC.3265" ?>
+				<?rfc include="reference.RFC.3320" ?>
+				<?rfc include="reference.RFC.3856" ?>
+				<?rfc include="reference.RFC.3857" ?>
+				<?rfc include="reference.RFC.3858" ?>
+				<?rfc include="reference.RFC.4483" ?>
+				<?rfc include="reference.RFC.4660" ?>
+				<?rfc include="reference.RFC.4661" ?>
+				<?rfc include="reference.RFC.4662" ?>
+    		<?rfc include="reference.I-D.ietf-simple-partial-notify" ?>
+    		<?rfc include="reference.I-D.ietf-simple-partial-publish" ?>
+    		<?rfc include="reference.I-D.ietf-simple-presence-rules" ?>
+    		<?rfc include="reference.I-D.ietf-sipping-uri-list-subscribe" ?>
+    		<?rfc include="reference.I-D.garcia-simple-presence-dictionary" ?>
+    		<?rfc include="reference.I-D.niemi-sip-subnot-etags" ?>
+			</references>
+    </back>
+</rfc>

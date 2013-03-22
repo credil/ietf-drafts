@@ -1,0 +1,404 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSPY v5 rel. 3 U (http://www.xmlspy.com)
+     by Daniel M Kohn (private) -->
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+
+<!-- zzzz next line -->
+<rfc category="std" ipr="full3978" docName="draft-xu-idr-tunnel-00.txt">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="no" ?>
+<?rfc compact="yes" ?>
+
+    <front>
+		<title abbrev="BGP Tunnel Endpoint">Tunnel Endpoints in BGP</title>
+
+
+	        <author initials ='X' surname ='Xu' fullname='Xiaohu Xu'>
+            <organization abbrev="Huawei">Huawei Technologies</organization>
+            <address>
+                <postal>
+<street>
+No.3 Xinxi Rd., Shang-Di Information Industry Base, Hai-Dian District
+</street>
+                    <city>Beijing</city>
+                    <region>Beijing</region>
+                    <code>100085</code>
+                    <country>P.R.China</country>
+                </postal>
+                <phone>+86 10 82836073</phone>
+                <email>xuxh@huawei.com</email>
+            </address>
+        </author>
+
+
+	    <author initials ='P' surname ='Francis' fullname='Paul Francis'>
+            <organization abbrev="Cornell U.">Cornell University</organization>
+            <address>
+                <postal>
+                    <street>4108 Upson Hall</street>
+                    <city>Ithaca</city>
+                    <region>NY</region>
+                    <code>14853</code>
+                    <country>US</country>
+                </postal>
+                <phone>+1 607 255 9223</phone>
+                <email>francis@cs.cornell.edu</email>
+            </address>
+        </author>
+ 
+	<!-- zzzz set date zzzz -->
+	<date day="26" month="October" year="2008"/>
+
+        <abstract>
+		<t> 
+Virtual Aggregation (VA) is a mechanism for shrinking the size of the 
+DFZ FIB in routers <xref target="I-D.francis-idr-intra-va"></xref>.
+VA can result in longer paths and increased load
+on routers within the ISP that deploys VA.
+This document describes a mechanism that allows an AS that originates
+a route to associate a tunnel endpoint terminating at itself with the
+route.
+This allows routers in a remote AS to tunnel packets to the originating
+AS.
+If transit ASes between the remote AS and the originating AS install
+the prefixes associated with tunnel endpoints in their FIBs, 
+then tunneled packets that transit through them will take the shortest
+path.  This results in reduced load for the transit AS, and better
+performance for the customers at the source and destination.
+</t>
+        </abstract>
+
+    </front>
+
+    <middle>
+
+
+<section anchor="sec-intro" title="Introduction">
+<t>
+Virtual Aggregation (VA) <xref target="I-D.francis-idr-intra-va"></xref>
+is a mechanism
+for reducing FIB size for routers within the AS that deploys VA.
+This is done through "FIB Suppression", where certain routers in the
+AS may not install routes to certain prefixes in their FIB.
+The downside of using VA is that packets addressed to suppressed prefixes
+transiting the AS may take a longer path than otherwise necessary.  
+</t>
+<t>
+For instance, imagine a packet traversing AS-path S-A-B-C-D, where ASes
+S and D are the service providers for their respective customers.
+Further, assume that ASes A, C, and D are using VA, and that
+A and C are FIB-suppressing the prefix associated with the packet.
+In this case, when the packet transits A and C, there is a good chance
+that it will take an extra router hop within A and C.  This increases
+load for A and C, and degrades performance for S's and D's customers.
+</t>
+<t>
+The mechanism described in this draft allows D, for instance, to
+associate a tunnel endpoint with the prefixes that it originates.
+The tunnel endpoint is an anycasted address
+that terminates at all of D's routers.
+If A and C FIB-install the route to the prefix associated with the tunnel
+endpoint, then packets tunneled to the FIB-suppressed prefix will take
+the shortest path.
+</t>
+<t>
+This draft describes a mechanism for advertising the tunnel endpoint
+address in BGP.
+It does so without changes to how BGP computes routes, and in such a way
+that packets always follow the expected AS path.  
+In other words, a tunnel T to a prefix P is not used unless the AS-path
+of the tunnel route and the AS-path of the prefix route are the same.
+</t>
+<t>
+This draft uses the Tunnel Encapsulation Attribute
+(TE-Attribute) defined in
+<xref target="I-D.ietf-softwire-encaps-safi"></xref>
+to encode the tunnel information.
+However, whereas 
+<xref target="I-D.ietf-softwire-encaps-safi"></xref>
+couples the TE-Attribute with the "Encapsulation SAFI", this draft
+uses the TE-Attribute in normal BGP updates transmitted over multiple
+ASes across the Internet.
+</t>
+<t>
+This draft extends the use of the optional, transitive TE-Attribute defined
+in section 4 of <xref target="I-D.ietf-softwire-encaps-safi"></xref>.
+Its purpose, as defined in 
+<xref target="I-D.ietf-softwire-encaps-safi"></xref>, is to allow
+a router acting as a tunnel endpoint to signal its tunnel type
+and tunnel parameters.  
+The TE-Attribute does not convey the actual
+IPv4 or IPv6 address of the tunnel endpoint.  Rather, this information
+is carried in the NEXT_HOP field of BGP.
+As such, the scope of 
+<xref target="I-D.ietf-softwire-encaps-safi"></xref> is only within the
+set of routers that do not change the NEXT_HOP field.
+</t>
+<t>
+This draft extends the use of the TE-Attribute so that it can be
+passed from AS to AS in normal BGP reachability updates.
+</t>
+	<section title="Requirements notation">
+            <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+            "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+            and "OPTIONAL" in this document are to be interpreted as
+	    described in 
+	    <xref target="RFC2119"/>.
+    </t>
+        </section>
+</section> <!-- "sec-intro" -->
+
+<section anchor="sec-field-def" title="Endpoint Address Sub-TLV Definition">
+<t>
+This draft defines a new sub-TLV to be used with the 
+TE-Attribute, the "Endpoint Address" sub-TLV.  The sub-TLV Type is TBD.
+The sub-TLV Value field is defined as:
+</t>
+<figure> <artwork><![CDATA[
+        +---------------------------------------------------------+
+        | Address Family Identifier (2 octets)                    |
+        +---------------------------------------------------------+
+        | Reserved  (1 octet)                                     |
+        +---------------------------------------------------------+
+        | Length of Autonomous System Number (1 octet)            |
+        +---------------------------------------------------------+
+        | Autonomous System Number (Variable)                     |
+        +---------------------------------------------------------+
+        | Endpoint Address (variable)                             |
+	+---------------------------------------------------------+
+ ]]></artwork> </figure>
+<t>
+The Autonomous System (AS) Number is that of the AS originating the
+route.
+The Endpoint Address is that of the tunnel endpoint.
+</t>
+</section> <!-- "sec-field-def" -->
+
+<section anchor="sec-usage" title="Usage of the TE-Attribute with an Endpoint Address Sub-TLV">
+<t>
+The following usage rules
+apply only to TE-Attributes that are NOT associated with
+an encapsulating SAFI (i.e. as defined by
+<xref target="I-D.ietf-softwire-encaps-safi"></xref>) and
+that include an Endpoint Address Sub-TLV.
+</t>
+
+<section anchor="sec-orig-as" title="Originating AS">
+<t>
+Only the router originating a route may include a TE-Attribute.
+In other words, the TE-Attribute MUST NOT be added to received routes.
+The AS number in the Endpoint Address Sub-TLV MUST match that used
+as the first AS in the AS path.
+The Endpoint Address itself does not have to
+be from the same AF as the reachable NLRI in the update.
+The reachable NLRI may be both IPv4 and IPv6.
+However, there MUST be an NLRI in the UPDATE that contains the
+endpoint address.
+</t>
+<t>
+An originating AS as defined here may be an AS that receives
+a route from a customer that uses a private AS number.
+</t>
+<t>
+If a tunnel endpoint router receives a packet on the tunnel, and the only
+known route to the destination is via routes originated by other ASes
+(not including private ASes of customers), then the packet must be dropped.
+This prevents transient loops whereby the ASes of a multi-homed customer 
+both think that the other AS can reach the customer.
+Once the route withdraw reaches all other ASes, no more packets will be
+received via the tunnel.
+</t>
+<t>
+All routers in the origin AS MUST use the same Endpoint Address, which
+is anycasted across all routers.
+The reason for imposing this restriction is as follows.  Say that an
+origin AS used different endpoint addresses for different routers, and
+that an upstream AS that does not recognize the TE-Attribute
+decided to aggregate two UPDATEs with different endpoint addresses.
+The aggregating AS might drop one of the TE-Attributes but include
+the other, with the result that the tunnel endpoint in the resulting
+UPDATE would be undetectably incorrect with respect to some of the NLRI
+in the UPDATE.
+</t>
+<t>
+The complete TE-attribute produced by all routers
+in the originating AS MUST be identical.
+The Protocol and Color Sub-TLV types are not used.
+If the encapsulation technique is GRE, and no key value is used, then
+the Endpoint Address Sub-TLV is the only one required.
+If the key value is used, or L2TPv3 is the tunnel type, then the
+Encapsulation Sub-TLV associated with the tunnel type is included.
+</t>
+<t>
+Note that even though the above paragraph states that the TE-attribute
+produced by all routers must be identical, in practice this is not
+strictly possible.
+If an AS decides to modify the endpoint address it uses, or decides
+to modify the tunnel type or tunnel parameters it uses, then for some
+period of time different routers will in fact be producing different
+TE-Attributes (i.e. while routers are being reconfigured).
+When this is the case, all routers MUST be able to receive tunneled
+packets for every TE-Attribute being produced by any router in the AS.
+For example, assume that an AS wants to modify its TE-Attributes from
+tunnel A to tunnel B (where A and B have different endpoint
+address, different tunnel types, or different tunnel parameters).
+The network administrator would first configure all routers to accept
+both tunnels A and B.  He or she would then modify routers to produce
+TE-Attributes for tunnel B.  After that was complete, he or she would
+delete tunnel A from all routers.
+</t>
+<t>
+It is for further study whether IP-in-IP encapsulation is required.
+It is also for further study whether multiple encapsulation types
+are required for the same UPDATE (i.e. to allow a remote router with
+limited encapsulation types to be able to select an encapsulation type
+that works for it.)
+</t>
+</section> <!-- "sec-orig-as" -->
+
+<section anchor="sec-nonorig-as" title="Non-Originating ASes">
+<t>
+ASes that have deployed VA SHOULD FIB-install routes containing the
+Endpoint Address.
+This will prevent packets tunneled to Endpoint Addresses from taking
+any extra hops.
+</t>
+<t>
+When a router in a non-originating AS receives a route with an associated
+Endpoint Address, it must decide whether or not to use the tunnel.
+The router always has the option of ignoring the tunnel (and will do so
+by default if it does not recognize the TE-attribute).  This section
+describes the criteria that determines when the router may use the tunnel.
+</t>
+<t>
+The router MUST NOT use the tunnel UNLESS the following criteria are met:
+<t><list style="numbers">
+<t>
+The AS_PATH to the tunnel endpoint matches the AS path to the reachable
+prefix.
+</t>
+<t>
+The AS_PATH advertised by the AS, for all NLRI for which a tunnel is used,
+matches that of the tunnel.
+</t>
+<t>
+The first AS in the AS_PATH Attribute is in an AS-SEQUENCE (not an AS-SET),
+and this AS matches the AS in the TE-attribute.
+This prevents an error whereby an aggregating AS combines NLRI from
+different originating ASes, and throws away all but one of the TE-attributes,
+thus resulting in an Endpoint Address that is incorrect.
+</t>
+<t>
+If there are multiple TE-attributes in the update, they MUST all be
+identical.
+In this case, the AS SHOULD delete all but one of the TE-attributes
+from UPDATEs it passes on.
+If they are not all identical, then the AS MUST ignore them
+and remove all of them from any UPDATES that it passes on.
+</t>
+</list></t>
+</t>
+<t>
+Note that the above rules have the characteristic that, if a transit
+AS decides to use one AS path to some prefixes from an origin AS, and
+another AS path to other prefixes from the origin AS, then only one
+of these paths can have a valid endpoint address associated with it.
+Packets transmitted to the other path cannot be tunneled.
+One way to fix this, that would require changes to this draft,
+would be to encode the tunnel endpoint as a block of addresses.  In this
+case, the transit AS that wishes to use multiple paths to different prefixes
+from an origin AS can deaggregate the block of addresses, and
+associate one tunnel endpoint block deaggregate with each selected path.
+Whether this is a good idea is for further study.
+</t>
+</section> <!-- "sec-nonorig-as" -->
+</section> <!-- "sec-usage" -->
+
+<section anchor="sec-iana" title="IANA Considerations">
+<t>
+IANA must issue a new Sub-TLV type for the Tunnel Encapsulation Attribute
+for the Endpoint Address Sub-TLV.
+</t>
+</section> <!-- "sec-iana" -->
+
+<section anchor="sec-sec" title="Security Considerations">
+<t>
+Because there are no changes in the BGP route selection process, 
+there are no changes to the security properties of BGP as a result
+of this draft.
+</t>
+</section> <!-- "sec-sec" -->
+
+
+    </middle>
+
+    <back>
+
+	    <references title='Normative References'>&rfc2119;
+
+
+<reference anchor='I-D.francis-idr-intra-va'>
+<front>
+<title>FIB Suppression with Virtual Aggregation and Default Routes</title>
+
+<author initials='P' surname='Francis' fullname='Paul Francis'>
+    <organization />
+</author>
+
+<author initials='X' surname='Xu' fullname='Xiaohu Xu'>
+    <organization />
+</author>
+
+<author initials='H' surname='Ballani' fullname='Hitesh Ballani'>
+    <organization />
+</author>
+
+<date month='September' day='15' year='2008' />
+
+<abstract><t>The continued growth in the Default Free Routing Table (DFRT) stresses the global routing system in a number of ways.  One of the most costly stresses is FIB size: ISPs often must upgrade router hardware simply because the FIB has run out of space, and router vendors must design routers that have adequate FIB.  FIB suppression is an approach to relieving stress on the FIB by NOT loading selected RIB entries into the FIB.  This document specifies two styles of FIB suppression.  Edge suppression (ES) allows ISPs that deploy a core- edge topology to shrink the FIBs of their edge routers, including those that interface to other ISPs and exchange the full DFRT. Virtual Aggregation (VA) allows ISPs to shrink the FIBs of any and all routers.  Both styles may be deployed autonomously by an ISP (cooperation between ISPs is not required), and can co-exist with legacy routers in the ISP.</t></abstract>
+
+</front>
+
+<seriesInfo name='Internet-Draft' value='draft-francis-idr-intra-va-01' />
+<format type='TXT'
+        target='http://www.ietf.org/internet-drafts/draft-francis-idr-intra-va-01.txt' />
+</reference>
+
+<reference anchor='I-D.ietf-softwire-encaps-safi'>
+<front>
+<title>BGP Encapsulation SAFI and BGP Tunnel Encapsulation Attribute</title>
+
+<author initials='P' surname='Mohapatra' fullname='Pradosh  Mohapatra'>
+    <organization />
+</author>
+
+<author initials='E' surname='Rosen' fullname='Eric Rosen'>
+    <organization />
+</author>
+
+<date month='June' day='4' year='2008' />
+
+<abstract><t>In certain situations, transporting a packet from one Border Gateway Protocol (BGP) speaker to another, the BGP next hop, requires that the packet be encapsulated by the first BGP speaker and decapsulated by the second. To support these situations, there needs to be some agreement between the two BGP speakers with regard to the "encapsulation information", i.e., the format of the encapsulation header as well as the contents of various fields of the header.  The encapsulation information need not be signaled for all encapsulation types. In the cases where the signaling is required (such as Layer Two Tunneling Protocol - Version 3 (L2TPv3), Generic Routing Encapsulation (GRE) with key), this draft specifies a method by which BGP speakers can signal encapsulation information to each other. The signaling is done by sending BGP updates using the "Encapsulation Subsequent Address Family Identifier (SAFI)" and IPv4 or IPv6 Address Family Identifier (AFI). In the cases where no encapsulation information needs to be signaled (such as GRE without key), this draft specifies a BGP extended community that can be attached to BGP UPDATE messages that carry payload prefixes to indicate the encapsulation protocol type to be used.</t></abstract>
+
+</front>
+
+<seriesInfo name='Internet-Draft' value='draft-ietf-softwire-encaps-safi-03' />
+<format type='TXT'
+        target='http://www.ietf.org/internet-drafts/draft-ietf-softwire-encaps-safi-03.txt' />
+</reference>
+
+	    </references>
+
+    </back>
+
+</rfc>

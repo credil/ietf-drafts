@@ -1,0 +1,661 @@
+<?xml version="1.0"?>
+<?rfc toc="yes"?><?rfc tocompact="yes"?><?rfc tocdepth="3"?><?rfc tocindent="yes"?><?rfc symrefs="yes"?><?rfc sortrefs="yes"?><?rfc comments="yes"?><?rfc inline="yes"?><?rfc compact="yes"?><?rfc subcompact="no"?><rfc category="exp" docName="draft-morin-mboned-igmpmld-error-feedback-00" ipr="full3978">
+  <front>
+    <title abbrev="">IGMP/MLD Error Feedback</title>
+
+    <author fullname="Thomas Morin" initials="T." surname="Morin">
+      <organization>France Telecom - Orange Labs</organization>
+
+      <address>
+        <postal>
+          <street>2, avenue Pierre Marzin</street>
+
+          <city>Lannion</city>
+
+          <code>22307</code>
+
+          <country>France</country>
+        </postal>
+
+        <email>thomas.morin@orange-ftgroup.com</email>
+      </address>
+    </author>
+
+    <date day="12" month="November" year="2007"/>
+
+    <workgroup>mboned</workgroup>
+
+    <keyword>draft</keyword>
+
+    <abstract>
+      <t>This document describes messages and procedures that can optionnaly
+      be implemented in IGMP/MLD Queriers and Hosts, to provide information to
+      terminals on the reason why the IGMP/MLD Querier didn't take into
+      account a Membership Report message.</t>
+    </abstract>
+
+    <note title="Requirements Language">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref target="RFC2119">RFC 2119</xref>.</t>
+    </note>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>Requirements have been formulated for means to provide mutticast
+      terminals with error feedback when the IGMP/MLD Querier did not or could
+      not process an IGMP/MLD Membership Report message (<xref target="I-D.ietf-mboned-maccnt-req"/>, section 4). Operator's
+      experience with IPTV deployments show that introducing such a feedback
+      in IGMP exhanges between terminals and multicast access equipments would
+      help provide a better service (e.g. a liaison between the IETF mboned
+      working group and the DSLForum was made in December 2005 to discuss this
+      issue, but didn't lead to a standardized solution).</t>
+
+      <t>An examples case is when an IGMP Querier refuses to take into account
+      an IGMP Membership Report because the number of multicast channels would
+      outpass the allowed threshold for the service. Many other examples of
+      the case where an IGMP error feedback channel would be useful are
+      presented in <xref target="error-codes"> </xref>.</t>
+
+      <t>This document describes new message encodings and the associated
+      procedures, all of which being optional and preserving full backward and
+      forward compatibility, and details the impact on the host API for
+      multicast subscriptions.</t>
+
+      <t>This document doesn't state yet whether the messages should be
+      carried over IGMP, ICMP or another protocol, but tries to document the
+      pros and cons of the different alternatives, to guide the decision
+      process.</t>
+    </section>
+
+    <section title="Terminology">
+      <t>The terminology in this document is the terminology used in <xref target="RFC3376"> </xref> and <xref target="RFC3810"> </xref>.</t>
+
+      <t>For readability, "Querier" and "Host(s)" will be used thoughout this
+      document, in place of "IGMP or MLD Querier" and "IGMP or MLD
+      Host(s)".</t>
+
+      <t/>
+    </section>
+
+    <section title="History and problem statement">
+      <t>The DSLForum expressed interest for such a feature, which was <xref target="magma-archive">discussed</xref> in a liaison with the Magma IETF
+      Working group. The specifications described in this document try to
+      address the comments exchanged on the magma WG mailing-list.</t>
+    </section>
+
+    <section title="Principle">
+      <t>The procedures described in this memo are fully optionnal : their
+      only intent is to carry informative data from the IGMP/MLD Querier to
+      the IGMP/MLD Hosts.</t>
+
+      <t>Most specifically, the intent is that:<list style="symbols">
+          <t>the procedures don't change the state machine of the IGMP Querier
+          or IGMP Host, the information carried is only meant to provide
+          information to the application subscribed to multicast data</t>
+
+          <t>an IGMP Host implementing these specifications will behave
+          correctly in the absence of these informations.</t>
+
+          <t>the behavior of an IGMP Querier implementing these specifications
+          is unchanged whether or not the hosts implement these specs.</t>
+        </list></t>
+
+      <t>Last, these specifications are not meant to carry information about
+      transient errors that the network is supposed to recover from, like
+      network outages.</t>
+    </section>
+
+    <section anchor="procedures" title="Procedures">
+      <section title="Procedures on the IGMP/MLD Querier">
+        <t>The following procedures introduce a new type of message : the
+        Feedback message. See section xxx for details about message
+        encodings.</t>
+
+        <t>Using these procedures a Querier can optionally emmit a Feedback
+        message after receiving a Membership Report message that it can not
+        process (see <xref target="error-codes"/> for example reasons on
+        why a Querier would not process a Membership Report message).</t>
+
+        <t>The Feedback message carries error type/sub-type field, and
+        information about the group to which the error pertains. Optionally,
+        if IGMPv3/MLDv2 is used, and if the error message pertains to some
+        specific sources, the addresses of the sources to which the error
+        pertains are included in the message.</t>
+
+        <t>The address to which the Feedback message will be sent is
+        determined as follows:<list style="symbols">
+            <t>if IGMPv3/MLDv2 is used and if the sender IP address is not
+            0.0.0.0 or 0000::/32, the address of sender of the IGMP Membership
+            Report is used</t>
+
+            <t>else, the group address that was mentioned in the Membership
+            Report message is used</t>
+          </list></t>
+
+        <t>The source address MUST be the same address as the address used for
+        Query messages, and the TTL MUST be set to 1.</t>
+
+        <t>If IGMPv2/MLDv1 is being used, only one feedback message should be
+        sent for a said Membership Report message.</t>
+
+        <t>If IGMPv3/MLDv2 is being used, only one feedback message should be
+        sent for each (S,G) in the Membership Report message.</t>
+
+        <t>In any case the amount of Feedback messages sent on a link MUST be
+        rate-limited,</t>
+      </section>
+
+      <section title="Procedures on the IGMP/MLD Host">
+        <t>When a Host receives an Feedback message, it MAY process it.</t>
+
+        <t>Processing a Feedback message consists in :<list style="symbols">
+            <t>MANDATORY checking that the TTL is set to 1</t>
+
+            <t>OPTIONALLY checking that the message source address is the
+            address of a known Querier</t>
+
+            <t>parsing the Feedback message</t>
+
+            <t>determining the network sockets for which the Feedback message
+            is relevant (G is the group address of the Feedback message)<list style="symbols">
+                <t>if no source address is included in the Feedback message,
+                the sockets are the sockets that have some active forwarding
+                state related to G (subscribed to G with a non-null include
+                list)</t>
+
+                <t>if some source addresses are indicated in the Feedback
+                message, the sockets are the sockets to which traffic from at
+                least one of these sources, and toward G, would be
+                forwarded</t>
+              </list></t>
+
+            <t>notifying these sockets of the error (see <xref target="application"/>)</t>
+
+            <t>OPTIONALLY logging the error and/or doing any local action
+            depending on policy</t>
+          </list></t>
+      </section>
+    </section>
+
+    <section title="Message encoding">
+      <t>This document currently only proposes a base encoding for the
+      Feedback message. Discussion is left open on the protocol on which these
+      messages should be piggybacked on, though ICMP and IGMP/MLD are natural
+      candidates. The definitive choice and exact detailed encodings will be
+      detailed in a later revision.</t>
+
+      <section title="Base encoding">
+        <t>Encoding of the error feedback message type, is as follows:<list style="symbols">
+            <t>error type (1 byte)</t>
+
+            <t>error sub-type (1 bytes)</t>
+
+            <t>group address (field length depends on IP protocol revision
+            used)</t>
+
+            <t>number of sources in error (possibly zero), followed by the
+            source addresses in error (possibly none, field length depends on
+            IP protocol revision used and number of sources)</t>
+          </list></t>
+
+        <t>[ nice ASCII-art might be considered for future revisions ]</t>
+      </section>
+
+      <section title="Protocol to carry error feedback messages">
+        <t>ICMP and IGMP/MLD are candidates for carrying the error feedback
+        message. This section exposes the pros/cons of both alternatives, and
+        ought to be removed once a decision is made on one of them.</t>
+
+        <section title="ICMP">
+          <t>The Feedback message could be an ICMP message that would use a
+          new ICMP message type (or possibly reusing existing types and
+          codes).</t>
+
+          <t>Pros:<list style="symbols">
+              <t>ICMP is already used to carry error messages between routers
+              and hosts (e.g.. port unreachable message)</t>
+
+              <t>ICMP has an extensible format which could easily be reused
+              for the Feedback function described in this memo</t>
+
+              <t>Implementations of network socket APIs already take into
+              account ICMP messages</t>
+            </list></t>
+
+          <t>Cons:<list style="symbols">
+              <t>ICMP has currently nothing to do with multicast today</t>
+
+              <t>some RFC explicitly forbid the sending of ICMP in reaction to
+              receiving multicast packets, and IGMP/MLD Membership Reports are
+              multicast packets (<xref target="RFC1122"/> section 7.2
+              and 3.2.2, <xref target="RFC1812"/> section 4.3.2.7) (see
+              <xref target="fenner-icmp-mcast"/>).</t>
+
+              <t>ICMP messages are (currently) never sent toward multicast
+              addresses, whereas that would be required to send Feedback
+              messages to IGMPv2/MLDv1 hosts</t>
+            </list></t>
+        </section>
+
+        <section title="IGMP/MLD">
+          <t>The Feedback message could be an IGMP or MLD message that would
+          use new IGMP/MLD message types.</t>
+
+          <t>Pros:<list style="symbols">
+              <t>IGMP and MLD are the protocols used for all operations
+              related to multicast subscription</t>
+            </list></t>
+
+          <t>Cons:<list style="symbols">
+              <t>possibly more work to define the encodings</t>
+
+              <t>a new IANA registry might be needed to manage Feedback error
+              codes</t>
+
+              <t>definition of how the network socket API will be used to
+              carry the information to the applications has to be defined</t>
+            </list></t>
+        </section>
+      </section>
+
+      <section anchor="error-codes" title="Error codes">
+        <t>This section describes some proposed based error types:</t>
+
+        <t><list style="symbols">
+            <t>improper message : the Membership Report message is improper
+            (the group address is not in the 224/0 or FF00::/8 range, or
+            specified sources are improper addresses)</t>
+
+            <t>IGMP version not supported by querier</t>
+
+            <t>wildcard on an SSM group : IGMPv2 or IGMPv3/MLDv2 with Exclude
+            source filter mode was asked, but the group address is not in the
+            SSM range of the Querier</t>
+
+            <t>exclude source filter mode not supported by the Querier</t>
+
+            <t>group administratively prohibited</t>
+
+            <t>source(s) administratively prohibited</t>
+
+            <t>resource limit reached</t>
+
+            <t>multicast reception is disabled on the link</t>
+          </list></t>
+
+        <t>[ This section will later be completed to include error type
+        numbers ]</t>
+
+        <t>Remind that the Feedback message is NOT meant to carry information
+        about transient errors that the network is supposed to recover from,
+        like for instance network outages.</t>
+
+        <t>An IANA registry may be required to manage these and future error
+        codes, and provide third party with the ability to define error codes
+        for IGMP/MLD error feedback.</t>
+      </section>
+    </section>
+
+    <section anchor="application" title="Feedback to the application layer">
+      <t>[ TBC : working group guidance is sought on how to link these
+      specifications with possibly needed evolution of the <xref target="posix">POSIX</xref> network socket API ]</t>
+
+      <t>This section describes how the information from Feedback messages is
+      supplied to applications subscribed to multicast stream, and expecting
+      the reception of multicast datagrams on a socket.</t>
+
+      <t>A requirement is fully backward compatibility with applications not
+      supporting these specifications : an application not supporting these
+      specifications must not be affected by a Feedback message. For instance,
+      a wrong solution would be to return an error on a read() or recv()
+      call.</t>
+
+      <t>A second requirement is to allow an application to keep receiving
+      data on a socket, even if some error was reported through a Feedback
+      message, for a group or channel joined on this socket. This is needed,
+      for instance, in two cases : when a socket is used to join multiple
+      distinct group or channels and only one of them is subject to an error ;
+      when a socket is used to join only one multicast group, for which the
+      Querier sends a Feedback message, but there are members for this group
+      sending data on a directly connected link.</t>
+
+      <t>A proposal is to rely on the use of the MSG_ERRQUEUE flag of the
+      recvmsg()/recvfrom() POSIX calls. This call allows the socket user to
+      retrieve the network errors queued for the socket. Further work is
+      required to fully describe how information from the Feedback message
+      would be mapped in the sock_extended_err structure.</t>
+
+      <t>Another proposal would be to allow the setsockopt() and
+      set(ipv4)sourcefilter() calls <xref target="RFC3678"/> to return
+      an error. That would require the local network stack to wait for some
+      time after sending a Membership Report message, before being able to
+      return from the setsockopt()/set(ipv4)sourcefilter() call, and would not
+      easily allow to carry detailed information about the specific group or
+      channel in error. Consequently, this approach doesn't seem a viable
+      one.</t>
+    </section>
+
+    <section title="Impact on IGMP/MLD proxies and equipments doing IGMP/MLD snooping">
+      <section title="IGMP/MLD Proxies">
+        <t>To support this Feedback mechanism, an <xref target="RFC4605">IGMP
+        or MLD proxy</xref> SHOULD send Feedback messages received on its Host
+        side toward its Querier side(s) that have matching multicast
+        memberships. The procedures for sending the Feedback messages are then
+        the same as for a normal Querier, as specified in <xref target="procedures"> </xref>: in particular the IGMP/MLD proxy MUST
+        use its own address as the source address of the Feedback message.</t>
+
+        <t>A new member of a multicast group already forwarded by the proxy on
+        its Querier side, will have to wait for some time before having a
+        chance to receive a Feedback message : timers will have to trigger
+        before the Querier on the Host side of the proxy sends a Query,
+        causing the proxy to send a Membership Report that may then cause the
+        Querier on the Host side to send a Feedback message, and this Feedback
+        message to be propagated to the new receiver.</t>
+
+        <t>To quickly provide Feedback messages to receivers on its Querier
+        side, the proxy MAY cache the Feedback messages that it receives on
+        the Host side to later match them with Membership Report messages
+        received on its Querier side, and send relevant Feedback messages in
+        reaction to these. If doing Feedback message caching, the proxy MUST
+        keep only one Feedback message per (S,G) entry or (*,G) entry. It MUST
+        also remove a Feedback message from its cache, if a same Feedback
+        message hasn't been sent in the last &lt;&gt; seconds by the Querier
+        on its Host side.</t>
+
+        <t>Last, an IGMP/MLD proxy MAY produce its own Feedback messages. In
+        that case it MUST still respect procedures of <xref target="procedures"/>.</t>
+      </section>
+
+      <section title="Equipments doing IGMP/MLD snooping">
+        <t>IGMP/MLD snooping equipments are expected to transparently
+        interoperate with the procedures described in this document, given
+        that <xref target="RFC4541">RFC 4541 section 2.2.1(3)</xref> states
+        that "[a] switch that supports IGMP snooping must flood all
+        unrecognized IGMP messages to all other ports".</t>
+      </section>
+    </section>
+
+    <section anchor="IANA" title="IANA Considerations">
+      <t>Request to IANA for ICMP or IGMP code point allocation would
+      expectedly be requested in the future for the messages defined in this
+      document.</t>
+
+      <t>[Note to RFC Editor: this section may be removed on publication as an
+      RFC.]</t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>Given that the specifications in this document do not change nor the
+      state machine of the IGMP/MDLD Querier and Host stack, nor the datagrams
+      that will be received by an application, they are not expected to
+      introduce security issues not already existing with IGMP/MLD or the
+      protocol used to carry the Feedback message.</t>
+
+      <t>A possible issue would be to have wrong Feedback sent toward
+      multicast applications. Such an issue could arise if spoofed Feedback
+      messages are sent and interpreted by multicast receiver hosts. This
+      issue is mitigated by the fact that IGMP/MLD Hosts MUST check that the
+      TTL of the Feedback messages is 1, and MAY also check the source IP of
+      the Feedback message against a list of known Queriers.</t>
+
+      <t>Another possible issue is denial of service of the Querier function,
+      that would be due to having the IGMP/MLD Querier be overloaded by
+      Feedback messages to send. This is mitigated by allowing the Querier to
+      rate-limit the flow of Feedback messages. On a LAN, such a rate-limiting
+      would possibly result in some receivers not receiving the feedback
+      message that they would have, which is a form of denial of service, but
+      only on the Feedback function by itself, with no impact on the rest of
+      the multicast group membership control protocol infrastructure. This
+      later type of denial of service might be mitigated by doing
+      rate-limiting based on the source address of the receivers (the source
+      address of the Membership Report triggering the Feedback message); but
+      such mechanism may themselves be subject to weaknesses due to Membership
+      Report spoofing.</t>
+    </section>
+
+    <section anchor="Acknowledgements" title="Acknowledgements">
+      <t>Acknowledgments go to DSLForum contributors who provided an initial
+      proposal, to IETF participants that participated in the discussion on
+      the magma WG list, from which guidance and inspiration was largely
+      taken. Thank you to Bill Fenner for providing detailed information on
+      issues related to ICMP errors in reaction to multicast datagrams.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <!-- Begin inclusion reference.RFC.2119.xml. --><reference anchor="RFC2119">
+
+<front>
+<title abbrev="RFC Key Words">Key words for use in RFCs to Indicate Requirement Levels</title>
+<author initials="S." surname="Bradner" fullname="Scott Bradner">
+<organization>Harvard University</organization>
+<address>
+<postal>
+<street>1350 Mass. Ave.</street>
+<street>Cambridge</street>
+<street>MA 02138</street></postal>
+<phone>- +1 617 495 3864</phone>
+<email>sob@harvard.edu</email></address></author>
+<date year="1997" month="March"/>
+<area>General</area>
+<keyword>keyword</keyword>
+<abstract>
+<t>
+   In many standards track documents several words are used to signify
+   the requirements in the specification.  These words are often
+   capitalized.  This document defines these words as they should be
+   interpreted in IETF documents.  Authors who follow these guidelines
+   should incorporate this phrase near the beginning of their document:
+
+<list>
+<t>
+      The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+      NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and
+      "OPTIONAL" in this document are to be interpreted as described in
+      RFC 2119.
+</t></list></t>
+<t>
+   Note that the force of these words is modified by the requirement
+   level of the document in which they are used.
+</t></abstract></front>
+
+<seriesInfo name="BCP" value="14"/>
+<seriesInfo name="RFC" value="2119"/>
+<format type="TXT" octets="4723" target="ftp://ftp.isi.edu/in-notes/rfc2119.txt"/>
+<format type="HTML" octets="17491" target="http://xml.resource.org/public/rfc/html/rfc2119.html"/>
+<format type="XML" octets="5777" target="http://xml.resource.org/public/rfc/xml/rfc2119.xml"/>
+</reference><!-- End inclusion reference.RFC.2119.xml. -->
+
+      <!-- Begin inclusion reference.RFC.3376.xml. --><reference anchor="RFC3376">
+
+<front>
+<title>Internet Group Management Protocol, Version 3</title>
+<author initials="B." surname="Cain" fullname="B. Cain">
+<organization/></author>
+<author initials="S." surname="Deering" fullname="S. Deering">
+<organization/></author>
+<author initials="I." surname="Kouvelas" fullname="I. Kouvelas">
+<organization/></author>
+<author initials="B." surname="Fenner" fullname="B. Fenner">
+<organization/></author>
+<author initials="A." surname="Thyagarajan" fullname="A. Thyagarajan">
+<organization/></author>
+<date year="2002" month="October"/></front>
+
+<seriesInfo name="RFC" value="3376"/>
+<format type="TXT" octets="119726" target="ftp://ftp.isi.edu/in-notes/rfc3376.txt"/>
+</reference><!-- End inclusion reference.RFC.3376.xml. -->
+
+      <!-- Begin inclusion reference.RFC.3810.xml. --><reference anchor="RFC3810">
+
+<front>
+<title>Multicast Listener Discovery Version 2 (MLDv2) for IPv6</title>
+<author initials="R." surname="Vida" fullname="R. Vida">
+<organization/></author>
+<author initials="L." surname="Costa" fullname="L. Costa">
+<organization/></author>
+<date year="2004" month="June"/>
+<abstract>
+<t>This document updates RFC 2710, and it specifies Version 2 of the ulticast Listener Discovery Protocol (MLDv2).  MLD is used by an IPv6 router to discover the presence of multicast listeners on directly attached links, and to discover which multicast addresses are of interest to those neighboring nodes.  MLDv2 is designed to be interoperable with MLDv1.  MLDv2 adds the ability for a node to report interest in listening to packets with a particular multicast address only from specific source addresses or from all sources except for specific source addresses. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="3810"/>
+<format type="TXT" octets="153579" target="ftp://ftp.isi.edu/in-notes/rfc3810.txt"/>
+</reference><!-- End inclusion reference.RFC.3810.xml. -->
+
+      <!-- Begin inclusion reference.RFC.3678.xml. --><reference anchor="RFC3678">
+
+<front>
+<title>Socket Interface Extensions for Multicast Source Filters</title>
+<author initials="D." surname="Thaler" fullname="D. Thaler">
+<organization/></author>
+<author initials="B." surname="Fenner" fullname="B. Fenner">
+<organization/></author>
+<author initials="B." surname="Quinn" fullname="B. Quinn">
+<organization/></author>
+<date year="2004" month="January"/>
+<abstract>
+<t>The Internet Group Management Protocol (IGMPv3) for IPv4 and the Multicast Listener Discovery (MLDv2) for IPv6 add the capability for applications to express source filters on multicast group memberships, which allows receiver applications to determine the set of senders (sources) from which to accept multicast traffic.  This capability also simplifies support of one-to-many type multicast applications.  This document specifies new socket options and functions to manage source filters for IP Multicast group memberships.  It also defines the socket structures to provide input and output arguments to these new application program interfaces (APIs).  These extensions are designed to provide access to the source filtering features, while introducing a minimum of change into the system and providing complete compatibility for existing multicast applications.</t></abstract></front>
+
+<seriesInfo name="RFC" value="3678"/>
+<format type="TXT" octets="36320" target="ftp://ftp.isi.edu/in-notes/rfc3678.txt"/>
+</reference><!-- End inclusion reference.RFC.3678.xml. -->
+
+      <!-- Begin inclusion reference.RFC.4605.xml. --><reference anchor="RFC4605">
+
+<front>
+<title>Internet Group Management Protocol (IGMP) / Multicast Listener Discovery (MLD)-Based Multicast Forwarding ("IGMP/MLD Proxying")</title>
+<author initials="B." surname="Fenner" fullname="B. Fenner">
+<organization/></author>
+<author initials="H." surname="He" fullname="H. He">
+<organization/></author>
+<author initials="B." surname="Haberman" fullname="B. Haberman">
+<organization/></author>
+<author initials="H." surname="Sandick" fullname="H. Sandick">
+<organization/></author>
+<date year="2006" month="August"/>
+<abstract>
+<t>In certain topologies, it is not necessary to run a multicast routing protocol.  It is sufficient for a device to learn and proxy group membership information and simply forward multicast packets based upon that information.  This document describes a mechanism for forwarding based solely upon Internet Group Management Protocol (IGMP) or Multicast Listener Discovery (MLD) membership information. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4605"/>
+<format type="TXT" octets="25558" target="ftp://ftp.isi.edu/in-notes/rfc4605.txt"/>
+</reference><!-- End inclusion reference.RFC.4605.xml. -->
+
+      <!-- Begin inclusion reference.RFC.4541.xml. --><reference anchor="RFC4541">
+
+<front>
+<title>Considerations for Internet Group Management Protocol (IGMP) and Multicast Listener Discovery (MLD) Snooping Switches</title>
+<author initials="M." surname="Christensen" fullname="M. Christensen">
+<organization/></author>
+<author initials="K." surname="Kimball" fullname="K. Kimball">
+<organization/></author>
+<author initials="F." surname="Solensky" fullname="F. Solensky">
+<organization/></author>
+<date year="2006" month="May"/>
+<abstract>
+<t>This memo describes the recommendations for Internet Group Management Protocol (IGMP) and Multicast Listener Discovery (MLD) snooping switches.  These are based on best current practices for IGMPv2, with further considerations for IGMPv3- and MLDv2-snooping.  Additional areas of relevance, such as link layer topology changes and Ethernet-specific encapsulation issues, are also considered.  This memo provides information for the Internet community.</t></abstract></front>
+
+<seriesInfo name="RFC" value="4541"/>
+<format type="TXT" octets="38555" target="ftp://ftp.isi.edu/in-notes/rfc4541.txt"/>
+</reference><!-- End inclusion reference.RFC.4541.xml. -->
+    </references>
+
+    <references title="Informative References">
+      <!-- Begin inclusion reference.I-D.ietf-mboned-maccnt-req.xml. --><reference anchor="I-D.ietf-mboned-maccnt-req">
+<front>
+<title>Requirements for Multicast AAA coordinated between Content Provider(s) and  Network Service Provider(s)</title>
+
+<author initials="H" surname="He" fullname="Haixiang He">
+    <organization/>
+</author>
+
+<date month="October" day="4" year="2007"/>
+
+<abstract><t>This memo presents requirements in the area of accounting and access control for IP multicasting. The scope of the requirements is limited to cases that Authentication, Accounting and Authorization (AAA) functions are coordinated between Content Provider(s) and Network Service Provider(s). General requirements for accounting and admission control capabilities including quality-of-service (QoS) related issues are listed. This memo assumes that these capabilities can be realized by functions implemented at edges of a network based on IGMP or MLD. Finally, cases for Content Delivery Services (CDS) are described as application examples which could benefit from multicasting accounting and access control capabilities as described in the memo. This memo defines requirements related to AAA issues for multi- entity provider models in which the network service provider and content provider cooperate to provide CDS and various related AAA functions for purposes such as protecting and accounting for the access to content and network resources. The requirements are generally not relevant to cases in which there is not a reason to share AAA functions between separate entities.</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-mboned-maccnt-req-05"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-mboned-maccnt-req-05.txt"/>
+</reference><!-- End inclusion reference.I-D.ietf-mboned-maccnt-req.xml. -->
+
+      <!-- Begin inclusion reference.RFC.1122.xml. --><reference anchor="RFC1122">
+
+<front>
+<title>Requirements for Internet Hosts - Communication Layers</title>
+<author initials="R." surname="Braden" fullname="Robert Braden">
+<organization>University of Southern California (USC)/ Information Sciences Institute (ISI)</organization>
+<address>
+<postal>
+<street>4676 Admiralty Way</street>
+<city>Marina del Rey</city>
+<region>CA</region>
+<code>90292-6695</code>
+<country>US</country></postal>
+<phone>+1 213 822 1511</phone>
+<email>Braden@ISI.EDU</email></address></author>
+<date year="1989" month="October"/></front>
+
+<seriesInfo name="STD" value="3"/>
+<seriesInfo name="RFC" value="1122"/>
+<format type="TXT" octets="295992" target="ftp://ftp.isi.edu/in-notes/rfc1122.txt"/>
+</reference><!-- End inclusion reference.RFC.1122.xml. -->
+
+      <!-- Begin inclusion reference.RFC.1812.xml. --><reference anchor="RFC1812">
+
+<front>
+<title>Requirements for IP Version 4 Routers</title>
+<author initials="F." surname="Baker" fullname="Fred Baker">
+<organization>Cisco Systems</organization>
+<address>
+<postal>
+<street>519 Lado Drive</street>
+<city>Santa Barbara</city>
+<region>CA</region>
+<code>93111</code>
+<country>US</country></postal>
+<phone>+1 805 681 0115</phone>
+<email>fred@cisco.com</email></address></author>
+<date year="1995" month="June"/></front>
+
+<seriesInfo name="RFC" value="1812"/>
+<format type="TXT" octets="415740" target="ftp://ftp.isi.edu/in-notes/rfc1812.txt"/>
+</reference><!-- End inclusion reference.RFC.1812.xml. -->
+
+      <reference anchor="fenner-icmp-mcast" target="http://www.icir.org/fenner/mcast/icmp.html">
+        <front>
+          <title>ICMP errors in response to multicast</title>
+
+          <author fullname="Bill Fenner">
+            <organization/>
+          </author>
+
+          <date day="12" month="March" year="1999"/>
+        </front>
+      </reference>
+
+      <reference anchor="magma-archive" target="http://www1.ietf.org/mail-archive/web/magma/current/msg00815.html">
+        <front>
+          <title>IETF Magma WG mailing-list archives</title>
+
+          <author fullname="IETF Magma WG">
+            <organization/>
+          </author>
+
+          <date day="16" month="December" year="2005"/>
+        </front>
+      </reference>
+
+      <reference anchor="posix">
+        <front>
+          <title>ISO/IEC 9945 Information technology, Portable Operating
+          System Interface (POSIX), Part 1: Base Definitions</title>
+
+          <date year="2003"/>
+        </front>
+      </reference>
+    </references>
+  </back>
+</rfc>

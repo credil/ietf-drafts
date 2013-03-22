@@ -1,0 +1,243 @@
+<?xml version="1.0"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+    <!ENTITY rfc4287 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4287.xml'>
+    <!ENTITY rfc3339 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3339.xml'>  
+    <!ENTITY xmlnames PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml4/reference.W3C.REC-xml-names-19990114.xml'>
+]>
+
+<rfc category="std" ipr="full3978" updates="4287" docName="draft-snell-atompub-tombstones-04.txt">
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc strict="yes" ?>
+<?rfc toc="yes"?>
+<?rfc compact="yes"?>
+
+<?rfc strict="yes" ?>
+<?rfc toc="yes"?>
+<?rfc compact="yes"?>
+<front>
+<title abbrev="Atom Tombstones">Atom Syndication Format Tombstones</title>
+<author initials="J.M." surname="Snell" fullname="James M Snell">
+<organization></organization>
+<address>
+<postal>
+<street></street>
+<city></city> <region></region> <code></code>
+<country></country>
+</postal>
+<phone></phone>
+<email>jasnell@gmail.com</email>
+<uri>http://snellspace.com</uri>
+</address>
+</author>
+<date month="January" year="2008" />
+<area>General</area>
+<keyword>I-D</keyword>
+<keyword>Internet-Draft</keyword>
+<keyword>XML</keyword>
+<keyword>Extensible Markup Language</keyword>
+<keyword>Atom</keyword>
+<keyword>RSS</keyword>
+<keyword>Syndication</keyword>
+<abstract><t>This specification adds mechanisms to the Atom Syndication Format 
+which Atom Feed publishers can use to explicitly indicate that specific Atom 
+entries have been removed from an Atom feed.</t></abstract>
+</front>
+<middle>
+<section title="Introduction">
+
+<t>This specification adds a new element to the Atom Syndication Format 
+<xref target="RFC4287" /> that can be used to explicitly indicate that
+specific Atom entries have been removed from an Atom Feed Document.</t>
+
+</section>
+
+<section title="Notational Conventions">
+
+<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", 
+"SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be 
+interpreted as described in BCP 14, <xref target="RFC2119" /></t>
+
+<t>This specification uses XML Namespaces <xref target="W3C.REC-xml-names-19990114"/>
+to uniquely identify XML element names.  It uses the following namespace prefix 
+for the indicated namespace URI;</t>
+
+<figure><artwork><![CDATA[
+ "at": "http://purl.org/atompub/tombstones/1.0"
+]]></artwork></figure>
+
+</section>
+
+<section title="The at:deleted-entry element">
+
+<t>The at:deleted-entry element MAY appear as a child of atom:feed to represent an
+Atom Entry that has been removed from the feed.</t>
+
+<figure><artwork><![CDATA[
+  deletedEntry = element at:deleted-entry {
+    atomCommonAttributes,
+    attribute ref { atomUri },
+    attribute when { atomDateConstruct }?,
+    ( element at:by { atomPersonConstruct}?,
+    & element at:comment {atomTextConstruct}?,
+    & extensionElement* )
+  }
+]]></artwork></figure>
+
+<t>The at:deleted-entry element MUST contain a ref attribute whose value 
+specifies the atom:id of the entry that has been removed.</t>
+
+<t>The at:deleted-entry element MAY contain a when element whose value is an 
+<xref target="RFC3339"/> "date-time" specifying the instant the entry was deleted.
+An uppercase "T" character MUST be used to separate date and time, and an uppercase 
+"Z" character MUST be present in the absence of a numeric time zone offset</t>
+
+<t>The at:deleted-entry element MAY contain one at:by element used to identify the
+entity that removed the entry from the feed. The at:by element is an Atom Person
+Construct as defined by Section 3.2 of <xref target="RFC4287" />.</t>
+
+<t>The at:deleted-entry element MAY contain one at:comment element whose value 
+provides additional information about the deletion operation.  The atom:comment
+element is an Atom Text Construct as defined by Section 3.1 of <xref target="RFC4287" />.</t>
+
+<t>Atom Feed Documents MAY contain any number of at:deleted-entry elements, but 
+MUST NOT contain more than one with the same ref attribute value.</t>
+
+<figure><artwork><![CDATA[
+  <feed xmlns="http://www.w3.org/2005/Atom"
+        xmlns:at="http://purl.org/atompub/tombstones/1.0">
+     ...
+     <!-- Minimal deleted-entry -->
+     <at:deleted-entry 
+       ref="tag:example.org,2005:/entries/1" />
+     
+     <!-- Extended deleted-entry -->
+     <at:deleted-entry
+       ref="tag:example.org,2005:/entries/2"
+       when="2005-11-29T12:11:12Z">
+       <at:by>
+         <name>John Doe</name>
+         <email>jdoe@example.org</email>
+       </at:by>
+       <at:comment>Removed comment spam</at:comment>
+     </at:deleted-entry>
+     ...
+  </feed>
+]]></artwork></figure>
+
+<t>An Atom feed MAY contain atom:entry elements and at:deleted-entry elements 
+sharing the same atom:id value.  Atom processors MUST ignore any at:deleted-entry 
+elements sharing an atom:id value with an atom:entry whose atom:updated element 
+specifies a date and time more recent than the at:deleted-entry element's when 
+value.  If the at:deleted-entry element does not contain a when element, the 
+at:deleted-entry sharing the same atom:id as an entry MUST be ignored.</t>
+
+</section>
+
+<section title="The Trash Link Relation">
+
+<t>This specification registers a new "trash" link relation to the Atom Registry
+of Link Relations defined in Section 7.1 of <xref target="RFC4287" />.  When appearing
+on atom:link elements within either the atom:feed or atom:source elements, The 
+"trash" rel attribute value signifies that the IRI in the value of href attribute 
+identifies a resource listing entries that have been deleted from the Feed document.
+If the linked resource is an Atom Feed Document, each of the entries in that feed
+will contain copies of the atom:entry elements removed from the feed containing
+the trash links.</t>
+
+<figure><preamble>For example,</preamble><artwork><![CDATA[
+  <feed xmlns="http://www.w3.org/2005/Atom">
+    ...
+    <link rel="trash" type="application/atom+xml" href="trash.xml" />
+    <link rel="trash" type="application/xhtml+xml" href="trash.xml" />
+    ...
+  </feed>
+]]></artwork></figure>
+
+<t>A single linked trash resource may list entries deleted from
+multiple feed documents. In such cases, each entry in the trash resource SHOULD
+reference the feed from which the entry was removed. For instance, if the 
+trash resource is an Atom Feed Document, each entry would contain an atom:source
+element identifying the feed the entry was deleted from.</t>
+
+<t>Linked "trash" resources are orthogonal to the at:deleted-entry element and 
+are intended to provide servers with a way of allowing clients to recover deleted 
+entries. For instance, the entries in a feed may be managed by two separate 
+authors, one of whom may delete an entry that the other author wishes to later 
+recover.  If a trash feed is provided, the second author can look for a copy of 
+the deleted entry there.</t>
+
+<t>While it will be common for servers to provide only a single trash 
+resource per feed, or to have multiple feeds share a single trash resource, 
+it is possible for a single feed to contain multiple trash links. The relationship 
+between multiple trash links is undefined. Individual entries deleted from the 
+feed containing the linked trash resources MAY appear in any, all or none of the 
+linked trash resources.  It is up to the server implementation to decide whether 
+to provide a trash resource and whether or not to add deleted entries to those 
+resources.</t>
+
+</section>
+
+<section title="Security Considerations">
+  <t>As specified in <xref target="RFC4287"/>, Atom processors should be
+  aware of the potential for spoofing attacks where an attacker publishes
+  atom:entry or atom:deleted-entry elements using the same atom:id values as 
+  entries from other Atom feeds.  An attacker may attempt to trick an application 
+  into believing that a given entry has either been removed from or added to a feed.  
+  To mitigate this issue, Atom processors are advised to ignore atom:deleted-entry 
+  elements referencing entries that have not previously appeared within the 
+  containing Feed document and should take steps to verify the origin of the
+  Atom feed before considering the entries to be removed.</t>
+</section>
+
+<section title="IANA Considerations">
+  
+<section title="The Link Relation Registration &quot;Trash&quot;">
+  <t>
+    <list style="hanging">
+      <t hangText="Attribute Value:">trash</t>
+      <t hangText="Description:">An IRI of a resource listing deleted resources.
+        When appearing within an atom:feed or atom:source elements, signifies 
+        that the IRI in the value of the href attribute identifies a resource
+        listing entries that have been deleted from the Feed document.
+      </t>
+      <t hangText="Expected display characteristics:">
+          Undefined; this relation can be used for
+          background processing or to provide extended functionality without
+          displaying its value.
+      </t> 
+      <t hangText="Security considerations:">                   
+          Automated agents should take care when this
+          relation crosses administrative domains (e.g., the URI has a different
+          authority than the current document).
+      </t>
+    </list>
+  </t>
+</section>
+  
+</section>
+
+<section title="Acknowledgements">
+<t>The author gratefully acknowledges the feedback from the members of the 
+Atom Publishing Format and Protocol working group during the development of 
+this specification.</t>
+</section>
+
+</middle>
+
+<back>
+<references title="Normative References">
+  &rfc2119;
+  &rfc3339;
+  &rfc4287;
+  &xmlnames;
+</references>
+</back>
+</rfc>

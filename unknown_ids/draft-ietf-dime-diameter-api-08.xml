@@ -1,0 +1,2361 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+<!-- <rfc category="info" ipr="full3978"> -->
+<rfc category="info" docName="draft-ietf-dime-diameter-api-08.txt" ipr="trust200811">
+ <front>
+   <title>The Diameter API</title>
+
+   <author role="editor" initials="V." surname="Fajardo" fullname="Victor Fajardo">
+     <organization>Toshiba America Research Inc.</organization>
+     <address>
+       <postal>
+         <street>One Telcordia Drive, #1S222</street>
+         <city>Piscataway</city> <region>NJ</region> <code>08854</code>
+       </postal>
+       <phone>+1 908-421-1845</phone>
+       <facsimile></facsimile>
+       <email>vfajardo@tari.toshiba.com</email>
+     </address>
+   </author>
+
+   <author initials="P.C." surname="Calhoun" fullname="Pat R. Calhoun">
+     <organization>Cisco Systems, Inc.</organization>
+     <address>
+       <postal>
+         <street>170 West Tasman</street>
+         <city>San Jose</city> <region>CA</region> <code>95134</code>
+       </postal>
+       <phone>+1 408-853-5269</phone>
+       <email>pacalhou@cisco.com</email>
+     </address>
+   </author>
+
+   <author initials="D.F." surname="Frascone" fullname="David Frascone">
+     <organization>Cisco Systems, Inc.</organization>
+     <address>
+       <postal>
+         <street>500 Northridge Drive, Suite 800</street>
+         <city>Atlanta</city> <region>GA</region> <code>30350</code>
+       </postal>
+       <phone>+1 678-352-2764</phone>
+       <facsimile>+1 978-334-0249</facsimile>
+       <email>dave@frascone.com</email>
+     </address>
+   </author>
+   
+<!--
+   <author initials="J.K." surname="Kempf" fullname="James Kempf">
+     <organization>DoCoMo Labs, USA</organization>
+     <address>
+       <postal>
+         <street>180 Metro Drive, Suite 300</street>
+         <city>San Jose</city> <region>CA</region> <code>95110</code>
+       </postal>
+       <phone>+1 408-451-4711</phone>
+       <email>kempf@docomolabs-usa.com</email>
+     </address>
+   </author>
+-->
+
+   <date year="2009" />
+   <area>Operations and Management</area>
+   <workgroup>Diameter Maintenance and Extensions (DIME)</workgroup>
+
+   <abstract>
+      <t>The Diameter authentication, authorization,
+      and accounting (AAA) protocol provides support for peering AAA transactions
+      across the Internet. This document describes an API for the 
+      Diameter protocol. The API is defined for the C language. 
+      The intent of the API is to foster source code portability across
+      multiple programming platforms. </t>
+   </abstract>
+ </front>
+
+ <middle>
+   <section title="Introduction">
+      <t>The Diameter authentication, authorization and accounting (AAA) protocol
+      provides scale-able AAA support for peering transactions across the Internet
+      <xref target="RFC3588"/>. This document describes an API in C for
+      applications to access the Diameter protocol. 
+      While an API is not strictly necessary for protocol
+      interoperability, it does help to promote the
+      use and deployment of a protocol by reducing the amount of work
+      necessary to develop and access applications that use the protocol.</t>
+
+      <t>The Diameter protocol provides a basic attribute/value pair (AVP) data format,
+      which particular application profiles extend. Processing of the extensions
+      is handled by code specific to the application profile. Application
+      profile customizability is reflected into the API as callback functions
+      for C.</t>
+
+      <t>The callbacks implement the application profile processing for incoming
+      messages. For outgoing calls, the C API provides an asynchronous model,
+      leaving processing of the return message to the callbacks.</t>
+
+      <t>For the most part, the API hides the details of establishing peering
+      and redirect connections, parsing and creating Diameter messages, and
+      other work necessary to set up and maintain a redirect or peering session. 
+      The application profile codes need only be concerned with processing of the
+      AVPs defined in the application profile.</t>
+
+      <section title="Conventions Used in This Document">
+      <t>   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+   document are to be interpreted as described in  <xref target="RFC2119"/>.</t>
+      </section>
+   
+   </section>
+
+   <section title="Binding Independent Considerations">
+
+      <t>This section discusses a number of implementation considerations for
+      bindings.</t>
+
+      <section title="Multithreading">
+        <t>The C API is expected to be thread-safe. Access to 
+        data structures shared among threads must be coordinated to
+        avoid corruption or invalid access. In addition, API implementers
+        are encouraged to provide the maximum amount of parallel processing
+        within their library implementations by allowing multiple threads
+        in the API library at once.</t>
+      </section>
+
+      <section title="Error Reporting">
+        <t>The API reports errors resulting from client calls through
+        language specific mechanisms. All functions in the API return
+        error codes. API implementers
+        are additionally encouraged to log errors using the appropriate platform
+        specific error logging technique, especially for errors that result
+        from network processing or other causes that are not directly related
+        to an API function or method call.</t>
+      </section>
+
+      <section title="String Format">
+        <t>C API clients are required to format strings as UTF-8 if the string
+        contains 16 bit characters. Since the ASCII characters and the UTF-8
+        8 bit characters have the same codes, ASCII can be used for UTF-8 if
+        no wide characters are in the string.
+        All strings passed through the C API are standard null-terminated C strings.
+        Processing to remove the null terminator for transmission on the wire
+        is done by the library. </t>
+      </section>
+
+      <section title="Handling Connections with Other Servers/Peers">
+        <t>The API supports making a connection with
+        an arbitrary Diameter peer. The API allows a client to set
+        the server address in a message (AAASetServer()).
+        If a message is not sent to a particular server, the API library is 
+        required to infer the servers by either looking in the configuration files
+        or dynamically determining the servers that support the extension. </t>
+      </section>
+
+      <section title="Command Dictionary File">
+        <t>The commands that can be parsed by the local Diameter client
+        library or server are defined in a command dictionary file
+        containing the command definitions including AVPs. The location
+        and name of the command dictionary file is platform-specific. This
+        file is read and parsed to drive creation of 
+        a command dictionary which is used by the library to
+        parse commands. The syntax
+        for the command dictionary file is in XML and
+        a DTD describing it is available in <xref target="XML"/>.
+        XML was selected as the definition language because
+        support for XML parsing is available as an extension to the standard
+        Java APIs and as a wide variety of public-domain C libraries, 
+        simplifying implementation. Both APIs also support programmatic
+        definition of commands, AVPs, and extensions so programs can
+        add commands not in the dictionary for purposes of experimentation
+        and implementing the library.</t>
+      </section>
+
+      <section anchor="visibility" title="Structure Member Visibility">
+        <t>Some data structures defined in this document shows only the visible
+        or public member variables. Other internal or private member variables that maybe
+        necessary for the correct functioning of an implementation are
+        left for the implementors to define. Note that this document uses the
+        C language (see <xref target="clang"/>) so there are no formal ways to guarantee
+        privacy of internal variables. It would be up to careful documentation and
+        the implementors discipline to maintain the integrity of the internal
+        variables privacy. An example of this is shown in
+        Sec <xref target="aaa_avp"/>.</t>
+      </section>
+    </section>
+
+    <section anchor="clang" title="C API">
+      <t>The C language API is designed around callbacks. An application profile
+      defines a collection of Diameter commands, and a library of callbacks for 
+      processing those commands. Each command is processed
+      by a callback. Callbacks can also be defined that handle all commands.
+      The API provides functions for managing callbacks, including registration
+      and deregistration. </t>
+
+      <t>When an incoming Diameter command arrives, the command is parsed and
+      passed to the appropriate callback. The callback receives as a parameter
+      the message struct, which contains the AVPs for the command. The
+      callback code can process the command by stepping through the AVPs.</t>
+
+      <t>For outgoing requests, the API provides functions for creating messages and
+      adding AVPs. A collection of functions also provides access to the
+      AVP dictionary.</t>
+
+      <t>Unless otherwise noted, parameters to API functions and callbacks
+      are non-NULL. Some parameters may have other restrictions. If a
+      parameter fails to satisfy the restrictions on its value, the 
+      function returns AAA_ERR_PARAMETER.</t>
+
+      <section title="Constant Types">
+
+        <section title="IP Address and Port">
+          <t>typedef struct sockaddr_storage AAA_IP_ADDR;</t>
+          <t>AAA_IP_ADDR provides a way of referring to an IPv4 address,
+            IPv6 address, and IP port. The default implementation (shown here)
+            is defined in the Basic Socket Interface Extensions for IPv6 <xref target="RFC3493"/></t>
+        </section>
+
+        <section title="Command Code">
+            <t>
+             typedef uint32_t AAACommandCode;
+            </t>
+            <t>
+            AAACommandCode provides a way of referring to the AAA command code
+            of a command. It is used when registering callbacks, among others.
+            </t>
+        </section>
+
+        <section title="Vendor Identifier">
+            <t>
+             typedef uint32_t AAAVendorId;
+            </t>
+            <t>
+              AAAVendorId provides a way of referring to the vendor identification
+              code. It is used when registering callbacks, among others. Note
+              that vendor id 0 is reserved and is defined by the preprocessor
+              constant AAA_NO_VENDOR_ID.
+            </t>
+        </section>
+
+        <section title="Extension Identifier">
+            <t>
+              typedef uint32_t AAAExtensionId;
+            </t>
+            <t>
+             AAAExtensionId provides a way of referring to an application profile
+             extension, for registering callbacks and other purposes.
+            </t>
+        </section>
+
+        <section title="Attribute/Value Pair Code">
+            <t>
+              typedef uint32_t AAA_AVPCode;
+            </t>
+            <t>
+             AAA_AVPCode provides a way of referring to the code number of an AVP.
+             It is used as a parameter to the dictionary functions, and a field
+             in the AVP struct.
+            </t>
+        </section>
+
+        <section title="Value Type Identifier">
+            <t>
+              typedef int32_t AAAValue;
+            </t>
+            <t>
+             AAAValue provides a way of referring to particular dictionary-defined
+             values. It is used in the dictionary API.
+            </t>
+        </section>
+
+        <section title="Server Identifier">
+            <t>
+             typedef void AAAServer;
+            </t>
+            <t>
+             AAAServer is an identifier for a particular serving peer. It is used in
+             the server access functions.
+            </t>
+        </section>
+
+        <section title="Session Identifier">
+            <t>
+             typedef void AAASessionId;
+            </t>
+            <t>
+             AAASessionId is an identifier for a particular AAA session. It is used in
+             the session APIs and when a message is created.
+            </t>
+        </section>
+
+        <section title="Message Identifier">
+            <t>
+             typedef uint32_t AAAMsgIdentifier;
+            </t>
+            <t>
+             AAAMsgIdentifier is a unique identifier for an AAA message. Each individual
+             message is marked with an identifier.
+            </t>
+         </section>
+
+        <section title="Callback Handle">
+            <t>
+             typedef void AAACallbackHandle;
+            </t>
+            <t>
+             AAACallbackHandle is a type for representing the callback
+             handle returned to the client when a callback is
+             registered.
+            </t>
+         </section>
+
+        <section title="Application Identifier">
+            <t>
+             typedef void* AAAApplicationId;
+            </t>
+            <t>
+             AAAApplicationId identifies a particular client session
+             to the API. The application id is passed to AAAStartSession(),
+             and is attached to incoming messages, to indicate with which
+             client session the message is associated. 
+            </t>
+        </section>
+
+        <section title="API Return Codes">
+       <t>The following status codes are returned by functions in the AAA API:</t>
+       <figure>
+           <artwork>
+        typedef enum {
+              AAA_ERR_NOT_FOUND =       -2,
+              AAA_ERR_FAILURE =         -1,
+              AAA_ERR_SUCCESS =          0,
+              AAA_ERR_NOMEM,
+              AAA_ERR_PROTO,
+              AAA_ERR_SECURITY,
+              AAA_ERR_PARAMETER,
+              AAA_ERR_CONFIG,
+              AAA_ERR_UNKNOWN_CMD,
+              AAA_ERR_MISSING_AVP,
+              AAA_ERR_ALREADY_INIT,
+              AAA_ERR_TIMED_OUT,
+              AAA_ERR_CANNOT_SEND_MSG,
+              AAA_ERR_ALREADY_REGISTERED,
+              AAA_ERR_CANNOT_REGISTER,
+              AAA_ERR_NOT_INITIALIZED,
+              AAA_ERR_NETWORK_ERROR
+        } AAAReturnCode;
+           </artwork>
+       </figure>
+
+       <t>Note that these status codes are separate from the codes returned by
+       remote AAA servers. </t>
+
+       <t>The following is a description of the error codes and the reasons why
+       they can be returned:
+
+       <list style="hanging">
+           <t hangText="AAA_ERR_NOT_FOUND:"> This code is returned if a handle or id was
+           not found. </t>
+
+           <t hangText="AAA_ERR_FAILURE:">
+             This code is returned if an unspecified failure
+             occurred during an AAA operation.</t>
+
+           <t hangText="AAA_ERR_SUCCESS:">
+             This code is returned if the AAA operation succeeded.
+             </t>
+
+           <t hangText="AAA_ERR_NOMEM:">
+             This code is returned if there is not enough memory to execute the operation.</t>
+
+           <t hangText="AAA_ERR_PROTO:">
+             This code is returned if a AAA protocol error occurred.
+             </t>
+
+           <t hangText="AAA_ERR_SECURITY:">
+             This code is returned if a security check failed or
+             another security error occurred.</t>
+
+           <t hangText="AAA_ERR_PARAMETER:">
+             This code is returned if an invalid parameter was
+             passed to an AAA function.</t>
+
+           <t hangText="AAA_ERR_CONFIG:">
+             This code is returned if an error was encountered
+             in a configuration file during library initialization.</t>
+
+           <t hangText="AAA_ERR_UNKNOWN_CMD:">
+             This code is returned if the library received a
+             AAA command that is not in the set of registered AAA commands.</t>
+
+           <t hangText="AAA_ERR_MISSING_AVP:">
+             This code is returned if a command was received
+             without a required AVP.</t>
+
+           <t hangText="AAA_ERR_ALREADY_INIT:">
+             This code is returned if an attempt is made
+             to initialize the AAA library when it has already been initialized.</t>
+
+           <t hangText="AAA_ERR_TIMED_OUT:">
+             This code is returned when a network operation
+             times out.</t>
+
+           <t hangText="AAA_ERR_CANNOT_SEND_MSG:">
+             This code is returned if the library can't
+             send a message. It is also of used to application profile extensions
+             that encounter the same error condition.</t>
+
+           <t hangText="AAA_ERR_ALREADY_REGISTERED:">
+             This code is returned by the command
+             registration functions if the command was already registered.</t>
+
+           <t hangText="AAA_ERR_CANNOT_REGISTER:">
+             This code is returned by the command
+             registration functions if the command could not be registered.</t>
+
+           <t hangText="AAA_ERR_NOT_INITIALIZED:">
+             This code is returned by any function
+             in the API except AAAOpen() if the library hasn't been initialized.</t>
+
+           <t hangText="AAA_ERR_NETWORK_ERROR:">
+             This code is returned by any function when an error in 
+             networking occurs.</t>
+
+       </list> </t>
+
+       <t>In addition to returning the error code, functions are required to log
+       errors using the platform dependent logging facility.</t>
+
+      </section> <!-- API Return Codes -->
+
+      <section title="Callback Location Codes">
+         <t>The following are codes used to indicate where a callback should
+         be installed in callback chain for processing:</t>
+
+       <figure>
+           <artwork>
+        typedef enum {
+                AAA_APP_INSTALL_FIRST,
+                AAA_APP_INSTALL_ANYWHERE,
+                AAA_APP_INSTALL_LAST
+       } AAACallbackLocation;
+           </artwork>
+       </figure>
+         <t>Callbacks installed with AAA_APP_INSTALL_FIRST and AAA_APP_INSTALL_LAST
+         operate on all commands, callbacks installed with AAA_APP_INSTALL_ANYWHERE
+         just operate on the command for which they are installed.</t>
+
+         <t>The codes have the following semantics:
+
+        <list style="hanging">
+           <t hangText="AAA_APP_INSTALL_FIRST:">
+             Install this callback as the first callback in the
+             chain. If subsequent callbacks are installed with this code, then
+             AAA_ERR_ALREADY_REGISTERED is returned.</t>
+
+           <t hangText="AAA_APP_INSTALL_ANYWHERE:">
+             Install this callback anywhere in the callback
+             chain.</t>
+
+           <t hangText="AAA_APP_INSTALL_LAST:">
+             Install this callback as the last callback in the
+             chain. If subsequent callbacks are installed with this code, then
+             AAA_ERR_ALREADY_REGISTERED is returned.</t>
+         </list></t>
+
+      </section> <!-- Callback Location Codes -->
+
+      <section title="AVP Data Type Codes">
+        <t>The following are AVP data type codes. They correspond directly to the
+        AVP data types outline in the Diameter specification <xref target="RFC3588"/>:</t>
+        <figure><artwork>
+        typedef enum {
+             AAA_AVP_OCTET_STRING_TYPE,
+             AAA_AVP_INTEGER32_TYPE,
+             AAA_AVP_INTEGER64_TYPE,
+             AAA_AVP_UNSIGNED32_TYPE,
+             AAA_AVP_UNSIGNED64_TYPE,
+             AAA_AVP_FLOAT32_TYPE,
+             AAA_AVP_FLOAT64_TYPE,
+        } AAA_AVPDataType;
+        </artwork></figure>
+      </section>
+
+      <section title="AVP Flags">
+
+        <t>The following are used for AVP header flags and for flags
+        in the AVP wrapper struct and AVP dictionary definitions. The first four
+        correspond to the AVP flags defined in the Diameter specification <xref target="RFC3588"/>. 
+        Some of these are also used in the wrapper struct and dictionary definitions
+        also. The last four are used only in  AAA_AVP and AAADictionaryEntry: </t>
+
+        <figure><artwork>
+        typedef enum {
+            AAA_AVP_FLAG_NONE =                 0,
+            AAA_AVP_FLAG_MANDATORY =            0x1,
+            AAA_AVP_FLAG_RESERVED =             0x2,
+            AAA_AVP_FLAG_VENDOR_SPECIFIC =      0x4,
+            AAA_AVP_FLAG_UNKNOWN =              0x10000
+        } AAA_AVPFlag;
+        </artwork></figure>
+
+        <t>The semantics of the flags are as follows:
+
+        <list style="hanging">
+           <t hangText="AAA_AVP_FLAG_NONE:">
+             Indicates that no AVP flags are set.
+             </t>
+
+           <t hangText="AAA_AVP_FLAG_MANDATORY:">
+             Represents the 'M' flag in
+             the Diameter AVP header <xref target="RFC3588"/>, meaning the AVP is mandatory.</t>
+
+           <t hangText="AAA_AVP_FLAG_VENDOR_SPECIFIC:">
+             Represents the 'V' flag in
+             the Diameter AVP header <xref target="RFC3588"/>, meaning that the AVP is vendor specific.
+             If this flag is set, the header will contain a vendor identifier.</t>
+
+           <t hangText="AAA_AVP_FLAG_UNKNOWN:">
+             Indicates that the AVP was not located in the
+             AVP dictionary. This flag is only used
+             in AAA_AVP.</t>
+          </list></t>
+      </section> <!-- AVP Flags -->
+
+      <section title="Domain Interconnection Types">
+
+       <t>The following domain interconnection types are returned by 
+       AAAGetDomainInterconnectType(). They indicate the type of
+       domain interconnection:</t>
+
+       <figure><artwork>
+        typedef enum {
+           AAA_DOMAIN_LOCAL,
+           AAA_DOMAIN_PROXY,
+           AAA_DOMAIN_BROKER,
+           AAA_DOMAIN_FORWARD
+        } AAADomainInterconnect;
+       </artwork></figure>
+
+       <t>The flags have the following semantics:
+
+       <list style="hanging">
+           <t hangText="AAA_DOMAIN_LOCAL">
+             The domain name is for the local domain.
+             </t>
+
+           <t hangText="AAA_DOMAIN_PROXY">
+             The domain name is for a proxy domain. A proxy is a server
+             that simply forwards the request based on the user's identity or
+             through some other means. The routing method used for a proxy is
+             the Proxy-State method, requiring routing through a fixed chain of
+             proxies <xref target="RFC3588"/>.</t>
+
+           <t hangText="AAA_DOMAIN_BROKER">
+             The domain name is for a broker domain. A broker is
+             a server that provides redirect services, allowing all servers in a
+             roaming consortium to interact directly.</t>
+
+           <t hangText="AAA_DOMAIN_FORWARD">
+             The domain name is for a forwarding domain. A forwarding
+             domain is a proxy that uses Destination-NAI routing. With Destination-NAI
+             routing, there is no set sequence of proxies through which messages
+             must be routed <xref target="RFC3588"/>.</t>
+        </list></t>
+       </section>
+
+
+       <section title="Message Flags">
+
+        <t>The following type is for the AAA message flags. Currently, there
+        are no message flags defined in the Diameter protocol <xref target="RFC3588"/>:</t>
+
+        <t>typedef uint8_t AAAMsgFlag;</t>
+
+       </section>
+
+       <section title="Result Codes">
+
+        <t>Result codes will be returned by the remote server to indicate the success
+			or failure of the operation.  Result code values are defined in the 
+			Diameter specification. <xref target="RFC3588"/>  </t>
+        </section>
+
+        <section title="Search Direction Type">
+          <t>The following type allows the client to specify
+          which direction to search for an AVP in the AVP
+          list:</t>
+
+          <figure><artwork>
+        typedef enum {
+           AAA_FORWARD_SEARCH = 0,
+           AAA_BACKWARD_SEARCH
+        } AAASearchType;
+          </artwork></figure>
+        </section> <!-- Search Direction Type -->
+
+        <section title="Accounting Types">
+          <t>The following specifies the type of accounting message:</t>
+
+          <figure><artwork>
+        typedef enum {
+                AAA_ACCT_EVENT = 1,
+                AAA_ACCT_START = 2,
+                AAA_ACCT_INTERIM = 3,
+                AAA_ACCT_STOP = 4
+        } AAAAcctMessageType;
+          </artwork></figure>
+
+		<t>The accounting types have the following semantics:
+
+	       <list style="hanging">
+	           <t hangText="AAA_ACCT_EVENT">
+	             The event type is used to indicate that a one-time event has occurred.
+	             </t>
+
+	           <t hangText="AAA_ACCT_START">
+	             The accounting start request is used to initiate an accounting session.</t>
+
+	           <t hangText="AAA_ACCT_INTERIM">
+	             Interim messages contains cumulative accounting information for the 
+				 existing accounting session (started with an AAA_ACCT_START).  Please 
+				 refer to <xref target="RFC3588"/> for details on the Diameter accounting
+				 mechanisms.</t>
+
+	           <t hangText="AAA_ACCT_STOP">
+	             The Accounting stop request terminates a session started with AAA_ACCT_START.</t>
+	        </list></t>
+
+        </section> <!-- Accounting types -->
+
+      </section> <!-- Constant Types -->
+
+      <section title="Structure Definitions">
+
+       <section title="Dictionary Entry Definition">
+        <t>The following structure is returned by the dictionary entry lookup
+        functions. It contains information about a particular AVP in the 
+        dictionary:</t>
+ 
+        <figure><artwork>
+        typedef struct dictionaryEntry {
+           AAA_AVPCode     avpCode;
+           char*           avpName;
+           AAA_AVPDataType avpType;
+           AAAVendorId     vendorId;
+           AAA_AVPFlag     flags;
+        } AAADictionaryEntry;
+        </artwork></figure>
+       </section> <!-- Dictionary Entry Definition -->
+
+      
+      <section title="AVP Definition">
+         <t>The following structure contains a message AVP in parsed form:</t>
+
+        <figure><artwork>
+         typedef struct avp {
+                 enum {
+                         AAA_RADIUS,
+                         AAA_DIAMETER
+                 } packetType;
+                 AAA_AVPCode code;
+                 uint16_t length;
+                 AAA_AVPFlag flags;
+                 AAA_AVPDataType type;
+                 AAAVendorId vendorId;
+                 void* data;
+         } AAA_AVP;
+        </artwork></figure>
+
+         <t>The fields have the following definitions:
+
+        <list style="hanging">
+         <t hangText="packetType:"> Indicates whether the message is for Diameter
+         or for Radius compatibility. If the AVP is for Radius, then
+         the code, length, type, and data fields are the only valid fields
+         in the structure; the other fields are all null. </t>
+
+         <t hangText="code:"> The AVP code. The type of the AVP can be determined
+         by matching the AVP code with an AVP description from
+         the dictionary.</t>
+
+         <t hangText="length:"> The length of the AVP's data field.</t>
+
+         <t hangText="flags:"> The AVP flags. </t>
+
+         <t hangText="type:"> The data type of the AVP's data.</t>
+
+         <t hangText="vendorId:"> The vendor id, if the AVP is vendor-specific.
+         If the AVP is standardized, the vendorId field is set to
+         AAA_NO_VENDOR_ID.</t>
+
+         <t hangText="data:"> The AVP data, in host byte order.</t>
+     </list></t>
+
+
+      </section> <!-- AVP Definition -->
+
+      <section title="AVP List">
+
+         <t>The following structure is used for representing
+         lists of AVPs on the message:</t>
+
+        <figure><artwork>
+         typedef struct avpList{
+                // API Private variables. Dependent on link list implementation
+         } AAA_AVP_LIST;
+        </artwork></figure>
+
+         <t>AVPs are kept in ordered lists. 
+         The client can use a search direction to indicated
+         in which direction to search when trying to find an AVP.</t>
+
+      </section> <!-- AVP List -->
+
+      <section title="Message Definition">
+
+         <t>The following structure contains the full AAA message:</t>
+
+        <figure><artwork>
+         typedef struct message {
+                 AAAMsgFlag              flags;
+                 AAACommandCode          commandCode;
+                 AAAVendorId             vendorId;
+                 AAAResultCode           resultCode;
+                 AAA_IP_ADDR             originator;
+                 AAA_IP_ADDR             sender;
+                 AAA_AVP_LIST            *avpList;
+                 AAA_AVP                 *proxyAVP;
+                 AAAMsgIdentifier        identifier;
+                 time_t                  secondsTillExpire;
+                 time_t                  startTime;
+                 void                    *appHandle;
+         } AAAMessage;
+        </artwork></figure>
+
+        <t>The fields have the following definition:
+
+        <list style="hanging">
+         <t hangText="flags:"> The message flags. Currently this field is always zero, since
+         there are no flags defined for a Diameter message at this time.</t>
+
+         <t hangText="commandCode:"> The command's message code.</t>
+
+         <t hangText="vendorId:"> The vendor id of the vendor that defined the message.</t>
+
+         <t hangText="resultCode:"> Code indicating the result of the client's request.
+         This code is sent by the peer over the wire.</t>
+
+         <t hangText="originator:"> The IP address of the message's originator.</t>
+
+         <t hangText="sender:"> The IP address of the message's previous hop
+         sender. This is only the same as originator if no
+         proxy or broker peers are being used.</t>
+
+         <t hangText="avpList:"> The list of AVPs in the message.</t>
+
+         <t hangText="proxyAVP:"> The proxy's AVP, if any. Otherwise NULL.</t>
+
+         <t hangText="identifier:"> The message's unique identifier.</t>
+
+         <t hangText="secondsTillExpire:"> Number of seconds until the
+         message expires.</t>
+
+         <t hangText="startTime:"> The number of seconds at which the
+         message was started.</t>
+
+         <t hangText="appHandle:"> An identifier indicating for which
+         client session the message is.</t>
+        </list></t>
+
+      </section> <!-- Message Definition -->
+      </section> <!-- Structure Definitions -->
+
+      <section title="Macros and Preprocessor Definitions">
+
+         <t>The following definition reserves the vendor id of 0:</t>
+
+         <t>#define AAA_NO_VENDOR_ID                                0</t>
+
+      </section> <!-- Macros and Preprocessor Definitions -->
+
+      <section title="Functions">
+
+      <section title="Initialization and Configuration">
+
+         <t>This section contains definitions that perform initialization
+         and configuration of the AAA library.</t>
+
+
+      <section title="AAAOpen()">
+
+         <t>The following function is used to open and configure the AAA library:</t>
+
+         <figure><artwork>
+      AAAReturnCode AAAOpen(char *configFileName);
+         </artwork></figure>
+
+         <t>This function must be called before any other AAA function is called.
+         Some of the operations that may be performed by AAAOpen() are: opening
+         and loading the AVP and vendor dictionaries, opening connections with
+         Diameter peers, loading  Diameter extension libraries, and registering
+         Diameter callbacks. After AAAOpen() returns, the library must
+         be ready for the client to open a session.</t>
+
+         <t>The parameters are:
+
+        <list style="hanging">
+         <t hangText="configFileName:"> The global configuration file name. If NULL or
+         the empty string, use the default for this platform. The global
+         configuration file must contain the vendor and AVP dictionary
+         file names, and may contain other platform-specific 
+         information needed to initialize and configure the Diameter peer.</t>
+        </list></t>
+
+         <t>Return values are:
+
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> If initialization succeeded.</t>
+
+         <t hangText="AAA_ERR_ALREADY_INIT:"> If the library is already initialized.</t>
+
+         <t hangText="AAA_ERR_NETWORK_ERROR:"> If the host name can't be determined.</t>
+
+         <t hangText="AAA_ERR_NOMEM:"> If no memory was available.</t>
+
+         <t hangText="AAA_ERR_CONFIG:"> If processing the dictionary or configuration
+         information failed.</t>
+        </list></t>
+
+      </section> <!-- AAAOpen() -->
+      <section title="AAAClose()">
+
+         <t>The following function closes the AAA library:</t>
+
+         <figure><artwork>
+      AAAReturnCode
+      AAAClose();
+         </artwork></figure>
+
+         <t>After this function is called, all other AAA functions are
+         no longer operative.</t>
+
+         <t>Return values are:
+
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> If finalization succeeded.</t>
+
+         <t hangText="AAA_ERR_NOT_INITIALIZED:"> If AAA was not initialized.</t>
+        </list></t>
+
+      </section> <!-- AAAClose() -->
+      <section title="AAAGetDefaultConfigFileName()">
+
+         <t>The following returns the default configuration file name on the platform:</t>
+
+         <figure><artwork>
+      const char *
+      AAAGetDefaultConfigFileName();
+         </artwork></figure>
+
+         <t>The return value is a pointer to the full pathname for
+         the file. The pointer value should not be deallocated because
+         it is constant and does not change.</t>
+
+
+      </section> <!-- AAAGetDefaultConfigFileName() -->
+      </section> <!-- Initialization and Configuration -->
+      <section title="Registering Commands">
+
+         <t>The functions in this section are used to register 
+         callback functions defined in a Diameter application profile extension
+         library. 
+         The following typedef defines the interface
+         between callback functions and the
+         AAA library functions:</t>
+
+         <figure><artwork>
+      typedef AAAReturnCode (*AAACallback)(AAAMessage *message);
+         </artwork></figure>
+
+         <t>Authors of Diameter extensions must define command callback
+         functions having this interface.</t>
+
+         <t>The parameters are:
+
+        <list style="hanging">
+         <t hangText="message:"> The AAAMessage to be processed.</t>
+    </list></t>
+
+         <t>The return value is a status code giving
+         the operation status.</t>
+
+
+      <section title="AAARegisterCommandCallback()">
+
+         <t>The following function is used to register command callbacks
+         for processing AAA commands:</t>
+
+         <figure><artwork>
+      AAACallbackHandle * 
+      AAARegisterCommandCallback(AAACommandCode commandCode, 
+                                 AAAVendorId vendorId,
+                                 char *commandName, 
+                                 AAAExtensionId extensionId,
+                                 AAACallback callback, 
+                                 AAACallbackLocation position);
+        </artwork></figure>
+
+         <t>The parameters are:
+
+        <list style="hanging">
+         <t hangText="commandCode:"> The code of the command processed by the callback.</t>
+
+         <t hangText="vendorId:"> The vendor id of the command.</t>
+
+         <t hangText="commandName:"> A pointer to the name of the command.</t>
+
+         <t hangText="extensionId:"> The id of the extension to which this command belongs.</t>
+
+         <t hangText="callback:"> The callback function to perform processing.</t>
+
+         <t hangText="position:"> The position of the callback in the chain.</t>
+        </list></t>
+
+         <t>The return value is a handle used when deregistering the callback,
+         or NULL if an error occurred while registering the callback.</t>
+
+
+      </section> <!-- AAARegisterCommandCallback() -->
+      <section title="AAARegisterNoncommandCallback()">
+
+
+         <t>The following callback registers an AAA callback to process all messages. 
+         The callback is not associated with any command, but rather
+         will process all messages as they come down the callback chain:</t>
+
+         <figure><artwork>
+      AAACallbackHandle 
+      AAARegisterNoncommandCallback(AAACallback callback,
+                                    AAACallbackLocation position);
+         </artwork></figure>
+
+         <t>The parameters are:
+
+        <list style="hanging">
+         <t hangText="callback:"> The callback function to perform processing.</t>
+
+         <t hangText="position:"> The position of the callback in the chain.</t>
+        </list></t>
+
+         <t>The return value is a handle used when deregistering the callback,
+         or NULL if an error occurred while registering the callback.</t>
+
+
+      </section> <!-- AAARegisterNoncommandCallback() -->
+      <section title="AAADeregisterCommandCallback()">
+
+         <t>The following function deregisters a command callback:</t>
+
+         <figure><artwork>
+      AAAReturnCode 
+      AAADeregisterCommandCallback(AAACallbackHandle *handle);
+         </artwork></figure>
+
+         <t>The parameters are:
+
+        <list style="hanging">
+         <t hangText="handle:"> The handle returned when the callback was registered.</t>
+        </list></t>
+
+         <t>The return values are:
+
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> Returned upon completion.</t>
+
+         <t hangText="AAA_ERR_FAILURE:"> if the callback is not registered.</t>
+        </list></t>
+
+
+      </section> <!-- AAADeregisterCommandCallback() -->
+      <section title="AAADeregisterNoncommandCallback()">
+
+         <t>The following function is used to 
+         deregister a noncommand callback:</t>
+
+         <figure><artwork>
+      AAAReturnCode 
+      AAADeregisterNoncommandCallback(AAACallbackHandle *handle);
+         </artwork></figure>
+
+         <t>The parameters are:
+
+        <list style="hanging">
+         <t hangText="handle:"> The handle returned when the callback was registered.</t>
+        </list></t>
+
+         <t>Return values are:
+
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> Returned upon completion.</t>
+
+         <t hangText="AAA_ERR_FAILURE:"> If the callback is not registered.</t>
+        </list></t>
+
+
+      </section> <!-- AAADeregisterNoncommandCallback() -->
+      <section title="AAARegisterExtension()">
+
+         <t>The following function is used to register a Diameter 
+         extension id. This function is typically called 
+         when registering non-command specific callbacks. Extension ids for
+         command-specific callbacks are registered when the callback
+         is registered:</t>
+
+         <figure><artwork>
+      AAAReturnCode
+      AAARegisterExtension(AAAExtensionId extensionId);
+         </artwork></figure>
+
+         <t>The parameters are:
+
+        <list style="hanging">
+         <t hangText="extensionId:"> The extension id.</t>
+        </list></t>
+
+         <t>The return codes are:
+
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> If the registration was successful.</t>
+         <t hangText="AAA_ERR_NOMEM:"> if a memory allocation failure occurred.</t>
+        </list></t>
+
+
+
+
+      </section> <!-- AAARegisterExtension() -->
+      </section> <!-- Registering Commands -->
+      <section title="Session and Server Management">
+
+         <t>The functions in this section allow the
+         client to open, close, and register
+         sessions, and to obtain server identifiers.</t>
+
+
+      <section title="AAAStartSession()">
+
+         <t>The following function allows a client to start a session and identify it:</t>
+
+         <figure><artwork>
+      AAAReturnCode
+      AAAStartSession(AAASessionId **sessionId, 
+                      AAAApplicationId appHandle,
+                      char *userName,
+                      AAACallback abortCallback);
+         </artwork></figure>
+
+         <t>The parameters are:
+
+        <list style="hanging">
+         <t hangText="sessionId:"> On return, a pointer to the session id for this session.</t>
+
+         <t hangText="appHandle:"> An identifier for the client application starting the 
+         session. This identifier is attached to messages so that the
+         client callbacks can tell which messages belong to it.</t>
+
+         <t hangText="userName:">- The NAI of the user.</t>
+
+         <t hangText="abortCallback:"> A function to be called if this session is aborted
+         by the server.</t>
+    </list></t>
+
+         <t>Return values are:
+
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> If the session was successfully started.</t>
+
+         <t hangText="AAA_ERR_NOMEM:"> If a memory allocation failure occurred.</t>
+    </list></t>
+
+
+      </section> <!-- AAAStartSession() -->
+      <section title="AAARegisterPeerSession()">
+
+         <t>The following function allows a client to register
+         a peer session that it has discovered through 
+         some other means, for example, by receiving
+         an unsolicited message.</t>
+
+         <figure><artwork>
+      AAAReturnCode
+      AAARegisterPeerSession(AAASessionId **sessionId,
+                             AAAApplicationId *appHandle,
+                             AAAMessage *message,
+                             char *userName,
+                             char *hostName);
+        </artwork></figure>
+
+         <t>The parameters are:
+
+        <list style="hanging">
+         <t hangText="sessionId:"> On return, a pointer to the local session id for the session.</t>
+
+         <t hangText="appHandle:"> An identifier for the client application starting the 
+         session. This identifier is attached to messages so that the
+         client callbacks can tell which messages belong to it.</t>
+
+         <t hangText="message:"> The message from the peer containing the session id.</t>
+
+         <t hangText="userName:">- The NAI of the user.</t>
+
+         <t hangText="hostName:"> The originator of the Diameter message</t>
+    </list></t>
+
+         <t>Return values are:
+
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> If the session was successfully registered.</t>
+
+         <t hangText="AAA_ERR_NOMEM:"> If a memory allocation failure occurred.</t>
+    </list></t>
+
+
+      </section> <!-- AAARegisterPeerSession() -->
+      <section title="AAAEndSession()">
+
+         <t>The following function, sent by a client, terminates a session:</t>
+
+         <figure><artwork>
+      AAAReturnCode
+      AAAEndSession(AAASessionId *sessionId);
+         </artwork></figure>
+
+         <t>The parameters are:
+
+        <list style="hanging">
+         <t hangText="sessionId:"> A pointer to the session id for the session.</t>
+    </list></t>
+
+         <t>Return values are:
+
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> If the session was successfully closed.</t>
+
+         <t hangText="AAA_ERR_NOT_FOUND:"> If the handle is invalid.</t>
+    </list></t>
+
+      </section> <!-- AAAEndSession() -->
+      <section title="AAAAbortSession()">
+
+         <t>The following function, sent by the server, terminates 
+         a session:</t>
+
+         <figure><artwork>
+      AAAReturnCode
+      AAAAbortSession(AAASessionId *sessionId);
+         </artwork></figure>
+                  
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="sessionId:"> A pointer to the session id for the session.</t>
+    </list></t>
+         
+         <t>Return values are:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> If the session was successfully closed.</t>
+         
+         <t hangText="AAA_ERR_NOT_FOUND:"> If the handle is invalid.</t>
+    </list></t>
+         
+      </section> <!-- AAAAbortSession() -->
+      <section title="AAALookupServer()">
+
+         <t>The function looks up the AAA server based on IP address and port number.
+         Server connections are created from the configuration file:</t>
+         
+         <figure><artwork>
+      AAAServer *
+      AAALookupServer(AAA_IP_ADDR ipAddr);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="ipAddr:"> The IP address/Port/Family of the server.</t>
+    </list></t>
+         
+         <t>The return value is either a valid server pointer or the 
+         NULL if the server can't be found.</t>
+
+
+      </section> <!-- AAALookupServer() -->
+      <section title="AAASetSessionMessageTimeout()">
+
+
+         <t>The following function sets the timeout, in seconds, for all 
+         AAAMessages in a particular session:</t>
+         
+         <figure><artwork>
+      AAAReturnCode
+      AAASetSessionMessageTimeout(AAASessionId *id,
+                                  time_t timeout);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="id:"> The session id for the session whose timeout should be changed.</t>
+         
+         <t hangText="timeout:"> The session timeout. The default timeout is 120 seconds.</t>
+    </list></t>
+         
+         <t>The return values are:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> If setting the timeout succeeded.</t>
+         
+         <t hangText="AAA_ERR_FAILURE:"> If the setting the timeout failed.</t>
+    </list></t>
+
+
+      </section> <!-- AAASetSessionMessageTimeout() -->
+      <section title="AAAGetDomainInterconnectType()">
+
+         <t>The following function returns the domain interconnect type for
+         a particular domain name and type of service:</t>
+
+         <figure><artwork>
+      AAADomainInterconnect 
+      AAAGetDomainInterconnectType(AAAMessage *message,
+                                   char *domainName,
+                                   char *type);
+         </artwork></figure>
+
+         <t>The parameters are:
+
+        <list style="hanging">
+         <t hangText="domainName:"> The name of the domain.</t>
+
+         <t hangText="type:"> The type of service. This must be one of the strings "LOCAL",
+         "PROXY", or "BROKER".</t>
+    </list></t>
+         <t>The return values are:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> If the domain interconnect type was retrieved.</t>
+         
+         <t hangText="AAA_ERR_FAILURE:"> If the command failed.</t>
+    </list></t>
+
+
+      </section> <!-- AAAGetDomainInterconnectType() -->
+
+      </section> <!-- Session and Server Management -->
+      <section title="Dictionary Lookup">
+
+         <t>The functions in this section are used to look up AVPs
+         and commands in the dictionary. The client is responsible
+         for supplying the structure memory into which the
+         dictionary information is copied.</t>
+
+
+      <section title="AAADictionaryEntryFromAVPCode()">
+
+         <t>This function looks up a dictionary entry using a command code and a
+         vendor id:</t>
+         
+         <figure><artwork>
+      AAAReturnCode
+      AAADictionaryEntryFromAVPCode(AAA_AVPCode avpCode,
+                                    AAAVendorId vendorId,
+                                    AAADictionaryEntry *Entry);
+         </artwork></figure>
+
+         <t>The parameters are:     
+         
+        <list style="hanging">
+         <t hangText="avpCode:"> The code number of the AVP.</t>
+         
+         <t hangText="vendorId:"> The vendor id of the AVP.</t>
+         
+         <t hangText="Entry:"> an AAADictionaryEntry structure for returning the entry.</t>
+    </list></t>
+         
+         <t>The return value is one of:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> If the query succeeded.</t>
+         
+         <t hangText="AAA_ERR_FAILURE:"> If no matching dictionary entry was found.</t>
+    </list></t>
+
+
+      </section> <!-- AAADictionaryEntryFromAVPCode() -->
+      <section title="AAADictionaryEntryFromName()">
+
+         <t>This function looks up a dictionary entry using command code 
+         name and vendor id:</t>
+
+         <figure><artwork>
+      AAAReturnCode 
+      AAADictionaryEntryFromName(char *avpName,
+                                 AAAVendorId vendorId,
+                                 AAADictionaryEntry *Entry);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avpName:"> The name of the AVP.</t>
+         
+         <t hangText="vendorId:"> The vendor id of the AVP.</t>
+         
+         <t hangText="Entry:"> an AAADictionaryEntry structure for returning the entry.</t>
+    </list></t>
+         
+         <t>The return value is one of:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> If the query succeeded.</t>
+         
+         <t hangText="AAA_ERR_FAILURE:"> If no matching dictionary entry was found.</t>
+    </list></t>
+
+
+      </section> <!-- AAADictionaryEntryFromName() -->
+      <section title="AAAValueFromName()">
+
+         <t>This function looks up an AVP value using the AVP name and vendor name:</t>
+         
+         <figure><artwork>
+      AAAValue AAAValueFromName(char *avpName, 
+                                char *vendorName,
+                                char *valueName);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avpName:"> The name of the AVP.</t>
+         
+         <t hangText="vendorName:"> The name of the vendor.</t>
+         
+         <t hangText="valueName:"> The name of the value.</t>
+    </list></t>
+         
+         <t>The return value is the id of the AVP, or AAA_ERR_NOT_FOUND if no
+         match was found.</t>
+         
+         
+      </section> <!-- AAAValueFromName() -->
+         <section title="AAAValueFromAVPCode()">
+
+         <t>This function looks up an AVP value using the AVP id and vendor id, 
+         and the value name:</t>
+         
+         <figure><artwork>
+      AAAValue AAAValueFromAVPCode(AAA_AVPCode avpCode, 
+                                   AAAVendorId vendorId,
+                                   char *valueName);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avpCode:"> The code of the AVP.</t>
+         
+         <t hangText="vendorId:"> The id of the vendor.</t>
+         
+         <t hangText="valueName:"> The name of the value.</t>
+    </list></t>
+         
+         <t>The return value is id of the AVP, or AAA_ERR_NOT_FOUND if no
+         match was found.</t>
+         
+         
+         </section> <!-- AAAValueFromAVPCode() -->
+      <section title="AAALookupValueNameUsingValue()">
+
+         <t>This function returns the AVP value name:</t>
+         
+         <figure><artwork>
+      const char *
+      AAALookupValueNameUsingValue(AAA_AVPCode avpCode,
+                                   AAAVendorId vendorId,
+                                   AAAValue value);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avpCode:"> The code of the AVP.</t>
+         
+         <t hangText="vendorId:"> The id of the vendor.</t>
+         
+         <t hangText="value:"> The value.</t>
+    </list></t>
+         
+         <t>The value name is returned, or NULL if
+         no match occurred.</t>
+         
+         
+      </section> <!-- AAALookupValueNameUsingValue() -->
+      <section title="AAAGetCommandCode()">
+
+         <t>This function returns the command code and vendor id based on a string:</t>
+         
+         <figure><artwork>
+      AAAReturnCode
+      AAAGetCommandCode(char *commandName, 
+                        AAACommandCode *commandCode,
+                        AAAVendorId *vendorId);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="commandName:"> A string containing the command name.</t>
+         
+         <t hangText="commandCode:"> Pointer that on return holds the
+         command code if the command was found.</t>
+         
+         <t hangText="vendorId:"> Pointer that on return holds the
+         vendor id if the command was found.</t>
+    </list></t>
+         
+         <t>The function returns AAA_ERR_SUCCESS when a command has been successfully
+         retrieved, otherwise AAA_UNKNOWN_CMD is returned.</t>
+         
+      </section> <!-- AAAGetCommandCode() -->
+         
+      </section> <!-- Dictionary Lookup -->
+      <section title="Message Management">
+
+         <t>The functions in this section allow the client to
+         create messages, add AVPs, and traverse AVP lists.</t>
+
+
+      <section title="AAANewMessage()">
+
+         <t>This function allocates an AAAMessage and returns a pointer to it. 
+         If a command code is provided, this function adds the command code AVP.
+         If the session identifier handle is provided, 
+         the Session-Id AVP is also added. Lastly, if this message is
+         allocated in response to a request, the request's message can be provided,  
+         and the new message is initialized to match the request, for
+         fields such as the identifier, the server identifier, etc. If this is
+         a new message, the request parameter is NULL:</t>
+         
+         <figure><artwork>
+      AAAMessage *
+      AAANewMessage(AAACommandCode commandCode,
+                    AAAVendorId vendorId,
+                    AAASessionId *sessionId,
+                    AAAExtensionId extensionId,
+                    AAAMessage *request);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="commandCode:"> The command code.</t>
+         
+         <t hangText="vendorId:"> The vendor identifier.</t>
+         
+         <t hangText="sessionId:"> Session identifier.</t>
+         
+         <t hangText="extensionId:"> The extension identifier.</t>
+         
+         <t hangText="request:"> A pointer to a request message, if this message is
+         being allocated in response to a request.</t>
+    </list></t>
+         
+         <t>The function returns a pointer to the message or NULL if a 
+         failure occurred.</t>
+
+
+      </section> <!-- AAANewMessage() -->
+      <section title="AAAFreeMessage()">
+
+         <t>This function frees a message allocated through 
+         AAANewMessage():</t>
+         
+         <figure><artwork>
+      AAAReturnCode
+      AAAFreeMessage(AAAMessage **message);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="message:"> A pointer to a pointer to the allocated message.</t>
+    </list></t>
+         
+         <t>The return value is the AAA status code AAA_ERR_SUCCESS.</t>
+      </section> <!-- AAAFreeMessage() -->
+
+      <section title="AAARespondToMessage()">
+
+         <t>This function is called to set the AAA Message                  
+         to the appropriate values, and to inform the library            
+         that this message is a locally generated response               </t>
+         
+         
+         <figure><artwork>
+      AAAReturnCode
+      AAARespondToMessage(AAAMessage* message,
+                          AAACommandCode commandCode,            
+                          AAAVendorId vendorId,
+                          AAAResultCode resultCode);
+         </artwork></figure>
+
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="message:"> The AAAMessage to respond to.</t>
+         
+         <t hangText="commandCode:"> The command code of the response.</t>
+         
+         <t hangText="vendorId:"> The vendor identifier (of the command code).</t>
+         
+         <t hangText="resultCode:"> The result code of the response.</t>
+    </list></t>
+         
+         <t>The function returns AAA_ERR_SUCCESS upon completion, or AAA_ERR_PARAMETER
+         if a NULL pointer was provided.</t>
+      </section> <!-- AAARespondToMessage() -->
+
+
+      <section title="AAAAddProxyState()">
+
+         <t>This function will add a Proxy-State AVP to                     
+         a message, that contains the Fully Qualified Domain Name (FQDN)
+         of the source of the message.</t>                                          
+         
+         <figure><artwork>
+      AAAReturnCode
+      AAAAddProxyState(AAAMessage *message);
+         </artwork></figure>
+         
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="message:"> The AAAMessage to add state to.</t>
+    </list></t>
+         
+         <t>The function returns AAA_ERR_SUCCESS upon completion, or
+         AAA_ERR_FAILURE if an error occurred.</t>
+      </section> <!-- AAAAddProxyState() -->
+
+
+      <section title="AAACreateAVP()">
+
+         <t>This function creates an AVP and returns a pointer to it. The AVP
+         is initialized from the arguments:</t>
+         
+         <figure><artwork>
+      AAAReturnCode
+      AAACreateAVP(AAA_AVP **avp, 
+                   AAA_AVPCode code,
+                   AAA_AVPFlag flags, 
+                   AAAVendorId vendorId, 
+                   char *data, 
+                   size_t length);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avp:"> On return, contains a pointer to the allocated AVP, or NULL if
+         no AVP was allocated. </t>
+         
+         <t hangText="code:"> The AVP's code.</t>
+         
+         <t hangText="flags:"> Any AVP flags that must be passed.</t>
+         
+         <t hangText="vendorId:"> The vendor id of the AVP. If no vendor id, then
+         AAA_NO_VENDOR_ID.</t>
+         
+         <t hangText="data:"> A buffer containing the AVP data.</t>
+         
+         <t hangText="length:"> The length of the data buffer.</t>
+    </list></t>
+         
+         <t>Return values are:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> Upon success.</t>
+         
+         <t hangText="AAA_ERR_PARAMETER:"> If an invalid parameter was passed.</t>
+         
+         <t hangText="AAA_ERR_PROTO:"> If a protocol error occurred.</t>
+         
+         <t hangText="AAA_ERR_NOMEM:"> Indicating  a memory failure.</t>
+    </list></t>
+
+      </section> <!-- AAACreateAVP() -->
+
+      <section title="AAACreateAndAddAVPToList()">
+
+         <t>This function creates an AVP and adds it to an AVP list. It returns
+         a pointer to the list in the avpList argument. If the avpList is NULL
+         a new list is created. The new AVP is always added to the end of
+         the list. The AVP is initialized from the arguments:</t>
+         
+         <figure><artwork>
+      AAAReturnCode
+      AAACreateAndAddAVPToList(AAA_AVP_LIST **avpList, 
+                               AAA_AVPCode code,
+                               AAA_AVPFlag flags, 
+                               AAAVendorId vendorId, 
+                               char *data, 
+                               size_t length);
+          </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avpList:"> The list to which the AVP should be added.</t>
+         
+         <t hangText="code:"> The AVP's code.</t>
+         
+         <t hangText="flags:"> Any AVP flags that must be passed.</t>
+         
+         <t hangText="vendorId:"> The vendor id of the AVP. If no vendor id, then
+         AAA_NO_VENDOR_ID.</t>
+         
+         <t hangText="data:"> A buffer containing the AVP data.</t>
+         
+         <t hangText="length:"> The length of the data buffer.</t>
+    </list></t>
+         
+         <t>Return values are:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> Upon success.</t>
+         
+         <t hangText="AAA_ERR_PARAMETER:"> If an invalid parameter was passed.</t>
+         
+         <t hangText="AAA_ERR_NOMEM:"> Indicating  a memory failure.</t>
+    </list></t>
+
+      </section> <!-- AAACreateAndAddAVPToList() -->
+
+      <section title="AAAAddAVPToList()">
+
+         <figure><artwork>
+      AAAReturnCode
+      AAAAddAVPToList(AAA_AVP_LIST **avpList,
+                      AAA_AVP *avp, AAA_AVP *position);
+         </artwork></figure>
+         
+         <t>Insert the AVP avp into this avpList after position. If position is
+         NULL, the AVP is added to the beginning of the list.</t>
+         
+         <t>If *avpList is NULL, a list will be allocated, and *avpList will point
+         to it.</t>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avpList:"> Pointer to a pointer for list. If *avpList is NULL, list memory is
+         allocated.</t>
+         
+         <t hangText="avp:"> AAA_AVP to add to list.</t>
+         
+         <t hangText="position:"> AAA_AVP pointer to add data after, or NULL if the new AVP
+         should go at the beginning of the list.</t>
+    </list></t>
+         
+         <t>The return value is one of:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> Upon success.</t>
+         
+         <t hangText="AAA_ERR_PARAMETER:"> If an invalid parameter was passed.</t>
+         
+         <t hangText="AAA_ERR_NOMEM:"> Indicates a memory failure.</t>
+    </list></t>
+         
+      </section> <!-- AAAAddAVPToList() -->
+               <section title="AAAFindMatchingAVP()">
+         
+         <t>This function finds an AVP with matching code and vendor id. If none match,
+         the function returns NULL:</t>
+
+         <figure><artwork>
+      AAA_AVP *
+      AAAFindMatchingAVP(AAA_AVP_LIST *avpList, 
+                         AAA_AVP *startAvp,
+                         AAA_AVPCode avpCode,
+                         AAAVendorId vendorId,
+                         AAASearchType searchType);
+         </artwork></figure>
+
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avp:"> A pointer to the head of the AVP list.</t>
+         
+         <t hangText="avpCode:"> The code of the sought after AVP.</t>
+         
+         <t hangText="vendorId:"> The vendor id of the sought after AVP.</t>
+    </list></t>
+         
+         <t>The return value is a pointer to the found AVP, or NULL if none 
+         is found.</t>
+               </section> <!-- AAAFindMatchingAVP() -->
+
+
+      <section title="AAAJoinAVPLists()">
+
+         <t>The following function joins together two AVP lists:</t>
+         
+         <figure><artwork>
+      AAAReturnCode AAAJoinAVPLists(AAA_AVP_LIST *dest, 
+                                    AAA_AVP_LIST *source,
+                                    AAA_AVP      *position);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="dest:"> The destination list  (All of the AVPs in source will be moved here).</t>
+         
+         <t hangText="source:"> The source list to be added to dest.</t>
+         
+         <t hangText="position:"> The position to add the AVPs to, or NULL for the beginning of the list.</t>
+    </list></t>
+         
+         <t>The return value is one of:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> Upon success.</t>
+         
+         <t hangText="AAA_ERR_PARAMETER:"> If an invalid parameter was passed.</t>
+    </list></t>
+      </section> <!-- AAAJoinAVPLists() -->
+         
+
+      <section title="AAARemoveAVPFromList()">
+
+         <t>This function removes an AVP from a list:</t>
+         
+         <figure><artwork>
+      AAAReturnCode
+      AAARemoveAVPFromList(AAA_AVP_LIST *avpList,
+                           AAA_AVP *avp);
+         </artwork></figure>
+                                            
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avpList:"> The head of the list from which to 
+         remove the AVP. </t>
+         
+         <t hangText="avp:"> Contains a pointer to the AVP to remove. </t>
+    </list></t>
+         
+         <t>The return value is one of:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> Upon success.</t>
+         
+         <t hangText="AAA_ERR_PARAMETER:"> If an invalid parameter was passed.</t>
+    </list></t>
+         
+      </section> <!-- AAARemoveAVPFromLisrt() -->
+         
+               <section title="AAAFreeAVP()">
+
+         <t>The function frees an AVP:</t>
+         
+         <figure><artwork>
+      AAAReturnCode
+      AAAFreeAVP(AAA_AVP **avp);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avp:"> Contains a pointer to a pointer to the AVP to free.</t>
+    </list></t>
+         
+         <t>The return value is one of:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> Upon success.</t>
+
+         <t hangText="AAA_ERR_PARAMETER:"> If an invalid parameter was passed.</t>
+    </list></t>
+               </section> <!-- AAAFreeAVP() -->
+
+      <section title="AAAGetFirstAVP()">
+
+         <t>This function returns a pointer to the first AVP in the list:</t>
+         
+         <figure><artwork>
+      AAA_AVP *
+      AAAGetFirstAVP(AAA_AVP_LIST *avpList);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avpList:"> A pointer to the list.</t>
+    </list></t>
+         
+         <t>The return value is a pointer to the found AVP, 
+         or NULL if none is found.</t>
+         
+      </section> <!-- AAAGetFirstAVP() -->
+               <section title="AAAGetLastAVP()">
+         
+         <t>This function returns a pointer to the last AVP in the list:</t>
+
+         <figure><artwork>
+      AAA_AVP *
+      AAAGetLastAVP(AAA_AVP_LIST *avpList);
+         </artwork></figure>
+
+         <t>The parameters are:
+
+        <list style="hanging">
+         <t hangText="avpList:"> A pointer to the list.</t>
+    </list></t>
+
+         <t>The function returns a pointer to the found AVP, 
+         or NULL if none is found.</t>
+
+               </section> <!-- AAAGetLastAVP() -->
+
+      <section title="AAAGetNextAVP()">
+
+         <t>This function returns a pointer to the next AVP in the list.</t>
+         
+         <figure><artwork>
+      AAA_AVP *
+      AAAGetNextAVP(AAA_AVP *avp);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avp:"> A pointer to the AVP prior to the one sought.
+         It is assumed that AAA_AVP has internal private members that keep track of
+         the next AAA_AVP element in the list.</t>
+    </list></t>
+         
+         <t>The return value is the next AVP in the list, or NULL if
+         the parameter is the last element in the list.</t>
+
+      </section> <!-- AAAGetNextAVP() -->
+
+      <section title="AAAGetPrevAVP()">
+
+         <t>This function returns a pointer to the previous AVP in
+         the list. It is assumed that AAA_AVP has internal private members 
+         that keep track of the previous AAA_AVP element in the list.</t>
+         
+         <figure><artwork>
+      AAA_AVP *
+      AAAGetPrevAVP(AAA_AVP *avp);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avp:"> A pointer to the AVP after the one sought.</t>
+    </list></t>
+         
+         <t>The return value is the previous AVP in the list or
+         NULL if the parameter is the first element in the list.</t>
+      </section> <!-- AAAGetPrevAVP() -->
+
+      <section title="AAAFreeAVPList()">
+
+         <t>This function frees an AVP list structure including all contained AVPs
+         if there are any. If the list is empty then only the AVP list data structure 
+         itself is deleted. If successful, the list will point to NULL on return.</t>
+         <figure><artwork>
+      AAAReturnCode
+      AAAFreeAVPList(AAA_AVP_LIST **avpList);
+          </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avpList:"> The list to be freed.</t>
+        </list></t>
+         
+         <t>Return values are:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> Upon success.</t>
+         
+         <t hangText="AAA_ERR_PARAMETER:"> If an invalid parameter was passed.</t>
+    </list></t>
+
+      </section> <!-- AAAFreeAVPList() -->
+
+      <section title="AAAConvertAVPToString()">
+
+         <t>This function converts the data in the AVP to a format suitable
+         for log or display functions.</t>
+         
+         <figure><artwork>
+      char *
+      AAAConvertAVPToString(AAA_AVP *avp,
+                            char *dest,
+                            size_t destLen);
+          </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="avp:"> The AVP to display.</t>
+         
+         <t hangText="dest:"> A used supplied destination buffer.</t>
+
+         <t hangText="destLen:"> The length of the user supplied buffer.</t>
+    </list></t>
+
+         <t>The return value is the passed in destination buffer.</t>
+      </section> <!-- AAAConvertAVPToString() -->
+
+      <section title="AAASetMessageResultCode()">
+
+         <t>This function decapsulates an encapsulated AVP,
+         and populates the list with the correct pointers.</t>
+         
+         <figure><artwork>
+      AAAResultCode
+      AAASetMessageResultCode(AAAMessage *message,
+                              AAAResultCode resultCode);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="message:"> A pointer to the allocated message.</t>
+         
+         <t hangText="resultCode:"> The AAA Result Code</t>
+        </list></t>
+         
+         <t> The return value is one of:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> Upon success.</t>
+
+         <t hangText="AAA_ERR_PARAMETER:"> If an invalid parameter was passed.</t>
+        </list></t>
+
+      </section> <!-- AAASetMessageResultCode() -->
+
+      </section> <!-- Message Management -->
+      <section title="Message Control">
+
+         <t>The following functions allow the client to direct
+         a message to a particular server, determine 
+         the server for a message, etc.</t>
+
+
+      <section title="AAASetServer()">
+
+         <t>This function sets the server to which the
+         message is sent:</t>
+         
+         <figure><artwork>
+      AAAReturnCode
+      AAASetServer(AAAMessage *message, 
+                   AAA_IP_ADDR host);
+         </artwork></figure>
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="message:"> The message to be sent.</t>
+         
+         <t hangText="host:"> The IP address / port / family of the server.</t>
+    </list></t>
+         
+         <t>The return value is:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> If the server was found.</t>
+         
+         <t hangText="AAA_ERR_NOT_FOUND:"> If the server was not found.</t>
+    </list></t>
+         
+      </section> <!-- AAASetServer() -->
+
+      <section title="AAASendMessage()">
+
+         <t>The following function transmitts a message. It will be sent
+         to the server based on the routing criteria defined in <xref target="RFC3588"/>.</t>
+          
+         <figure><artwork>
+      AAAReturnCode
+      AAASendMessage(AAAMessage *message);
+         </artwork></figure>
+         
+         <t>The parameter is the message to send.</t>
+         
+         <t>The return codes are:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> Upon completion.</t>
+         
+         <t hangText="AAA_ERR_FAILURE:"> If an error occurred.</t>
+    </list></t>
+      </section> <!-- AAASendMessage() -->
+
+      </section> <!-- Message Control -->
+      <section title="Accounting">
+
+         <t>The following functions allow the client to direct
+         a message to a particular server, determine 
+         the server for a message, etc.</t>
+
+
+      <section title="AAASendAcctRequest()">
+
+         <t>The following function sends an accounting message to an accounting
+         server.</t>
+         
+         <figure><artwork>
+      AAAReturnCode
+      AAASendAcctRequest(AAASessionId *aaaSessionId,
+                         AAAExtensionId extensionId,
+                         AAA_AVP_LIST *acctAvpList,
+                         AAAAcctMessageType msgType);
+         </artwork></figure>
+         
+         
+         <t>The parameters are:
+         
+        <list style="hanging">
+         <t hangText="aaaSessionId:"> The session id that this accounting data corresponds to.</t>
+         
+         <t hangText="extensionId:"> The extension type associated with this accounting message.</t>
+         
+         <t hangText="acctAvpList:"> A list of AVPs to send in the accounting message.</t>
+         
+         <t hangText="msgType:"> The type of accounting message.</t>
+    </list></t>
+         
+         <t>The return codes are:
+         
+        <list style="hanging">
+         <t hangText="AAA_ERR_SUCCESS:"> Upon completion.</t>
+         
+         <t hangText="AAA_ERR_PARAMETER:"> If a parameter is invalid.</t>
+    </list></t>
+
+      </section> <!-- AAASendAcctRequest() -->
+         
+               </section> <!-- Accounting -->
+
+      </section> <!-- Functions -->
+      <section title="Implementation Notes">
+
+         <t>The following are some implementation notes that library designers
+         may want to keep in mind.</t>
+
+      </section> <!-- Implementation Notes -->
+
+      <section title="Grouped AVPs">
+
+         <t>In order to create grouped AVPs, an application creates an AAA_AVP_LIST
+         that is not attached to an AAAMessage structure (also known as an orphaned
+         AAA_AVP_LIST). All of the necessary AVPs within the Group are added to
+         the orphaned AAA_AVP_LIST using the existing list manipulation functions.
+         Lastly, the grouped AVP is added to the AAAMessage structure.</t>
+         
+         <t>The following is an example that adds a Proxy-State Grouped AVP to an
+         existing AAAMessage structure.</t>
+         
+         <figure><artwork>
+
+     addProxyState(AAAMessage *message, ipaddr_t *ourAddress,
+         void *state, size_t stateLen)
+     {
+             AAA_AVP_LIST *avpList = NULL;
+     
+             /*
+              * Add the Proxy-Address AVP to the AAAList
+              */
+             if (AAACreateAndAddAVPToList(&avpList,
+                 DIAM_AVP_PROXY_ADDRESS, AAA_AVPI_FLAG_NONE,
+                 NO_VENDOR_ID, (char *)ourAddress,
+                 sizeof (ipaddr_t))) {
+                     loggerSyslog(LOG_AVP_PROBLEMS,
+                         "Unable to add Proxy-Address AVP");
+                     return (AAA_ERR_FAILURE);
+             }
+             /*
+              * Now we add the Proxy-Info AVP to the AAAList
+              */
+             if (AAACreateAndAddAVPToList(&avpList,
+                 DIAM_AVP_PROXY_INFO, AAA_AVPI_FLAG_NONE,
+                 NO_VENDOR_ID, state, stateLen)) {
+                     loggerSyslog(LOG_AVP_PROBLEMS,
+                         "Unable to add Proxy-Info AVP");
+                     return (AAA_ERR_FAILURE);
+             }
+             /*
+              * Now the AAAList is added to the AAAMessage as
+              * a Proxy-State AVP.
+              */
+             if (AAACreateAndAddAVPToList(&message->avpList,
+                 DIAM_AVP_PROXY_STATE, AAA_AVPI_FLAG_NONE,
+                 NO_VENDOR_ID, (char *)avpList,
+                 AAA_AVP_GROUPED_LENGTH)) {
+                     loggerSyslog(LOG_AVP_PROBLEMS,
+                         "Unable to add Proxy-State AVP");
+                     return (AAA_ERR_FAILURE);
+             }
+     
+             return (AAA_ERR_SUCCESS);
+     }
+         </artwork> </figure>
+         
+         <t>As shown above, the procedures is to create a new AAA_AVP_LIST structure,
+         adding all of the necessary AVPs that are within the Grouped AVP, then
+         calling AAACreateAndAddAVPToList() to add the AAA_AVP_LIST as a Grouped
+         AVP to the AAAMessage.</t>
+         
+         <t>Note that the AAA_AVP_LIST pointed to by orphaned avpList MUST NOT be
+         accessed by the application after the Grouped avp has been created. The 
+         list will be freed along with the AVP by the AAA Library.</t>
+         
+         <t>In order to parse a Grouped AVP, the AAA_AVP data field contains a 
+         pointer to an AAA_AVP_LIST, as shown below.</t>
+         
+         <figure><artwork>
+     boolean_t
+     isProxyStateOurs(AAA_AVP *proxyState, ipaddr_t *ourAddress)
+     {
+             AAA_AVP_LIST *avpList;
+             AAA_AVP *proxyAddress;
+             AAA_AVP *proxyInfo;
+             ipaddr_t *proxyAddress;
+     
+             /*
+              * Get the pointer to the Grouped AAA_AVP_LIST
+              */
+             avpList = (AAA_AVP_LIST *)proxyState->data;
+     
+             /*
+              * First, for the Proxy-Address, and see if it is ours.
+              */
+             if ((proxyAddress = AAAFindMatchingAVP(avpList, NULL,
+                 DIAM_AVP_PROXY_ADDRESS, NO_VENDOR_ID,
+                 AAA_FORWARD_SEARCH)) != NULL) {
+                     /*
+                      * Check if this one is ours.
+                      */
+                     address2 = (ipaddr_t *)proxyAddress->data;
+                     if (*address2 == *address) {
+                             /*
+                              * This one is ours... return TRUE
+                              */
+                             return (B_TRUE);
+                     }
+             }
+
+             return (B_FALSE);
+     }
+         </artwork></figure>
+      </section> <!-- Grouped AVPs -->
+
+
+      <section anchor="aaa_avp" title="Extended AAA_AVP structure">
+
+         <t>The AAA_AVP structure that is defined in this specification is
+         a subset of the structure used by the internal library. The internal
+         structure, known as the extended AAA_AVP, may contain many private
+         fields, such as pointers to AAA_AVPs. Applications do not directly
+         access the next (and previous) AAA_AVP pointers but
+         instead access them via the AAAGetNextAVP() and AAAGetPreviousAVP()
+         functions (see <xref target="visibility"/>).</t>
+         
+         <t>The following is an example of an extended AAA_AVP structure:</t>
+
+        <figure><artwork>
+         typedef struct {
+                 // API Public variables here
+         } AAA_AVP;
+        </artwork></figure>
+         
+        <figure><artwork>
+         typedef struct xavp {
+                 AAA_AVP      avp;
+                 struct xavp *next;
+                 struct xavp *prev;
+                 int          privateFlags;
+         } Extended_AAA_Avp;
+        </artwork></figure>
+         
+         <t>Of course, when AAACreateAVP is called, sufficient memory is allocated
+         for the extended AAA_AVP structure, however the function returns a
+         pointer to the AAA_AVP.</t>
+         
+      </section> <!-- Extended AAA_AVP structure -->
+         
+               <section title="Avoiding AVP Copying">
+         
+         <t>The AAA_AVP struct does not provide an exact mapping to
+         the Diameter protocol AVP packet format; however, library
+         implementers can avoid having to copy the AVP data by
+         putting a pointer to a packet format structure into
+         a hidden part of the AAA_AVP struct. A pointer to
+         the AVP data is then deposited into the AAA_AVP
+         data field. This allows proper deallocation of the
+         packet format structure when the AAA_AVP structure
+         is deallocated.</t>
+
+               </section> <!-- Avoiding AVP Copying -->
+      <section title="Callback Processing Order">
+
+         <t>The C API allows API clients to register message processors,
+         or callbacks, that are 
+         invoked before and after the bulk of the processing functions for
+         a message. Only one pre- or post-processor is allowed for all
+         incoming messages, regardless of command or extension type. If
+         the API client adds another, any existing pre- and post-processors
+         are removed. </t>
+         
+         <t>Message processing can be best explained by the following diagram:</t>
+         
+         <figure><artwork>
+         +-------+     +-------+     +-------+     +-------+
+         | First |     |  Any  |     |  Any  |     |  Last | Apps
+         +-------+     +-------+     +-------+     +-------+
+             ^             ^             ^             ^
+           1 |           2 |           3 |           4 |
+         +-------------------------------------------------+
+         |                   AAA Library                   |
+         +-------------------------------------------------+
+                                 ^
+                                 | MSG
+         </artwork></figure>
+         
+         <t>In the above diagram, "First", "Any", and "Last" are added by the
+         API client. The message processor labeled "First" is given
+         access to the message before any other, the message processor "Last"
+         after all others are finished. There is no guarantee on ordering
+         for the other message processors. If the client adds a new "First"
+         or "Last" message processor, AAA_ERR_ALREADY_REGISTERED error is
+         returned. There is one "First" and "Last" processor for all commands regardless
+         of type; whereas, the "Any" processors are command-specific.</t>
+         
+         <t>If one of the "Any" processors completes successfully, the message
+         is not passed on any further. A successful
+         completion means the success return code is returned from the
+         C API callback, but the callback is responsible for freeing the 
+         message before returning.</t>
+      </section> <!-- Callback Processing Order -->
+
+   </section> <!-- C API -->
+
+   <section title="Security Considerations">
+     <t>This document describes an API and therefore depends on the security
+     mechanisms defined in the Diameter protocol <xref target="RFC3588"/>. </t>
+   </section> <!-- Security Considerations -->
+   <section title="IANA Considerations">
+     <t>This document has no actions for IANA. </t>
+   </section> <!-- IANA Considerations -->
+   <section title="Acknowledgments">
+   <t>The authors would like to thank James Kempf for his input 
+       to this document.</t>
+   </section> <!-- Acknowledgments -->
+   
+ </middle>
+ <back>
+   <references title='Normative References'>
+    <reference anchor="RFC3588">
+    <front>
+    <title>Diameter Base Protocol</title>
+    <author surname="Calhoun" fullname="Pat R. Calhoun">
+		<organization/>
+	</author>
+    <author surname="Loughney" fullname="John Loughney">
+			<organization/>
+		</author>
+    <author surname="Guttman" fullname="Erik Guttman">
+			<organization/>
+		</author>
+    <author surname="Zorn" fullname="Glen Zorn">
+			<organization/>
+		</author>
+    <author surname="Arkko" fullname="Jari Arkko">
+			<organization/>
+		</author>
+   <date month="October" year="2002" />
+   </front>
+    <seriesInfo name='RFC' value='3588' />
+   </reference>
+
+    <reference anchor="RFC3493">
+    <front>
+    <title>Basic Socket Interface Extensions for IPv6</title>
+    <author surname="Gilligan" fullname="Robert E. Gilligan">
+		<organization/>
+	</author>
+    <author surname="Thomson" fullname="Susan Thomson">
+		<organization/>
+	</author>
+    <author surname="Bound" fullname="Jim Bound">
+		<organization/>
+	</author>
+    <author surname="McCann" fullname="Jack McCann">
+		<organization/>
+	</author>
+    <author surname="Stevens" fullname="W. Richard Stevens">
+		<organization/>
+	</author>
+    <date month="February" year="2003" />
+    </front>
+    <seriesInfo name="rfc" value="3493"/>
+   </reference>
+
+    <reference anchor="RFC2119">
+    <front>
+    <title>Key words for use in RFCs to Indicate Requirement Levels</title>
+    <author initials="S." surname="Bradner" fullname="Scott Bradner">
+		<organization/>
+	</author>
+    <date month="March" year="1997"/>
+    </front>
+    <seriesInfo name="BCP" value="14"/>
+    <seriesInfo name="RFC" value="2119"/>
+    </reference>
+   </references>
+
+   <references title='Informative References'>
+
+   <reference anchor="XML">
+    <front>
+    <title>Diameter XML Dictionary</title>
+    <author surname="Frascone" fullname="David Frascone">
+		<organization/>
+	</author>
+    <author surname="Jones" fullname="Mark Jones">
+		<organization/>
+	</author>
+    <author surname="Guttman" fullname="Erik Guttman">
+		<organization/>
+    </author>
+    <date month="September" year="2007" />
+    </front>
+    <seriesInfo name="Internet-Draft" value="draft-frascone-xml-dictionary-00"/>
+   </reference>
+
+   </references>
+ </back>
+
+</rfc>

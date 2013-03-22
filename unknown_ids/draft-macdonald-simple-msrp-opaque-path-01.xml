@@ -1,0 +1,379 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd"[
+  <!ENTITY rfc2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+  <!ENTITY rfc3261 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3261.xml'>
+  <!ENTITY rfc4975 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4975.xml'>
+  <!ENTITY rfc4976 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4976.xml'>
+  <!ENTITY draft-ietf-simple-msrp-acm PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.draft-ietf-simple-msrp-acm-00.xml'>
+
+]>
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes"?>
+<?rfc compact="yes" ?>
+<?rfc sortrefs="no" ?>
+<?rfc symrefs="yes" ?>
+
+<rfc category="exp" 
+     docName="draft-macdonald-simple-msrp-opaque-path-01"
+     ipr="pre5378Trust200902">
+  <front>
+    <title>Opaque MSRP Path Uri</title>
+
+    <author fullname="Derek C. MacDonald" initials="D.C." surname="MacDonald">
+      <organization>CounterPath Solutions, Inc.</organization>
+      <address>
+        <postal>
+          <street>Suite 300, One Bentall Centre, 505 Burrard St</street>
+          <city>Vancouver</city>
+          <code>V7X1M3</code>
+          <region>BC</region>
+          <country>Canada</country>
+        </postal>
+        <phone>+1-604-320-3344</phone>
+        <email>derek@counterpath.com</email>
+      </address>
+    </author>
+
+    <date day="9" month="March" year="2009" />
+
+    <area>RAI</area>
+
+    <workgroup>SIMPLE</workgroup>
+
+    <keyword>MSRP Topology Hiding</keyword>
+
+    <keyword>Draft</keyword>
+
+    <abstract>
+      <t>The Message Session Relay Protocol(MSRP) does not allow privacy and
+      topology hiding, such that MSRP users can hide the IP Address of their
+      systems. This limitation is due to the fact that MSRP Path headers
+      contain physical IP addresses. This document describes a mechanism which
+      adds a level of indirection to allow privacy and topology hiding, to
+      prevent remote parties and a man-in-the-middle from learning the IP 
+      Address and port information of the MSRP client.  It also defines the
+      option tag msrp-opaque, to indicate such support.</t>
+    </abstract>
+
+    <note title="Requirements Language">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref target="RFC2119"/>.</t>
+    </note>
+  </front>
+
+  <middle>
+    <section title="Applicability" toc="default">
+      <t>This technique may be used in any MSRP deployment where all MSRP
+      endpoints support the <xref target="I-D.ietf-simple-msrp-acm"/>  extension 
+      when routing to/from on an MSRP URI.  Not all MSRP endpoints must support
+      this opaque extension; they only need to support draft-ACM.
+      This document only describes an SDP based mechanism for binding a
+      physical address to an opaque MSRP URI that limits possible topologies.
+      <xref target="RFC4976"/> MSRP relays will not be able to
+      route from opaque MSRP URI's.</t>
+    </section>
+
+    <section title="Introduction">
+      <t>A frequent requirement of network architectures is to hide the
+      systems of the core network from external user agents. It is also often 
+      desirable to hide the IP address of a user agent from other user agents 
+      in the network. This is usually accomplished using a SIP B2BUA or other 
+      relay element. MSRP does not allow an efficient approach to this problem
+      because the payload of the protocol contains physical IP addresses, and
+      thus the B2BUA needs to modify MSRP messages in order to hide topology
+      information.</t>
+      
+      <t>Furthermore, users of MSRP or their system administrators may not wish
+      to provide remote MSRP agents the IP Address and port of their local MSRP
+      host machines, for security or anonymity reasons.  Revealing such might
+      expose the host machines to external attacks, even through NATs/Firewalls.
+      One means of providing user anonymity is by using a TURN server; however in
+      practice there are few TURN servers available, and other relay agents such
+      as SBC's may already be in the path.  The opaque MSRP URI concept defined
+      in this draft is usable with a TURN server, SBC, or MSRP B2BUA.  It is not
+      usable with MSRP Relays unless their functionality is extended.</t>
+
+      <t>This specification defines an opaque MSRP URI, that does not contain
+      a routable IP address. The opaque URI is a mapping to a physical address
+      that is exchanged outside the MSRP protocol. This allows topology hiding
+      without re-writing any MSRP messages between the MSRP User Agents.</t>
+
+      <t>The opaque URI is a pointer to an externally conveyed routable URI.
+      This document describes a mechanism to convey the routable URI in the
+      SDP offer/answer exchange used to initiate the MSRP session, based on the 
+      changes in draft-ACM. The opaque URI is used in the MSRP message headers, 
+      while the transport addressing conveyed in SDP is used for the transport 
+      layer connections.</t>
+
+      <t>The basic concept is that instead of indicating the MSRP transport
+      connection information in the MSRP "path" SDP attribute, and using such in
+      the to-path/from-path MSRP headers, a pseudo-random string is used
+      instead: the MSRP opaque URI. An MSRP client inserts a pseudo-random
+      MSRP opaque URI value in the SDP MSRP path attribute, and uses this
+      value in MSRP messages for its path headers. Actual transport connection
+      information is instead conveyed in the standard SDP connection and media
+      lines, per draft-ACM.</t>
+    </section>
+
+    <section title="Overview of Operations">
+      <t>An MSRP User Agent following this document's mechanism will generate
+      a SIP INVITE for an MSRP-based media session by populating the SDP
+      connection line and media line with transport addressing information, as
+      is done for COMEDIA and draft-ACM, along with an MSRP opaque URI for 
+      the SDP MSRP path attribute. It will also insert the new 'msrp-opaque' 
+      option tag into a SIP Require header field.</t>
+
+      <t>The SIP UAS receiving the INVITE request will see the MSRP URI is an
+      opaque type, due to a new 'opaque' URI parameter defined later in this
+      document. It will then respond with an SDP answer also indicating an
+      MSRP opaque URI, with its actual transport address information in the
+      SDP connection and media lines.</t>
+
+      <t>Per <xref target="RFC4975"/>, the UAC will initiate
+      the TCP connection to the UAS, however per draft-ACM the TCP
+      connection would use the SDP connection and media lines for addressing
+      info instead of the MSRP URI directly.</t>
+
+      <t>The MSRP messages generated by the UAC and UAS MUST continue to use
+      the MSRP path attribute opaque URI for the to/from-path MSRP headers.
+      Since the URI is not directly dereferenceable for transport addressing,
+      each UA maintains an internal binding of MSRP opaque-URI to connection
+      transport information.</t>
+
+      <t>If the TCP connection for MSRP were to go directly from the UAC to
+      the UAS, then clearly one could simply learn the UA addressing on the
+      wire, or by looking at SDP information, and anonymity would not be
+      achieved. It is expected that in typical deployment the media transport
+      information is obfuscated through some other means, such as SBC's or
+      ALG's performing media relay functions, but that is beyond
+      the scope of this document: the goal of this document is to provide
+      anonymity for MSRP, not SIP nor SDP.</t>
+
+      <t>The approach defined in this document does not fit with the MSRP
+      Relay model of RFC 4976, where an MSRP client can use a special
+      intermediary called an "MSRP Relay".  Instead, this mechanism works 
+      with MSRP Application  Servers, acting as full MSRP Back-to-Back User 
+      Agents, or with typical SIP intermediate types of devices, such as SBCs 
+      and ALGs. One of the goals of this specification is to be able to 
+      make MSRP work across such intermediaries.</t>
+
+      <t>[Note: the MSRP opaque URI model *could* be made to work with MSRP
+      Relays, if the Relays were to know about such URIs in advance - it is
+      TBD whether it is worth specifying how that could/should work]</t>
+    </section>
+
+    <section title="MSRP Opaque URI">
+      <section title="Opaque URI Format">
+        <t>The opaque URI is an MSRP URI that has a domain name in the
+        .invalid TLD, and an 'opaque' URI parameter as defined later. A
+        globally unique identifier is generated and encoded as a URI in the
+        .invalid TLD. For example:
+        path:msrp://f7jey483rydfhkyerky3.invalid:7394/2s93u93udj;tcp;opaque.
+        The opaque URI pointer is the first portion of the URI before
+        .invalid: f7jey483rydfhkyerky3. The port is arbitrary. [Note:
+        Should there be a fixed value for the port?]</t>
+      </section>
+
+      <section title="Generating an Opaque Uri">
+        <t>The identifying portion of the opaque uri is the portion up to
+        .invalid. This portion should be cryptographically unique and MUST
+        be encoded so it obeys rfc3986. Opaque URIs do not modify the grammar
+        of rfc4975.</t>
+
+        <t>TODO: determine generation scheme and encoding</t>
+      </section>
+
+      <section title="MSRP URI Parameter">
+        <t>This document defines a new MSRP URI parameter: "opaque". The
+        opaque URI parameter indicates that this URI follows this
+        specification, and MUST appear to identify an opaque URI whenever one
+        is used. The ABNF for this parameter, following <xref
+        target="RFC4975">RFC4975</xref>, is as follows:</t>
+
+        <figure>
+          <artwork><![CDATA[
+            URI-parameter = opaque-param / (token ["=" token])
+            opaque-param  = "opaque"]]></artwork>
+        </figure>
+      </section>
+    </section>
+
+    <section title="SIP Option Tag">
+      <t>This specification registers a new SIP option tag, as per the
+      guidelines in Section 27.1 of <xref target="RFC3261"/>.</t>
+
+      <t>Name: msrp-opaque</t>
+
+      <t>Description: This option-tag is used to identify UAs that support
+      the mechanism defined in this document.</t>
+
+      <t>SIP User Agents MUST include a Requires header field with the
+      "msrp-opaque" option-tag when using an opaque URI in an SDP offer or
+      answer in a SIP message.</t>
+
+      <t>SIP User Agents SHOULD include a Supported header field with an the
+      "msrp-opaque" option-tag if they support this specification but still
+      wish to generate a non-opaque URI in the SDP. This allows the UAS to
+      reject the request with a Require header field containing "msrp-opaque"
+      to indicate the UAS requires the UAC to use an opaque URI; and this
+      allows for backwards compatibility as described in the next section.</t>
+    </section>
+
+    <section title="Backwards Compatibility with RFC 4975 and 4976">
+      <t>When a UAC initiates an MSRP session, it may need to interoperate
+      with legacy devices based on RFC 4975 and 4976. This can be accomplished
+      with the opaque URI mechanism in the following way, as long as the UAC
+      does not itself require anonymization of its URI: the UAC generates a
+      legacy RFC 4975 MSRP URI, but adds the 'opaque' parameter to the end of
+      it, and sets the SDP connection and media lines to be the real transport
+      addresses as well, and adds a Supported option tag of "msrp-opaque".</t>
+
+      <t>If the answering UAS only supports RFC 4975 and/or 4976, it will
+      ignore the opaque parameter and Supported option tag, and respond and
+      act as per RFC 4975. If the UAS supports the opaque mechanism, and
+      wishes to anonymize its MSRP URI, it responds with a real MSRP opaque
+      URI, and a SIP Require header field with the "msrp-opaque" option
+      tag.</t>
+    </section>
+
+    <section title="Example Scenario">
+      <t>In the following example, Alice invites Bob to an MSRP session. Alice
+      does not wish her IP address to be known, as it conveys information
+      about her location and might make her system vulnerable to attacks.
+      Similarly, the Atlanta network has a policy of not exposing such
+      details about their network or their users. In this case Alice and Bob
+      are both at atlanta.example.com</t>
+
+      <figure>
+        <artwork><![CDATA[
+        Alice                Atlanta Network       Bob
+        |                    |                   |
+        |------INVITE------->| 1                 |
+        |                    |------INVITE------>| 2
+        |                    |<------200---------| 3
+        |<------200----------| 4                 |
+        |-------ACK--------->|                   |
+        |                    |-------ACK-------->|
+        |                    |                   |
+        
+      ]]></artwork>
+      </figure>
+
+      <t>Message 1 is an INVITE where msrp-opaque is required and an opaque
+      MSRP URI is used in the SDP.</t>
+
+      <figure>
+        <artwork><![CDATA[
+        INVITE sip:bob@atlanta.example.com SIP/2.0
+        To: <sip:bob@atlnata.example.com>
+        From: <sip:alice@atlanta.example.com>;tag=786
+        Call-ID: 3413an89KU
+        Requires: msrp-opaque
+        Content-Type: application/sdp
+        -
+        c=IN IP4 192.168.0.100
+        m=message 12454 TCP/MSRP *
+        a=path:msrp://f7jey483rydfhkyerky3.invalid.com:7394/jshA7weztas;tcp;opaque
+         ]]></artwork>
+      </figure>
+
+      <t>The connection c-line of the SDP identifies Alice's actual transport
+      address for the MSRP connection, and the media m-line port portion
+      identifies the TCP port; as opposed to the msrp path attribute as
+      defined in <xref target="RFC4975">RFC4975</xref>. They may be changed by
+      intermediate nodes to point to an address:port on a TCP relay service in
+      the Atlanta network.</t>
+
+      <figure>
+        <artwork><![CDATA[
+        c=IN IP4 border.altanta.example.com
+        m=message 22454 TCP/MSRP *
+        a=path:msrp://f7jey483rydfhkyerky3.invalid.com:7394/jshA7weztas;tcp;opaque
+          ]]></artwork>
+      </figure>
+
+      <t>The relevant portion on the SDP from Message 3. For simplicity, Bob's
+      UA has been given a publicly reachable IP address.</t>
+
+      <figure>
+        <artwork><![CDATA[
+        c=IN IP4 bob.altanta.example.com
+        m=message 34313 TCP/MSRP *
+        a=path:msrp://a6ghr7yv6egw33r.invalid.com:7394/kjhd37s2s20w2a;tcp;opaque
+         ]]></artwork>
+      </figure>
+
+      <t>Which is re-written to point to the border element.</t>
+
+      <figure>
+        <artwork><![CDATA[
+        c=IN IP4 border.altanta.example.com
+        m=message 27784 TCP/MSRP *
+        a=path:msrp://a6ghr7yv6egw33r.invalid.com:7394/kjhd37s2s20w2a;tcp;opaque
+         ]]></artwork>
+      </figure>
+
+      <t>After this exchange is complete Alice will form a connection to the
+      border.atlanta.example.com which will in turn connect to Bob's UA.
+      border.atlanta.example.com acts as a simple TCP relay between Bob and
+      Alice until the TCP connection is torn down by either party.</t>
+
+      <t>While some of this functionality can be achieved with the MSRP relay
+      specification, or by using TURN-TCP, this approach has its own
+      advantages and disadvantages.</t>
+
+      <t>Advantages: <list>
+          <t>The opaque-uri provides topology hiding. This can also be
+          provided by TURN-TCP, but will end up w/ two TURN allocations being
+          used.</t>
+
+          <t>At the media level, the opaque-uri approach only requires a TCP
+          relay that has no knowledge of MSRP.</t>
+
+          <t>It is a small change for endpoints that already support
+          MSRP.</t>
+        </list></t>
+
+      <t>Disadvantages: <list>
+          <t>Until the TCP relay has connected to the second peer(Bob), any
+          MSRP requests from Alice must be rate-limited or cached. In
+          practice, rate limiting seems to work well; if the connection to Bob
+          fails, the connection to Alice would be torn down. This does not
+          provide the same level of error reporting as MSRP-Relay.</t>
+
+          <t>Mapping rules must be conveyed from the signal-plane(SIP/SDP) to
+          the Media Plane(TCP relay)</t>
+        </list></t>
+    </section>
+
+    <section title="Security Considerations">
+      <t>Hiding host system IP Address and port information may be considered
+      by some to be a form of anonymity or obfuscation for malevolent purposes, 
+      but it actually represents a simple form of host protection.  SIP and
+      MSRP User Agents are not just clients - they are servers as well, from
+      both a protocol and use-case perspective.  SIP in particular typically
+      uses a UDP socket, and even when using TCP, agents frequently run a listen
+      server socket in order to receive inbound requests.  If the connection
+      information of SIP or MSRP applications running on a host are revealed, the
+      local user of the system and/or its administrators have no simple means by 
+      which to prevent any device on the Internet from attempting to send messages
+      to the host for malicious purposes.  For example, the NAT will have opened
+      a port and created a binding for the SIP UDP port, and some NATs are fully
+      conical and will allow any remote device to send packets in through their
+      open bindings.</t>
+    </section>    
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      &rfc2119;
+      &rfc3261;
+      &rfc4975;
+      &rfc4976;
+      &draft-ietf-simple-msrp-acm;
+      &draft-ietf-sip-gruu;
+    </references> 
+  </back>
+</rfc>

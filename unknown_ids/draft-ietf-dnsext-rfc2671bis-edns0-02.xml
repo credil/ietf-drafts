@@ -1,0 +1,435 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc strict="yes" ?>
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<rfc category="std" docName="draft-ietf-dnsext-rfc2671bis-edns0-02" ipr="trust200902" obsoletes="2671">
+  <front>
+    <title abbrev="EDNS0 Extensions">Extension Mechanisms for DNS (EDNS0)</title>
+    <author fullname="Michael Graff" initials="M.G." surname="Graff">
+      <organization>Internet Systems Consortium</organization>
+      <address>
+        <postal>
+          <street>950 Charter Street</street>
+          <city>Redwood City</city>
+          <region>California</region>
+          <code>94063</code>
+          <country>US</country>
+        </postal>
+        <phone>+1 650.423.1304</phone>
+        <email>mgraff@isc.org</email>
+      </address>
+    </author>
+    <author fullname="Paul Vixie" initials="P.V." surname="Vixie">
+      <organization>Internet Systems Consortium</organization>
+      <address>
+        <postal>
+          <street>950 Charter Street</street>
+          <city>Redwood City</city>
+          <region>California</region>
+          <code>94063</code>
+          <country>US</country>
+        </postal>
+        <phone>+1 650.423.1301</phone>
+        <email>vixie@isc.org</email>
+      </address>
+    </author>
+    <date month="July" year="2009"/>
+    <area>General</area>
+    <workgroup>DNSEXT Working Group</workgroup>
+    <keyword>RFC</keyword>
+    <keyword>Request for Comments</keyword>
+    <keyword>I-D</keyword>
+    <keyword>Internet-Draft</keyword>
+    <keyword>edns0</keyword>
+    <keyword>dns</keyword>
+    <abstract>
+      <t>
+The Domain Name System's wire protocol includes a number of fixed
+fields whose range has been or soon will be exhausted and does not allow
+requestors to advertise their capabilities to responders.
+This document describes backward compatible mechanisms for allowing the
+protocol to grow.
+</t>
+      <t>
+This document updates the EDNS0 specification based on 10 years of operational
+experience.
+</t>
+    </abstract>
+  </front>
+  <middle>
+    <section title="Introduction">
+      <t>
+DNS <xref target="RFC1035"/> specifies a Message Format and within
+such messages there are standard formats for encoding options, errors, and
+name compression.
+The maximum allowable size of a DNS Message is fixed.
+Many of DNS's protocol limits are too small for uses which are or which are
+desired to become common.
+There is no way for implementations to advertise their capabilities.
+</t>
+      <t>
+Unextended agents will not know how to interpret the protocol
+extensions detailed here.  In practice, these clients will be upgraded
+when they have need of a new feature, and only new features will make
+use of the extensions.  Extended agents must be prepared for behaviour
+of unextended clients in the face of new protocol elements, and fall
+back gracefully to unextended DNS.  <xref target="RFC2671"/> originally
+proposed extensions to the basic DNS protocol to overcome these deficiencies.
+This memo refines that specification and obsoletes <xref target="RFC2671"/>.
+</t>
+    </section>
+    <section title="Requirements Language">
+      <t>
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
+"SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this  document are to be
+interpreted as described in <xref target="RFC2119">RFC 2119</xref>.
+</t>
+    </section>
+<section title="EDNS Support Requirement">
+  <t>EDNS support is manditory in a modern world.  DNSSEC requires EDNS
+support, and many other featres are made possible only by EDNS support
+to request or advertise them.</t>
+</section>
+    <section title="Affected Protocol Elements">
+      <section title="Message Header">
+        <t>
+The DNS Message Header's
+(see <xref target="RFC1035">, section 4.1.1</xref>)
+second full 16-bit word is divided into a 4-bit OPCODE, a 4-bit RCODE, and a
+number of 1-bit flags.
+The original reserved Z bits have been allocated to various purposes, and
+most of the RCODE values are now in use.
+More flags and more possible RCODEs are needed.
+The OPT pseudo-RR specified below contains subfields that carry a bit field
+extension of the RCODE field and additional flag bits, respectively.
+</t>
+      </section>
+      <section title="Label Types">
+        <t>
+The first two bits of a wire format domain label are used to denote the
+type of the label.
+<xref target="RFC1035">,section 4.1.4</xref> allocates two of the four
+possible types and reserves the other two.
+More label types were proposed in <xref target="RFC2671"/> section 3.
+</t>
+      </section>
+      <section title="UDP Message Size">
+        <t>
+DNS Messages are limited to 512 octets in size when sent over UDP.
+While the minimum maximum reassembly buffer size still allows a limit of
+512 octets of UDP payload, most of the hosts now connected to the Internet
+are able to reassemble larger datagrams.
+Some mechanism must be created to allow requestors to advertise larger buffer
+sizes to responders.  To this end, the OPT pseudo-RR specified below contains
+a maximum payload size field.
+</t>
+      </section>
+    </section>
+    <section title="Extended Label Types">
+<t>
+The first octet in the on-the-wire representation of a DNS label
+specifies the label type; the basic DNS specification <xref target="RFC1035"/>
+dedicates the two most significant bits of that octet for this purpose.</t>
+<t>
+This document reserves DNS label type 0b01 for use as an indication for
+Extended Label Types.  A specific extended label type is selected by the
+6 least significant bits of the first octet. Thus, Extended Label Types
+are indicated by the values 64-127 (0b01xxxxxx) in the first octet of
+the label.</t>
+<t>
+This document does not describe any specific Extended Label Type.</t>
+<t>
+In practice, Extended Label Types are difficult to use due to support
+in clients and intermediate gateways.  Therefore, the registry of
+Extended Label Types is requested to be closed.  They cause interoperability
+problems and at present no defined label types are in use.</t>
+    </section>
+    <section title="OPT pseudo-RR">
+      <section title="OPT Record Behavior">
+        <t>
+One OPT pseudo-RR (RR type 41) MAY be added to the additional data section
+of a request.  If present in requests, compliant responders which implement
+EDNS MUST include an OPT record in non-truncated responses, and SHOULD
+attempt to include them in all responses.
+An OPT is called a pseudo-RR because it pertains to a particular transport
+level message and not to any actual DNS data.
+OPT RRs MUST NOT be cached, forwarded, or stored in or loaded from master
+files.
+The quantity of OPT pseudo-RRs per message MUST be either zero or one, but
+not greater.
+</t>
+      </section>
+      <section title="OPT Record Format">
+        <t>
+An OPT RR has a fixed part and a variable set of options expressed as
+{attribute, value} pairs.
+The fixed part holds some DNS meta data and also a small collection of basic
+extension elements which we expect to be so popular that it would be a waste
+of wire space to encode them as {attribute, value}
+pairs.
+</t>
+          <t>The fixed part of an OPT RR is structured as follows:</t>
+          <texttable title="OPT RR Format">
+            <ttcol>Field Name</ttcol>
+            <ttcol>Field Type</ttcol>
+            <ttcol>Description</ttcol>
+            <c>NAME</c>
+            <c>domain name</c>
+            <c>empty (root domain)</c>
+            <c>TYPE</c>
+            <c>u_int16_t</c>
+            <c>OPT</c>
+            <c>CLASS</c>
+            <c>u_int16_t</c>
+            <c>requestor's UDP payload size</c>
+            <c>TTL</c>
+            <c>u_int32_t</c>
+            <c>extended RCODE and flags</c>
+            <c>RDLEN</c>
+            <c>u_int16_t</c>
+            <c>describes RDATA</c>
+            <c>RDATA</c>
+            <c>octet stream</c>
+            <c>{attribute,value} pairs</c>
+          </texttable>
+
+          <t>
+The variable part of an OPT RR is encoded in its RDATA and is structured
+as zero or more of the following:
+</t>
+          <figure>
+            <artwork align="center">
+ 
+              +0 (MSB)                            +1 (LSB)
+   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+0: |                          OPTION-CODE                          |
+   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+2: |                         OPTION-LENGTH                         |
+   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+4: |                                                               |
+   /                          OPTION-DATA                          /
+   /                                                               /
+   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+</artwork>
+          </figure>
+          <t>
+            <list style="hanging" hangIndent="6">
+              <t hangText="OPTION-CODE"><vspace/>Assigned by Expert Review.</t>
+              <t hangText="OPTION-LENGTH"><vspace/>Size (in octets) of OPTION-DATA.</t>
+              <t hangText="OPTION-DATA"><vspace/>Varies per OPTION-CODE.</t>
+            </list>
+          </t>
+<t>
+Order of appearance of option tuples is never relevant. Any
+option whose meaning is affected by other options is so affected no
+matter which one comes first in the OPT RDATA.</t>
+<t>
+Any OPTION-CODE values not understood by a responder or requestor
+MUST be ignored.  Specifications of such options might wish to
+include some kind of signalled acknowledgement.  For example, an option
+specification might say that if a responder sees option XYZ, it SHOULD
+include option XYZ in its response.</t>
+      </section>
+      <section title="Requestor's Payload Size">
+        <t>
+The requestor's UDP payload size (which OPT stores in the RR CLASS
+field) is the number of octets of the largest UDP payload that can be
+reassembled and delivered in the requestor's network stack.
+Note that path MTU, with or without fragmentation, may be smaller than this.
+Values lower than 512 MUST be treated as equal to 512.
+</t>
+        <t>
+Note that a 512-octet UDP payload requires a 576-octet IP reassembly
+buffer.  Choosing 1280 for IPv4 over Ethernet would be reasonable.
+The consequence of choosing too large a value may be an ICMP message from an
+intermediate gateway, or even a silent drop of the response message.</t>
+          <t>
+The requestor's maximum payload size can change over time, and
+MUST therefore not be cached for use beyond the transaction in which it
+is advertised.</t>
+</section>
+        <section title="Responder's Payload Size">
+          <t>
+The responder's maximum payload size can change over time, but can
+be reasonably expected to remain constant between two sequential transactions;
+for example, a meaningless QUERY to discover a responder's maximum UDP payload
+size, followed immediately by an UPDATE which takes advantage of this size.
+(This is considered preferrable to the outright use of TCP for oversized
+requests, if there is any reason to suspect that the responder implements
+EDNS, and if a request will not fit in the default 512 payload size limit.)
+</t>
+        </section>
+        <section title="Payload Size Selection">
+          <t>
+Due to transaction overhead, it is unwise to advertise an architectural
+limit as a maximum UDP payload size.  Just because your stack can reassemble
+64KB datagrams, don't assume that you want to spend more than about 4KB of
+state memory per ongoing transaction.
+</t>
+	  <t>
+A requestor MAY choose to implement a fallback to smaller advertised sizes
+to work around firewall or other network limitations.
+A requestor SHOULD choose to use a fallback mechanism which begins with a large
+size, such as 4096.  If that fails, a fallback around the 1220 byte range
+SHOULD be tried, as it has a reasonable chance to fit within a single
+Ethernet frame.  Failing that, a requestor MAY choose a 512 byte packet,
+which with large answers may cause a TCP retry.
+</t>
+        </section>
+<section title="Middleware Boxes">
+  <t>Middleware boxes MUST NOT limit DNS messages over UDP to 512 bytes.</t>
+<t>Middleware boxes which simply forward requests to a recursive resolver
+MUST NOT modify the OPT record contents in either direction.</t>
+</section>
+      <section title="Extended RCODE">
+        <t>
+The extended RCODE and flags (which OPT stores in the RR TTL field)
+are structured as follows:</t>
+        <figure>
+          <artwork align="center">
+              +0 (MSB)                            +1 (LSB)
+   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+0: |         EXTENDED-RCODE        |            VERSION            |
+   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+2: | DO|                           Z                               |
+   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+</artwork>
+        </figure>
+        <t>
+          <list style="hanging" hangIndent="6">
+            <t hangText="EXTENDED-RCODE"><vspace/>
+ Forms upper 8 bits of extended 12-bit RCODE.  Note that EXTENDED-RCODE value
+"0" indicates that an unextended RCODE is in use (values "0" through "15").
+</t>
+            <t hangText="VERSION"><vspace/>
+Indicates the implementation level of whoever sets it.  Full conformance with
+this specification is indicated by version ``0.''  Requestors are encouraged
+to set this to the lowest implemented level capable of expressing a
+transaction, to minimize the responder and network load of discovering the
+greatest common implementation level between requestor and responder.  A
+requestor's version numbering strategy MAY ideally be a run time
+configuration option.
+<vspace/>
+If a responder does not implement the VERSION level of the request, then it
+answers with RCODE=BADVERS.  All responses MUST be limited in format to the
+VERSION level of the request, but the VERSION of each response SHOULD be the
+highest implementation level of the responder.  In this way a requestor will
+learn the implementation level of a responder as a side effect of every
+response, including error responses and including RCODE=BADVERS.
+</t>
+            <t hangText="DO"><vspace/>
+DNSSEC OK bit as defined by <xref target="RFC3225"/>.
+</t>
+            <t hangText="Z"><vspace/>
+Set to zero by senders and ignored by receivers, unless modified in a
+subsequent specification.
+</t>
+          </list>
+        </t>
+      </section>
+      <section title="OPT Options Type Allocation Procedure">
+<t>
+Allocations assigned by expert review.  TBD
+</t>
+</section>
+    </section>
+    <section title="Transport Considerations">
+        <t>
+The presence of an OPT pseudo-RR in a request should be taken as an
+indication that the requestor fully implements the given version of EDNS,
+and can correctly understand any response that conforms to that
+feature's specification.
+</t>
+        <t>
+Lack of presence of an OPT record in a request MUST be taken as an indication
+that the requestor does not implement any part of this specification and that
+the responder MUST NOT use any protocol extension described here in its
+response.</t>
+        <t>
+Responders who do not implement these protocol extensions MUST respond
+with FORMERR messages without any OPT record.
+</t>
+<t>
+If there is a problem with processing the OPT record itself, such as an
+option value that is badly formatted or includes out of range values, a
+FORMERR MAY be retured.  If this occurs the response MUST include an OPT
+record.  This MAY be used to distinguish between servers whcih do not
+implement EDNS and format errors within EDNS.</t>
+<t>If EDNS is used in a request, and the response arrives with TC set
+and with no EDNS OPT RR, a requestor SHOULD assume that truncation
+prevented the OPT RR from being appended by the responder, and further,
+that EDNS is not used in the response.  Correspondingly, an EDNS
+responder who cannot fit all necessary elements (including an OPT RR)
+into a response, SHOULD respond with a normal (unextended) DNS response,
+possibly setting TC if the response will not fit in the unextended
+response message's 512-octet size.
+</t>
+    </section>
+    <section title="Security Considerations">
+      <t>
+Requestor-side specification of the maximum buffer size may open a new DNS
+denial of service attack if responders can be made to send messages which are
+too large for intermediate gateways to forward, thus leading to potential ICMP
+storms between gateways and responders.
+</t>
+      <t>
+Announcing very large UDP buffer sizes may result in dropping by firewalls.
+This could cause retransmissions with no hope of success.
+Some devices reject fragmented UDP packets.
+</t>
+      <t>
+Announcing too small UDP buffer sizes may result in fallback to TCP.
+This is especially important with DNSSEC, where answers are much larger.
+</t>
+    </section>
+    <section title="IANA Considerations">
+<t>
+The IANA has assigned RR type code 41 for OPT.</t>
+<t>
+<xref target="RFC2671"/> specified a number of IANA sub-registries within
+"DOMAIN NAME SYSTEM PARAMETERS:" "EDNS Extended Label Type",
+"EDNS Option Codes", "EDNS Version Numbers", and "Domain System Response Code."
+IANA is advised to re-parent these subregistries to this document.
+</t>
+<t>
+RFC 2671 created an extended label type registry.
+We request that this registry be closed.</t>
+<t>
+This document assigns extended label type 0bxx111111 as "Reserved for future
+extended label types."  We request that IANA record this assignment.</t>
+<t>This document assigns option code 65535 to "Reserved for future expansion."
+</t>
+<t>This document expands the RCODE space from 4 bits to 12 bits.  This will
+allow IANA to assign more than the 16 distinct RCODE values allowed in
+<xref target="RFC1035">RFC 1035</xref>.
+</t>
+<t>
+This document assigns EDNS Extended RCODE "16" to "BADVERS".</t>
+<t>IESG approval should be required to create new entries in the EDNS Extended
+Label Type or EDNS Version Number registries, while any published RFC
+(including Informational, Experimental, or BCP) should be grounds for
+allocation of an EDNS Option Code.
+</t>
+    </section>
+    <section title="Acknowledgements">
+<t>
+Paul Mockapetris, Mark Andrews, Robert Elz, Don Lewis, Bob Halley, Donald
+Eastlake, Rob Austein, Matt Crawford, Randy Bush, and Thomas Narten were each
+instrumental in creating and refining this specification.</t>
+    </section>
+  </middle>
+  <back>
+    <references title="Normative References">
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.1035.xml"?>
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2671.xml"?>
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.3225.xml"?>
+    </references>
+    <references title="Informative References">
+      <?rfc include="http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml"?>
+    </references>
+  </back>
+</rfc>

@@ -1,0 +1,620 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+
+    <!ENTITY rfc3588 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3588.xml'>
+    <!ENTITY rfc2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+<?rfc toc="yes" ?>
+<?rfc symrefs="no" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="no" ?>
+<?rfc compact="no" ?>
+<?rfc subcompact="no" ?>
+<rfc category="std" ipr="full3978" docName="draft-lior-diameter-classifier-01.txt">
+    <front>
+        <title abbrev="Diameter Classifier"> Diameter Claissifier </title>
+        <author initials="A" surname="Lior" fullname="Avi Lior">
+            <organization>Bridgewater Systems</organization>
+            <address>
+                <postal>
+                    <street>303 Terry Fox Drive, Suite 500</street>
+                    <city>Ottawa</city>
+                    <region>Ontario</region>
+                    <code/>
+                    <country>Canada K2K 3J1</country>
+                </postal>
+                <phone>+1 613-591-6655</phone>
+                <email>avi@bridgewatersystems.com</email>
+            </address>
+        </author>
+        <author initials="M." surname="Jones" fullname="Mark Jones">
+            <organization>Bridgewater Systems</organization>
+            <address>
+                <postal>
+                    <street>303 Terry Fox Drive, Suite 500</street>
+                    <city>Ottawa</city>
+					<region>Ontario</region>
+					<code>K2K 3J1</code>
+					<country>Canada</country>
+                </postal>
+                <phone>+1 613-591-6655</phone>
+                <email>mark.jones@bridgewatersystems.com</email>
+            </address>	
+	    </author>
+        <date month="February" year="2008"/>
+        <area>Internet</area>
+        <keyword>RADIUS</keyword>
+        <keyword>Diameter</keyword>
+        <keyword>Request for Comments</keyword>
+        <keyword>I-D</keyword>
+        <keyword>Internet-Draft</keyword>
+        <abstract>
+            <t>Many Diameter applications require to classify packets.  Diameter base protocols 
+            provides an IP Filter Rule type and a QoS Filter Rule type that is being used to 
+            classify packets.  However, because these types were defined for specific uses and 
+            defined in ways that are hard to extend and therefore are not generally applicable 
+            for those applications that require packet classifiers.</t>
+            
+            <t>This document describes a set of Diameter types that are useful to create packet 
+            classifiers.  The packet classier type can be used by various applications to express 
+            packet classifiers that best match the application's specific needs.</t>
+        </abstract>
+    </front>
+    <middle>
+        <section title="Introduction">
+            <t> The Diameter base protocol <xref target="RFC3588"/> defines two data formats, 
+            IPFilterRule and QoSFilterRule.  IPFilterRule is designed to implement packet filters 
+            and QoSFilterRule tagging and metering of packets.  Both of these data formats are 
+            expressed as an ASCII string which makes it impossible to extend and also makes it 
+            difficult to parse and thus equipment suffer a performance hit.</t>
+            
+            <t>Many applications require the ability to express packet classifiers.  QoS based 
+            applications need to be able to express which packets to apply a certain QoS treatment.
+            Charging applications need to be able to express which packets should be have certain 
+            charging rules applied to them.  Some applications need to be able to redirect certain 
+            packets.</t>
+            
+            <t>The packet classifiers need to be able to classify packets at the various layers and 
+            various protocols.  For example, it should be possible to build a classifier to work on 
+            layer 2 protocols and build another classifier that works on layer 3 protocols such as 
+            IPv4 or IPv6.  Classifiers must also be able to utilize various attributes that are 
+            utilized in these layers and protocols.</t>
+            
+            
+           
+        </section>
+        <section title="Terminology">
+            <t> The keywords "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD
+                NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as
+                described in <xref target="RFC2119"/>. </t>
+        </section>
+        
+        <section title="Classifier Attribute Overview">
+          <t>Classifiers are used in many applications to specify how to classify packets.  For example 
+          in a QoS application, if a packet matches a classifier then that packet will be treated in 
+          accordance with a QoS specification associated with that classifier.
+          </t>          
+          <t>The Classifiers are sent to on on-path element (e.g. a router) which uses the classifier to 
+          match packets. <xref target="figure1"/> shows a typical deployement.</t>
+          
+           <figure anchor="figure1" title="Example of a Classifier Architecture">
+                    <artwork><![CDATA[	
+                                                        +-----------+
+                                                       +-----------+|
+    +--------+          +-------------+              +------------+||
+    |        |   IN     |             |              |            |||
+    |        +--------->|             +------------->|            |||
+    |Managed |          | Classifying  |              | Unmanaged  |||
+    |Terminal|   OUT    | Entity      |              | Terminal   |||
+    |        |<---------+             |<-------------+            ||+
+    |        |          |             |              |            |+
+    +--------+          +-------------+              +------------+
+                                ^
+                                | Classifiers
+                                |
+                         +------+-------+
+                         |              |
+                         |      AAA     |
+                         |              |              
+                         +--------------+
+                    ]]></artwork>
+          </figure>                    
+          <t>The managed terminal, the terminal for which the classifiers are being specified is 
+          located on the left of the Classifer Entity.  The unmanged terminal, the terminal that 
+          recieves packets from the Managed terminal or sends packets to the managed terminal is 
+          located to the right side of the Classifier Entity.</t>
+          <t>The Classifying Entity is reponsible for classifying packets that are incoming (IN) 
+          from the Managed Terminal or packets outgoing (OUT) to the Managed Terminal.</t>
+          <t>A Classifier consists of a group of attributes that specify how to match a packet. Each
+          set of attributes expresses values about aspects of the packet - typically the packet header.
+          Different protocols therefore would use different attributes.</t>
+          
+          <t>In general a Classifier consists of the following:</t>   
+          
+          <t>
+             <list style="hanging">
+                <t hangText="Identifier:"> <vspace blankLines="1"/>
+                The identifier uniquely identifies this classifier and maybe used to reference the 
+                classifier from another structure.
+                </t>
+                <t hangText="From:"><vspace blankLines="1"/>
+                Specifies the rule for matching the source part of the packet.
+                </t>
+                <t hangText="To:"><vspace blankLines="1"/>
+                Specifies the rule for matching the destination part of the packet.
+                </t>
+                <t hangText="Protocol"><vspace blankLines="1"/>
+                Specifies the matching protocol of the packet.
+                </t>
+                <t hangText="Direction:"><vspace blankLines="1"/>
+                Specifies whether the classifier is to apply to packets flowing from the Managed 
+                Terminal (IN) or to packets flowing to the Managed Terminal (OUT), or packets flowing in both direction.
+                </t>
+                <t hangText="Options:"><vspace blankLines="1"/>
+                Associated with each protocol or layer, or various values specific to the header of the protocol or layer. 
+                Options allow matching on those values.
+                </t>
+             </list>
+          </t>
+          <t>Each protocol type will have a specific set of attributes that can be used to specify a classifier for that protocol.  These attributes will be grouped under a grouped AVP called a Classifier AVP.</t>
+
+      <!-- ====================================================================== -->
+
+        <section title="Classifier AVP">
+          <t>The Classifier AVP (AVP Code TBD) is a grouped AVP that consists of a set of attributes
+        that specify how to match a packet.</t>
+        <t>
+               <figure>
+                  <artwork><![CDATA[
+Classifier ::= < AVP Header: XXX >
+               { Classifier-ID }
+               { Protocol }
+               { Direction }
+             * [ From-Spec ]
+             * [ To-Spec ]
+             * [ Diffserv-Code-Point ]
+               [ Fragmentation-Flag ]
+             * [ IP-Option ]
+             * [ TCP-Option ]
+               [ TCP-Flags ]
+             * [ ICMP-Type ]
+             * [ AVP ]
+                     ]]></artwork>
+               </figure>
+          </t>
+        </section>
+  
+      <!-- ====================================================================== -->
+        <section title="Classifier-ID AVP">
+          <t>The Classifier-ID AVP (AVP Code TBD) is of type OctetString and uniquely identifies 
+          the classifier. Each application will define the uniqueness scope of this identifier, 
+          e.g. unique per terminal or globally unique.
+          Exactly one Classifier-ID AVP MUST be contained within a Classifier AVP.</t>
+        </section>
+      <!-- ====================================================================== -->
+        <section title="Protocol AVP">
+          <t>The Protocol AVP (AVP Code TBD) is of type Enumerated and specifies the protocol 
+          being matched. The attributes included in the Classifier AVP must be consistent with the
+          value of the Protocol AVP. Exactly one Protocol AVP MUST be contained within a 
+          Classifier AVP. The values for this AVP are managed by IANA under the Protocol Numbers
+          registry <xref target="PROTOCOL"/>.</t>
+        </section>
+      <!-- ====================================================================== -->
+        <section title="Direction AVP">
+          <t>The Direction AVP (AVP Code TBD) is of type Enumerated that specifies in which 
+          direction to apply the Classifier. The values of the enumeration are: "IN","OUT","BOTH".  
+          In the "IN" and "BOTH" directions, the From-Spec refers to the address of the Managed 
+          Terminal and the To-Spec refers to the unmanaged terminal. In the "OUT" direction, the 
+          From-Spec refers to the Unmanaged Terminal whereas the To-Spec refers to the Managed 
+          Terminal. </t>
+          <t>
+               <figure>
+                  <artwork><![CDATA[
+  Value | Name and Semantic
+  ------+------------------------------------------------------------
+    0   | RESERVED
+    1   | IN - The classifier applies to downlink flows only.
+    2   | OUT - The classifier applies to uplink flows only.
+    3   | BOTH - The classifier applies to both downlink 
+        | and uplink flows.
+     ]]></artwork>
+               </figure>
+          </t>
+        </section>
+      <!-- ====================================================================== -->
+        <section title="From-Spec AVP">
+          <t>The From-Spec AVP (AVP Code TBD) is a grouped AVP that specifies the Source 
+          Specification used to match the packet. Zero or more of these attributes may appear in the
+          classifier. If this AVP is absent from the classifier then the source address is not being
+          matched (wild card). If more than one instance of this AVP appears in the Classifier then 
+          the source of the packet can match any From-Spec AVP. The contents of this AVP are protocol 
+          specific.</t>
+        <t>
+               <figure>
+                  <artwork><![CDATA[
+From-Spec ::= < AVP Header: XXX >
+              [ IP-Address ]
+              [ IP-Address-Range ]
+              [ IP-Address-Mask ]
+              [ MAC-Address ]
+              [ Port ]
+              [ Port-Range ]
+              [ Negated ]
+              [ Assigned ]
+            * [ AVP ]
+                     ]]></artwork>
+               </figure>
+          </t>
+        </section>
+      <!-- ====================================================================== -->
+        <section title="To-Spec AVP">
+          <t>The To-Spec AVP (AVP Code TBD) is a grouped AVP that specifies the Destination 
+          Specification used to match the packet. Zero or more of these attributes may appear in the
+          classifier. If the attribute is absent from the classifier then the destination address is
+          not being matched (wild card). If more than one instance of this AVP appears in the 
+          Classifier then the destination of the packet can match any To-Spec AVP. The contents of 
+          this AVP are protocol specific.</t>
+        <t>
+               <figure>
+                  <artwork><![CDATA[
+To-Spec ::= < AVP Header: XXX >
+            [ IP-Address ]
+            [ IP-Address-Range ]
+            [ IP-Address-Mask ]
+            [ MAC-Address ]
+            [ Port ]
+            [ Port-Range ]
+            [ Negated ]
+            [ Assigned ]
+          * [ AVP ]
+                     ]]></artwork>
+               </figure>
+          </t>
+        </section>
+        </section>
+      <!-- ====================================================================== -->
+
+          <section title="Source and Destination AVPs">
+            <t>For packet classification the contents of the From-Spec and To-Spec can contain the 
+            following AVPs.</t>
+            <t>By combining several of these attributes within a From-Spec or To-Spec AVP and using
+            more than one From-Spec or To-Spec AVP in the Classifier AVP, one can express many 
+            different types of address pools.
+            </t>
+            
+      <!-- ====================================================================== -->
+            <section title="Negated AVP">
+              <t>The Negated AVP (AVP Code TBD) of type Enumerated containing the values of True or 
+              False.  Exactly zero or one of these attributes may appear in the From-Spec or To-Spec
+              AVP. When set to True the meaning of the match in the To-Spec and From-Spec are 
+              negated, causing all other addresses to be matched instead.</t>
+              <t>When set to False, or when the attribute is not included in the From-Spec or 
+              To-Spec AVP then the meaning of the match is not inverted, causing only the addresses 
+              specified to be matched.</t>
+              <t>Note that the negation does not impact the port comparisons.</t>
+              <t>
+               <figure>
+                  <artwork><![CDATA[
+  Value | Name
+  ------+--------
+    0   | False
+    1   | True
+     ]]></artwork>
+               </figure>
+              </t>
+            </section>
+      <!-- ====================================================================== -->
+            <section title="IP-Address AVP">
+              <t>The IP-Address AVP (AVP Code TBD) is of type Address and specifies a single 
+              IP address (IPv4 or IPv6) address to match.</t>
+            </section>
+            <section title="IP-Address-Range AVP">
+              <t>The IP-Address-Range AVP (AVP Code TBD) is of type Grouped and specifies an 
+              inclusive IP address range.</t>
+              <t>
+               <figure>
+                  <artwork><![CDATA[
+IP-Address-Range ::= < AVP Header: XXX >
+                     [ IP-Address-Start ]
+                     [ IP-Address-End ]
+                   * [ AVP ]
+                     ]]></artwork>
+               </figure>
+              </t>
+              <t>If the IP-Address-Start AVP is not included then the address range starts from the
+              first valid IP address up to and including the specified IP-Address-End address.</t>
+              <t>If the IP-Address-End AVP is not included then the address range starts at the 
+              address specified by the IP-Address-Start AVP and includes all the remaining valid IP
+              addresses.</t>
+            </section>
+            <section title="IP-Address-Start AVP">
+              <t>The IP-Address-Start AVP (AVP Code TBD) is of type Address and specifies the 
+              first IP address (IPv4 or IPv6) address of an IP address range.
+              </t>
+            </section>
+            <section title="IP-Address-End AVP">
+              <t>The IP-Address-End AVP (AVP Code TBD) is of type Address and specifies the 
+              last IP address (IPv4 or IPv6) address of an address range.
+              </t>
+            </section>
+            <section title="IP-Address-Mask AVP">
+               <t>The IP-Address-Mask AVP (AVP Code TBD) is of type Grouped and specifies an IP 
+               address range using a base IP address and the bit-width of the mask. For example, a 
+               range expressed as 1.2.3.0/24 will match all IP addresses from 1.2.3.0 up to and 
+               including 1.2.3.255. The bit-width MUST be valid for the type of IP address.</t>
+              <t>
+               <figure>
+                  <artwork><![CDATA[
+IP-Address-Mask ::= < AVP Header: XXX >
+                    [ IP-Address ]
+                    [ IP-Bit-Mask-Width ]
+                  * [ AVP ]
+                     ]]></artwork>
+               </figure>
+              </t>
+            </section>
+            <section title="IP-Mask-Bit-Mask-Width AVP">
+               <t>The IP-Bit-Mask-Width AVP (AVP Code TBD) is of type OctetString. The value is a
+               single octet and specifies the width of an IP address bit-mask.</t>
+            </section>
+            <section title="MAC-Address AVP">
+               <t>The MAC-Address AVP (AVP Code TBD) is of type OctetString and specifies a single 
+               MAC address. The value is a 6 octets encoding of the MAC address as it would appear 
+               in the frame header.</t>
+            </section>
+            <section title="Port AVP">
+              <t>The Port AVP (AVP Code TBD) is of type Integer32 in the range of 0 to 65535 and 
+              specifies the TCP or UDP port number to match.
+              </t>
+            </section>            
+            <section title="Port-Range AVP">
+            <t>The Port-Range AVP (AVP Code TBD) is of type Grouped and specifies an inclusive range 
+            of ports.</t>
+              <t>
+               <figure>
+                  <artwork><![CDATA[
+Port-Range ::= < AVP Header: XXX >
+               [ Port-Start ]
+               [ Port-End ]
+             * [ AVP ]
+                     ]]></artwork>
+               </figure>
+              </t>
+            <t>If the Port-Start AVP is omitted then port 0 is assumed. If the Port-End AVP is 
+            omitted then port 65535 is assumed.</t>
+            </section>
+            <section title="Port-Start AVP">
+              <t>The Port-Start AVP (AVP Code TBD) is of type Integer32 and specifies the 
+              first port number of an IP port range.
+              </t>
+            </section>
+            <section title="Port-End AVP">
+              <t>The Port-End AVP (AVP Code TBD) is of type Integer32 and specifies the 
+              last port number of an IP port range.
+              </t>
+            </section>
+            <section title="Assigned AVP">
+            <t>In some scenarios, the AAA does not know the IP address assigned to the Managed 
+            Terminal at the time that the Classifier is sent to the Classifying Entity.  
+            The Assigned AVP (AVP Code TBD) is of type Enumerated and consists of the value 
+            "Assigned".  When present, it represents the IP address assigned to the Managed 
+            Terminal.</t>
+            </section>
+          </section>
+      <!-- ====================================================================== -->
+          <section title="Header Option AVPs">
+            <t>The Classifer AVP may contain one or more of the following AVPs to match on 
+            the various possible IP, TCP or ICMP header options.</t>
+            <section title="Diffserv-Code-Point AVP">
+            <t>The Diffserv-Code-Point AVP (AVP Code TBD) is of type Enumerated and specifies the
+            Differentiated Services Field Codepoints to match in the IP header. The values
+            are managed by IANA under the Differentiated Services Field Codepoints registry 
+            <xref target="DSCP"/>.</t>
+            </section>            
+            <section title="Fragmentation-Flag AVP">
+            <t>The Fragmentation-Flag AVP (AVP Code TBD) is of type Enumerated and specifies the
+            packet fragmentation flags to match in the IP header.</t>
+            <t>
+               <figure>
+                  <artwork><![CDATA[
+  Value | Name and Semantic
+  ------+------------------------------------------------------------
+    0   | RESERVED
+    1   | Don't Fragment (DF)
+    2   | More Fragments (MF)
+     ]]></artwork>
+               </figure>
+            </t>
+            </section>
+            <section title="IP-Option AVP">
+            <t>The IP-Option AVP (AVP Code TBD) is of type Grouped and specifies an IP header 
+            option that must be matched.</t>
+              <t>
+               <figure>
+                  <artwork><![CDATA[
+IP-Option ::= < AVP Header: XXX >
+              { IP-Option-Type }
+            * [ IP-Option-Value ]
+              [ Negated ]
+            * [ AVP ]
+                     ]]></artwork>
+               </figure>
+              </t>
+            <t>If one or more IP-Option-Value AVPs are present, one of the values MUST match
+            the value in the IP header option. If the IP-Option-Value AVP is absent, the 
+            option type MUST be present in the IP header but the value is wildcarded. </t>
+            <t>The Negated AVP is used in conjuction with the IP-Option-Value AVPs to specify 
+            IP header options which do not match specific values. The Negated AVP is used 
+            without the IP-Option-Value AVP to specify IP headers which do not contain the
+            option type.</t>
+            </section>
+            <section title="IP-Option-Type AVP">
+            <t>The IP-Option-Type AVP (AVP Code TBD) is of type Enumerated and the values
+            are managed by IANA under the IP Option Numbers registry <xref target="IPOPTIONS"/>.
+            </t>
+            </section>            
+             <section title="IP-Option-Value AVP">
+            <t>The IP-Option-Value AVP (AVP Code TBD) is of type OctetString and contains the
+            option value that must be matched.</t>
+            </section>            
+            <section title="TCP-Option AVP">
+            <t>The TCP-Option AVP (AVP Code TBD) is of type Grouped and specifies a TCP header 
+            option that must be matched.</t>
+              <t>
+               <figure>
+                  <artwork><![CDATA[
+TCP-Option ::= < AVP Header: XXX >
+               { TCP-Option-Type }
+             * [ TCP-Option-Value ]
+               [ Negated ]
+             * [ AVP ]
+                     ]]></artwork>
+               </figure>
+              </t>
+            <t>If one or more TCP-Option-Value AVPs are present, one of the values MUST match the
+            value in the TCP header option. If the TCP-Option-Value AVP is absent, the option type
+            MUST be present in the TCP header but the value is wildcarded. </t>
+            <t>The Negated AVP is used in conjuction which the TCP-Option-Value AVPs to specify 
+            TCP header options which do not match specific values. The Negated AVP is used 
+            without the TCP-Option-Value AVP to specify TCP headers which do not contain the
+            option type.</t>
+            </section>
+            <section title="TCP-Option-Type AVP">
+            <t>The TCP-Option-Type AVP (AVP Code TBD) is of type Enumerated and the values are
+            managed by IANA under the TCP Option Numbers registry <xref target="TCPOPTIONS"/>.
+            </t>
+            </section>            
+             <section title="TCP-Option-Value AVP">
+            <t>The TCP-Option-Value AVP (AVP Code TBD) is of type OctetString and contains the
+            option value that must be matched.</t>
+            </section>            
+            <section title="TCP-Flags AVP">
+            <t>The TCP-Flags AVP (AVP Code TBD) is of type Grouped and specifies a set of TCP
+            control flags that must be matched.</t>
+              <t>
+               <figure>
+                  <artwork><![CDATA[
+TCP-Flags ::= < AVP Header: XXX >
+            * [ TCP-Flag-Type ]
+              [ Negated ]
+            * [ AVP ]
+                     ]]></artwork>
+               </figure>
+              </t>
+            <t>If the Negated AVP is not present, the TCP-Flag-Type AVPs specifies which 
+            flags MUST be set. If the Negated AVP is present, the TCP-Flag-Type AVPs 
+            specifies which flags MUST be cleared. </t>
+            </section>
+            <section title="TCP-Flag-Type AVP">
+            <t>The TCP-Flag-Type AVP (AVP Code TBD) is of type Enumerated and specifies a
+            TCP control flag type that must be matched.</t>
+            <t>
+               <figure>
+                  <artwork><![CDATA[
+  Value | Name and Semantic
+  ------+------------------------------------------------------------
+    0   | RESERVED
+    1   | CWR - Congestion Window Reduced.
+    2   | ECE - ECN-Echo. TCP peer is ECN capable.
+    3   | URG - URGent pointer field is significant.
+    4   | ACK - ACKnowledgment field is significant.
+    5   | PSH - Push function.
+    6   | RST - Reset the connection.
+    7   | SYN - Synchronize sequence numbers.
+    8   | FIN - No more data from sender.
+     ]]></artwork>
+               </figure>
+            </t>
+            </section>
+            <section title="ICMP-Type">
+            <t>The ICMP-Type AVP (AVP Code TBD) is of type Grouped and specifies a ICMP  
+            message type that must be matched.</t>
+              <t>
+               <figure>
+                  <artwork><![CDATA[
+ICMP-Type ::= < AVP Header: XXX >
+              { ICMP-Type-Number }
+            * [ ICMP-Code ]
+            * [ AVP ]
+                     ]]></artwork>
+               </figure>
+              </t>
+            <t>If the ICMP-Code AVP is present, the value MUST match that in the ICMP 
+            header. If the ICMP-Code AVP is absent, the ICMP type MUST be present in the 
+            ICMP header but the code is wildcarded. </t>
+            </section>
+            <section title="ICMP-Type-Number AVP">
+            <t>The ICMP-Type-Number AVP (AVP Code TBD) is of type Enumerated and the values are
+            managed by IANA under the ICMP Type Numbers registry <xref target="ICMPTYPE"/>.</t>
+            </section>
+            <section title="ICMP-Code AVP">
+            <t>The ICMP-Code AVP (AVP Code TBD) is of type Enumerated and the values are
+            managed by IANA under the ICMP Type Numbers registry <xref target="ICMPTYPE"/>.</t>
+            </section>
+          </section>
+    </middle>
+    <back>
+        <references title="Normative References"> 
+          &rfc2119;  
+        <reference anchor="DSCP">
+            <front>
+                <title>Differentiated Services Field Codepoints</title>
+                <author>
+                    <organization abbrev="IANA">IANA,</organization>
+                </author>
+                <date month="" year="" />
+            </front>
+            <seriesInfo name=""
+            value="http://www.iana.org/assignments/dscp-registry" />
+        </reference>
+        <reference anchor="PROTOCOL">
+            <front>
+                <title>Protocol Types</title>
+                <author>
+                    <organization abbrev="IANA">IANA,</organization>
+                </author>
+                <date month="" year="" />
+            </front>
+            <seriesInfo name=""
+            value="http://www.iana.org/assignments/protocol-numbers" />
+        </reference>
+        <reference anchor="IPOPTIONS">
+            <front>
+                <title>IP Option Numbers</title>
+                <author>
+                    <organization abbrev="IANA">IANA,</organization>
+                </author>
+                <date month="" year="" />
+            </front>
+            <seriesInfo name=""
+            value="http://www.iana.org/assignments/ip-parameters" />
+        </reference>
+        <reference anchor="TCPOPTIONS">
+            <front>
+                <title>TCP Option Numbers</title>
+                <author>
+                    <organization abbrev="IANA">IANA,</organization>
+                </author>
+                <date month="" year="" />
+            </front>
+            <seriesInfo name=""
+            value="http://www.iana.org/assignments/tcp-parameters" />
+        </reference>
+        <reference anchor="ICMPTYPE">
+            <front>
+                <title>ICMP Type Numbers</title>
+                <author>
+                    <organization abbrev="IANA">IANA,</organization>
+                </author>
+                <date month="" year="" />
+            </front>
+            <seriesInfo name=""
+            value="http://www.iana.org/assignments/icmp-parameters" />
+        </reference>
+        </references>
+        <references title="Informative References"> 
+          &rfc3588; 
+        </references>
+    </back>
+</rfc>

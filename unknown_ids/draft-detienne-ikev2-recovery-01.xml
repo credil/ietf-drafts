@@ -1,0 +1,804 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSPY v5 rel. 3 U (http://www.xmlspy.com)
+     by Daniel M Kohn (private) -->
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+
+<rfc ipr="full3978" docName="draft-detienne-ikev2-recovery-01">
+
+<!-- <rfc number="1234" category="std"> -->
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="yes" ?>
+
+<front>
+    <title>Safe IKE Recovery</title>
+
+    <author initials='F.' surname="Detienne" fullname='Frederic Detienne'>
+      <organization>
+        Cisco
+      </organization>
+      <address>
+        <postal>
+          <street>De Kleetlaan, 7</street>
+          <city>Diegem</city>
+          <code>B-1831</code>
+          <country>Belgium</country>
+        </postal>
+				<phone>+32 2 704 5681</phone>
+				<email>fd@cisco.com</email>
+      </address>
+    </author>
+    <author initials='P.' surname="Sethi" fullname='Pratima Sethi'>
+        <organization>
+          Cisco
+        </organization>
+      <address>
+        <postal>
+          <street>O'Shaugnessy Road, 11</street>
+          <city>Bangalore</city>
+          <region>Karnataka</region>
+          <code>560027</code>
+          <country>India</country>
+        </postal>
+				<phone>+91 80 4154 1654</phone>
+				<email>psethi@cisco.com</email>
+      </address>
+    </author>
+    		<author initials="Y." surname="Nir" fullname="Yoav Nir">
+			<organization abbrev="Check Point">
+				Check Point Software Technologies Ltd.
+			</organization>
+			<address>
+			
+				<postal>
+					<street>5 Hasolelim st.</street>
+					<code>67897</code>
+					<city>Tel Aviv</city>
+					<country>Israel</country>
+				</postal>
+				<email>yir@checkpoint.com</email>
+			</address>
+		</author>
+
+
+    <date month="July" year="2008"/>
+
+    <area>Internet</area>
+
+    <workgroup>IESG</workgroup>
+
+    <keyword>RFC</keyword>
+    <keyword>Internet-Draft</keyword>
+    <keyword>XML</keyword>
+
+    <abstract>
+<t>The Internet Key Exchange protocol version 2 (IKEv2) suffers from the limitation of not having a means to quickly recover from a stale state known as dangling Security Associations (SA's) where one side has SA's that the corresponding party does not have anymore.</t>
+
+<t>This Draft proposes to address the limitation by offering an immediate, DoS-free recovery mechanism for IKE.</t>
+</abstract>
+</front>
+
+<middle>
+<section title="Introduction">
+<t>If an IKEv2 (<xref target="IKEv2"/>) endpoint receives an IPsec packet that it does not recognize (invalid SPI), a specific notify (INVALID_SPI) can be sent back to the originating peer to take action. This payload is typically only going to be trusted if it is protected by a IKE_SA as unprotected notifies can easily be forged. Similarly, an IKEv2 endpoint receiving an unrecognized IKE message MAY send back an INVALID_IKE_SPI notify to the originating peer. In order to validate those unauthenticated messages, a polling sequence has to be started. This memo proposes to decrease the time incurred by this sequence.</t>
+
+<t>The polling sequence works as follow. When a peer doubts the liveness of its remote peer, it can send empty informational exchanges expecting a reply confirming liveness. This works as informational exchanges are supposed to be acknowledged in IKEv2.</t>
+<t>Practical mechanisms offered so far suffer from one of the following limitations:
+   <list style="symbols">
+	 <t>poll based and slow to react or resource hungry</t>
+   <t>based on unauthenticated packets and hence open to denial of service attacks</t>
+	 </list>
+</t>
+
+<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target="Bra97"/>.</t>
+</section>
+
+<section title="Protocol overview">
+<section title="High level description">
+<t>The recovery procedure works in 3 stages:
+	<list style="numbers">
+	<t>An invalid IKE or ESP packet is received by either peer</t>
+  <t>The remote peer is notified through a protected or unprotected notify
+		<list style="symbols">
+		<t>Protected notifies are implicitly trusted</t>
+		<t>The remote peer attemps to confirm the legitimacy of Unprotected Notifies</t>
+		</list></t>
+	<t>The remote peer deletes or recreates the SA's in error</t>
+	</list>
+</t>
+</section>
+<section title="Notation">
+<t>The IKEv2 notation will be used throughout this document with one notable addition. Parent SA describes an IKE_SA from which a CHILD_SA has been derived.</t>
+</section>
+<section title="Protocol design guidelines">
+<t>The general approach to recovering from dangling SA situations is to send proofs of desynchronization and liveness. It is admittedly difficult for two gateways to demonstrate they did have SA's but have lost them without a secure, authenticated channel to do so. It is however relatively easy for these gateways to provide valuable hints about the lost SA's.</t>
+
+<t>This memo presents a protocol that builds enough trust for those hints to be taken in account. The basic principle is that an attacker taking advantage of this recovery procedure would have to be positioned on the network such that it could perform more interesting attacks than tackling recovery. I.e. the barrier for attacking IKE recovery is as high or higher than other parts of the IKE protocol.</t>
+
+<t>The recovery of SA's as outlined in this memo occurs in three phases:
+   <list style="symbols">
+   <t>Unrecognized SPI's are detected</t>
+   <t>The protocol collects clues of previous connectivity</t>
+   <t>The SA's are repaired by <xref target="IKEv2"/> or by reconstructing the SA from the "ticket"  </t>
+   </list>
+</t>
+
+<t>This memo follows the below guidelines:
+   <list style="symbols">
+   <t>event driven protocol -- no polling involved</t>
+   <t>re-create SA's instead of deleting them upon error</t>
+   <t>let the side that still has the SA's negotiate fresh SA's after a failure</t>
+   <t>do not generate state when it can be avoided; reduce CPU cost</t>
+   </list>
+</t>
+</section>
+
+<section title="Protocol design rationale">
+<t>IKEv2 already specifies a poll-based peer liveness detection mechanism. While this type of mechanism helps recovery in most situations, the time taken for recovery tends to be high. Convergence time requirements are getting shorter and faster protocols are becoming a necessity.</t>
+
+<t>The protocol is triggered when dangling SA's are detected, i.e. when a peer receives unrecognized SPI's. This event is in turn triggered when there is actual traffic to be sent and there would be little point in just deleting SA's then hoping for the systems to recreate them. Instead, these SA's have to be repaired as fast as possible in order for the underlying network traffic to be forwarded.</t>
+
+<t>The device that has the SA's also has all the information needed to rekey them and becomes the defacto initiator at the end of the recovery procedure. This is particularly important for systems with dynamic security policies that do not specify how to build the SA; it may not be obvious for those peers to determine which security parameter they should use to recreate the SA they are now missing. When recreating the SA, the peer that has SA's implicitly knows what to rebuild and can use the old SA as a template.</t>
+
+<t>The choice of the rekeyer also brings in an added security value. The side that wants to transmit data or at least that pretends having SA's has to demonstrate 'willingness' to actually transmit. Correspondingly it also means that the gateway that does not have SA's is not forced to negotiate anything it may not need. It is important to note that the initial effort of setting up timers and retransmitting, etc... is left to the side that wants to transmit data.</t>
+
+<t>Last but not least, the protocol can remain stateless until sufficient proof of liveness is discovered. In fact, one of the protocol variations in this meme allows full statelessness at the expense of a round trip time. In an other variation, some small but reboot-resistant storage (a key) is used to accelerate the recovery.</t>
+</section>
+</section>
+
+<section title="IKE recovery">
+<section title="IKE Recovery options">
+<t>During their IKEv2 exchange, two peers negotiate support for IKE Recovery. If both peers can store ephemeral information as well as longer term additional information related to IKE Recovery, an accelerated procedure for setting up new SAs can be used.  This procedure is called Ticket Based IKE Recovery and is described in <xref target="TICKET_BASED_RECOVERY"/>.</t>
+
+<t>If either peer cannot store ephemeral or long term information, peers fall back to Sateless IKE Recovery described in <xref target="STATELESS_RECOVERY"/>. </t>
+</section>
+
+<section title="Stateless IKE Recovery" anchor="STATELESS_RECOVERY"> 
+<section title="Introducing CHECK_SPI">
+<t>Stateless IKE Recovery is negotiated during the initial IKE exchange by advertising capabilities as described in <xref target="NEGOTIATING_IKE_REC"/>.</t>
+
+<t>In order to achieve stateless IKE recovery, this memo introduces a new notify type called CHECK_SPI. The CHECK_SPI payload carries an SPI (IKE_SA or Child SA) and one of three sub-types (QUERY, ACK, NACK). The semantic of the CHECK_SPI subtypes is the following:
+<list style="symbols">
+	<t>QUERY: a peer queries the remote peer SA DB for the presence of the SA whose value is in the payload</t>
+	<t>ACK: a peer confirms it has the SA specified in the payload</t>
+	<t>NACK: a peer confirms it does not have the SA specified in the payload</t>
+</list>
+</t>
+<t>The payload format of the CHECK_SPI notify is covered in <xref target="PAYLOAD_FORMAT"/>.</t>
+</section>
+
+<section title="Stateless recovery by invalid IKE packets">
+<t>When an IKE peer X receives an IKE packet with an unknown IKE SPI (A,B), that is not an initialization offer (IKE_SA_INIT), peer X SHOULD send an unprotected INVALID_IKE_SPI notification.</t>
+
+<figure>
+<artwork align="left">
+Peer X                                                  Peer Y
+
+          HDR(A,B) ...                   
+         &lt;--------------------------------------------
+
+          HDR(A,B) INVALID_IKE_SPI(A,B)
+         --------------------------------------------&gt;
+</artwork>
+</figure>
+
+<t>Even if another IKE_SA exists with the remote peer Y, the notification MUST NOT be sent protected since peer Y may not share this SA either.</t>
+
+<t>In order to limit the risk of Denial of Service attacks, the sending of the INVALID_IKE_SPI notification MUST be rate limited.</t>
+
+<t>When peer Y receives the unauthenticated INVALID_IKE_SPI referencing the offending IKE SPI (A,B), Y MUST perform the following actions:
+<list style="symbols">
+   <t>verify that (A,B) is indeed an active IKE_SPI with X</t>
+   <t>send to X a new notify type CHECK_SPI(QUERY, (A,B)) followed by a N(Cookie) payload</t>
+</list>
+</t>
+
+<figure>
+<artwork align="left">
+Peer X                                                  Peer Y
+
+          HDR(A,B) INVALID_IKE_SPI(A,B)                   
+         --------------------------------------------&gt;
+
+          HDR(A,B) CHECK_SPI(QUERY,(A,B)), N(Cookie)
+         &lt;--------------------------------------------
+</artwork>
+</figure>
+
+<t>The sending of the CHECK_SPI packet MUST be rate limited on a per peer basis.</t>
+
+<t>Y SHOULD NOT generate any state at this point. If the INVALID_IKE_SPI notification gets lost, and X indeed does not have the IKE SPI, the process will start again at the next IKE message sent by Y to X.</t>
+
+<t>When peer X receives an unauthenticated CHECK_SPI(QUERY,(A,B)) packet, it MUST perform a look up for (A,B) in its IKE_SA database. Depending on whether X has or does not have the offending SA, it SHOULD reply with an IKE packet CHECK_SPI(ACK|NACK,(A,B)) N(COOKIE). The N(COOKIE) payload in the CHECK_SPI(ACK|NACK) packet is the same as that recieved in the CHECK_SPI(QUERY), i.e. the N(COOKIE) payload is reflected back in the response.</t> 
+
+<t><xref target="STATELESS_COOKIEGEN"/> discusses cookie generation in greater detail. For now, it is enough to know that the cookie should contain enough information for peer Y to validate the CHECK_SPI(ACK|NACK) response without having to keep any state.</t>
+
+<figure>
+<artwork align="left">
+Peer X                                                  Peer Y
+
+          HDR(A,B) CHECK_SPI(QUERY,(A,B)), N(Cookie)
+         &lt;--------------------------------------------
+
+          HDR(A,B) CHECK_SPI(ACK|NACK,(A,B)), N(Cookie)
+         --------------------------------------------&gt;
+</artwork>
+</figure>
+
+<t>When peer Y receives the CHECK_SPI(ACK|NACK)|N(Cookie) packet, it MUST ensure the COOKIE is valid. If it is not, the packet MUST be dropped and a rate limited message MUST be logged.</t>
+
+<t>If the COOKIE is valid and the remote peer X confirms it has the IKE SPI (via CHECK_SPI(ACK,...)), a rate limited message SHOULD be logged; this could be a race condition or an attack from a spoofing attacker.</t>
+
+<t>If the COOKIE is valid and the remote peer X confirms it does NOT have the IKE SPI (via CHECK_SPI(NACK,..), peer Y MUST delete the IKE_SA(A,B) and any
+CHILD_SA's that belong to this IKE_SA, and it SHOULD initiate a new IKE exchange to renegotiate the Parent SA.  The parameters of the negotiation SHOULD be taken primarily from the configuration (security policy) and, if absent, taken from the confirmed dangling SA. Renegotiation of CHILD_SA's SHOULD follow the Parent IKE_SA creation. </t>
+
+<t>A complete recovery exchange for IKE SA's would look like:</t>
+<figure>
+<artwork align="left">
+Peer X                                                  Peer Y
+
+          HDR(A,B) ...                   
+         &lt;--------------------------------------------
+
+          HDR(A,B) INVALID_IKE_SPI(A,B)                   
+         --------------------------------------------&gt;
+
+          HDR(A,B) CHECK_SPI(QUERY,(A,B)), N(Cookie)
+         &lt;--------------------------------------------
+                
+          HDR(A,B) CHECK_SPI(NACK,(A,B)), N(Cookie)
+         --------------------------------------------&gt;
+
+          HDR(A',0) SAi1, KEi, Ni
+         &lt;--------------------------------------------
+
+                            ...
+</artwork>
+</figure>
+</section>
+<section title="Wait before rekey">
+<t>There exists a particular attack where a man-in-the-middle can snoop and inject traffic but can not block or drop packets. This attack can spoof INVALID_SPI (allegedly from X), forcing a CHECK_SPI(QUERY) from Y. The attacker would spoof back CHECK_SPI(NACK) to force an undue rekey. Since the attacker can not block packets, the CHECK_SPI(QUERY) will also reach X, who will reply with CHECK_SPI(ACK).</t>
+
+<t>Y receives CHECK_SPI(NACK) first and MAY wait for a few msec before creating a new SA. Y will eventually receive BOTH a CHECK_SPI(ACK) and a CHECK_SPI(NACK). Which is dubious. The SIR process should then stop and log an error, saving the SA.</t>
+
+<t>The process is illustrated below:
+<figure>
+<artwork align="left">
+   X                 Attacker                Y
+                         Inv SPI
+                         ------------------&gt;
+
+                            CHECK_SPI(QUERY)
+      &lt;-------------------------------------
+
+                         CHECK_SPI(NACK)
+                         ------------------&gt; Should rekey
+                                             but wait a few msec
+
+      CHECK_SPI(ACK)
+      -------------------------------------&gt; Hint of attack
+                                             =&gt; no rekey
+</artwork>
+</figure>
+Ideally, the round-trip-time should be measured during the IKE exchange and Y wait for a full RTT before initiating a rekey.</t>
+
+<t>Given that IKE itself is subject to DH computation by a man-in-the-middle, also considering that SA's are dampened after creation (see <xref target="DAMPENING"/>), the staging complexity and limited interest of this attack makes it rather impractical. An implementation MAY decided to implement this final safety wait but this is strictly optional.</t> 
+</section>
+
+<section anchor="STATELESS_COOKIEGEN" title="Stateless IKE Recovery cookie">
+<t>The cookie information is chosen by the peer that emits it. As such,
+the cookie has strictly no meaning for the remote peer and can thus be chosen
+as seen fit. This section provides recommendations on how to generate
+and validate those cookies.</t>
+
+<t>When an IKE endpoint sends an unauthenticated CHECK_SPI, the cookie payload
+following the notify is computed as follow:</t>
+
+
+<figure>
+<artwork align="center">
+Cookie = &lt;VersionIDofSecret&gt;
+         | H(&lt;secret&gt; | CHECK_SPI(..., Query)
+         | ip.src | ip.dst
+         | udp.src | udp.dst)
+</artwork>
+</figure>
+
+<t>where
+<list style="symbols">
+  <t>&lt;secret&gt; is a randomly generated secret known only to the
+   responder and periodically changed</t>
+  <t>&lt;VersionIDofSecret&gt; should be changed whenever &lt;secret&gt; is    regenerated</t>
+  <t>CHECK_SPI(..., Query) is the content of the CHECK_SPI notify payload where the operation subtype has been set to Query (cf. <xref target="PAYLOAD_FORMAT"/>)</t>
+  <t> ip.src is the source ip address of the IKE packet</t>
+  <t> ip.dst is the destination ip address of the IKE packet</t>
+  <t> udp.src is the source udp post of the IKE packet</t>
+  <t> udp.dst is the destination udp port of the IKE packet</t>
+</list></t>
+
+<t>Upon reception of a CHECK_SPI(ACK or NACK) response followed by a N(Cookie), a peer can verify whether this is the reply to a Query it placed by recomputing the cookie and comparing it to the COOKIE in the IKE message.</t>
+
+<t>In order to minimize the range of cryptographic attacks on &lt;secret&gt;, messages SHOULD have a limited life time.</t>
+</section>
+</section>
+
+<section title="Ticket based IKE recovery using Session Resumption" anchor="TICKET_BASED_RECOVERY">
+
+<section title="Ticket Based Recovery">
+<t> If both peers can store ephemeral information and support IKE Session Resumption as described in <xref target="IKERESUME"/>, an accelerated procedure can be used.  This procedure is called Ticket Based IKE Recovery.</t> 
+
+<t>The ticket based IKE Recovery method relies on an unauthenticated INVALID_IKE_SPI along with a cookie for detection of a dangling SA. Recovery is effected using session resumption exchange described in <xref target="IKERESUME"/>to recover from a Dangling SA condition. This memo introduces a variation to the Session Resumption Exchange for protection against Denial of Service Attacks</t>
+</section>
+
+<section title="Choice of Recovery Mechanism">
+<t>The choice of using Stateless IKE Recovery or Ticket Based Recovery depends upon the capabilities of the endpoint and its peer as well.It could also depend on policy.</t>
+
+<t>During Recovery, the endpoint that still has the SA, also knows about the peers capabilities whereas the enpoint that has lost its SA can be presumed to not know its peers capabilities. This endpoint only offers a hint of its capabilities by responding to an inavlid packet with an INVALID_SPI followed by a cookie.</t> 
+
+<t>The endpoint that has the SA can choose to respond to an unauthenticated INVALID_SPI  based on its knowledge of the peer capabiliries. If it has a session_resumption ticket from the peer, it SHOULD initiate an IKE_SESSION_RESUME exchange, else it SHOULD send a CHECK_SPI query. If the peer is not capable of Safe IKE Recovery, the endpoint SHOULD fall back to liveness checks or other mechanisms recommended by [IKEv2].</t> 
+
+<t>If the endpoint that recieves an IKE_SESSION_RESUME packet is unable to use the resumption ticket for any reason, it should respond with a RESUME_NACK followed by the peer coookie it recieved in the clear. This allows the peer to initiate a full IKEv2 exchange safely.</t> 
+</section>
+
+<section title="Ticket based recovery by invalid IKE packets">
+<t>When a peer X receives an IKE packet with an unknown IKE_SPI, it SHOULD send an unprotected INVALID_IKE_SPI notify to the sender Y. The INVALID_IKE_SPI MUST be followed with a Cookie payload. The cookie payload content is relevant only to the generator of the cookie and a suggested format for it is described in <xref target="STATELESS_COOKIEGEN"/> This cookie has been furhter referred to a s COOKIE_X </t>
+
+<t>When peer Y receives the INVALID_IKE_SPI referencing the IKE_SPI(A,B) followed by N(COOKIE_X), it MUST perform the following actions:
+
+<list style="symbols">
+<t>verify that (A,B) is an active IKE_SA it has with X. If no such SA exists a ate limited mesage SHOULD be logged.</t> 
+<t>verify that it possess a ticket given to it by X and initiate a IKE_SESSION_RESUME exchange with X. This memo requires that the IKE_SESSION_RESUME packet MUST carry the cookie COOKIE_X it received in the INVALID_SPI packet encrypted in the SK payload. Y also generates and sends another cookie in the clear. This cookie is referred to further in the draft as COOKIE_Y </t>
+</list>
+</t>
+
+<figure>
+<artwork align="left">
+Peer X                                                  Peer Y
+
+         HDR(A,B) ...                   
+         &lt;--------------------------------------------
+
+         HDR(A,B) INVALID_IKE_SPI(A,B) N(COOKIE_X)
+         --------------------------------------------&gt;
+
+         HDR(A,B) Ni N(COOKIE_Y) N(TICKET) SK( IDi, IDr...N(COOKIE_X)) 
+         &lt;--------------------------------------------
+
+                            ...
+</artwork>
+</figure>
+
+<t>The peer X on reeiving a SESSION_RESUME packet with a cookie payload MUST perform the following actions</t>
+
+<t>look up the SA (A,B) in its SA database. If the SA exists, it MUST respond with a protected CHECK_SPI(ACK) that includes the peer cookie COOKIE_Y and a rate limited message SHOULD be logged.</t> 
+
+<t>If the SA does not exist, X should decrypt the SK payload using the contents of the ticket. and validate COOKIE_X. If the cookie is not valid the packet should be dropped and a rate limited message SHOULD be logged.</t>
+
+<t>If the IKE_SESSION_RESUME packet is rejected for any other reason, Peer X responds with a CHECK_SPI(NACK) followed by the cookie COOKIE_Y</t>
+
+<t>Else the Peer X sends back an IKE_SESSION_RESUME response to create a new SA. The response packet also includes N(COOKIE_Y) which is simply sent back unchanged but protected inside the SK payload. Peer X can also proceed to computing and creating state for a new SA as described in <xref target="IKERESUME"/>. A further cookie exchange as described in <xref target="IKERESUME" /> is not required as X has already transmitted a cookie in the clear and has got  the it back from it's peer Y securely encrypted. Thus X can be sure of the authenticity of Y as well as the freshness of the exchange.  </t>
+
+<figure>
+<artwork align="left">
+Peer X                                                  Peer Y
+
+
+         HDR(A,B) Ni N(COOKIE_Y) N(TICKET) SK{IDi, IDr,...,N(COOKIE_X)) 
+         &lt;--------------------------------------------
+	 
+	 HDR(A,B) SK{IDr,Nr, SAr2,...,N(COOKIE_Y)} 
+	 -----------------------------------------------&gt;
+
+                            ...
+</artwork>
+</figure>
+
+<t>Peer Y performs the following actions depending on the response it gets back from X 
+<list style="symbols"> 
+<t>On receiving a SESSION_RESUME response, Peer Y decrypts the SK payload and validates the COOKIE_Y, and proceeds to create a new SA. If the cookie is invalid a rate limiting message is logged and the packet is dropped.</t> 
+
+<t>If the Peer Y receives a CHECK_SPI(NACK) followed by the cookie COOKIE_Y, Y SHOULD proceed to initiating a regular IKEv2 session.</t> 
+
+<t>If a protected CHECK_SPI(ACK) response is received, a rate limiting message is logged.</t>  
+
+<t>If the Peer Y receives a N(TICKET_NACK) notification, Y MAY initiate a regular IKEv2 exchange.</t> 
+</list>
+</t>
+</section>
+</section>
+
+<section title="IPsec SA recovery">
+<t>We are now considering the case of an IKE endpoint Y sending an ESP or AH packet (or any type of traffic supported by a CHILD_SA) to peer X who does not have the corresponding phase 2 SA. We will differentiate two subcases depending on the presence or not of an IKE SA between the two peers.</t>
+
+<t>The recovery procedure will be roughly the same as for the Dangling Parent SA case but for children SA's, we send protected notifications whenever we can.</t>
+
+<figure>
+<artwork align="left">
+Peer X                                                  Peer Y
+
+          ESP(SPI) ...
+         &lt;--------------------------------------------
+</artwork>
+</figure>
+
+<t>On receiving an unrecognized ESP or AH packet, Peer X SHOULD notify the remote peer Y. The method will be different, according to the presence of an IKE_SA with Y.</t>
+
+<section title="In the presence of an IKE_SA">
+<t>In IKEv2, when an IKE_SA is available between two peers, CHILD_SA's SHOULD not be out of sync thanks to the acknowledgement and retransmissons of notifies. IKEv2 however does not specify what to do when a peer does not eventually respond to protected DELETE_SPI notifies.</t>
+
+<t>This section augments the IKEv2 specification in order to allow the recovery of stale SA's in case peers decided to keep the Parent SA nevertheless.</t>
+
+<t>If an IKE_SA is available with the remote peer, peer X MUST send a protected INVALID_SPI notification to the Y. The notification MUST be protected by the Parent SA and MUST contain the SPI of the invalid packet.</t>
+
+<figure>
+<artwork align="left">
+Peer X                                                  Peer Y
+
+          ESP(SPI) ...
+         &lt;--------------------------------------------
+
+          HDR(A,B) SK{INVALID_SPI(SPI)}
+         --------------------------------------------&gt;
+</artwork>
+</figure>
+
+<t>At this point, Y MUST check whether it has the offending SA. If so, it SHOULD re-key or delete the child SA according to its security policy. This document suggests that Y SHOULD delete the dangling SA but MAY rekey if deemed adequate. If the offending SA is not to be found, a message SHOULD be logged as the triggering ESP packet or be the result of a race condition. The logging MUST be rate limited.</t>
+</section>
+
+<section title="In the absence of an IKE_SA">
+<t>If an IKE_SA is not available with peer Y, an unprotected INVALID_SPI notification MUST be sent. The notification MUST contain the SPI of the invalid packet.</t>
+
+<figure>
+<artwork align="left">
+Peer X                                                  Peer Y
+
+          ESP(SPI) ...
+         &lt;--------------------------------------------
+
+          HDR(0,0) INVALID_SPI(SPI)
+         --------------------------------------------&gt;
+</artwork>
+</figure>
+<t>Note: An IKE SPI of (0,0) is used since there is no other IKE SPI to use (by construction)</t>
+
+<t>Peer Y MUST verify whether it has the offending CHILD_SA; if it does not, Y MUST log a rate limited message and drop the notify. If Y owns the offending SA, Y MUST perform the following:
+   <list style="symbols">
+   <t> ensure the unauthenticated INVALID_SPI notify is legitimate</t>
+	 <t> rebuild the dangling SA's with the remote peer if needed</t>
+</list>
+The following procedure will help determining whether the INVALID_SPI notify is legitimate.</t>
+
+<t>Peer Y MUST send a protected CHECK_SPI notify to X. Since Y has the CHILD_SA, it MUST have its Parent SA by construction.</t>
+
+<figure>
+<artwork align="left">
+Peer X                                                  Peer Y
+
+          HDR(0,0) INVALID_SPI(SPI)
+         --------------------------------------------&gt;
+         
+          HDR(A,B) CHECK_SPI(QUERY, SPI)
+         &lt;--------------------------------------------
+</artwork>
+</figure>
+
+<t>If X can decrypt the CHECK_SPI(QUERY) notification from Y, i.e it has a valid IKE_SA(A,B), the situation can be either of the following:
+   <list style="symbols">
+   <t>there is a logic error on X as it should have sent the INVALID_SPI protected</t>
+	 <t>the INVALID_SPI request that led to the CHECK_SPI notify has been forged</t>
+	 <t>there was a race condition in an earlier exchange</t>
+	 </list>
+</t>
+
+<t>X MUST try to identify which condition it has met, e.g. by checking SPI is in the SA database and MUST log a message about a possible security alert.</t>
+
+<t>Under normal recovery circumstances, X will not have the PARENT SA. In this case, X MUST reply with an unprotected INVALID_IKE_SPI(A,B) and fall back into the Parent SA recovery procedure.</t>
+
+<t>The Parent SA recovery procedure could use either stateless or Ticket based recovery. The overall recovery scheme for CHILD_SA's using the Stateless IKE recovery procedure can be summarized as . </t>
+
+<figure>
+<artwork align="left">
+Peer X                                                  Peer Y
+
+          ESP(SPI) ...                   
+         &lt;--------------------------------------------
+
+          HDR(0,0) INVALID_SPI(SPI)                   
+         --------------------------------------------&gt;
+
+          HDR(A,B) CHECK_SPI(QUERY,(SPI))
+         &lt;--------------------------------------------
+                
+          HDR(A,B) INVALID_IKE_SPI (A,B)
+         --------------------------------------------&gt;
+
+          HDR(A,B) CHECK_SPI(QUERY,(A,B)), N(Cookie)
+         &lt;--------------------------------------------
+
+          HDR(A,B) CHECK_SPI(NACK,(A,B)), N(Cookie)
+         --------------------------------------------&gt;
+
+          HDR(A',0) SAi1, KEi, Ni
+         &lt;--------------------------------------------
+</artwork>
+</figure>
+</section>
+</section>
+<section title="Mandatory Initiators">
+<t>There are cases where the side having the SA's cannot act as an initiator in a recovery procedure and has to rely on the peer device to initiate recovery . These exceptions include:
+<list>
+   <t>Specific implementations, typically in remote access, that rely on the
+   'client' to be a pure initiator.</t>
+   <t>gateways that are behind a dynamic PAT device and that can not be reached
+   directly from outside. These devices have to be initiators of  the connection in order to set up the translation rules.</t>
+</list></t>
+
+<t>We call such devices Mandatory Initiators and in the context of this document, they will eventually become responsible for recovering the SA's.</t>
+
+<t>Mandatory Initiators SHOULD be determined by the system administrator through their configuration or implicitly through the set of features they are configured for. Mandatory Initiators MAY determine by themselves whether they are behind a dynamic PAT device. The determination can for instance arise from analyzing the NAT-T payload described in <xref target="NAT-T"/>.</t>
+
+<t>Because Mandatory Initiators are actually IKEv2 initiators, they typically know by configuration which peers they should have a connection with, even if the SA's are missing. If this is indeed the case, the following Mandatory Initiator recovery procedure SHOULD be followed.</t>
+
+<t>The recovery procedure for Mandatory Initiators is the same as for other peers with change in the last step containing the CHECK_SPI(NACK) where the Mandatory Initiator actually sends initiates an an IKEv2 Initial Exchange along with the CHECK_SPI(NACK) payload. </t>
+
+<t>Example CHILD_SA recovery exchange with mandatory initiator
+(Parent SA present):</t>
+<figure>
+<artwork align="left">
+Peer X                                                  Peer Y
+
+          HDR(A,B) ...                   
+         &lt;--------------------------------------------
+
+          HDR(A,B) INVALID_IKE_SPI(A,B)                   
+         --------------------------------------------&gt;
+
+          HDR(A,B) CHECK_SPI(QUERY,(A,B)), N(Cookie)
+         &lt;--------------------------------------------
+
+          HDR(A',0) SAi1, KEi, Ni, CHECK_SPI(NACK,(A,B)), N(Cookie)
+         --------------------------------------------&gt;
+
+          ...
+</artwork>
+</figure>
+
+<t>When Peer Y receives the Initial Offer, it MUST verify it has the IKE SPI in the CHECK_SPI reply. In other words, the recovery procedure HINTS the Mandatory Initiator about a need for resynchronizing the SA's. This hint MAY be ignored, according to the local peer policy.</t>
+
+<t>If it does not have the corresponding IKE SA, Y MUST log a rate limited message and drop the message. If Y owns the IKE SPI, it MUST validates the cookie as described in <xref target="STATELESS_COOKIEGEN"/> and proceed with the IKE exchange, according to its security policy.</t>
+
+<t>In any case, X SHOULD NOT retransmit the Initial Offer. The process will restart by itself if the IKE SA is indeed missing and further offending ESP or IKE packets are emitted. If X receives a valid Message 2, it can proceed with the rest of the IKEv2 negotiation and retransmit as necessary.</t>  
+
+<t>Example CHILD_SA recovery exchange with mandatory initiator (no Parent SA):</t>
+<figure>
+<artwork align="left">
+Peer X                                                  Peer Y
+(Mandatory Initiator)
+
+          ESP(SPI) ...                   
+         &lt;--------------------------------------------
+
+          HDR(0,0) INVALID_SPI(SPI)                   
+         --------------------------------------------&gt;
+
+          HDR(A,B) CHECK_SPI(QUERY,(SPI))
+         &lt;--------------------------------------------
+                
+          HDR(A,B) INVALID_IKE_SPI (A,B)
+         --------------------------------------------&gt;
+
+          HDR(A,B) CHECK_SPI(QUERY,(A,B)), N(Cookie)
+         &lt;--------------------------------------------
+                
+          HDR(A',0) SAi1, KEi, Ni, CHECK_SPI(NACK,(A,B)), N(Cookie)
+         --------------------------------------------&gt;
+</artwork>
+</figure>
+</section>
+
+<section title="Recovery closure">
+<t>In many cases, the outcome of the recovery procedure yields to the creation of a new IKE_SA. Either side may be left with an old IKE_SA and dangling CHILD_SA's. In order to recover entirely, the old CHILD_SA's SHOULD be recreated (entirely renegotiated) under the protection of the new Parent SA. After which, the old SA's (IKE_SA and CHILD_SA's) SHOULD be entirely deleted.</t>
+</section>
+
+<section title="Dealing with race conditions">
+<t>When a peer deletes SA's, a DELETE payload is sent that MUST be acknowldeged. Before the delete notify reaches the remote peer, further ESP packets for the now deleted SPI may be received. These ESP packets MUST be silently discarded as long the DELETE Notify can be retransmitted.</t>
+</section>
+</section>
+
+<section title="Throttling and dampening">
+<t>An important aspect of the security in IKE recovery has to do with limitating the CPU utilization. In order to thwart flood types denial of service attacks, strict rate limiting and throttling mechanisms have to be enforced.</t>
+
+<t>All the notifications that are exchanged during IKE recovery SHOULD be rate limited. This paragraph provides information on the way rate limiting should take place.</t>
+
+<section title="Invalid SPI throttling">
+<t>The sending of all Invalid SPI notifies MUST be rate limited one way or an other. The rate limiting SHOULD be performed on a per peer basis but dynamic state creation SHOULD be avoided as much as possible. A recommended tradeoff is to limit the number of flows that can undergo recovery at one point in time and avoid sending Invalid SPI notifies for flows that are potentially already under recovery.</t>
+
+<t>Invalid SPI rate limiting protects against natural dangling SA occurences. I.e. normal traffic conditions may cause unrecognized SPI's to be received and this message is the most important to protect. Indeed, it is not realistic to send one notification per bad ESP packet received. On high speed links, this could mean thousands of IKE notifies sent for the same offending SPI.</t>
+
+<t>The receiving of unauthenticated Invalid SPI notifies MUST as well be rate limited. Again, the rate limiting SHOULD be performed on a per peer basis without dynamic state creation. In normal circumstances, the peer receiving Invalid SPI notifies has an SA with the peer sendig those notifies and already maintains peer-related data structures that can help in maintaining adequate counters.</t>
+
+<t>Authenticated Invalid SPI notifies can be accepted without throttling.</t>
+</section>
+
+<section title="Dampening" anchor="DAMPENING">
+<t>After one of the following conditions:
+<list style="symbols">
+	<t>the natural creation or rekey of one or more SA's</t>
+	<t>the recovery of one or more SA's</t>
+	<t>the failure in recovering an SA owned by the local security gateway</t>
+	<t>the logging of an error or warning message involving an SA owned by
+   the local security gateway</t>
+</list></t>
+
+<t>The peer with which SA's were created, attempted or against which a log was emitted SHOULD be dampened, which means that all the unauthenticated Invalid SPI and Check SPI messages emitted by that peer MUST be ignored for a chosen duration.</t>
+
+<t>This protection prevents a man-in-the-middle from forcing the fast recreation of SA's and potentially depleting the entropy of systems under attack. It also deals efficently with race conditions that may occur after a rekey.</t>
+</section>
+
+<section title="User controls">
+<t>Because throttling at large is related to speed, the network implementation around the security gateways has a major influence on the pertinence of the paremeters controlling rate limiting. It is difficult to provide good absolute values for the rate limiters, considering that these are implementation dependent.</t>
+
+<t>As such, for the sake of fitness in practical deployments, a system
+implementing this memo MUST provide administrative controls over the rate
+limiter parameters.</t>
+</section>
+</section>
+
+<section title="Negotiating IKE recovery" anchor="NEGOTIATING_IKE_REC">
+
+<t>IKE recovery capabilities MUST be advertised through a Vendor ID payload.</t>
+
+<t>In the first two messages of the Parent SA negotiation, the Vendor ID payload for this specification MUST be sent if supported (and it MUST be received by both sides). The content of the payload is the </t> 
+<t>ASCII string: SECURE IKE RECOVERY, or </t>
+<t>in HEX: 53 45 43 55 52 45 20 49 4b 45 20 52 45 43 4F 56 45 52 59</t> 
+
+
+<t> The peers' capbility for IKE Session Resumption is known implicitly from receiving the resumption ticket.</t> 
+
+<t>Determining peer capability can be useful for two reasons at least.First, this information MAY let a system decide to fallback to another recovery mechanism, such as from Ticket based Recovery to Stateless Safe IKE Recovery or  falling back to the one embedded in IKEv2</t>
+
+<t>Knowledge of the peer's capabilities can be used by the 'live peer'(the one that still has the SA's) in order to determine whether it is normal or not to receive unauthenticated INVALID_SPI with or without cookies or CHECK_SPI notifies. A peer that has lost information about it's peer SHOULD go under the assumption that peer does understand IKE Recovery as described in this memo.  This assumption implies that INVALI_SPI notifies with cookies  and CHECK_SPI notifies can be sent. If the remote peer does not support IKE Recovery, it will just ignore these messages.</t>
+
+<t>In general, it is useful for system administrators to monitor the capabilities of a remote system connecting to a local security gateway and there is an interest in advertising the IKE Recovery capability.</t>
+
+</section>
+
+<section title="Payload formats" anchor="PAYLOAD_FORMAT">
+<t>For reference, the Notify Payload is defined as follow</t>
+
+<figure>
+<artwork align="center">
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+! Next Payload  !C!  RESERVED   !         Payload Length        !
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+!  Protocol ID  !   SPI Size    !      Notify Message Type      !
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+!                                                               !
+~                Security Parameter Index (SPI)                 ~
+!                                                               !
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+!                                                               !
+~                       Notification Data                       ~
+!                                                               !
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork>
+</figure>
+
+<t>The meaning of the fields is the same as defined in [IKEv2].</t>
+
+<t>This memo introduces a new Notify Message Type that is being developped with a Private Use Type:
+<list style="symbols">
+   <t>CHECK_SPI: 32770</t>
+</list></t>
+<t>An official IANA assigned number MUST be assigned if this document reaches final recommendation state.</t>
+
+<t>The notification data area is formatted as such:</t>
+<figure>
+<artwork align="center">
+                     1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+! Operation     !  Protocol ID  |            RESERVED           !
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+!                              SPI                              !
+~                                                               ~
+!                                                               !
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork>
+</figure>
+
+<t>
+	<list style="symbols">
+	<t>Operation (1 Octet) - This field determines the operation being performed (Query, Reply_ACK, Reply_NACK)</t>
+	<t>Protocol ID - Specifies the IPsec protocol identifier for the current negotiation. Values are defined in <xref target="IKEv2"/>.</t>
+	<t>SPI - The SPI under investigation. The actual length of this block depends on the type of SPI.</t>
+	</list>
+</t>
+
+<t>The list of operations and their corresponding value:
+<list style="symbols">
+  <t>Query: 0</t>
+  <t>Reply_ACK: 1</t>
+  <t>NACK: 2</t>
+</list></t>
+</section>
+
+<section title="IANA Considerations">
+
+<t>This document requires the following notification to be registered by IANA. The corresponding registry was established by IANA.
+<list style="symbols">
+   <t>CHECK_SPI Notification type (<xref target="PAYLOAD_FORMAT"/>).</t>
+</list></t>
+</section>
+
+<section title="Security Considerations">
+<t>IKE recovery self-protection is discussed all along the document and contains many mechanism to thwart denial of service attacks.</t>
+
+<t>IKE recovery is subject to a man-in-the-middle attack that can let the attacker trigger a renegotiation. It has to be noticed that an attacker able to block ESP and/or IKE packets can cause IKE itself to also tear down and trigger a rekey of IKE SA's. With throttling and dampening enabled, IKE recovery is able to reduce the amount of rekeys/negotiations to as low a rate as IKEv2.</t>
+
+<t>Overall, IKE Recovery is not more vulnerable than IKEv2 and even improves on the security of IKEv2 by resynchronizing SA's more rapidly which is important with dynamic polices.</t>
+</section>
+
+</middle>
+
+<back>
+<references title="Normative References">
+<reference anchor="IKEv2">
+<front>
+<title>RFC 4306, Internet Key Exchange (IKEv2) Protocol</title>
+<author initials="Ed. C." surname="Kaufman">
+<organization></organization>
+</author>
+<date month="December" year="2005"/>
+</front>
+</reference>
+
+<reference anchor="NAT-T">
+<front>
+<title>RFC 3947, Negotiation of NAT-Traversal in the IKE</title>
+<author surname="Kivinen">
+<organization></organization>
+</author>
+<date month="January" year="2005"/>
+</front>
+</reference>
+
+<reference anchor="Bra97">
+<front>
+<title>RFC 2119, Key Words for use in RFCs to indicate Requirement Levels</title>
+<author initials="S." surname="Bradner">
+<organization></organization>
+</author>
+<date month="March" year="1997"/>
+</front>
+</reference>
+</references>
+
+<references title="Informative References">
+
+<reference anchor="IKERESUME">
+<front>
+<title>Stateless Session Resumption for the IKE Protocol</title>
+<author initials="Y." surname="Sheffer">
+<organization>Checkpoint</organization>
+</author>
+<date month="July" year="2007"/>
+</front>
+</reference>
+</references>
+</back>
+
+</rfc>
+

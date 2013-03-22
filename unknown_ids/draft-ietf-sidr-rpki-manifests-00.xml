@@ -1,0 +1,903 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" >
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc compact="yes"?>
+<rfc category="std" docName="draft-ietf-sidr-rpki-manifests-00.txt" ipr="full3978">
+  <front>
+    <title abbrev="RPKI Manifests">Manifests for the Resource Public Key Infrastructure</title>
+
+    <author fullname="Rob Austein" initials="R." surname="Austein">
+     <organization abbrev="ISC">Internet Systems Consortium</organization>
+     <address>
+      <postal>
+       <street>950 Charter St.</street>
+       <city>Redwood City</city>
+       <region>CA</region>
+       <code>94063</code>
+       <country>USA</country>
+      </postal>
+      <email>sra@isc.org</email>
+     </address>
+    </author>
+
+    <author fullname="Geoff Huston" initials="G." surname="Huston">
+      <organization abbrev="APNIC">Asia Pacific Network Information
+      Centre</organization>
+      <address>
+        <postal>
+        <street>33 park Rd.</street>
+        <city>Milton</city>
+        <region>QLD</region>
+        <code>4064</code>
+        <country>Australia</country>
+        </postal>
+
+        <email>gih@apnic.net</email>
+
+        <uri>http://www.apnic.net</uri>
+      </address>
+    </author>
+
+    <author fullname="Stephen Kent" initials="S." surname="Kent">
+     <organization abbrev="BBN">BBN Technologies</organization>
+     <address>
+      <postal>
+       <street>10 Moulton St.</street>
+       <city>Cambridge</city>
+       <region>MA</region>
+       <code>02138</code>
+       <country>USA</country>
+      </postal>
+      <email>kent@bbn.com</email>
+     </address>
+    </author>
+
+    <author fullname="Matt Lepinski" initials="M." surname="Lepinski">
+     <organization abbrev="BBN">BBN Technologies</organization>
+     <address>
+      <postal>
+       <street>10 Moulton St.</street>
+       <city>Cambridge</city>
+       <region>MA</region>
+       <code>02138</code>
+       <country>USA</country>
+      </postal>
+      <email>mlepinski@bbn.com</email>
+     </address>
+    </author>
+
+
+    <date year="2008" />
+
+    <area>Individual Submission</area>
+
+    <workgroup>Individual Submission</workgroup>
+
+    <abstract>
+      <t>This document defines a "manifest" for use in the Resource
+      Public Key Infrastructure. A "manifest" is a signed object that
+      contains a listing of all the signed objects in the repository
+      publication point associated with an authority responsible for
+      publishing in the repository. For each certificate, or
+      other forms of signed objects issued by the authority that are
+      published at this repository publication point, the
+      manifest contains both the name of the file containing the
+      object, and a hash of the file content. Manifests are intended
+      to expose potential threats to relying parties of the results of
+      a man-in-the middle withholding attack on repository retrieval
+      operations.</t>
+    </abstract>
+  </front>
+
+  <middle>
+   <section title="Introduction">
+
+    <t>The Resource PKI (RPKI) <xref target="ID.SIDR-ARCH" /> makes
+    use of a distributed repository system <xref
+    target="ID.SIDR-REPOSITORY" /> to make available a variety of
+    objects needed by relying parties (RPs) such as Internet service
+    providers (ISPs). Because all of the objects stored in the
+    repository system are digitally signed by the entities that
+    created them, attacks that modify these objects are detectable by
+    RPs. However, attacks that substitute "stale" versions of signed
+    objects (i.e., objects that were valid but have since been
+    superceded) are not automatically detected just by validation of
+    digital signatures. Attacks that remove an object also are not
+    detectable by verification of digital signatures, unless an RP is
+    able to predict that the object should be present. To help address
+    these vulnerabilities, the RPKI repository system will make use of
+    a new data structure call a "manifest."</t>
+
+    <t>A manifest is a signed object listing of all of the signed
+    objects issued by an authority responsible for a publication point
+    in the repository system.  For each certificate, Certificate
+    Revocation List (CRL), or other signed object, such as a Route
+    Origination Authority (ROA), issued by the authority, the manifest
+    contains both the name of the file containing the object, and a
+    hash of the file content.  Manifests are intended to allow an RP
+    to obtain sufficient information so as to be able to detect if the
+    retrieval of objects from an RPKI repository has been compromised
+    by unauthorized removal, or by substitution of "stale" versions of
+    objects. Manifests are designed to be used for Certification
+    Authority (CA) publication points in repositories, points that
+    contain subordinate certificates, CRLs and other signed objects,
+    and End Entity (EE) publication points in repositories (that
+    contain signed objects).</t>
+
+    <t> <vspace blankLines="1" />
+     <list style="empty">
+      <t>[Note 1. This text assumes that CRLs are included in
+      manifests. As a signed product of an issuing authority that is
+      published in the authority's publication repository this would
+      be consistent with the definition of manifests in the
+      text. However, if manifests are intended to list all objects in
+      a publication repository that relying parties would otherwise
+      not know to exist, then is not logically necessary to include
+      CRLs in a manifest, as the CRL is already a requrement for CAs
+      to publish. It is an option to strike CRLs from the list of
+      objects to inlude in a manifest. This may reduce to some extent
+      the amount of manifest activity in a repository for an otherse
+      largely static CA. On the other hand listing the CRL in the
+      manifest has some utility in being able to detect some forms of
+      substitution of a "stale" but otherwise valid CRL. A later note
+      highlights a similar issue over inclusion of the
+      manifest-signing EE certificate in the manifest. It is suggested
+      that the text be left as is and that CRLs be included in
+      manifests.]<vspace blankLines="1" /> </t>
+
+      <t>[Note 2. This draft assumes that it is possible for an EE to
+      sign and publish multiple objects and, accordingly, a manifest
+      for the signed object publication repository is
+      necessary. Accordingly, the document implicitly refers to both
+      CA and EE manifests. An alternate option is to apply a
+      restriction in the RPKI that an EE can sign a single object, in
+      which case the signed object can be referenced directly in the
+      SIA of the AA and no manifest of EE-signed objects is
+      necessary. It is suggested that the text be left as is, leaving
+      the option for CA and EE manifests to be permitted within this
+      specification.]<vspace blankLines="1" /> </t>
+     </list>
+    </t>
+
+    <section title="Terminology">
+
+     <t>It is assumed that the reader is familiar with the terms and
+     concepts described in "Internet X.509 Public Key Infrastructure
+     Certificate and Certificate Revocation List (CRL) Profile" <xref
+     target="RFC3280"/>and "X.509 Extensions for IP Addresses and AS
+     Identifiers" <xref target="RFC3779"/>.</t>
+
+     <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+     NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and
+     "OPTIONAL" in this document are to be interpreted as described in
+     RFC 2119.</t>
+
+    </section>
+   </section>
+   <section title="Manifests">
+
+    <t>Manifests are modeled on CRLs, as the issues involved in
+    detecting stale manifests, and detection of potential attacks
+    using manifest replays, etc are similar to those for CRLs.  The
+    syntax of the manifest payload differs from CRLs, since RPKI
+    repositories can contain objects not covered by CRLs,
+    e.g. digitally signed objects, such as ROAs. The Cryptographic
+    Message Syntax (CMS) <xref target="RFC3852" /> signature format is
+    employed to encapsulate the manifest payload. It also provides a
+    vehicle to carry the EE certificate needed to verify a
+    manifest.</t>
+
+    <t>The scope of a manifest is the entire collection objects in a
+    publication point in a repository, where each object has been
+    signed by the same CA or EE that is the authority for this
+    repository publication point.</t>
+
+    <section title="Manifest Syntax">
+
+     <t>A manifest is a CMS signed-data object whose content is
+     defined as follows:</t>
+
+     <figure>
+      <artwork><![CDATA[
+   Manifest ::= SEQUENCE {
+        version     [0] INTEGER DEFAULT 0,
+        manifestNumber  INTEGER,
+        thisUpdate      GeneralizedTime,
+        nextUpdate      GeneralizedTime,
+        fileHashAlg     OBJECT IDENTIFIER,
+        fileList        SEQUENCE OF (SIZE 0..MAX) FileAndHash
+    }
+
+    FileAndHash ::=     SEQUENCE {
+        file            IA5String
+        hash            BIT STRING
+    }
+   ]]></artwork>
+     </figure>
+
+     <t>The version of this Manifest format is 1, and the value of
+     this field is therefore 0.</t>
+
+     <t>The manifestNumber field is a sequence number that is
+     incremented each time a new manifest is issued for the
+     repository. This field is used to allow a RP to detect gaps in a
+     sequence of published manifest.</t>
+
+     <t>The thisUpdate field contains the time when the manifest was
+     created and the nextUpdate field contains the time at which the
+     next scheduled manifest will be issued. The value of nextUpdate
+     MUST be later than the value of thisUpdate. If the authority
+     alters any of the items in the repository publication point, then
+     the authority MUST issue a new manifest before nextUpdate. In
+     such a case, when the authority issues the new manifest, it MUST
+     also issue a new CRL that includes the EE certificate
+     corresponding to the old manifest.  A manifest is nominally valid
+     until the time specified in nextUpdate or until a manifest is
+     issued with a greater manifest number, whichever comes first. The
+     revoked EE certificate for the previous manifest's signature will
+     be removed from the CRL when it expires.</t>
+
+     <t>The fileHashAlg field contains the OID of the hash algorithm
+     used to hash the files that the authority has placed into the
+     repository. The mandatory to implement hash algorithm is SHA-256
+     and its OID is 2.16.840.1.101.3.4.2.1. <xref target="RFC4055"
+     />.</t>
+
+     <t>The fileList field contains a sequence of FileAndHash pairs,
+     one for each currently valid signed object that has been issued
+     by the authority. Each FileAndHash pair contains the name of the
+     file in the repository that contains the object in question, and
+     a hash of the file's contents.</t>
+    </section>
+   </section>
+
+   <section title="Manifest Signing and Verification">
+
+    <t>A manifest for a CA's repository publication point is signed by
+    a private key, for which the corresponding public key appears in
+    an EE certificate signed by the CA in question.</t>
+
+    <t>A manifest for a EE's repository publication point is signed by
+    a private key, for which the corresponding public key appears in
+    an EE certificate signed by the same CA that signed the public key
+    of the publishing EE. This, for an EE-managed publication point,
+    exactly one level of indirection is allowed in validation of the
+    manifest certificate.</t>
+
+    <t>Validation of a manifest's CMS digital signature is performed
+    in the context of the RPKI, and is validated using the algorithm
+    described in <xref target="ID.SIDR-CERTPROFILE" />.</t>
+
+    <t><vspace blankLines="1" />
+     <list style="empty">
+      <t>[Note 3. This draft assumes that each EE uses a unique
+      repository publication point. This is not an explicit constraint
+      of the Resource PKI. For the sake of the efficiency of the
+      relying parties' repository synchronization operations it is
+      possible that a CA may choose to place all signed objects that
+      are verified using EE certificates that are subordinates to this
+      CA in a common single repository publication point. In this case
+      the above manifest signature description still holds, namely
+      that the manifest of this common repository publication point is
+      a single manifest that is signed by a private key, for which the
+      corresponding public key appears in an EE certificate signed by
+      this CA.  It is suggested that the text note that this
+      validation method allows both the model that each EE uses a
+      dedicated repository publication point, or that all subordinate
+      EEs of a single CA share a common repository publication point,
+      and note that it CAs may elect to use a dedicated per-EE
+      repository, or a single shared EE repository.]<vspace blankLines="1" /> </t>
+
+      <t>[Note 4. In the (possibly degenerate) case of a multi-signed
+      object it would appear that the simplest case is to apply a
+      restriction that the EE certificates used in this context be
+      one-off use EE certificates and each EE certificate reference
+      the common multi-signed object's repository publication
+      point. The collection of CAs that generated EE certificates to
+      sign this object would also need to agree on a common repository
+      publication point in this case. As the issue of a multi-signed
+      object is still unresolved for this RPKI no resolution is
+      suggested here (see draft-ietf-smime-multisig-03.txt for a
+      multi-signing approach).]<vspace blankLines="1" /> </t>
+     </list>
+    </t>
+
+    <t>Two models for managing the EE certificates used to verify
+    manifests are permitted. A publication point authority may create
+    an EE certificate for manifest verification and use the
+    corresponding private key to sign a series of manifests over
+    tiome. Alternatively, an EE certificate may be used to verify a
+    single instance of a manifest and the private key corresponding to
+    the certificate may be deleted after it is used to sign that
+    manifest instance. To avoid needless CRL growth, the EE
+    certificate used to validate a manifest in this second case SHOULD
+    expire at the same time that the manifest expires, i.e., the
+    notAfter value in the EE certificate should be the same as the
+    nextUpdate value in the manifest. In contrast, when an EE
+    certificate is used to verify a series of manifests, the validity
+    of that certificate has to encompass the validity intervals for
+    all corresponding manifests.</t>
+
+   </section>
+   <section title="Using CMS SignedData to protect a Manifest">
+
+    <t>It is intended that the manifest will be processed by an RP in
+    the context of assembling a local copy of the entire RPKI
+    repository. Thus, the certificates and CRLs required to validate
+    the certificate path for the EE certificate used to varify the
+    manifest's signature will be at hand for the RP. AS a result, this
+    specification recommends that only the EE certificate needed to
+    verify the signature on the manifest be included in the CMS
+    DignedData. CA certificates and CRLs SHOULD NOT be included in the
+    CMS SignedData. The CMS timestamp field SHOULD NOT be included in
+    the CMS Signed Data.</t>
+
+    <t><vspace blankLines="1" />
+     <list style="empty">
+      <t>[Note 5. This section needs to be expanded to precisely
+      specify which optional CMS fields MUST be present, which ones
+      MUST be omitted and which (if any) MAY be present at the
+      discretion of themanifest signed. It is also suggested that the
+      default algorithms to be used also be specified here.]<vspace blankLines="1" /> </t>
+     </list>
+    </t>
+   </section>
+   <section title="Manifest Generation">
+
+    <t>Each CA in the RPKI publishes the certificates and CRLs it
+    issues at a publication point in the RPKI repository system. To
+    create a manifest, each CA MUST:<vspace blankLines="2" />
+
+     <list style="numbers">
+
+      <t>Generate a key pair.<vspace blankLines="1" /> </t>
+
+      <t>Issue an EE certificate for this key pair to enable relying
+      parties to verify the signature on the manifest.<vspace blankLines="1" />
+
+       <list style="symbols">
+
+        <t>This EE certificate has an SIA extension access description
+        field with an accessMethod OID value of id-ad-signedobject
+        where the associated accessLocation references the publication
+        point of the manifest as an object URL.<vspace blankLines="1" /> </t>
+
+        <t>This EE certificate SHOULD describe its IP number resources
+        using the "inherit" attribute rather than explicit description
+        of a resource set.<vspace blankLines="1" /> </t>
+
+        <t>The validity times of the EE certificate MUST either
+        exactly match the thisUpdate and nextUpdate times of the
+        manifest, or encompass the validity intervals for the series
+        of manifests that are expected to be verified using the
+        EE certificate.<vspace blankLines="1" /> </t>
+       </list>
+      </t>
+
+      <t>Publish this certificate in the authority's repository
+      publication point.<vspace blankLines="2" />
+
+       <list style="empty">
+        <t>[Note 6. This assumes that the EE certificate used to sign
+        manifests is published in the CA's repository publication
+        point in the same manner as all other subordinate certificates
+        issued by this CA. It is potentially an option to omit the
+        publication step on the basis that the EE certificate is also
+        contained in the CMS SignedData field of the manifest. It is
+        suggested that these EE certificates by treated in the same
+        manner as all other certificates in the RPKI and be published
+        in the appropriate repository as well as being reproduced in
+        the CMS SignedData section of the manifest, leaving the above
+        text as is.]<vspace blankLines="2" /> </t>
+       </list>
+      </t>
+
+      <t>The manifest is then constructed. Note that the manifest does
+      not include a self reference (i.e., its own file name and hash),
+      since it would be impossible to compute the hash of the manifest
+      itself prior to it being signed.<vspace blankLines="1" /> </t>
+
+      <t>The manifest is encapsulated using the CMS SignedData content
+      type and published in the publication point in the repository
+      system that is described by the manifest.<vspace blankLines="1" /> </t>
+
+      <t>If a single use EE certificate is associated with a single
+      use key pair the private key may now be destroyed.<vspace blankLines="1" /> </t>
+     </list>
+    </t>
+
+    <t>An authority MUST issue a new manifest on or before the
+    nextUpdate time.</t>
+
+    <t>An authority MUST issue a new manifest in conjunction with the
+    finalization of changes made to objects in the publication
+    point. An authority MAY perform a number of object operations on a
+    publication repository within the scope of a repository change
+    before issuing a single manifest that covers all the operations
+    within the scope of this change. Repository operators SHOULD
+    implement some form of synchronization function on the repository
+    to ensure that relying parties who are performing retrieval
+    operations on the repository are not exposed to intermediate
+    states during changes to the repository and the associated
+    manifest.</t>
+
+    <t>Since the manifest object URL is included in the SIA of issued
+    certificates then a new manifest MUST NOT invalidate the manifest
+    object URL of previously issued certificates. This implies that
+    the manifest's publication name in the repository, in the form of
+    an object URL, is one that is unchanged across manifest generation
+    cycles.</t>
+
+    <t>As the manifest scope is all signed objects associated with an
+    authority responsible for a pubnlication point, the manifest must
+    persist across key rollover events. This implies that this
+    persistent repository publication name cannot be derived from the
+    authority's current public key value in any way.</t>
+
+    <t>In the case of a CA publication point manifest, when the CA is
+    performing a key rollover, the CA will use its new private key to
+    sign an EE certificate for a new manifest. It will sign the
+    manifest and publish it at the point in the key rollover sequence
+    following the publication of the new CA certificate by the
+    superior CA (i.e. the point at which objects signed with the new
+    key may be validated by relying parties). The previous EE
+    certificate used to sign manifests will be revoked by the
+    CRL that is associated with the retiring private key (as the scope
+    of CRLs in the RPKI is that of CA plus private key value). The new
+    instance of the manifest, and successive manifests, will describe
+    all the files in the CA publication point that were signed with
+    both the retiring key and the new key. The manifest number will
+    continue to be incremented and MUST NOT be reset.</t>
+
+    <t>In the case of a EE publication point manifest, when the EE
+    certificate is rekeyed, a new publication point is established. A
+    new EE certificate for manifest validation will be generated by
+    the CA that issues the new EE certificate assocaited with the new
+    publication point. In this case there is no manifest overlap, as
+    the new repository publication point will have a distinct
+    manifest.</t>
+
+    <t>In the case of a common publication point for all subordinate
+    EE authorities of a CA the same still holds, and each batched
+    update operation on the shared repository would entail a new
+    generation of the manifest being produced.</t>
+   </section>
+
+   <section title="Certificate Requests">
+
+    <t>A request for a CA certificate MUST include in the SIA of the
+     request an accessMethod OID of id-ad-rpkiManifest, where the
+     associated accessLocation refers to the subject's published
+     manifest object as an object URL.</t>
+
+    <t>When an EE certificate is intended for use in verifying
+    multiple objects, the certificate request for the EE certificate
+    MUST include in the SIA of the request an access method OID of
+    id-ad-rpkiManifest, where the associated access location refers to
+    the publication point of the objects that are verified using this
+    EE certificate.<vspace blankLines="2" />
+
+     <list style="empty">
+      <t>[Note 7. This draft assumes that it is possible for an EE to
+      sign and publish multiple objects as noted earlier. The above
+      constraint me be removed if this is not the case. It is
+      suggested that the multiple object provision be left in the
+      text.]<vspace blankLines="1" /> </t>
+     </list>
+    </t>
+
+    <t>When an EE certificate is used to sign a single object, the
+    certificate request for the EE certificate MUST include in the SIA
+    of the request an access method OID of id-ad-signedObject, where
+    the associated access location refers to the publication point of
+    the single object that is verified using this EE certificate.</t>
+
+    <t>In accordance with the provisions of <xref
+    target="ID.SIDR-CERTPROFILE"/>, all certificate issuance requests
+    for a CA certificate SHOULD include the id-ad-caRepository access
+    method, and also the id-ad-rpkiManifest access method that
+    references the intended publication point of the manifest in the
+    associated access location in the request. The issuer SHOULD honor
+    these values in the issued certificate or MUST reject the
+    Certificate Request.</t>
+
+    <t>Similarly, a request for an EE certificate SHOULD include
+    either the id-ad-signedObjectRepository and the id-ad-rpkiManifest
+    access method, or, in the case of single-use EE certificates,
+    include the id-ad-signedObject access method and omit the
+    id-ad-rpkiManifest access method.</t>
+
+   </section>
+   <section title="Publication Repositories">
+
+    <t>The RPKI publication system model requires that every
+    publication point be associated with a CA or an EE, and be
+    non-empty. Upon creation of the publication point associated with
+    a CA, the CA MUST create and publish a manifest as well as a
+    CRL. The manifest will contain at least two entries, the CRL
+    issued by the CA upon repository creation and the EE certificate
+    used to sign the manifest. Upon the creation of the publication
+    point associated with an AA, the EE MUST create and puiblish a
+    manifest. The manifest in an otherwise empty repository
+    publication point associated with an EE will contain no entries in
+    the manifest's fileList sequence (i.e. a sequence of 0
+    length).<vspace blankLines="2" />
+
+     <list style="empty">
+      <t>[Note 8. This description of the initial state of a CA's
+      repository publication point assumes that the EE certificate
+      used to sign manifests is published in the CA's repository
+      publication point in the same manner as all other subordinate
+      certificates issued by this CA, as noted in a previous
+      comment. It is suggested that this remain the case and that this
+      text be retained.]<vspace blankLines="1" /></t>
+     </list>
+    </t>
+
+    <t>For signed objects EE certificate used in the verification of
+    such objects is either a single-use certificate, used to verify a
+    single signed object, or a multiple-use certificate. In the case
+    of a single-use EE certificate, the id-ad-signedObject SIA access
+    method is to refer to the signed object itself, and the signed
+    object is not covered by a manifest. In the case where the EE
+    certificate is used to verify multiple objects, the
+    id-ad-signedObjectRepository SIA access method points to the
+    repository publication point where signed objects that are
+    verified using this EE certificate are published and the
+    id-ad-rpkiManifest SIA access methos points to the manifest for
+    this repository publication point. A CA MAY use a common
+    repository publication point for the collection of signed objects
+    that are verified using any of the CA's subordinate EE
+    certificates.</t>
+
+   </section>
+   <section title="Relying Parties">
+
+    <t>All RPKI repository publication points SHOULD should contain a
+    valid manifest.</t>
+
+    <t> A valid manifest is one where:<vspace blankLines="2" />
+
+     <list style="symbols">
+
+      <t>the manifest conforms to the defined syntax for
+      manifests<vspace blankLines="1" /> </t>
+
+      <t>the digital signature can be verified by using the public key
+      specified in the attached EE certificate<vspace blankLines="1" /> </t>
+
+      <t>the current time is no earlier than the thisUpdate time of
+      the manifest and no later than the nextUpdate time of the
+      manifest<vspace blankLines="1" /> </t>
+
+      <t>the EE certificate conforms to the profile as specified in
+      <xref target="ID.SIDR-CERTPROFILE"/><vspace blankLines="1" /> </t>
+
+      <t>the EE certificate has not been revoked<vspace blankLines="1" /> </t>
+
+      <t>the EE certificate has not expired<vspace blankLines="1" /> </t>
+
+      <t>the EE certificate can be validated according to the
+      procedure described in section 7 of <xref
+      target="ID.SIDR-CERTPROFILE"/><vspace blankLines="1" /> </t>
+     </list>
+    </t>
+
+    <t>The absence of a manifest from a RPKI repository publication
+    point may indicate a possible attack on the repository retrieval
+    function, and this situation should generate some form of
+    operational warning. If the relying party has retained one or more
+    previously retrieved manifests then the relying party should use
+    most recent (highest manifestNumber value) verified manifest for
+    the publication point in question. If no prior manifest for this
+    publication point is available, there is no basis for detecting
+    missing files, so the relying party should just process the
+    repository contents in any case. All objects retrieved from a
+    repository whose manifest is in this state are still potentially
+    useable by relying parties, and validated objects should be
+    regarded with the same level of trust that is used for validated
+    objects that have been retrieved from repositories with valid
+    manifests.</t>
+
+    <t>If the signature on a manifest cannot be verified, or the
+    manifest cannot be parsed according to the manifest syntax
+    specification, it must be disregarded by a relying party. Since
+    this case entailed retrieval of what purports to be a manifest, a
+    warning SHOULD be issued, but the RP should proceed with
+    processing the publication point objects.</t>
+
+    <t>Where a manifest is present, and the signature can be verified
+    using the attached EE certificate, but the EE certificate itself
+    cannot be validated, then it is possible that the manifest is
+    bogus. In this case the manifest should be disregarded by the RP
+    and a warning SHOULD be issued, but the RP should proceed with
+    processing the publication point objects as if no manifest had
+    been provided.</t>
+
+    <t>Where a manifest is present, and the signature can be verified
+    using the attached EE certificate, but the EE certificate itself
+    has been revoked, then it is possible that the manifest is a
+    replay. In this case the manifest should be disregarded by the RP
+    and a warning SHOULD be issued, but the RP should proceed with
+    processing the publication point objects as if no manifest had
+    been provided.</t>
+
+    <t>When processing a valid manifest, if an RP encounters a signed
+    object that is not listed in the manifest, or that has a different
+    hash value from the one specified in the manifest, then the object
+    SHOULD be ignored and a warning SHOULD be issued. The object
+    should not be trusted as it may be part of a replay attack.
+    <vspace blankLines="2" />
+
+     <list style="empty">
+      <t>[Note 9. An alternative approach is that such objects that
+      are not in the manifest or fail to match the hash algorithm but
+      still validate in the RPKI should still be used because they do
+      indeed validate within the scope of the RPKI. The issue here
+      appears to be one of judgment about what form of replay attack
+      is occurring in such a situation, assuming that the authority's
+      manifest generation process was correct and the discrepancy has
+      arisen during the repository synchronization operation. The
+      default approach, or ignoring everything not in the manifest and
+      ignoring everything that fails to match the manifest's hash
+      value assumes that the attack is one of replay of the
+      object. The alternative is that the replay attack is a replay of
+      the manifest, in which case the relying party has been forced to
+      discard valid objects because of the manifest replay. This
+      requires further consideration as to which scenario presents the
+      lesser risk to relying parties. No suggestion is made here, and
+      further advice is sought on this topic.]<vspace blankLines="1" /> </t>
+     </list>
+    </t>
+
+    <t>If a valid manifest lists files that are not visible in the
+    publication point, then the RP should assume that these objects
+    have been deleted, potentially without authorization, and a
+    warning SHOULD be issued.</t>
+
+
+    <t>A semi-formal description of the recommended relying party
+    manifest processing algorithm follows.</t>
+
+    <section title="Manifest Processing">
+
+     <t>The error-free case is:<vspace blankLines="1" />
+
+      <list style="empty">
+
+       <t>A manifest is present in the repository, is current (i.e.,
+       the current time is bounded by the manifest validity interval),
+       and its signature can be verified using a valid certificate
+       <xref target="ID.SIDR-CERTPROFILE" />.  All files found in the
+       publication point are listed in the manifest, all files listed
+       in the manifest are found in the publication point, and the
+       hashes match.</t>
+      </list>
+     </t>
+
+     <t>The cases that SHOULD generate various manifest validation
+     warnings are:<vspace blankLines="1" />
+
+      <list style="numbers" counter="cases">
+
+       <t>No manifest is found in the repository at the publication
+       point. In this case, the relying party cannot use the manifest
+       in question.<vspace blankLines="1" />
+
+        <list style="letters">
+
+         <t>If the relying party has a prior manifest for this
+         publication point, then the relying party should use most
+         recent, verified manifest for the publication point in
+         question and generate warning A.<vspace blankLines="1" /> </t>
+
+         <t>If no prior manifest for this publication point is
+         available to the relying party, there is no basis for
+         detecting missing files, so just process certificate, CRL,
+         and other signed object files and generate warning B.<vspace blankLines="1" /> </t>
+
+        </list>
+       </t>
+
+       <t>The signature on manifest fetched from the repository cannot
+       be verified (or the format of the manifest is bad). In this
+       case, the relying party cannot use the manifest in question.<vspace blankLines="1" />
+
+        <list style="letters">
+
+         <t>If the relying party has a prior manifest for this
+         publication point, then the relying party should use most
+         recent, verified manifest for the publication point in
+         question and generate warning A.<vspace blankLines="1" /> </t>
+
+         <t>If no prior manifest for this publication point is
+         available to the relying party, there is no basis for
+         detecting missing files, so just process certificate, CRL,
+         and other signed object files and generate warning B.<vspace blankLines="1" /> </t>
+
+        </list>
+       </t>
+       <t>The manifest is present and current and its signature can be
+       verified using the CMS enclosed EE certificate.<vspace blankLines="1" />
+
+        <list style="letters">
+
+         <t>If the EE certificate is valid (current and not revoked)
+         and all files in the repository are listed in the manifest,
+         and all files listed in the manifest are found in the
+         repository, and the hashes match, then the relying party
+         should use the manifest, as this is the validated case.<vspace blankLines="1" /> </t>
+
+         <t>If the EE certificate is valid and one or more files
+         listed in the manifest have hashes that do not match the
+         files in the repository with the indicates names, then the
+         corresponding files are likely to be old and intended to be
+         replaced, and thus SHOULD NOT be used. The relying party
+         should generate Warning C.<vspace blankLines="1" /> </t>
+
+         <t>If the EE certificate is valid and one or more files
+         listed in the manifest are missing, the relying party should
+         Generate Warning D.<vspace blankLines="1" /> </t>
+
+         <t>If the EE certificate is expired, an indication that the
+         EE certificate valid times and the manifest times are not
+         aligned, then the relying party should generate warning E,
+         but proceed with processing.<vspace blankLines="1" /> </t>
+
+         <t>If the EE certificate is revoked but not expired, then the
+         manifest SHOULD be ignored. The relying party should generate
+         warning F and proceed with processing as if no manifest is
+         available, as the CA has explicitly revoked the certificate
+         for the manifest.<vspace blankLines="1" /> </t>
+
+        </list>
+       </t>
+
+       <t>The manifest is present but expired. If the signature cannot
+       be verified, then treat this in the same manner as case 1 or
+       2. If the manifest signature can be verified using a matching
+       EE certificate:<vspace blankLines="1" />
+
+        <list style="letters">
+
+         <t>If the EE certificate is valid (current and not revoked),
+         then generate warning A and proceed.<vspace blankLines="1" /> </t>
+
+         <t>If the EE certificate is expired, then generate warning G
+         and proceed.<vspace blankLines="1" /> </t>
+
+         <t>If EE certificate is revoked but not expired, the manifest
+         SHOULD be ignored. Generate warning F and proceed with
+         processing as if no manifest is available (since the CA
+         explicitly revoked the certificate for the manifest.) <vspace blankLines="1" /> </t>
+        </list>
+       </t>
+      </list>
+     </t>
+
+     <section title="Warning List">
+      <t>
+       <list style="hanging">
+        <t hangText="Warning A:">A current manifest is not available
+        for &lt;pub point name&gt;. An older manifest for this
+        publication point will be used, but there may be undetected
+        deletions from the publication point.<vspace blankLines="1" /> </t>
+
+        <t hangText="Warning B:">No manifest is available for &lt;pub
+        point name&gt;, and thus there may have been undetected
+        deletions from the publication point.<vspace blankLines="1" /> </t>
+
+        <t hangText="Warning C:">The following files at &lt;pub point
+        nam&gt; appear to be superceded and are NOT being
+        processed.<vspace blankLines="1" /> </t>
+
+        <t hangText="Warning D:">The following files that should have
+        been present in the repository at &lt;pub point name&gt;, are
+        missing &lt;file list&gt;.  This indicates an attack against
+        this publication point, or the repository, or an error by the
+        publisher.<vspace blankLines="1" /> </t>
+
+        <t hangText="Warning E:">EE certificate for manifest
+        verification for &lt;pub point name&gt; is expired. This
+        indicates an error by the publisher, but processing for this
+        publication point will proceed using the current manifest.<vspace blankLines="1" /> </t>
+
+        <t hangText="Warning F:">The EE certificate for &lt;pub point
+        name&gt; has been revoked. The manifest will be ignored and
+        all files found at this publication point will be
+        processed.<vspace blankLines="1" /> </t>
+
+        <t hangText="Warning G:">EE certificate for manifest
+        verification for &lt;pub point name&gt; is expired. This
+        indicates an error by the publisher, but processing for this
+        publication point will proceed using the the most recent (but
+        expired) manifest.<vspace blankLines="1" /> </t>
+       </list>
+      </t>
+     </section>
+    </section>
+   </section>
+   <section title="Security Considerations">
+    <t>[To be defined]</t>
+   </section>
+
+   <section title="IANA Considerations">
+    <t>[Note to IANA, to be removed prior to publication: there are no IANA
+     considerations stated in this version of the document.]</t>
+   </section>
+
+   <section title="Acknowledgements">
+    <t>The authors would like to acknowledge the contributions from
+     George Michaelson and Randy Bush in the preparation of the
+     manifest specification.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <reference anchor="ID.SIDR-ARCH">
+        <front>
+          <title>An Infrastructure to Support Secure Internet Routing</title>
+
+          <author fullname="M. Lepinski" initials="M" surname="Lepinski">
+            <organization>BBN Technologies</organization>
+          </author>
+          <author fullname="S. Kent" initials="S" surname="Kent">
+            <organization>BBN Technologies</organization>
+          </author>
+          <author fullname="R. Barnes" initials="R" surname="Barnes">
+            <organization>BBN Technologies</organization>
+          </author>
+
+          <date month="November" year="2007" />
+        </front>
+        <seriesInfo name="Work in progress: Internet Drafts" value="draft-ietf-sidr-arch-02.txt" />
+      </reference>
+
+      <reference anchor="ID.SIDR-CERTPROFILE">
+        <front>
+          <title>A Profile for X.509 PKIX Resource Certificates</title>
+
+          <author fullname="G. Huston" initials="G" surname="Huston">
+            <organization>APNIC</organization>
+          </author>
+          <author fullname="G. Michaelson" initials="G" surname="Michaleson">
+            <organization>APNIC</organization>
+          </author>
+          <author fullname="R. Loomans" initials="R" surname="Loomans">
+            <organization>APNIC</organization>
+          </author>
+
+          <date month="November" year="2007" />
+        </front>
+
+        <seriesInfo name="Work in progress: Internet Drafts" value="draft-ietf-sidr-res-certs-09.txt" />
+      </reference>
+
+      <reference anchor="ID.SIDR-REPOSITORY">
+        <front>
+          <title>A Distributed Repository System for the Resource PKI</title>
+
+          <author fullname="G. Huston" initials="G" surname="Huston">
+            <organization>APNIC</organization>
+          </author>
+          <author fullname="G. Michaelson" initials="G" surname="Michaleson">
+            <organization>APNIC</organization>
+          </author>
+
+          <date month="November" year="2007" />
+        </front>
+
+        <seriesInfo name="Work in progress: Internet Drafts" value="draft-ietf-sidr-repository-00.txt" />
+      </reference>
+
+      <?rfc include='./rfcs/bibxml/reference.RFC.3280.xml'?>
+      <?rfc include='./rfcs/bibxml/reference.RFC.3779.xml'?>
+      <?rfc include='./rfcs/bibxml/reference.RFC.3852.xml'?>
+      <?rfc include='./rfcs/bibxml/reference.RFC.4055.xml'?>
+    </references>
+  </back>
+</rfc>

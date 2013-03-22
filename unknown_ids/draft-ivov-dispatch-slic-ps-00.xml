@@ -1,0 +1,590 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM 'rfcXXXX.dtd'>
+
+<rfc category='info' ipr='trust200902' docName='draft-ivov-dispatch-slic-ps-00'>
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc='yes' ?>
+<?rfc symrefs='yes' ?>
+<?rfc sortrefs='yes'?>
+<?rfc iprnotified='no' ?>
+<?rfc strict='yes' ?>
+  <front>
+
+    <title abbrev='Sound Level Indicators in Conferences'>
+      Dispatching Sound Level Indicators in Conferences (Problem
+      Statement)
+    </title>
+
+    <author initials='E.' surname='Ivov' fullname='Emil Ivov'>
+      <organization abbrev='SIP Communicator'>SIP Communicator</organization>
+      <address>
+        <postal>
+          <street></street>
+          <city>Strasbourg</city>
+          <code>67000</code>
+          <country>France</country>
+        </postal>
+        <email>emcho@sip-communicator.org</email>
+      </address>
+    </author>
+    <author initials='E.' surname='Marocco' fullname='Enrico Marocco'>
+      <organization>Telecom Italia</organization>
+      <address>
+        <postal>
+          <street>Via G. Reiss Romoli, 274</street>
+          <city>Turin</city>
+          <code>10148</code>
+          <country>Italy</country>
+        </postal>
+        <email>enrico.marocco@telecomitalia.it</email>
+      </address>
+    </author>
+
+    <date month='May' year='2009' />
+
+    <abstract>
+      <t>
+        The Conferencing Framework described in RFC 4353 defines the
+        semantics necessary for conducting conference calls with the
+        session initiation protocol. It also introduces a mixer entity
+        responsible for combining all media streams and delivering
+        them to the participants of the call. This document presents
+        the lack of a standardized way for such mixers to deliver
+        information about the audio activity (sound level) of
+        participants in a conference call. The document describes the
+        problem and discusses a few possible ways of transporting such
+        information.
+      </t>
+    </abstract>
+
+  </front>
+
+  <middle>
+    <section title='The Problem'>
+      <t>
+        The Framework for Conferencing with the Session Initiation
+        Protocol defined in
+        <xref target="RFC4353">RFC 4353</xref>
+        presents an overall architecture for multi-party conferencing.
+        Among others, the framework borrows from
+        <xref target="RFC3550">RTP</xref>
+        and extends the concept of a mixer entity "responsible for
+        combining the media streams that make up a conference, and
+        generating one or more output streams that are delivered to
+        recipients". Every participant would hence receive, in a flat
+        single stream, media originating from the others.
+      </t>
+      <t>
+        Using such centralized mixer-based architectures simplifies
+        support for conference calls on the client side since they would
+        hardly differ from one-to-one conversations. However, the
+        method also introduces a few limitations. The flat nature of
+        the streams that a mixer would output and send to participants
+        makes it difficult for users to identify the original source of
+        what they are hearing.
+      </t>
+      <t>
+        The IETF has already defined mechanisms (e.g. the CSRC fields
+        in <xref target='RFC3550'>RTP</xref>) that allow the mixer to
+        send to participants cues on current speakers, but they only
+        work for speaking/silent binary indications. In other words,
+        there are still a number of use cases where one would require
+        more detailed information. Possible examples include the
+        presence of background chat/noise/music/typing, someone
+        breathing noisily in their microphone, or other cases where
+        identifying the source of the disturbance would make it easy
+        to remove it (e.g. by sending a private IM to the concerned
+        party asking them to mute their microphone).
+      </t>
+      <t>
+        One way of presenting such information in a user friendly
+        manner would be for a conferencing client to attach sound level
+        indicators to the corresponding participant related components
+        in the user interface as displayed in
+        <xref target='figure-conference-ui' />.
+      </t>
+      <figure anchor="figure-conference-ui">
+        <artwork>
+<![CDATA[
+                      ------------------------
+                     |                        |
+                     |  00:42 |  Weekly Call  |
+                     |                        |
+                     |------------------------|
+                     |                        |
+                     | Alice |======    | (S) |
+                     |                        |
+                     | Bob   |=         |     |
+                     |                        |
+                     | Carol |          | (M) |
+                     |                        |
+                     | Dave  |===       |     |
+                     |                        |
+                     |________________________|
+]]>
+        </artwork>
+        <postamble>
+          Delivering detailed speaker information to the user by
+          displaying sound level for every participant.
+        </postamble>
+      </figure>
+      <t>
+        Implementing a user interface like the above on the client side,
+        however, would be quite delicate (if at all possible) since, as
+        we have already mentioned, conference participants are generally
+        receiving a single, flat audio stream and have therefore no
+        immediate way of determining sound level based solely on the
+        media. With today's common conferencing solutions a mixer is
+        the only party aware of such information. It therefore seems
+        like a logical next step to determine what would be the best
+        way to allow a mixer to deliver such information to conference
+        participants.
+      </t>
+      <t>
+        The rest of this document investigates existing IETF mechanisms
+        that could be extended in order to allow for a way to transport
+        sound level information.
+      </t>
+    </section>
+    <section title='Possible Approaches'>
+      <t>
+        This section dwells on various existing mechanisms and their
+        use for transporting participant sound level indicators.
+      </t>
+      <section title='An Extension to the Conference State Event
+                      Package for SIP'>
+        <t>
+          <xref target="RFC4575">RFC 4575</xref> defines a conference
+          event package for tightly coupled conferences using the
+          Session Initiation Protocol (SIP) events framework. It
+          allows for the delivery of various conference related
+          details such as conference descriptions, participant count
+          and identity. The document also provides a way of indicating
+          who the speakers are at any given moment by specifying a
+          mechanism for mapping conference participants to RTP
+          SSRC/CSRC identifiers. All these details are dispatched in
+          an asynchronous manner using the SIP events framework, or,
+          in other words, through NOTIFY SIP requests following an
+          initial SUBSCRIBE from a participant.  It may therefore seem
+          logical to try and extend the framework by adding the syntax
+          necessary to convey sound levels.
+        </t>
+        <t>
+          Further thought on the subject, however, raises numerous
+          issues with such an approach. Sound level in human speech is
+          obviously a very time sensitive characteristic which would
+          require frequent updates (i.e. approximately once every
+          50-100 ms). In order for the update of the user interface to
+          appear "natural" to the user, sound level information would
+          probably have to be delivered after every one or two RTP
+          packets.  Using <xref target="RFC4575">RFC 4575</xref> or
+          SIP in general for this would generate traffic on the (often
+          low-bandwidth) signalling path comparable to, if not
+          exceeding, the media itself.
+        </t>
+        <t>
+          It is probably also worth mentioning that the use of
+          <xref target="RFC4575">RFC 4575</xref> for such a feature
+          would make the mechanism incompatible with non-SIP signaling
+          protocols like, for example,
+          <xref target='RFC3920'>XMPP</xref> and its Jingle extensions.
+        </t>
+      </section>
+      <section title='Various RTP Etensions'>
+        <t>
+          The sound levels of different human voices in a conversation
+          are one kind of particularly fast changing information RTP
+          seems to be well suited for. Additionally, RTP syntax,
+          through the CSRC list in the RTP packet header and one or
+          more SDES RTCP packets, already allows a mixer to specify
+          the identities of the users whose voices were aggregated in
+          a mixed stream. It seems thus straightforward to consider an
+          extension to RTP as a possible approach for carrying such
+          information.
+        </t>
+        <t>
+          A first option for extending RTP is to define an RTP header
+          extension as specified in <xref target='RFC3550'>RFC
+          3550</xref> that would allow encoding sound level indicators
+          for each element of the CSRC list. The main advantage of
+          such an approach would consist of the very little impact it
+          would have in terms of bandwidth overhead; however, the RTP
+          header extension mechanism was initially meant only for
+          experimentation and its use for specifying new features is
+          explicitly discouraged.
+
+          <list style='empty'>
+            <t>
+              A possible workaround for such a limitation could be the
+              definition of that extension in a new RTP profile, in
+              turn defined as an extension of the Audio/Video profile
+              specified in <xref target='RFC3551'>RFC
+              3551</xref>. However, the complexity introduced in the
+              profile negotiation process, especially when done with
+              <xref target='I-D.ietf-mmusic-ice'>ICE</xref>, makes the
+              approach an overkill for the goal it tries to achieve.
+            </t>
+          </list>
+        </t>
+        <t>
+          Alternatively, the syntax needed for encoding sound level
+          indicators for the participants in an audio conference can
+          be specified as a new payload type for the RTP Audio/Video
+          profile defined in <xref target='RFC3551'>RFC
+          3551</xref>. The drawback of such an approach resides in the
+          significant increase of RTP packets it would generate; in
+          fact, even if the amount of additional information would be
+          very small, encoding it in a new payload would require a
+          separate RTP packet for each update (that, for a decent user
+          experience, should happen several times per second).
+        </t>
+      </section>
+      <section title='Extending the Role of the CSRC Identifiers in RTP'>
+        <t>
+          The <xref target="RFC3550">RTP</xref> specification defines
+          a Synchronization Source (SSRC) identifier. SSRCs are used
+          by every RTP source (e.g. every participant in a conference
+          call) and they are meant to be globally unique within a
+          particular RTP Session. Again, according to the
+          specification, mixers are expected to record the SSRC
+          identifiers of all contributing streams as a list of CSRC
+          identifiers in the RTP packets transporting the resulting
+          combined stream.  In the case of a conference call this
+          would mean that if the mixer is respecting the above, every
+          participant would receive the SSRC identifier of every other
+          active participant.
+        </t>
+        <t>
+          <xref target="RFC4575">RFC 4575</xref> then defines a way of
+          mapping an SSRC identifier to an actual conference
+          participant through the &lt;src-id&gt; tag. The mapping
+          provides a way of determining which are the currently active
+          (i.e. speaking) conference call participants.
+        </t>
+        <t>
+          A very simple way for a mixer to use the CSRC fields as a
+          transport means for sound level indication would be to extend
+          their meaning over a series of packets rather than a single
+          one. This way it could be specified that the sound-level of
+          a particular participant, represented on a zero to ten scale,
+          corresponds to the number of occurrences of its CSRC
+          identifier in the ten most recent RTP packets received from
+          the mixer.
+        </t>
+        <t>
+          For example, consider a conference call with four
+          participants: Alice, Bob, Carol, and Dave. At a certain
+          point in time Alice has a sound level of 6/10, Bob 1/10,
+          Carol is silent or in other words 0/10 and Dave has a level
+          of 3/10. In order to describe this state the mixer could
+          have sent the last ten RTP packets with the following CSRC
+          configuration:
+        </t>
+        <texttable anchor="tab:differences">
+          <ttcol width="10%"></ttcol>
+          <ttcol width="9%"> P1 </ttcol>
+          <ttcol width="9%"> P2 </ttcol>
+          <ttcol width="9%"> P3 </ttcol>
+          <ttcol width="9%"> P4 </ttcol>
+          <ttcol width="9%"> P5 </ttcol>
+          <ttcol width="9%"> P6 </ttcol>
+          <ttcol width="9%"> P7 </ttcol>
+          <ttcol width="9%"> P8 </ttcol>
+          <ttcol width="9%"> P9 </ttcol>
+          <ttcol width="9%"> P10 </ttcol>
+          <c> Alice </c><c>+</c><c>+</c><c>+</c><c>+</c><c>+</c>
+                        <c>+</c><c></c><c></c><c></c><c></c>
+          <c> Bob </c>  <c></c><c>+</c><c></c><c></c><c></c><c></c>
+                        <c></c><c></c><c></c><c></c>
+          <c> Carol </c> <c></c><c></c><c></c><c></c><c></c><c></c>
+                         <c></c><c></c><c></c><c></c>
+          <c> Dave </c> <c></c><c></c><c></c><c></c><c></c><c></c>
+                        <c></c><c>+</c><c>+</c><c>+</c>
+          <postamble>
+            A possible representation of a particular sound level
+            configuration through the presence/absence of CSRC
+            identifiers in subsequent RTP packets.
+          </postamble>
+        </texttable>
+        <t>
+          The graphical interface of a user agent involved in such a
+          conference (like the one sketched in
+          <xref target='figure-conference-ui'/>) would then display
+          correct sound levels just showing for each participant as
+          many ticks as were the occurrencies of the respective CSRC
+          in the previous ten RTP packets.
+        </t>
+        <t>
+          The algorithm for encoding sound level information this way
+          is relatively simple. In order to determine whether or not
+          to include a particular CSRC a mixer should:
+          <list style='symbols'>
+            <t>
+              include the CSRC if the sound level of the participant
+              in the current packet is greater than the number of
+              occurrencies of that same CSRC in the nine previous
+              packets;
+            </t>
+            <t>
+              omit the CSRC if the sound level of the participant in
+              the current packet is lower than or equal to the number
+              of occurrencies of that same CSRC in the nine previous
+              packets.
+            </t>
+          </list>
+        </t>
+        <t>
+          There are several advantages to using this approach, the
+          most obvious being its simplicity as well as the fact that
+          sound level information is transported together with the
+          parts of the audio stream that it actually concerns which
+          should make synchronization straightforward.
+        </t>
+        <t>
+          The technique would also work with other signaling protocols
+          using RTP such as <xref target='RFC3920'>XMPP's</xref> Jingle
+          extensions for example.
+        </t>
+        <t>
+          One of the first disadvantages that come to mind with this
+          approach is the fact that mixer would not be able to indicate
+          level in a single packet but would have to distribute it over
+          a succession of up to ten packets which would reduce the
+          reactivity of the representation.
+        </t>
+        <t>
+          It is probably worth mentioning, however, that a granularity
+          that allows switching from a level of zero to ten and back to
+          zero again in an instant manner is not of much use anyway
+          since such UI updates would be barely perceptible to the user.
+          Still, this is a UI decision and making it on a protocol level
+          may bring some inconveniences.
+        </t>
+        <t>
+          Another possible problem would come from implementations using
+          CSRC presence in a binary way to determine current speaker.
+          When running against a mixer that supports sound level
+          indication such implementations may appear to be jumpy as
+          the participants that they are designating as active may be
+          changing status too rapidly.
+        </t>
+      </section>
+    </section>
+    <section title='Security Considerations'>
+      <t>
+        <list style='numbers'>
+          <t>
+            A MITM could modify sound level indicators and make
+            participants believe that someone is saying something when
+            they actually aren't ...
+          </t>
+          <t>
+            Should use some authentication method to resolve this?
+          </t>
+          <t>
+            Could break compatibility with SRTP?
+          </t>
+        </list>
+      </t>
+    </section>
+  </middle>
+  <back>
+    <references title='Informative References'>
+      <reference anchor='RFC4353'>
+        <front>
+          <title>A Framework for Conferencing with the Session
+            Initiation Protocol (SIP)</title>
+          <author initials='J.' surname='Rosenberg' fullname='J. Rosenberg'>
+            <organization />
+          </author>
+          <date year='2006' month='February' />
+          <abstract>
+            <t>The Session Initiation Protocol (SIP) supports the
+              initiation, modification, and termination of media
+              sessions between user agents. These sessions are managed
+              by SIP dialogs, which represent a SIP relationship between
+              a pair of user agents. Because dialogs are between pairs
+              of user agents, SIP's usage for two-party communications
+              (such as a phone call), is obvious. Communications
+              sessions with multiple participants, generally known as
+              conferencing, are more complicated. This document defines
+              a framework for how such conferencing can occur. This
+              framework describes the overall architecture, terminology,
+              and protocol components needed for multi-party
+              conferencing. This memo provides information for the
+              Internet community.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name='RFC' value='4353' />
+        <format type='TXT' octets='67405'
+          target='ftp://ftp.isi.edu/in-notes/rfc4353.txt' />
+      </reference>
+
+
+      <reference anchor='RFC4575'>
+
+        <front>
+          <title>A Session Initiation Protocol (SIP) Event Package for
+            Conference State</title>
+          <author initials='J.' surname='Rosenberg' fullname='J. Rosenberg'>
+            <organization />
+          </author>
+          <author initials='H.' surname='Schulzrinne' fullname='H. Schulzrinne'>
+            <organization />
+          </author>
+          <author initials='O.' surname='Levin' fullname='O. Levin'>
+            <organization />
+          </author>
+          <date year='2006' month='August' />
+          <abstract>
+            <t>This document defines a conference event package for
+              tightly coupled conferences using the Session Initiation
+              Protocol (SIP) events framework, along with a data format
+              used in notifications for this package. The conference
+              package allows users to subscribe to a conference Uniform
+              Resource Identifier (URI). Notifications are sent about
+              changes in the membership of this conference and
+              optionally about changes in the state of additional
+              conference components. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name='RFC' value='4575' />
+        <format type='TXT' octets='97484'
+          target='ftp://ftp.isi.edu/in-notes/rfc4575.txt' />
+      </reference>
+
+      <reference anchor='RFC3550'>
+
+        <front>
+          <title>RTP: A Transport Protocol for Real-Time
+            Applications</title>
+          <author initials='H.' surname='Schulzrinne' fullname='H. Schulzrinne'>
+            <organization />
+          </author>
+          <author initials='S.' surname='Casner' fullname='S. Casner'>
+            <organization />
+          </author>
+          <author initials='R.' surname='Frederick' fullname='R. Frederick'>
+            <organization />
+          </author>
+          <author initials='V.' surname='Jacobson' fullname='V. Jacobson'>
+            <organization />
+          </author>
+          <date year='2003' month='July' />
+          <abstract>
+
+            <t>This memorandum describes RTP, the real-time
+              transport protocol. RTP provides end-to-end network
+              transport functions suitable for applications transmitting
+              real-time data, such as audio, video or simulation data,
+              over multicast or unicast network services. RTP does not
+              address resource reservation and does not guarantee
+              quality-of- service for real-time services. The data
+              transport is augmented by a control protocol (RTCP) to
+              allow monitoring of the data delivery in a manner scalable
+              to large multicast networks, and to provide minimal
+              control and identification functionality. RTP and RTCP are
+              designed to be independent of the underlying transport and
+              network layers. The protocol supports the use of RTP-level
+              translators and mixers. Most of the text in this
+              memorandum is identical to RFC 1889 which it obsoletes.
+              There are no changes in the packet formats on the wire,
+              only changes to the rules and algorithms governing how the
+              protocol is used. The biggest change is an enhancement to
+              the scalable timer algorithm for calculating when to send
+              RTCP packets in order to minimize transmission in excess
+              of the intended rate when many participants join a session
+              simultaneously. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name='STD' value='64' />
+        <seriesInfo name='RFC' value='3550' />
+        <format type='TXT' octets='259985'
+          target='ftp://ftp.isi.edu/in-notes/rfc3550.txt' />
+        <format type='PS' octets='630740'
+          target='ftp://ftp.isi.edu/in-notes/rfc3550.ps' />
+        <format type='PDF' octets='504117'
+          target='ftp://ftp.isi.edu/in-notes/rfc3550.pdf' />
+      </reference>
+
+      <reference anchor='RFC3920'>
+        <front>
+          <title abbrev='XMPP Core'>Extensible Messaging and Presence
+          Protocol (XMPP): Core</title>
+          <author initials='P.' surname='Saint-Andre' fullname='Peter Saint-Andre'
+          role='editor'>
+          <organization>Jabber Software Foundation</organization>
+          <address>
+            <email>stpeter@jabber.org</email>
+          </address>
+          </author>
+          <date year='2004' month='October' />
+          <area>Applications</area>
+          <workgroup>XMPP Working Group</workgroup>
+          <keyword>Presence</keyword>
+          <keyword>XML</keyword>
+          <keyword>Extensible Markup Language</keyword>
+          <abstract>
+            <t>This memo defines the core features of the Extensible
+              Messaging and Presence Protocol (XMPP), a protocol for
+              streaming Extensible Markup Language (XML) elements in
+              order to exchange structured information in close to real
+              time between any two network endpoints. While XMPP
+              provides a generalized, extensible framework for
+              exchanging XML data, it is used mainly for the purpose of
+              building instant messaging and presence applications
+              that meet the requirements of RFC 2779.</t>
+          </abstract>
+        </front>
+      </reference>
+      <reference anchor="RFC3551">
+        <front>
+          <title>
+            RTP Profile for Audio and Video Conferences with Minimal
+            Control
+          </title>
+          <author initials="H." surname="Schulzrinne"
+                  fullname="H. Schulzrinne">
+            <organization/>
+          </author>
+          <author initials="S." surname="Casner"
+                  fullname="S. Casner">
+            <organization/>
+          </author>
+          <date year="2003" month="July"/>
+        </front>
+        <seriesInfo name="STD" value="65"/>
+        <seriesInfo name="RFC" value="3551"/>
+        <format type="TXT" octets="106621"
+                target="ftp://ftp.isi.edu/in-notes/rfc3551.txt"/>
+        <format type="PS" octets="317286"
+                target="ftp://ftp.isi.edu/in-notes/rfc3551.ps"/>
+        <format type="PDF" octets="237831"
+                target="ftp://ftp.isi.edu/in-notes/rfc3551.pdf"/>
+      </reference>
+      <reference anchor='I-D.ietf-mmusic-ice'>
+        <front>
+          <title>
+            Interactive Connectivity Establishment (ICE): A
+            Methodology for Network Address Translator (NAT) Traversal
+            for Offer/Answer Protocols
+          </title>
+          <author initials='J' surname='Rosenberg'
+                  fullname='Jonathan Rosenberg'>
+            <organization />
+          </author>
+          <date month='October' day='29' year='2007' />
+        </front>
+        <seriesInfo name='Internet-Draft'
+                    value='draft-ietf-mmusic-ice-19' />
+        <format type='TXT'
+                target='http://www.ietf.org/internet-drafts/draft-ietf-mmusic-ice-19.txt' />
+      </reference>
+    </references>
+  </back>
+</rfc>

@@ -1,0 +1,434 @@
+<?xml version='1.0' encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+  <!ENTITY I-D.ietf-dkim-ssp PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-dkim-ssp.xml'>
+  <!ENTITY rfc1034 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.1034.xml'>
+  <!ENTITY rfc2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+  <!ENTITY rfc2181 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2181.xml'>
+  <!ENTITY rfc2606 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2606.xml'>
+  <!ENTITY rfc2782 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2782.xml'>
+  <!ENTITY rfc2821 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2821.xml'>
+  <!ENTITY rfc2822 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2822.xml'>
+  <!ENTITY rfc4033 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4033.xml'>
+  <!ENTITY rfc4034 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4034.xml'>
+  <!ENTITY rfc4686 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4686.xml'>
+  <!ENTITY rfc4871 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4871.xml'>
+  <!ENTITY rfc5016 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.5016.xml'>
+  <!ENTITY rfc5234 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.5234.xml'>
+]>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc toc="yes" ?>
+<?rfc tocindent="yes" ?>
+<?rfc tocdepth="2" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<rfc category="std" docName="draft-otis-dkim-adsp-sec-issues-01" ipr="full3978">
+  <front>
+    <title abbrev="ADSP-SEC-ISSUES">DKIM Author Domain Signing Practices (ADSP) Security Issues</title>
+    <author fullname="Douglas Otis" initials="D." surname="Otis">
+      <organization>Trend Micro, NSSG</organization>
+      <address>
+         <postal>
+           <street>10101 N. De Anza Blvd</street>
+           <city>Cupertino</city>
+           <region>CA</region>
+           <code>95014</code>
+           <country>USA</country>
+         </postal>
+         <phone>+1.408.257-1500</phone>
+         <email>doug_otis@trendmicro.com</email>
+       </address>
+    </author>
+
+    <date day="18" month="August" year="2008"/>
+    <area>Internet Area</area>
+    <workgroup>DKIM Working Group</workgroup>
+
+    <keyword>email, e-mail, rfc2822, rfc 2822, rfc822, rfc 822, rfc2821, rfc 2821, rfc821, rfc 821,
+      rfc4871, rfc 4871, DKIM, domain keys, domainkeys, ADSP, ADSP, SSP, architecture, mta, user,
+      delivery, smtp, submission, email, e-mail, smtp, Internet, mailfrom, mail from, author, return
+      address, sender signing, signing practices, key domain, author key domain, author address,
+      author domain, security issues</keyword>
+
+    <abstract>
+      <t>The proposed <xref target="I-D.ietf-dkim-ssp"/> defines DNS records that advertise the
+        extent to which a domain employs <xref target="RFC4871"/> to sign <xref target="RFC2822"/>
+        messages, and defines how other hosts can access these advertisements. Its laudable goal is
+        to allow domains control over the use of the From header field. When a message is not
+        adequately signed, advertised assertions, referenced by a domain in the From header field,
+        assist in resolving the message's intended disposition.</t>
+
+      <t>However, <xref target="I-D.ietf-dkim-ssp"/> fails to discern that restricted identities
+        imposed upon remote signing agents, require additional control be afforded the domain,
+        irrespective of the domain's advertised practices. <xref target="I-D.ietf-dkim-ssp"/>
+        employs a flawed two-stage signature validation process that occurs in conjunction with
+        advertised practices. The two stage approach impairs the range of authentication assertions
+        and related security tactics. Advertised practices not only determine whether a signature
+        should be expected, they may constrain the &quot;on-behalf-of&quot; identity applied
+        by signing agents that are not otherwise so restricted. By constraining the
+        &quot;on-behalf-of&quot; identity for all signing agents, the draft neglects the
+        predominate role of the domain as a point of trust, and incorrectly assumes the signature is
+        limited to supporting assertions regarding the identity of the author. In addition, the only
+        directly actionable practice is defined using a term that is likely to negatively impact the
+        integrity of delivery status.</t>
+
+      <t><xref target="I-D.ietf-dkim-ssp"/> impairs security in other ways as well, but fortunately
+        minor changes to the definition of a valid signature can significantly remedy the most
+        critical security issue.</t>
+    </abstract>
+    <note title="Requirements Language">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+        "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in
+          <xref target="RFC2119"/>.</t>
+    </note>
+  </front>
+  <middle>
+    <section title="Introduction">
+      <t>Both <xref target="RFC4871"/> and <xref target="I-D.ietf-dkim-ssp"/> would benefit from a
+        general requirement for signatures with keys that restrict a remote signing agent's
+        &quot;on-behalf-of&quot; identity, where this identity must also match against the
+        From header field before being considered valid. <xref target="RFC4871"/> makes a statement
+        that is emblematic of how the signature's role can be distorted. This statement can not be
+        applied as a basis for message acceptance, does not acknowledge that restricted identities
+        for remote signing agents require greater control be afforded the domain, and ignores the
+        predominate role of the domain by assuming the DKIM signature is to make assertions
+        regarding the identity of the author. In section 6.3 paragraph 5, <list style="hanging">
+          <t>&quot;If the message is signed on behalf of any address other than that in the
+            From: header field, the mail system SHOULD take pains to ensure that the actual signing
+            identity is clear to the reader.&quot;</t>
+        </list></t>
+
+      <t>At best, DKIM might make a weak assertion regarding the identity of the author. However,
+        these assertions lack a wide range of supporting conventions where reliance upon an author
+        identity would be unsafe. To sustain delivery integrity, whether the signature is valid must
+        remain clear. The &quot;on-behalf-of&quot; identity may be opaque whenever the key
+        employed by the signing agent can sign on behalf of the entire domain. Signing agents
+        afforded unrestricted keys can be considered able to verify the entire message's compliance
+        with the domain's practices. The establish trust is with the signing domain, and can never
+        be based upon a dubious identity within the From header field.</t>
+
+      <t>Conceptually, receiving hosts verify a DKIM signature by obtaining the corresponding public
+        key. A valid signature confirms the message is attested to by a party in possession of the
+        private key, and in control of a portion of the domain publishing the public key. An
+        important missing check is needed to repair <xref target="I-D.ietf-dkim-ssp"/>. The check
+        should be applied whenever a key restricts the &quot;on-behalf-of&quot; identity for
+        remote signing agents. For the domain to control the From header field with remote signing
+        agents, a restricted &quot;on-behalf-of&quot; identity must then be required to also
+        match against the From header field before considering the signature to be valid. The From
+        header field requirement for a restricted &quot;on-behalf-of&quot; identity should
+        be consistent at every stage in the process.</t>
+
+      <t>Ideally, <xref target="I-D.ietf-dkim-ssp"/> should only introduce practices that ensure the
+        From header field domains are within their signing domain, and ensure the signing domain is
+        able to control the From header field for remote signing agents in all cases. Keys that
+        restrict the &quot;on-behalf-of&quot; identity being signed are likely employed by
+        mobile users having limited access to the domain's outbound signing servers.</t>
+
+      <t>In the case of a key restricted identity, the signature is required to include a matching
+        &quot;on-behalf-of&quot; identity. Currently, there is no general requirement that
+        the restricted identity also match against the From header field. Since these keys are prone
+        to theft and are easily abused, no signature should be considered valid when a restricted
+        identity does not match against the From header field.</t>
+
+      <t><xref target="I-D.ietf-dkim-ssp"/> fails to stipulate that signatures using identity
+        restricted keys should be considered invalid when the identity does not match against the
+        From header field. These signatures are only considered invalid when the domain is able to
+        advertise a restrictive practice at the domain or subdomain in question. Ensuring that a
+        restricted identity match against the From header field should not depend upon the recipient
+        discovering and the domain being able to assert a restrictive advertised practice. Not
+        relying upon restrictive advertised assertions becomes even more paramount when the
+        restrictive advertised practices potentially harm the integrity of delivery status. When
+        delivery integrity is important, restrictive advertised practices may need to be avoided.</t>
+
+      <t>As IP addresses are increasingly being blocked by providers, compromised systems, often
+        containing account information, are frequently used by bad actors to gain access to larger
+        domains, where blocking the combined outbound messages often prove impractical. Ordinarily,
+        larger domains are either unwilling or unable to affirm the identity in the From header
+        field and, as a result, may end up leaving the &quot;on-behalf-of&quot; identity tag
+        and value blank.</t>
+
+      <t>The constraints imposed by <xref target="I-D.ietf-dkim-ssp"/> makes it impractical for the
+        &quot;on-behalf-of&quot; identity to always indicate what was authenticated, as
+        intended in <xref target="RFC4871"/>. Ironically, an ability to always indicate an
+        authenticated identity was lost due to an optimization that considered signatures having a
+        restricted &quot;on-behalf-of&quot; identity not matching against the From header
+        field to be valid. Any scheme that considers signatures to be valid when a restricted
+        identity does not match against the From header field places recipients in significant peril
+        since the signature header or this identity are seldom visible, and this leaves the From
+        header field open to exploitation.</t>
+
+      <t>Detecting inappropriate use of an identity restricted key should occur quickly and prior to
+        message acceptance. The fix for <xref target="I-D.ietf-dkim-ssp"/> is to preclude signatures
+        from being considered valid that might permit an unverifiable use of a domain within the
+        From header field by remote signing agents. This check is not prefaced upon first
+        discovering whether the domain advertises practices. In other words, in addition to
+        restrictions on the &quot;on-behalf-of&quot; identity within the signature for
+        remote signing agents, the From header field should also match against the same restriction.</t>
+
+      <t>Currently, <xref target="I-D.ietf-dkim-ssp"/> advertised practices may affect messages that
+        lack signatures, or where the From header field address is not within the signing domain, or
+        where the &quot;on-behalf-of&quot; identity does not match against the From header
+        field. The impact of an advertised practice and the resulting
+        &quot;on-behalf-of&quot; identity requirement occurs irrespective of the type of
+        signing agent and key used. This creates a security vulnerability that may encourage DNS
+        attack, and unnecessarily limits the practical utility of the DKIM signature.</t>
+
+      <t>When a restricted identity fails to match against the From header field and is considered
+        to provide a valid signature, <xref target="I-D.ietf-dkim-ssp"/> may subsequently invalidate
+        the signature whenever a practice advertisement by the domain is discovered. Unfortunately,
+        the two stage conditional valid signature requirement unnecessarily affects all signing
+        agents. Signature validity is dependent upon the success of advertisement discovery, where
+        this two stage process is likely to negatively impact both delivery integrity and security.
+        Limitations imposed on the &quot;on-behalf-of&quot; identity within the second stage
+        may alter what is considered valid by <xref target="RFC4871"/>. When the signing agent
+        employs unrestricted keys, this change is wholly without merit.</t>
+
+      <t>To control remote signing agents, keys may restrict the &quot;on-behalf-of&quot;
+        identity being signed. However <xref target="RFC4871"/> imposes no requirement for
+        restricted identity placement within the message. In addition, <xref
+          target="I-D.ietf-dkim-ssp"/> incorrectly assumes reliable advertisement discovery, and
+        fails to impose restricted identity placement for remote signing agents as well. Although
+        remote signing agents may have keys that restrict identity signing, the domain is unable to
+        control whether a restricted &quot;on-behalf-of&quot; identity is also assured to
+        match with the From header field, except by publishing advertised practices at every
+        existing subdomain.</t>
+
+      <t>For <xref target="RFC4871"/>, the &quot;on-behalf-of&quot; identity is not required
+        to be that of a message author, and may even indicate authentication of a system or an
+        access account. This distinction is important since predominately compromised systems,
+        rather than individuals, are the source of abuse. Unfortunately, <xref
+          target="I-D.ietf-dkim-ssp"/> places constraints on what may be placed within the
+        &quot;on-behalf-of&quot; identity. It is unrealistic to suggest multiple signatures
+        offer a solution, since this doubles the related overhead. <xref target="RFC4871"/> has
+        already defined an &quot;on-behalf-of&quot; identity. There is no reason to reinvent
+        the meaning of the &quot;on-behalf-of&quot; identity in support of a flawed two
+        stage conditional valid signature definition.</t>
+    </section>
+
+    <section title="Errors and Omissions">
+      <section title="Factual Errors">
+        <t>Section 3.2 of <xref target="I-D.ietf-dkim-ssp"/> makes a factual error in stating that a
+          valid signature by an Author Domain is already known to be compliant with any possible
+          ADSP for that domain. Compliance with ADSP currently requires Author Signatures, not just
+          a signature by the Author domain.</t>
+
+        <t>The Author Signature requires the &quot;on-behalf-of&quot; identity to match
+          against the author's address. A valid signature by the Author Domain per <xref
+            target="RFC4871"/> will not impose this limitation, where the <xref
+            target="I-D.ietf-dkim-ssp"/> Author Signature requirements therefore limit interchange
+          without justification.</t>
+
+        <t>For example, office administrators might submit messages authored by their managers. The
+          authenticated DKIM signature &quot;on-behalf-of&quot; identity could be that of
+          the office administrator whose email-address was placed within the Sender header field as
+          permitted by <xref target="RFC2822"/>. When a signing domain's practice permits office
+          administrators to send messages on behalf of managers, a manager's email-address could be
+          placed within the From header field to signify the manager's role as author.</t>
+
+        <t>A valid signature, verified with a key lacking identity restrictions, clearly indicates
+          that the signature was applied by a trusted signing agent. A trusted signing agent can
+          sign on behalf of the entire domain, and should first ensure message conformance prior to
+          signing. A signature by the Author domain using a key that lacks identity restrictions is
+          sufficient to ensure a domain's ability to control the use of the From header field, and
+          to assert any sundry list of message conformance requirements.</t>
+
+        <t>A valid signature applied using a key lacking identity restrictions by the Author Domain
+          should be considered compliant with any possible ADSP. However the current Author
+          Signature definition in conjunction with the discovery of a practice may cause a valid
+          signature to become invalid when assessing ADSP compliance where the
+          &quot;on-behalf-of&quot; identity does not match against the author's address.</t>
+      </section>
+      <section title="Factual Omissions">
+        <t><xref target="I-D.ietf-dkim-ssp"/> attempts to define practices used by a domain, but
+          then fails to specify which public transport protocol or protocols meet the advertised
+          practice. Misapplication of practice compliance assessment could lead to interchange
+          problems when only a portion of the possible <xref target="RFC2822"/> related transports
+          employ <xref target="RFC4871"/>.</t>
+
+        <t>Omitting public transport specifics might seem reasonable, since there are many possible
+          protocol gateways into SMTP provided by various third-parties. Remaining silent on the
+          relevant transport will lead to various ad-hoc methods for dealing with protocol gateways.
+          The omission fails to warn of potential problems, such as various news articles being
+          dropped, for example.</t>
+
+        <t>Omitting transport specifics has lead to the general requirement in Section 4.3 that any
+          ADSP related transport use DNS at the domain of the address. The lack of transport agility
+          is the result of there not being any ADSP parameter that makes any specific public
+          transport assertion.</t>
+      </section>
+
+    </section>
+    <section title="Recommended Changes">
+      <section title="3.2 ADSP Usage">
+        <t>CHANGE:</t>
+        <t>If a message has a Valid Signature from an Author Domain, ADSP provides no benefit
+          relative to that domain since the message is already known to be compliant with any
+          possible ADSP for that domain.</t>
+        <t>TO:</t>
+        <t>If a message has a Valid Signature from an Author Domain, an additional consideration
+          must be applied. When a key used to validate the signature imposes a restrictive template
+          on the local-part of the &quot;on-behalf-of&quot; identity, this template and the
+          signature's domain should also match against an address contained within the From header
+          field, or the signature should not be considered valid.</t>
+        <t>A match is determined by the construction of a template composed of the key's
+          &quot;g=&quot; tag and value, and the domain as denoted in the signature's
+          &quot;d=&quot; tag and value in the form:<vspace/>
+          <list style="hanging">
+            <t>&lt;g value | * &gt;@[*.]&lt;d value&gt;</t>
+          </list></t>
+        <t>The default for the key's local-part template value, when it is not present, is
+          &quot;*&quot;, in which case no From header field comparison will be required.</t>
+      </section>
+      <section title="2.7.  Author Signature">
+        <t>CHANGE:</t>
+        <t>An &quot;Author Signature&quot; is any Valid Signature where the identity of the
+          user or agent on behalf of which the message is signed (listed in the
+          &quot;i=&quot; tag or its default value from the &quot;d=&quot; tag)
+          matches an Author Address in the message. When the identity of the user or agent includes
+          a Local-part, the identities match if the Local-parts are the same string, and the domains
+          are the same string.</t>
+
+        <t>TO:</t>
+        <t>An &quot;Author Signature&quot; is any Valid Signature per section 3.2, where an
+          Author Address domain is within the signature's &quot;d=&quot; tag and value
+          domain.</t>
+      </section>
+      <section title="Section 4.1.  DNS Representation">
+        <t>CHANGE:</t>
+        <t>_adsp._domainkey.</t>
+        <t>TO:</t>
+        <t>_adsp. (preferably adopt a specific resource record instead).</t>
+      </section>
+      <section title="3.1.  ADSP Applicability">
+        <t>CHANGE:</t>
+        <t>ADSP as defined in this document is bound to DNS.</t>
+        <t>TO:</t>
+        <t>ADSP as defined in this document is bound to DNS and SMTP.</t>
+      </section>
+      <section title="4.2.1.  Record Syntax">
+        <t>CHANGE TERMS:</t>
+        <t>Discardable and discard</t>
+        <t>TO:</t>
+        <t>Dismissable and dismiss<vspace blankLines="1"/>
+          <list style="hanging">
+            <t>Even for the example cases sighted, arrangements are being made to offer feedback to
+              determine the level of abuse. The term discardable is likely to thwart adoption when
+              the integrity of the delivery status is also important. If the mechanism proves
+              effective, the level of abuse should also dramatically wane.</t>
+          </list></t>
+      </section>
+    </section>
+
+    <section title="IANA Considerations">
+      <t>This document requires no IANA consideration.</t>
+    </section>
+
+    <section title="Security Considerations">
+      <section title="Considerations not managed by draft-ietf-dkim-ssp">
+        <t>DKIM keys with a restrictive local-part template in the <spanx style="verb">g=</spanx>
+          tag and value are likely employed by remote signing agents beyond the direct control of
+          the signing domain. As a result, additional consideration is required when a restrictive
+          local-part template does not match against the From header field. Signatures should not be
+          considered valid whenever a restrictive local-part key <spanx style="verb">g=</spanx> tag
+          and value, and the signature <spanx style="verb">d=</spanx> tag and value, do not match
+          against a From header field address.</t>
+
+        <t>Signatures by keys lacking a restrictive local-part template are only safely used when
+          the signing agent is able to directly evaluate the signed header fields and content.
+          Recognition of signing agents able to apply policy over the entire message improves
+          security in several ways:<list style="hanging">
+            <t>Discerns potentially deceptive signatures independent of advertised signing practice
+              discovery.</t>
+            <t>Permits an accurate indication of on whose behalf the signature was added, even when
+              not on behalf of the author's address.</t>
+            <t>Permits the &quot;on behalf of&quot; identity to be derived from an account
+              instead of being left blank when a signing domain is unable or unwilling to affirm the
+              identity of the author's address.</t>
+            <t>Permits the identity to track either the author or the account used. This ability can
+              be most useful to third-parties that attempt to isolate bot-net 0wned systems. In
+              response to a growing portion of the IP address space being blocked, bot-nets
+              increasingly send their mail through a provider's outbound server after obtaining
+              access to valid accounts.</t>
+          </list></t>
+
+        <t><xref target="I-D.ietf-dkim-ssp"/> should state a valid DKIM signature does not safely
+          provide an assertion of the author's identity, and that only the domain contained within
+          the signature will have been verified by DKIM signature validation. In addition, when the
+          &quot;on-behalf-of&quot; identity signing is restricted, and does not match
+          against the From header field, the signature should not be considered valid.</t>
+
+        <section title="Lack of transport specificity">
+          <t><xref target="I-D.ietf-dkim-ssp"/> fails to signal which transport protocol implements
+            an advertised practice. As such, it also fails to indicate which DNS resource, if any,
+            supports the transport. Although verifying a domain's existence might query resource
+            records specified by <xref target="RFC2821"/>, the associated transport is never
+            specified, where only query errors returned are meaningful.</t>
+
+          <t>Since the goal is to control use of a domain in the From header field, a DNS error will
+            then likely require a message to be refused, since the proposed methods are unable to
+            resolve practices over a domain hierarchy. <xref target="I-D.ietf-dkim-ssp"/> also never
+            specifies a transport or related resource records. This means any wildcard resource
+            record within the domain will thereby allow domain spoofing. Any domain using wildcards
+            will permit any synthesized domain appear to lack advertised practice assertions.</t>
+
+          <t>Contrary to the MUST NOT use wildcards mandate, a solution for covering the entire
+            domain hierarchy or to cope with wildcard resources will likely be wildcard TXT resource
+            records containing restrictive practice assertions. The sanctioned alternative would be
+            to publish separate resource records at each existing domain node. As if a per node
+            alternative was not bad enough, this alternative has been made even less attractive by
+            requiring more entries and by consuming more resources than otherwise required.</t>
+
+          <t>The additional DNS overhead occurs with the use of two prefixed subdomain labels
+            locating the TXT resource record. Instead of just the 6 byte &quot;_adsp.&quot;,
+            the additional &quot;_domainkey.&quot; label introduces an additional 11 bytes
+            and subdomain for every DNS node protected. Justification for having any label was to
+            accommodate typical web-based commodity provider tools that often do not support new
+            resource record types.</t>
+
+          <t>Justification for the second label is likely based upon a false assumption that
+            delegation of the &quot;_domainkey.&quot; subdomain will also facilitate the
+            typical needs of third-party providers expected to advertise practices at just the
+            domain supporting the transport.</t>
+
+          <t>There are transport protocols in wide use that employ <xref target="RFC2822"/>
+            messages, but that might not utilize DNS. There are also cases where a domain contained
+            within a message is intentionally not found in DNS. Such domains may deal with a
+            different name space, or ensure the related address is not exploited by spammers. <xref
+              target="I-D.ietf-dkim-ssp"/> does not offer a means to deal with messages that
+            conflict with a strategy that depends upon the lack of DNS errors as a basis for
+            acceptance.</t>
+        </section>
+
+        <t><xref target="I-D.ietf-dkim-ssp"/> should recommend that recipients be advised to use
+          automated folder placement for trusted signing domains to reduce deceptions that utilize
+          domain look-alike and subdomain based tactics.</t>
+
+        <section title="DNS Wildcards and specifying SMTP as the transport">
+          <t>With the exception of wildcard MX records, wildcards within a domain that also publish
+            ADSP records should not pose a significant problem. Although referencing SMTP related
+            records will not provide <spanx style="verb">NXDOMAIN</spanx> results when a domain
+            contains a wildcard, SMTP discovery records, such as MX or A records, still offer
+            evidence of SMTP support. Whether AAAA records, absent MX or A records, can be
+            considered evidence of SMTP support has not withstood widespread use of AAAA only
+            servers.</t>
+
+          <t>For security reasons, SMTP should also adopt an MX resource record mandate for the
+            acceptance of public exchanges. This would then mean advertised practice discovery could
+            be limited to subdomains containing MX records, and ensure failure of a single
+            transaction obtaining an MX record would curtail all other message related transactions.
+            An MX resource record mandate would thereby shelter domains not publishing MX records
+            from the additional assortment of transactions often associated with any number of
+            spoofed email-addresses and DKIM signatures that might be generated per message.</t>
+        </section>
+      </section>
+    </section>
+  </middle>
+  <back>
+    <references title="References - Normative"> &I-D.ietf-dkim-ssp; </references>
+    <references title="References - Informative"> &rfc1034; &rfc2119; &rfc2181;
+      &rfc2606; &rfc2821; &rfc2822; &rfc4033; &rfc4034; &rfc4686;
+      &rfc4871; &rfc5234; &rfc2782; &rfc5016; </references>
+  </back>
+</rfc>

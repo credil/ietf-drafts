@@ -1,0 +1,316 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+
+<!ENTITY RFC4810 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4810.xml">
+
+<?rfc toc="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+
+
+
+<rfc ipr="full3978" category="info" docName="draft-brasher-diap-00">
+	<front>
+<title abbrev="Distributed Internet Archive Protocol">Distributed Internet Archive Protocol (DIAP)</title>
+		<author fullname="Damian Brasher" initials="D.L." surname="Brasher">
+			<organization> Interlinux LTD </organization>
+			<address>
+				<postal>
+					<street/>
+					<city> Southampton </city>
+					<code> SO15 7NP </code>
+					<region> Hampshire </region>
+					<country> United Kingdom </country>
+				</postal>
+				<email> dbrasher@interlinux.co.uk </email>
+			</address>
+		</author>
+		<date month="April" year="2008"/>
+		<area>Archiving over Networks</area>
+		<workgroup></workgroup>
+		<abstract>
+	<t>
+A de-centralised, self-contained and managed storage protocol. A system 
+to provide strong storage fail over by using existing resources over 
+networks distributing vital data evenly. Rapid deployment and high 
+redundancy for small to medium organisations as well as individuals.  
+Designed to reduce dependency on tape backup systems. The protocol also 
+has implications for long term archiving. By classifying data vitality 
+values the limitations in physical space due to bandwidth constrictions 
+can be overcome and the usefulness of DIAP maximised.
+	</t>
+		</abstract>
+<!--
+		<note title="Requirements Language">
+			<t>The key words &quot;MUST&quot;, &quot;MUST NOT&quot;,
+&quot;REQUIRED&quot;, &quot;SHALL&quot;, &quot;SHALL NOT&quot;,
+&quot;SHOULD&quot;, &quot;SHOULD NOT&quot;, &quot;RECOMMENDED&quot;,
+&quot;MAY&quot;, and &quot;OPTIONAL&quot; in this document are to be
+interpreted as described in <xref target="RFC2119">RFC 2119</xref>.
+</t>
+		</note>
+-->
+	</front>
+	<middle>
+	<section title="Introduction">
+	<t>
+The system design uses FIFO Pipe queue theory. Three nodes either 
+between sites say between offices, homes, on a campus or over WAN's, 
+which could be dedicated to storage or used for existing services, have
+a round robin synchronisation of FULL - differential backup pools where 
+the source of data ranges from a personal laptop to a file store over 
+unused band-width where the data rate is dynamically controlled, 
+including compression, according to load and availability.
+Three for simplicity and because the probability of failure beyond 
+three is so small the extra coding to accommodate more nodes would be 
+self-defeating. In real life use of three nodes for a DIAP pool is 
+strong enough. Chaining together DIAP pools to extend data retention 
+periods is a future aim of the project. Also designed, as project 
+maturity is reached, to help reduce an organisations carbon footprint,
+the extent to which is unknown at this stage.	
+	</t>
+	</section>
+
+	<section title="Architecture">
+	<t>
+The system reduces single point of failure by creating a single FULL 
+copy on each node at the beginning of the month the storing the 
+differentials in a distributed manner. Use a program such as Bacula set 
+to use a monthly FULL – differential. If a copy fails then the system 
+will retry the next day but you loose the day of failure. Using rsync 
+logs you can trace / track the successful copies. The copies are 
+staggered so that each rsync copy list is made before new files are put
+into each directory by a few minutes. I.e. bd9-cd9 starts before 
+ad9-bd9 and ad0-bd0 is last. Redundancy is split across three nodes, no 
+duplicate days apart from the first FULL copy. DIAP pool is possibly
+equivalent to 30 tapes every month but stored at three locations. 10 
+days every three days, at each. You are advised to have some knowledge 
+of the average differential size.
+	</t>
+	
+	<texttable anchor="slots" title="Slots">
+          <preamble>Slots.</preamble>
+	
+	  <ttcol align="center">Slots</ttcol>
+	  <ttcol align="center">A</ttcol>
+          <ttcol align="center">B</ttcol>
+          <ttcol align="center">C</ttcol>
+
+       	<c>(Dirs)</c>	<c>aFull</c>	<c>bFull</c>	<c>cFull</c>
+	<c> </c>     	<c>ad0</c>	<c>bd0</c> 	<c>cd0</c>
+	<c> </c>	<c>ad1</c>	<c>bd1</c>	<c>cd1</c>
+	<c> </c>	<c>ad2</c>	<c>bd2</c>	<c>cd2</c>
+	<c> </c>	<c>ad3</c>	<c>bd3</c>	<c>cd3</c>
+	<c> </c>	<c>ad4</c>	<c>bd4</c>	<c>cd4</c>
+	<c> </c>	<c>ad5</c>	<c>bd5</c>	<c>cd5</c>
+	<c> </c>	<c>ad6</c>	<c>bd6</c>	<c>cd6</c>
+	<c> </c>	<c>ad7</c>	<c>bd7</c>	<c>cd7</c>
+	<c> </c>	<c>ad8</c>	<c>bd8</c>	<c></c>
+        </texttable>
+
+<t>
+
+Two entry points, aFull beginning of month and ad0 for the remaining 
+days. Assuming entry points are filled during the day before the cycle 
+begins at night 29 cron jobs split between 3 nodes.
+
+Max ad0 = LMB ((a-b or b-c or c -d) x 7 hrs) - (Ave. Diff x 9)**. 
+Max ad0 must be greater than 2 x (Ave. Diff x 9).                
+Max aFull = Max ad0.                                            
+                                                            
+** This copes with the situation when a FULL is copied at the same time 
+the system is saturated with Diffs.
+
+LBM = Lowest Maximum Bandwidth.                               
+
+NB: actual max transfer will vary test so transfers are recommended 
+for accuracy.
+
+Min DIAP space required on each node =
+
+((max ad0 + (9 x Ave. Diff)) – max rsync logfile size.
+
+This varies according to the size of Differential – see example.
+
+Example system: (LMB x 7 hrs Ave. Diff) = 128KByte/S 1G.                        
+
+Max ad0 (aFull) = 24G – 9G = 15G.
+
+Max ad0 > 2 x (Ave. Diff x 9 = 18G) so ad0 so system will not fail.
+
+</t>
+        
+	<texttable anchor="data_flow" title="Data Flow">
+          <preamble>Flow of data.</preamble>
+
+          <ttcol align="center"></ttcol>
+	  <ttcol align="center"></ttcol>
+	  <ttcol align="center"></ttcol>
+	  <ttcol align="center"></ttcol>
+	  <ttcol align="center"></ttcol>
+
+<c> </c>	<c> </c>	<c> Node</c>	<c> </c>	<c> </c>
+<c>Cron Jobs</c><c>Daily</c>	<c>A</c>	<c>B</c>	<c>C</c>
+<c>t=0</c>	<c>Special</c>	<c>aFull-bFull (1st of Mnth)</c><c>bFull-cFull (2nd of Mnth)</c>	<c></c>
+<c>Start 00:00</c><c>2</c>	<c>ad0-bd0 t=30</c>	<c>bd0-cd0 </c> 	<c>cd0-ad1 </c>
+<c>End</c><c>3</c>	<c>ad1-bd1 </c>		<c>bd1-cd1</c> 		<c>cd1-ad2</c>
+<c>07:30</c>	<c>4</c> 	<c>ad2-bd2 </c>		<c>bd2-cd2 </c>		<c>cd2-ad3 </c>
+<c>t=0</c>	<c>5</c><c>ad3-bd3 </c>		<c>bd3-cd3 </c>		<c>cd3-ad4</c>
+<c>(00:00)</c>	<c>6</c><c>ad4-bd4 </c>		<c>bd4-cd4 </c>		<c>cd4-ad5 </c>
+<c></c>	<c>7</c>	<c>ad5-bd5 </c>		<c>bd5-cd5 </c>		<c>cd5-ad6 </c>
+<c>t=0-30 </c>	<c>8</c>	<c>ad6-bd6 </c>		<c>bd6-cd6 </c>		<c>cd6-ad7 </c>
+<c>(00:30)</c>	<c>9</c>	<c>ad7-bd7 </c>		<c>bd7-cd7 </c>		<c>cd7-ad8</c>
+<c> </c>	<c>10</c>	<c>ad8-bd8 </c>		<c>bd8-cd8 t=0m</c>	<c> </c>
+
+
+        </texttable>
+
+
+
+	</section>
+
+	<section title="Prototype Design">
+	<t>
+The prototype is built of several components and uses the Linux 
+Operating system. Bash scripts are used to deploy DIAP on three
+POSIX user accounts using expect and ssh.  
+Ssh certificates are setup between three POSIX accounts. A single
+configuration file is use to set environment variables.
+	</t>
+	
+	<t>
+The system requires a series of directories used to store the data
+fed into ad0 and aFull:
+	</t>
+
+	<t>
+mkdir aFull ad0 ad1 ad2 ad3 ad4 ad5 ad6 ad7 ad8 && touch log_a
+	</t>
+
+	<t>
+Cron jobs are used to implement table 2 architecture:
+	</t>
+	<t>
+0 1 0 * * rsync -az -e ssh --timeout=1800 --numeric-ids \
+--log-file=/home/diap/log_b --ignore-errors --bwlimit=128 \
+~/aFull/ diap@$IP_ADD_B:bFull
+	</t>
+	</section>
+
+<section anchor="DVLT" title="DVLT">
+	<t>
+(VTL) The virtual tape Library is a device located in one location 
+whereas DIAP enables a Distributed virtual Tape Library to exist.
+	</t>
+</section>
+
+<section anchor="Hyper Virtual auto-changer" title="Hyper Virtual auto-changer">
+	<t>
+This term is derived from the term virtual auto-changer. A virtual 
+auto-changer still requires hardware tape drives, 'Hyper' takes this 
+one stage further by emulating the virtual auto-changer in software.
+	</t>
+</section>
+
+<section anchor="Data Vitality" title="Data Vitality">
+	<t>
+Data vitality is a measure of the organisation subjective view of
+the value of particular data types.
+	</t>
+</section>
+
+
+<section anchor="DIAP Rule of Thumb" title="DIAP Rule of Thumb">
+	<t>
+Observing an email archive, at 272MBytes, having never deleted an 
+email permanently and the file, ../mail, has been in use for 4 years.
+During this time available xDSL line Bandwidth has increased, 2004 
+500MBits/sec to 1GBit/sec, 2008 1GBit/sec to 6GBits/Sec this is about a 
+150% yearly increase whereas the mailbox has increased yearly by about 
+50%. It is this difference which DIAP attempts to use classing email 
+record as 'mission critical' - Other record types will increase at 
+different rates, as will bandwidth depending on location, but probably 
+less than the average yearly bandwidth increase. This idea needs 
+expanding but forms the foundation for the usefulness of DIAP, 
+describing a DIAP rule of thumb. DIAP can also be viewed as a technique.
+	</t>
+</section>
+
+<section anchor="Community Project and UK Trademark" title="Community Project and UK Trademark">
+	<t>
+A community project resides at http://www.diap.org.uk to facilitate the
+development of working implementations. The current working prototype
+is released here under GPL licence rules. A UK Trade Mark has been 
+applied for to protect the acronym DIAP for use by the wider Open Source community.
+	</t>
+</section>
+<section anchor="DPA" title="DPA">
+	<t>
+DPA compliance and awareness.
+	</t>
+</section>
+<section anchor="Conclusion" title="Conclusion">
+	<t>
+The incremental data retention tuned to the needs of an organisation 
+so that some data is always available from any node in the backup pool 
+quickly to within a certain time frame and perhaps tape storage 
+stations strategically places in various secure locations for older 
+data retention. This system would avoid using prohibitively expensive 
+packages by reusing resources, building on Open Source technologies and 
+have a coherent strategy across many sites increasing the level of 
+redundancy to a high degree. A three tier strategy involving DIAP as 
+the bottom layer, file collection uppermost and use of pre-existing 
+mid-term infrastructure could make up a disaster recovery plan.
+	</t><t>
+With layers of indexing, accounting and management facilities. An 
+assumption is that individual file encryption the responsibility of 
+the file owner, this does not rule out hard drive or partition 
+encryption of individual nodes considered to reside at insecure 
+locations. If used for these locations physical security automatic 
+fail-safe measures to trigger archive deposits useless upon theft can 
+be deployed. Similar fail-safe techniques deployed for attempted network 
+security breaches. Virus scanners would be set to scan existing archives 
+periodically and on entry to the archive pool.	
+
+	</t>
+</section>
+
+<section anchor="Security" title="Security Considerations">
+	<t>
+Open root access is not recommended for SSH. Using ports other than 
+the default 22 is advised. 
+	</t>
+</section>
+
+<section anchor="Acknowledgements" title="Acknowledgements">
+	<t>
+Thanks are due to members of Hampshire Lug,
+Colleagues at ECS and OMII-UK at Southampton University, 
+inputs on this topic, including Myles McClelland, Marisa McClelland, 
+Stephen Pelc.
+	</t>
+</section>
+
+
+</middle>
+<back>
+
+<references title="Informative References">
+
+	&RFC4810;
+
+    <reference anchor='DIAP' target='http://www.diap.org.uk'>
+        <front>
+        <title>Distributed Internet Archive Protocol (DIAP)</title>
+        <author initials='D.L' surname='Brasher'></author> 
+
+            <date month='April' year='2008' />
+       </front>
+    </reference>
+
+</references>
+		<!--		<references title="Informative References">
+		</references>
+		-->
+	</back>
+</rfc>

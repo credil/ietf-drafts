@@ -1,0 +1,536 @@
+<?xml version="1.0"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+
+<?rfc toc="yes" ?>
+<?rfc tocompact="no" ?>
+<?rfc compact="no" ?>
+<?rfc subcompact="no" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc comments="yes" ?>
+<?rfc inline="yes" ?>
+
+<rfc ipr="full3978" docName="draft-wakikawa-mip6-no-ndp-02.txt">
+
+<!------------------------------------------------>
+<!--  Front Section				-->
+<!------------------------------------------------>
+
+<front>
+
+<title abbrev="HA Limited Proxy NDP">
+Elimination of Proxy NDP from Home Agent Operations
+</title>
+
+<!-- AUTHORS -->
+<?rfc include="./author-ryuji.xml" ?>
+<?rfc include="./author-masafumi.xml" ?>
+<?rfc include="./author-thubert.xml" ?>
+
+<date month="November" year="2007" />
+<area>Internet</area><workgroup>MIP6 Working Group</workgroup>
+
+<abstract>
+ <t> This document summarizes how to eliminate the Proxy NDP from the
+ Home Agent's operations. Although the Proxy NDP is mainly used to
+ intercept packets by a Home Agent on Mobile IPv6 and NEMO, it brings
+ several limitations to the protocols.  </t>
+</abstract>
+
+</front>
+
+<middle>
+
+<!------------------------------------------------>
+<!--  SECTION 1: INTRODUCTION			-->
+<!------------------------------------------------>
+
+<section title="Introduction">
+  <t>In Mobile IPv6, one of design limitations is the use of Proxy
+    Neighbor Discovery on Home Agent. Mobile IPv6 uses the proxy
+    Neighbor Discovery Protocol (proxy NDP) to intercept packets meant
+    for mobile nodes on a home agent at a home link. When the proxy
+    NDP is used, a home prefix must be strictly configured at the
+    physical link which the home prefix is defined in the Internet
+    topology.  Moreover, the performance of NDP may effect that of
+    Mobile IPv6 if the number of mobile nodes are served by a home
+    network prefix.</t>
+
+  <t>Elimination of the Proxy NDP from Mobile IPv6 and NEMO may bring
+    some advantages such as flexible home prefix configuration,
+    reduction of NDP overhead, disengagement from the home link
+    bandwidth. In NEMO Working Group,
+    <xref target="I-D.ietf-nemo-home-network-models"/> introduces
+    various home prefix configurations such as the aggregated home
+    prefix, the aggregated home prefix and the virtual home
+    prefix. Proxy NDP is useless specially when the aggregated home
+    prefix is used.  Finally, the fact that packets are captured by
+    NDP shows that the maximum bandwidth for all the mobile nodes are
+    limited to the home link bandwidth. </t>
+
+  <t>We introduce special use case for Monami6 work. When a mobile
+    node returns home with multiple interfaces, it can only activate
+    either an interface attached to the home link or an interface
+    attached to a foreign link
+    <xref target="I-D.ietf-nemo-multihoming-issues"/>. If it tries to
+    active both interfaces, the Home Agent and the Mobile Node will
+    defend the Home Address by NDP simultaneously. Consequently, it
+    leads DAD problem. This problem has been discussed on the Multiple
+    Care-of Address Registration
+    <xref target="I-D.ietf-monami6-multiplecoa"/> in Monami6 Working
+    Group. By eliminating Proxy NDP, the mobile node can utilize both
+    of interfaces attached to the home and the foreign link at the
+    same time. </t>
+
+  <t>This document shows the possible configuration and modification
+    when a home agent stop the proxy NDP for Mobile IP and NEMO. The
+    Mobile Node is transparent to this NDP elimination, though it may
+    skip several steps from returning home operation. </t>
+
+  <t>Readers are expected to be familiar with all the terms defined in
+    the RFC3753 <xref  target="RFC3753"/> and the NEMO Terminology draft
+    <xref target="I-D.ietf-nemo-terminology"/></t>
+
+  <t> The keywords "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+    NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL"
+    in this document are to be interpreted as described in RFC
+    2119 <xref target="RFC2119"></xref>
+  </t>
+  
+</section> <!-- Intro -->
+
+<section anchor="usecase" title="Use Case">
+
+  In this section, three scenarios where the proxy NDP is not useful. 
+
+  <section anchor="virtual" title="Mobile IP6: Virtual Home Link and Performance">
+
+    <t>The first case is that home prefix is configured as the virtual
+      home link on Home Agent as shown in
+      <xref target="fig:usecase1"/>.  The operator may choose this
+      deployment scenario to reduce NDP overhead caused by number of
+      Mobile Nodes at the home link.</t>
+
+    <t>The home link is not configured at the physical link and all of
+      the Mobile Nodes moves only in foreign links and never come back
+      to the home link. The Home Agent does not intercept packets from
+      a Mobile Node and to the Mobile Node on the home link by the
+      Proxy NDP.  The Home agent is configured as an external router
+      in order to intercept packets without the proxy NDP.</t>
+
+    <t>Even if the home link is configured at the physical link, the
+      proxy NDP can be skipped. This is also useful scenario for
+      Mobile IP operators, because the performance of packet
+      interception is released from the limitation of the home link
+      bandwidth. Even if the external link toward the Internet is high
+      speed network like 10Gbps, the performance is limited to the
+      home link bandwidth on the regular Mobile IP and NEMO. The
+      operator needs not to invest to the home link bandwidth with our
+      modified operation. In addition to this, plenty of Proxy NDP
+      entries are burden to a Home Agent, if the number of Mobile
+      Nodes are served by the Home Agent. Our proposal can remove this
+      burden from the Home Agent.</t>
+
+<figure anchor="fig:usecase1"  title="MIP">
+<artwork>        
+        +---=------+       10Gbps +----+
+        | Internet +==============+ HA |
+        +----+---+-+              +--+-+
+             |Foreign Link           | Virtual Home Link/64
+        -----+-------           - - - - - - - - 
+             |CoA1              (100Mbps)
+          +--+--+    
+          |  MN |     ----->   No returning home
+          +--+--+               
+</artwork>        
+</figure>
+
+  </section>
+
+  <section anchor="aggregated" title="Network Mobility: Aggregated Home Link">
+    
+    <t>The NEMO Basic Support <xref target="RFC3963"/> allows that a
+      home link is configured as the aggregated home prefix. The Home
+      Agent assigns an internal network prefix(es) to a Mobile Router
+      as shown in <xref target="fig:usecase2"/>. The Home Agent cannot
+      intercept the packets meant for the mobile network prefix by the
+      proxy NDP, because the Proxy NDP assumes /64 prefix length on a
+      link. This is not explicitly described in the NDP specification,
+      but the NDP specification implies this. It is necessary for Home
+      Agent to intercept the packets without using Proxy NDP.</t>
+
+    <t>It is also useful that the Home Agent is configured as an
+      external router of the aggregated home networks and the Home
+      Agent intercepts packets according to the IP routing. There is
+      no reasons to use Proxy NDP for intercepting mobile nodes'
+      packets. </t>
+
+<figure anchor="fig:usecase2"  title="Aggregated Home Link">
+<artwork>        
+        +----------+              +----+
+        | Internet +--------------+ HA |
+        +----+---+-+              +--+-+
+             |                       |  
+          +--+--+              ------+--------
+          |  MR |           Aggregated Home Link P1::/48
+          +--+--+
+             |    P1:a::/64
+    ---------+-----------
+       |   |   |   |   ...
+      LFN LFN LFN LFN  ...
+</artwork>        
+</figure>
+
+  </section>
+
+  <section anchor="simultaneously" title="Monami6: Simultaneous Use of Home and Foreign Link ">
+
+
+
+    <t>The Multiple Care-of Address Registration
+      <xref target="I-D.ietf-monami6-multiplecoa"/> does not allow to
+      maintain multiple bindings that one is attached to the home link
+      and the other is attached to the foreign link
+      simultaneously. This restriction has been derived from the Proxy
+      NDP operation on a Home Agent. The Home Agent needs to defend a
+      mobile node's home address by the proxy NDP for packet
+      interception, while the mobile node defends its home address by
+      regular NDP to send and receive packets at the interface
+      attached to the home link. Two nodes, Home Agent and Mobile
+      Node, compete ND state, so that it causes address duplication
+      problem consequently.</t>
+
+    <t>This document recommends not to use the Proxy NDP in order to
+      support simultaneous use of home and foreign link. If the proxy
+      NDP is disabled, the main problem, address duplication problem
+      can be solved. In this Multiple Care-of Address Registration case,
+      Mobile Node and Home Agent can maintain multiple bindings, the
+      binding of the Mobile Node's interface is attached to the home
+      link and the other(s) is attached to the foreign link.</t>
+
+  </section>
+
+</section> <!-- Use Case-->
+
+<section anchor="hacon" title="Home Agent Configuration">
+
+  <t>In Mobile IPv6 and NEMO, two possible placements of Home Agents
+    are possible. The difference between them is whether the Home
+    Agent acts as an external router or not as shown in Figure
+    <xref target="fig:haconf"/>. </t>
+    
+  <t>In this document, HA is always an external router so that it can
+    intercept all the packets meant for mobile nodes without the proxy
+    neighbor advertisement. The Home Agent intercepts packets
+    according to the IP routing. All the packets toward the home
+    prefix will be routed to the Home Agent. When the Home Agent
+    receives packets meant for the home prefix, it then route packets
+    based on routing information and binding cache to the target
+    mobile node. .</t>
+
+<figure anchor="fig:haconf"  title="Home Agent Placements">
+<artwork>        
+     +----------+                       +----------+
+     | Internet |                       | Internet |
+     +----+-----+                       +----+-----+
+          |                                  |
+        +-+-+     +----+                   +-+--+ 
+        | R |     | HA |                   | HA |
+        +---+     +--+-+                   +----+
+          |          |  Home Link            |    Home Link
+     -----+----------+-----------       -----+-------------
+</artwork>        
+</figure>
+
+<t>Note that there is one drawback when a HA is placed as an external
+  router. Operators cannot utilize multiple home agents for a same
+  home prefix at a home link as introduced in
+  <xref target="RFC3775"/>. For the purpose of the home agent
+  reliability, the Home Agent Reliability protocol can be operated
+  with the specific configuration in
+  <xref target="fig:hareliability"/>. In this case, upper router can
+  switch the routing information based on the HA survivability as
+  shown in <xref target="fig:hareliability"/></t>
+
+<figure anchor="fig:hareliability"  title="Multiple Home Agents Placement">
+<artwork>        
+                   +----------+
+                   | Internet |
+                   +----+-----+
+                        |
+                      +-+-+
+                   +--+ R +--+
+                   |  +---+  |
+                 +-+-+     +-+-+  
+                 |HA1|     |HA2|
+                 +-+-+     +-+-+
+                   |         |  Home Link
+                 --+---------+-----
+</artwork>        
+</figure>
+</section>
+
+<section anchor="haop" title="Home Agent Operation">
+
+  <section anchor="dad" title="Duplicate Address Detection">
+    <t>RFC3775<xref target="RFC3775"/> also uses the Proxy NDP to
+      defend a Home Address of a Mobile Node when the Mobile Node is
+      away from the Home Link. Thus, non of other nodes can pick the
+      Home Address at the Home Link even if the Mobile Node is not
+      visible on the Home Link. </t>
+
+    <t>When the Proxy NDP is eliminated, the uniqueness of a home
+      address should be carefully examined.  If a Mobile Node is away
+      from the Home, its home address can be picked by other Mobile
+      Nodes on the Home Link because of no Proxy ND entry of the Home
+      Address.  To prevent address duplication, the Home Agent can
+      filter the packets originated from the Home Link based on the
+      Binding Cache.  Since the Home Agent is an external router, all
+      the packets are passed through the Home Agent.  When the Home
+      Agent intercepts packets from the Home Link and finds an active
+      binding cache entry for the same address with the packet's
+      source address, it MUST drop packets. For incoming packets, the
+      Home Agent can prioritize the binding cache database first and
+      can tunnel packets to the Mobile Node. The packets are never
+      reached to the malicious node who takes the home address of
+      other mobile nodes. As a result, although a third node
+      (malicious node) can obtain a home address which is already
+      taken by other Mobile Node, it cannot send and receive packets
+      by using the home address. </t>
+
+  </section>
+
+  <section anchor="ra" title="Sending Router Advertisement">
+
+    <t>The Home Agent SHOULD send a Router Advertisement to the Home
+    Link for two purposes: address assignment and home link
+    detection. The Mobile Node generates a home address from the
+    received router advertisement. It also uses this to detect the
+    home link.</t>
+
+    <t>In this document, the Home Agent MUST route all the incoming
+    and outgoing packets of the home link. Even for communication with a
+    Correspondent Node located on the home link, the packets MUST be
+    routed via the Home Agent. Otherwise, a malicious node can steal a
+    Home Address of the other Mobile nodes and communicates with
+    Correspondent nodes located on the Home Link by using the stolen
+    Home Address (HoA1) as shown in <xref target="fig:malicious"/>. If
+    the packet is always routed to the Home Agent first, the packets
+    sent by Correspondent Node will be routed correctly to the right
+    Mobile Node.</t>
+
+    <t>For doing so, the Home Agent MUST generate Router Advertisement
+      which the on-link flag (L flag) <xref target="RFC2461"/> is
+      unset, so that all the packets will be routed via the Home
+      Agent. Malicious nodes may directly route the packets with the
+      stolen home address, but packets sent by Correspondent Node will
+      reach to the right Mobile Node. Moreover, when the Home Agent
+      receives packets which destination and source are both located
+      on the home link, it MUST NOT generate ICMP redirect to the
+      sender. </t>
+
+
+<figure anchor="fig:malicious"  title="Malicious Node communicating with CN on the home link">
+<artwork> 
+                    +----------+
+                    | Internet +--MN (HoA1)
+                    +----+-----+
+                         |
+                       +-+--+ 
+                       | HA |
+                       +-+--+
+                         |    Home Link
+             ---+--------+-------+-----
+                |               |
+               CN           Malicious (HoA1)  
+</artwork>        
+</figure>
+
+
+
+  </section>
+
+
+
+  <section anchor="recvpkthome" title="Deliverying Packets to the Mobile Node">
+
+
+    <t>Home Agent intercepts packets meant for mobile node by IP
+      routing (See <xref target="hacon"/> and
+      <xref target="ra"/>). How to deriver packets is same as
+      <xref target="RFC3775"/>. The Home Agent refers the Binding
+      Cache and encapsulates packets according to the binding cache
+      entry.</t>
+
+    <t>If a correspondent node is located at the home link, the node
+      routes packets to the Home Agent first because the on-link flag
+      of Router Advertisement is unset (See <xref target="ra"/>. The
+      Home Agent intercepts packets and tunnels packets to the Mobile
+      Node only when the binding cache entry for the packet's
+      destination is available. Otherwise, it can re-send the packet
+      back to the Home Link. </t>
+
+
+    <t>However, Home Agent MUST drop the packets by the malicious node
+      who steal the Home Address (See Section 4.1). For incoming
+      packets from the external network (ex.Internet), when the
+      binding is not active, Home Agent MUST drop the packets which
+      source address is Mobile Node itself. On the other hand, for
+      incomming packets from the Home Link, when the binding is
+      active, Home Agent MUST drop the packets which source address is
+      Mobile Node itself.</t>
+
+<!--    <t>The Home Agent MUST operate the binding de-registration
+      carefully if the Proxy NDP is disabled. As soon as a Mobile Node
+      returns home, the Mobile Node starts DAD before binding
+      de-registration. It means the Home Agent cannot distinguish
+      whether either a right Mobile Node or a malicious node operates
+      DAD on the Home Link.  Home Agent MUST prevent routing packets
+      of a Home Address while binding cache of the Home Address is
+      active, so that it drops packets when the malicious node
+      acquires the Home Address of other Mobile Node.</t>-->
+
+    <!--All packets meant for the home prefix are routed through the
+      Home Agent (see <xref target="ra"/>).  When the binding is
+      active, any packets which source address is the Home Address
+      MUST NOT generate from the Home Link. For incoming packets from
+      the external network (ex. Internet), the Home Agent MUST NOT
+      route the packets meant for a Home Address to the Home Link when
+      the binding cache for the Home Address is active.  If the
+      packets meant for the Home Address are arrived from a
+      Correspondent Node located on the Home Link, it can tunnel
+      packets to the Mobile Node according to the Binding
+      Cache. Otherwise, it can routes packets to the Mobile Node
+      located on the Home Link. -->
+
+<!--      <t><xref target="filterhl"/> and <xref target="filterint"/> show
+      the example routing rules of the Home Agent.</t>-->
+
+<!--<figure anchor="filterhl"  title="Rules for Packets meant for a Home Address Received from the Home Link">
+<artwork>        
+    HoA:= Home Address
+    BC:= Binding Cache for HoA
+    source:= IPv6 Source Address Field
+    dest:= IPv6 Destination Address Field
+       
+    If (BC == true) {
+       if (source == HoA) {
+           /* drop the packet */
+       } else if (dest == HoA) { 
+           /* tunnel the packet */
+       }
+    } else if (BC == None) {
+       if (source == HoA) {
+           /* route the packet to the destination*/
+       } else if (dest == HoA) {
+           /* route the packet to the Home Link */
+    }
+</artwork>        
+</figure>-->
+
+
+<!--<figure anchor="filterint"  title="Rules for Packets meant for a Home Address from the external network">
+
+<artwork>        
+    innersource:= IPv6 Source Address Field of Inner IPv6 Header
+    tunneled:= IPv6-IPv6 Encapsulation Packet    
+
+    if (tunneled == true && innersouce == HoA) {
+    /* for tunneled packets (i.e. packets to CN from MN) */
+       if (BC == true) {
+          /* Route to the Destination after depacauslatition.
+           * It's required the outer source address (CoA) 
+           * verification, too.
+           */
+       } else { /* BC == none */
+           /* drop the packet */
+       }
+    } else {  /* for no tunneled packets (i.e. packets to MN from CN) */
+
+       if (source == HoA) {
+           /* drop the packet, something odd happened. */
+       } else if (dest == HoA) {
+           if (BC == true) {
+               /* Tunnel to the Mobile Node */
+           } else if (BC == none) {
+            /* Route to the Home Link */
+           }
+       } 
+    }
+</artwork>        
+</figure>-->
+   
+  </section>
+
+  <section anchor="returnhome" title="Returing Home">
+    <t>For Returning home, no modification is given in this
+      specification.</t>
+  </section>
+
+</section>
+
+
+<section title="IANA considerations">
+   <t>This document does not require any IANA action.</t>
+</section>
+
+<section title="Security Considerations">
+  <t>No security vulnerability is not introduced in this specification. </t>
+</section>
+
+<?rfc compact="yes" ?>
+
+
+</middle>
+<!-------------------------------------------------------->
+<!--  Back Section					-->
+<!-------------------------------------------------------->
+
+<back>
+
+
+<!-------------------------------------------------------->
+<!--	REFERENCES					-->
+<!-------------------------------------------------------->
+
+<references title="Normative reference">
+
+  <?rfc include="bibxml/reference.RFC.2119.xml" ?>
+  <?rfc include="bibxml/reference.RFC.2461" ?>
+  <?rfc include="bibxml/reference.RFC.3775.xml" ?>
+  <?rfc include="bibxml/reference.RFC.3753.xml" ?>
+  <?rfc include="bibxml/reference.RFC.3963.xml" ?>
+  <?rfc include="bibxml/reference.I-D.ietf-nemo-home-network-models.xml" ?>
+  <?rfc include="bibxml/reference.I-D.ietf-nemo-terminology.xml" ?>
+  <?rfc include="bibxml/reference.I-D.ietf-monami6-multiplecoa.xml" ?>
+</references>
+
+
+<references  title="Informative Reference">
+  <?rfc include="bibxml/reference.I-D.ietf-nemo-multihoming-issues.xml" ?>
+</references>
+
+<!-------------------------------------------------------->
+<!--	APPENDIX					-->
+<!-------------------------------------------------------->
+
+
+<!-------------------------------------------------------->
+<!--	Change Log					-->
+<!-------------------------------------------------------->
+
+<vspace blankLines="100"/> <!-- Force New Page -->
+
+<!--<section anchor="sec:log"
+	title="Change Log From Previous Version">
+
+<t><list style="symbols">
+  <t>Editorial Updates</t>
+</list></t>
+
+</section>--> <!-- Change Log -->
+
+
+</back>
+
+</rfc>

@@ -1,0 +1,434 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc compact="yes" ?>
+<rfc category="std" ipr="trust200811" docName="draft-stewart-tsvwg-sctp-nonce-00">
+   <front>
+      <title abbrev="ECN-nonce for SCTP">ECN Nonces for Stream Control Transmission Protocol (SCTP)</title>
+<!-- ************** RANDALL STEWART ***************-->
+      <author initials="R. R." surname="Stewart" fullname="Randall R. Stewart">
+         <organization>Researcher</organization>
+         <address>
+            <postal>
+               <street></street>
+               <street></street>
+               <city>Chapi</city>
+               <region>SC</region>
+               <code>29036</code>
+               <country>USA</country>
+            </postal>
+            <email>randall@lakerest.net</email>
+         </address>
+      </author>
+      <date year="2009" />
+      <keyword>Internet-Draft</keyword>
+
+<!-- ************** SOURABH LADHA ***************-->
+      <author initials="S." surname="Ladha" fullname="Sourabh Ladha">
+         <organization>Qualcomm</organization>
+         <address>
+            <postal>
+               <street>5775 Morehouse Drive</street>
+               <city>San Diego</city>
+               <region>CA</region>
+               <country>USA</country>
+            </postal>
+            <email></email>
+         </address>
+      </author>
+
+<!-- ************** Neil Spring ***************-->
+      <author initials="N." surname="Spring" fullname="Neil Spring">
+         <organization>University Of Maryland</organization>
+         <address>
+            <postal>
+               <street>4133 A.V. Williams Bldg</street>
+               <city>College Park</city>
+               <region>MD</region>
+               <code>20742</code>
+               <country>USA</country>
+            </postal>
+            <email>nspring@cs.washington.edu</email>
+         </address>
+      </author>
+
+<!-- ************** ABSTRACT *************** -->
+      <abstract>
+         <t>This document describes the addition of the ECN-nonce
+RFC 3540 <xref target="RFC3540"></xref> to the Stream Control Transmission Protocol
+(SCTP) RFC 2960 <xref target="RFC2960"></xref>.  The ECN-nonce reduces the vulnerability
+of ECN senders to misbehaving receivers that conceal
+congestion signals like ECN marks and packet losses.  The
+ ECN-nonce approach is different in SCTP because SCTP uses
+chunks for extensible protocol features and is
+ selective acknowlegement (SACK)-based; this document
+describes those differences. In particular this document describes (1) protocol extensions
+in the form of a single new parameter for the INIT/INIT-ACK chunks, and a single bit flag in the SACK
+ chunk, and (2) rules governing the sender and receiver side implementation.</t> 
+
+ <t>This document outlines a minimum response that an SCTP sender should apply after detecting a misbehaving receiver.</t>
+
+      </abstract>
+   </front>
+<!-- ************** INTRODUCTION *************** -->
+   <middle>
+     <section anchor="1." title="Introduction">
+        <t>Like TCP, SCTP RFC 2960 <xref target="RFC2960"></xref> supports Explicit Congestion 
+Notification (ECN) RFC 3168 <xref target="RFC3168"></xref>, and therefore is exposed to misbehaving receivers 
+that conceal congestion signals. The misbehavior includes the concealment of ECN Echo (ECNE) signals
+which may cause an SCTP sender to be agressive and unfair to compliant flows. The ECN-nonce 
+RFC 3540 <xref target="RFC3540"></xref> adds robustness to ECN signaling for TCP. This document 
+analogously applies the ECN-nonce to SCTP. The ECN-nonce can be used to protect against other misbehaviors as well,
+such as optimistic acknowledgements <xref target="paper.savage99"></xref>, and false Duplicate
+TSN notifications for more information discussions in RFC 3708 <xref target="RFC3708"></xref> may
+be helpful.</t>
+
+	<t> The reader should be familiar with the ECN-Nonce as described in 
+RFC 3540 <xref target="RFC3540"></xref>. This document describes only the SCTP-specific 
+aspects of the ECN-nonce.</t>	
+         <section title="Overview of Protocol Extensions">
+            <t>This document specifies the following:</t>
+            <t>1. A single new Nonce-Supported parameter in the INIT/INIT-ACK chunks exchanged during the association 
+establishment to indicate to the peer whether ECN-nonce is supported.</t>
+            <t>2. A single bit flag in the SACK chunk called the Nonce Sum (NS), and the rules
+ governing the sending, calculating and checking of the nonce sum.</t>
+			<t>The ECN-nonce does not change the existing ECN protocol. The ECN-nonce uses
+two bits of the IP header called the ECN Capable Transport (ECT) bits. The sender randomly generates
+a single bit nonce and encodes it in the ECT codepoints, ECT(0) or ECT(1). To indicate congestion
+in the network, routers may overwrite the ECT codepoints with a Congestion Experienced (CE) marking. 
+The nonce  sum is a cumulative one bit addition of the nonces received so far. The receiver calculates 
+the nonce sum and returns it in the NS flag of the SACK chunk. The sender verifies the value of the NS 
+flag in the SACK chunk. Since all the nonces are needed to calculate the correct nonce sum, an 
+incorrect nonce sum implies that one or more nonces are missing at the receiver. If an incorrect nonce 
+sum is received by the sender without ECNE signals, the sender can infer that the receiver is misbehaving and concealing 
+congestion notifications.</t> 
+
+            <t>It is beyond the scope of this document to specify a sender's complete response after detecting a
+ misbehaving receiver. However this document outlines the minimum response that a sender SHOULD apply to
+ a receiver's misbehavior.</t>
+         </section>
+     </section>
+<!-- ************** Terminology *************** -->
+     <section anchor="Terminology" title="Terminology">
+         <t>The keywords MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, 
+RECOMMENDED, NOT RECOMMENDED, MAY, and OPTIONAL, when they appear in this document, are to
+be interpreted as described in RFC 2119 <xref target="RFC2119"></xref>.</t>
+      </section>
+<!-- ************** Protocol Extensions *************** -->
+      <section title="Protocol Extension to SCTP">
+         <section title="Nonce-Supported Parameter Definition">
+            <t>Endpoints supporting ECN-nonce SHOULD use the following OPTIONAL parameter to 
+indicate that the ECN-nonce extension is supported.</t>
+            <figure>
+               <artwork>
+     Fixed Parameter                    Status     Type Value
+   -------------------------------------------------------------
+     Nonce-Supported                    OPTIONAL     0x8001
+
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |    Parameter Type = 0x8001    |  Parameter Length = 4         |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+               </artwork>
+            </figure>
+            <t>Type: 16 bit u_int</t>
+            <t>0x8001, Indicating the Nonce-Supported parameter.</t>
+            <t>Length: 16 bit u_int</t>
+            <t>4, Indicating the size of the parameter.</t>
+         </section>
+         <section title="Nonce Sum (NS) flag Definition">
+            <t>A single bit flag (NS) in the SACK chunk is defined as follows:</t>
+            <figure>
+               <artwork>
+       0                   1                   2                   3
+       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |   Type = 3    | Chunk Flags |N|      Chunk Length             |
+      |               |             |S|                               | 
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                      Cumulative TSN Ack                       |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |          Advertised Receiver Window Credit (a_rwnd)           |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      | Number of Gap Ack Blocks = N  |  Number of Duplicate TSNs = X |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |  Gap Ack Block #1 Start       |   Gap Ack Block #1 End        |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      /                                                               /
+      \                              ...                              \
+      /                                                               /
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |   Gap Ack Block #N Start      |  Gap Ack Block #N End         |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                       Duplicate TSN 1                         |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      /                                                               /
+      \                              ...                              \
+      /                                                               /
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                       Duplicate TSN X                         |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+              </artwork>
+            </figure>
+<t>        Chunk Flags: </t>
+<t>        Reserved:  7 bits </t>
+<t>        Set to 0 on transmit and ignored on receipt.</t>
+<t>        NS:  1 bit </t>
+<t>        The Nonce Sum (NS) flag is set by the sender of the SACK chunk with the apropriate 
+calculated value (1 bit cumulative nonce sum). If either peer does not support the ECN-nonce, 
+then the NS flag is always set to 0.</t>
+         </section>
+		</section>
+<!-- ************** Nonce-Supported Parameter Negotiation *************** -->
+         <section title="Nonce-Supported Parameter Negotiation">
+            <t>An SCTP endpoint supporting the ECN-nonce SHOULD include the Nonce-Supported 
+Parameter in the INIT chunk when initializing the association to indicate this to the peer.</t>
+            <t>When a receiver supports the ECN-nonce and detects a Nonce-Supported parameter in the INIT chunk, the receiver SHOULD respond with a Nonce-supported parameter in the INIT-ACK chunk.</t>
+            <t>When an SCTP endpoint that supports the ECN-nonce receives an INIT chunk without 
+the Nonce-Supported parameter, that SCTP endpoint:</t>
+            <t>
+               <list style='symbols'>
+                  <t>MAY include the Nonce-Supported parameter in the INIT-ACK chunk.</t>
+                  <t>SHOULD NOT set the NS flag in the SACK chunk during the lifetime of the 
+association.</t>
+               </list>
+            </t>
+            <t>An SCTP endpoint that supports the ECN-nonce SHOULD disable ECN (i.e., stop 
+setting the ECT codepoints for the association) if its peer does not support the ECN-nonce. 
+An SCTP endpoint that does not support the ECN-nonce may be denied preferential treatment or 
+otherwise penalized by a peer that supports the ECN-nonce based on that peer's policy.</t>
+         </section>
+<!-- ************** ECN-nonce Operation *************** -->
+         <section title="ECN-nonce Operation">
+		<t>The following sub-sections describe in detail the ECN-nonce operation.
+ This operation includes (i) the local SCTP state to be maintained at each endpoint, (ii) the sender procedures 
+for transmitting nonces and checking of the nonce sum, (iii) intermediate router(s) behavior, and (iv) the 
+receiver procedures for calculating the nonce sum from the received nonces, and returning the 
+nonce sum to the sender.</t>
+         <section title="State Information">
+         <t> SCTP endpoints should maintain a single bit local state called "current nonce sum".
+ The current nonce sum is a one bit cumulative addition of the nonces. In the beginning of a new 
+SCTP association the current nonce sum SHOULD be initialised to one.</t>
+         <t> SCTP senders should store a mapping from Transmission Sequence Numbers (TSNs) to 
+nonce values associated with packets.</t>
+         <t> The following sections describe in detail how these values are maintained and updated.</t> 
+         </section>
+         <section title="Sender Behavior (Transmit)">
+            <t>The sender's transmit behavior follows Section 3 of
+RFC 3540 <xref target="RFC3540"></xref> with the following changes to nonce handling.</t> 
+
+<t>
+The one-bit nonce is placed or encoded only for SCTP packets which
+carry one or more "new" DATA chunks.  Only SCTP packets containing
+one or more "new" DATA chunks can be marked as ECN-capable (with
+either ECT(0) or ECT(1) codepoints set), so only these packets can
+use the one-bit nonce.  This is because control chunks are not
+subject to congestion control, and thus a router's ECN-marking 
+of control chunks would not illicit a congestion response.
+</t>
+
+
+            <t>The sender maintains a mapping of the TSNs of transmitted DATA chunks with
+ the nonce values placed in the respective packets. When multiple DATA chunks are bundled 
+in the same packet, only one of the TSNs transmitted in that packet is mapped to the nonce 
+placed in the packet. All other TSNs transmitted in the same packet are mapped to a 
+nonce value of zero.</t>
+            <t>(Implementation Note: An implementation may maintain the mapping of only 
+the single TSN sent in each packet with the corresponding nonce. Said implementation 
+will assume that all TSNs lying between two consecutive TSNs in the data structure are mapped 
+to a nonce value of zero.)</t>x
+         </section>
+         <section title="Router Behavior">
+		  <t>For the ECN-nonce to function correctly, routers should behave as 
+specified in RFC 3168 <xref target="RFC3168"></xref>.</t>
+		  </section>
+         <section title="Receiver Behavior (Receive and Transmit)">
+            <t>The receiver updates the value of its current nonce sum on receiving
+a packet carrying one or more new DATA chunks. Recall that the nonce sum is the cumulative 
+one bit addition of the nonces received so far. Thus on receipt of a packet with one or 
+more new DATA chunks a single bit addition of the current nonce sum and the received 
+nonce is performed. The result is the new value of current nonce sum.</t>
+
+            <t>In contrast to RFC 3540 <xref target="RFC3540"></xref>, the current 
+nonce sum is also updated immediately when receiving out of order packets. SCTP is 
+inherently a SACK based protocol, hence an SCTP sender can know exactly which packets
+had reached the receiver out of order.</t>
+
+            <t> When a packet is marked with a Congestion Experienced (CE) signal, 
+the original nonce is unknown to the receiver. The missing nonce value is ignored 
+(or equivalently a value of zero is assumed) when calculating the current nonce sum.</t>
+
+            <t>When the receiver sends a SACK chunk, the current nonce sum (the updated 
+value as described above) is placed in the NS flag (defined in Section 3.2) of the SACK chunk.</t>
+
+            <t>(Implementation Note: When sending an ECNE chunk and a SACK chunk in response
+to a CE marked packet that contained one or more DATA chunks, an SCTP endpoint should try to
+ bundle the ECNE chunk and the SACK chunk in the same packet.)</t>
+            </section>
+         <section title="Sender Side (Receive)">
+		 <t> This section describes the sender's procedure for verifying the nonce sum 
+returned by the receiver.</t>
+
+		 <t> The nonce sum is verified on the receipt of a SACK chunk which 
+acknowledges new data, either via an advanced Cumulative TSN Ack field or by new Gap Ack Blocks. To 
+verify the nonce sum, the sender SHOULD:</t>
+
+         <t>
+
+         <list style='symbols'>
+
+		 <t> Calculate the expected nonce sum. This calculation is a single bit addition of the current nonce sum plus all the nonce values corresponding to the new data acknowledged. The nonce values are looked up from the local mapping of TSNs and nonce values maintained at the sender.</t>
+
+		 <t> Set the current nonce sum to the value of expected nonce sum.</t>
+		 <t> Compare the current nonce sum with the NS flag returned 
+in the SACK chunk.</t>
+		 </list>
+		 </t>	
+
+		 <t> The sender SHOULD disable checking of the nonce sum in the following three scenarios (checking of the nonce sum SHOULD be enabled after re-synchronization as described in Section 5.6) :</t>
+         <t>
+         <list style='symbols'>
+		 <t> On detecting that a packet has been lost (i.e., after receiving
+four missing reports or after the expiration of the retransmission timer). Nonce checking
+is suspended because the receiver has admitted to missing packets and an ordinary congestion 
+response is in effect.</t>
+		 <t> On receiving an ECNE chunk from the receiver. Nonce checking is suspended 
+because the receiver has
+
+admitted to a congestion experienced mark and an ordinary congestion response is in effect.</t> 
+
+		 <t> After sending a FORWARD TSN chunk defined in RFC 3758<xref target="RFC3758"></xref>. 
+The FORWARD TSN chunk is used by SCTP senders that support the partially reliable extension 
+to move the receiver's cumulative ack point forward.</t>
+		 </list>
+		 </t>
+		 <t> If nonce sum checking is enabled, and a SACK chunk is received with an 
+incorrect nonce sum, then several scenarios are possible: (i) the ECNE and SACK chunks were 
+sent in separate packets and the ECNE chunk was dropped by the network, (ii) the ECNE chunk 
+was sent in a separate packet after the SACK chunk (i.e., the ECNE chunk is currently in the network),
+or (iii) the receiver is misbehaving and concealing Congestion Experienced (CE) signals.</t>
+
+		 <t> To detect unambiguously that a receiver is misbehaving, the sender waits until new data, sent after having received the incorrect nonce sum, is acknowledged. The sender also suspends checking of the nonce sum during this period. If no ECNE chunk is received till the acknowledgement for the new data arrives, the sender can be certain that the 
+receiver is concealing CE signals and thus misbehaving.</t>
+         </section>
+         <section title="Re-synchronization of the Nonce Sum">
+         <t> To enable proper checking of the nonce sums, re-synchronization of the sender 
+and receiver current nonce sums is required in three situations.</t>            
+         <t>
+         <list style='symbols'>
+         <t> Loss of one or more packets in a window of data: Re-synchronization of 
+the sender and receiver current nonce sum occurs when new data sent after the congestion 
+window was reduced is acknowledged via the Cumulative TSN Ack field.</t>
+
+         <t> After having received an ECNE chunk: Re-synchronization of the sender and 
+receiver current nonce sum occurs when new data sent after the Congestion Window Reduced (CWR) chunk is acknowldeged 
+via the Cumulative TSN Ack field.</t>
+         <t> After sending a FORWARD TSN chunk: Re-synchronization of the sender and receiver 
+current nonce sum occurs when new data sent after the FORWARD TSN chunk is acknowledged via 
+the Cumulative TSN Ack field.</t>
+         </list>
+         </t>
+         <t>To re-synchronize, the sender simply sets its current nonce sum to the value 
+of NS flag received in the SACK chunk.</t>
+         </section>
+       </section>
+<!-- **** Response after Receiving Incorrect Nonce and after Detecting Receiver's Misbehavior **********-->
+      <section title="Sender's Response">
+		<t> The following discussion describes the response that SHOULD be applied 
+(i) to a peer that does not support the ECN-nonce, or (ii) after having detected a 
+misbehaving receiver.</t>
+
+      <section title="Response to a peer that does not support the ECN-nonce">
+            <t>
+               <list style='symbols'>
+                <t>An SCTP endpoint that supports the ECN-nonce SHOULD disable ECN 
+(i.e., stop setting the ECT codepoints for the association) if its peer does not 
+support the ECN-nonce.</t>
+				<t>Optionally, an SCTP sender can further respond 
+by rate limiting the association. Several such responses are possible; this document 
+leaves them as a matter of policy that can be exercised by an endpoint.</t> 
+				</list>
+			</t>
+		</section>
+
+      <section title="Response to a misbehaving receiver">
+            <t>
+               <list style='symbols'>
+				<t>After having detected a misbehaving receiver,
+the SCTP sender SHOULD disable ECN for the rest of the association.</t>
+				<t>The minimum penalty to a receiver's misbehavior 
+SHOULD be the equivalent of the response to an ECNE chunk.</t>
+				<t>Optionally, an SCTP sender can further respond 
+to a misbehaving receiver by setting the congestion window (cwnd) to one, thus 
+re-probing the available bandwidth. This conservative action eliminates the incentive for a 
+receiver to misbehave. Several such responses are possible; this document 
+leaves them as a matter of policy that can be exercised by an endpoint.</t>
+               </list>
+            </t>
+      </section>
+   </section>
+   
+<!-- ************** Summary *************** -->
+      <section title="Summary">
+         <t>This document applies the ECN-nonce proposal RFC 3540 <xref target="RFC3540"></xref> to SCTP.</t>
+
+         <t>A single new parameter called the Nonce-Supported parameter and a 
+single bit flag in the SACK chunk called the Nonce Sum (NS) have been described 
+along with rules governing the sender and receiver side implementation. This document outlines the minimum response that a sender should apply to a receiver's misbehavior.</t>
+      </section>
+      
+<!-- **************Security Considerations *************** -->
+      <section title="Security Considerations">
+         <t>This document shares the same security concerns as RFC 3540 <xref target="RFC3540"></xref>.</t>
+      </section>
+      
+<!-- **************IANA Considerations *************** -->
+      <section title="IANA Considerations">
+         <t>A single bit flag in the SACK chunk called the Nonce Sum (NS) is used 
+by this proposal, and must be allocated.</t>
+         <t>One new parameter type code is defined by this document to be
+added to SCTP RFC 2960 ('0x8001').</t>
+      </section>
+      
+<!-- **************Acknowledgements *************** -->
+      <section title="Acknowledgements">
+         <t>Paul Amer provided valuable feedback on an early version of this draft.</t>
+      </section>
+      
+      
+   </middle>
+   <back>
+      <references title="Normative references">
+         <?rfc include="reference.RFC.2119" ?>
+         <?rfc include="reference.RFC.3168" ?>
+ 	 <?rfc include="reference.RFC.2960" ?>
+         <?rfc include="reference.RFC.3540" ?>
+ 	 <?rfc include="reference.RFC.3758" ?>
+      </references>
+<references title="Informational References">
+         <reference anchor="paper.savage99" target="">
+            <front>
+               <title>TCP congestion control with a misbehaving receiver</title>
+               <author initials="S." surname="Savage" fullname="S. Savage">
+                     <organization></organization>
+               </author>
+               <author initials="N." surname="Cardwell" fullname="N. Cardwell">
+                     <organization></organization>
+               </author>
+               <author initials="D." surname="Wetherall" fullname="D. Wethrall">
+                     <organization></organization>
+               </author>
+               <author initials="T." surname="Anderson" fullname="T. Anderson">
+                     <organization></organization>
+               </author>
+               <date month="October" year="1999" />
+            </front>
+            <seriesInfo name="" value="SIGCOMM CCR" />
+         </reference>
+         <?rfc include="reference.RFC.3708" ?>
+</references>
+   </back>
+</rfc>
+

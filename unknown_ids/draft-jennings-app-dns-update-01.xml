@@ -1,0 +1,1273 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="no"?>
+<?rfc tocompact="yes"?>
+<?rfc tocdepth="3"?>
+<?rfc tocindent="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc comments="yes"?>
+<?rfc inline="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc colonspace='yes' ?>
+<rfc category="std" docName="draft-jennings-app-dns-update-01" ipr="full3978">
+  <front>
+    <title abbrev="DNS Update">HTTP API for Updating DNS Records</title>
+
+    <author fullname="Cullen Jennings" initials="C." surname="Jennings">
+      <organization>Cisco Systems</organization>
+
+      <address>
+        <postal>
+          <street>170 West Tasman Drive</street>
+
+          <street>Mailstop SJC-21/2</street>
+
+          <city>San Jose</city>
+
+          <region>CA</region>
+
+          <code>95134</code>
+
+          <country>USA</country>
+        </postal>
+
+        <phone>+1 408 902-3341</phone>
+
+        <email>fluffy@cisco.com</email>
+      </address>
+    </author>
+
+    <author fullname="Tom Daly" initials="T." surname="Daly">
+      <organization>Dynamic Network Services, Inc.</organization>
+
+      <address>
+        <email>tom@dyn-inc.com</email>
+      </address>
+    </author>
+
+    <author fullname="Jeremy Hitchcock" initials="J." surname="Hitchcock">
+      <organization>Dynamic Network Services, Inc.</organization>
+
+      <address>
+        <email>jeremy@dyndns.com</email>
+      </address>
+    </author>
+
+    <date day="3" month="November" year="2008" />
+
+    <abstract>
+      <t>This specification defines a simple HTTP based scheme for clients to
+      update DNS records.</t>
+
+      <t>The draft is being discussed on the apps-discuss@ietf.org list.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>There are many circumstances in which an application or device would
+      like to have an easy way to update DNS records. While a number of
+      support DNS based protocols exist for updating records<xref
+      target="RFC2136"></xref><xref target="RFC3007"></xref><xref
+      target="RFC4310"></xref>, many of these mechanisms are not available in
+      today's scaled down applications and devices. However, many existing
+      application and devices do support the use of HTTP<xref
+      target="RFC2616"></xref> and HTTP over TLS to update DNS records. The
+      goal of this specification is to create a generic standard for which
+      applications and devices can update DNS records using HTTP over TLS.</t>
+
+      <t>The need for this protocol exists from the use of DHCP and other
+      dynamic IP addressing systems, where a device receives updates to it IP
+      address, and further, there exists a need for the global DNS to be made
+      aware of such a change. Many residential NAT devices support this type
+      of operation today, but do it using hap-hazard and proprietary methods
+      <xref target="DynDNS"></xref><xref target="telnic"></xref><xref
+      target="SliceHost"></xref> .</t>
+
+      <t>The approach described in the specification allows a client to make
+      HTTP over TLS requests to a server to update DNS records, using standard
+      and highly available encryption techniques for security, while providing
+      a generic a flexible interface for updating DNS records</t>
+
+      <!--
+
+      <t>There are many circumstances in which an application would like to
+      have an easy way to update DNS records. The DynDNS service<xref
+      target="DynDNS"></xref>, supported on many residential NATs, is one
+      example: it updates a DNS record to point at the NAT after the NAT
+      receives a dynamically assigned IP address. Another common use case is
+      dynamically created servers in elastic computing environments. When new
+      servers are created, they often need to update DNS records.</t>
+
+      <t>The approach described in this specification allows a client to make
+      a simple HTTP<xref target="RFC2616"></xref> request to a server. The
+      client is authenticated using a shared secret. The server is
+      authenticated with TLS, which provides both integrity for the
+      transaction and confidentiality for the shared secret. The request
+      contains information that instructs the server to update a particular
+      DNS record. The specification is limited to updating a simple subset of
+      DNS records and does not support more complex operations such as the
+      multiple changes that need to happen as an atomic transactions.</t>
+
+      -->
+    </section>
+
+    <section title="Terminology">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119">RFC 2119</xref>.</t>
+    </section>
+
+    <section title="Update Record Requests">
+      <t>This section describes the semantics of requests to update DNS
+      records. The specification only covers how tell a DNS system what
+      updates are desired. How the DNS system deal with SOA records or DNSSEC
+      if not effected in any way by this specification.</t>
+
+      <section title="HTTPS Request">
+        <t>The client needs to be configured with the base URL for the server,
+        along with a username and password. The request is created by forming
+        an HTTPS<xref target="RFC2818"></xref> POST request to a URL. The
+        HTTPS POST request is formed by starting with the configured base URL,
+        and then appending all the required parameters. The request MUST be
+        done using HTTPS to protect the password. The client MUST ensure the
+        TLS certificate of the server is appropriately signed.</t>
+
+        <t>The HTTP request SHOULD contain a "User-Agent" header that clearly
+        identifies the version of the software making the request, as this
+        facilitates debugging.</t>
+      </section>
+
+      <section title="URL Parameters">
+        <t>The request MUST include exactly one user, password, domain, and
+        type parameter as defined below. Other parameters are optional and can
+        occur at most once. The values of parameters MUST be appropriately
+        escaped as required to be part of a valid HTTP URL.</t>
+
+        <texttable>
+          <preamble>General Parameters</preamble>
+
+          <ttcol>Parameter Name</ttcol>
+
+          <ttcol>Value</ttcol>
+
+          <c>user</c>
+
+          <c>The configured user name for the user making the request.</c>
+
+          <c>password</c>
+
+          <c>The configured password for the user making the request base16
+          encoded as defined in <xref target="RFC4648"></xref>.</c>
+
+          <c>domain</c>
+
+          <c>The fully qualified domain name for the record to update.</c>
+
+          <c>type</c>
+
+          <c>The ASCII encoded version of they type of DNS record to
+          update.</c>
+
+          <c>rdata</c>
+
+          <c>The value that should be stored in the DNS resource record.</c>
+
+          <c>match</c>
+
+          <c>The value that matches an existing resource record that is to be
+          updated by this request. A special value of "*" means that all
+          existing records are replaced by the new record in this request.</c>
+
+          <c>ttl</c>
+
+          <c>Requested time to live for the DNS records in seconds. If
+          omitted, this will be set to default chosen by the server.</c>
+        </texttable>
+
+        <t>Some common values for the type parameter field are shown in the
+        following table.</t>
+
+        <texttable>
+          <preamble>Type Parameters Values</preamble>
+
+          <ttcol>Type Name</ttcol>
+
+          <ttcol>Value</ttcol>
+
+          <c>A</c>
+
+          <c>DNS A record <xref target="RFC1035"></xref>.</c>
+
+          <c>AAAA</c>
+
+          <c>DNS AAAA record <xref target="RFC3596"></xref>.</c>
+
+          <c>CNAME</c>
+
+          <c>DNS CNAME record <xref target="RFC1035"></xref>.</c>
+
+          <c>NS</c>
+
+          <c>DNS NS record <xref target="RFC1035"></xref>.</c>
+
+          <c>PTR</c>
+
+          <c>DNS PTR record <xref target="RFC1035"></xref>.</c>
+
+          <c>SRV</c>
+
+          <c>DNS SRV record <xref target="RFC2782"></xref>.</c>
+
+          <c>TXT</c>
+
+          <c>DNS TXT record <xref target="RFC1464"></xref>.</c>
+
+          <c>HIP</c>
+
+          <c>DNS HIP record <xref target="RFC5205"></xref>.</c>
+
+          <c>MX</c>
+
+          <c>DNS MX record.</c>
+
+          <c>SPF</c>
+
+          <c>DNS SPF record.</c>
+        </texttable>
+
+        <section anchor="sec-mult" title="Entries with multiple records">
+          <t>For many updates, where only one resource record is desired, the
+          match parameter is sent with a value of "*" indicating all existing
+          records are removed and replaced with the new one. Sometimes it is
+          desirable to have multiple records of the same type for the same
+          name. For example, a domain may have multiple MX records. To add a
+          new record, no match value is sent, or the match value is empty, and
+          a new record is appended to the set. To update an existing record,
+          the match parameter is set to the value of the old record that needs
+          to be updated. If the record in the match parameter can not be
+          found, the request returns an 404 error.</t>
+        </section>
+
+        <section title="Deleting records">
+          <t>If the value of the parameter that would update a record is
+          empty, the record MUST be removed from DNS.</t>
+        </section>
+      </section>
+
+      <section title="Return Codes and Errors">
+        <t>HTTP response codes are used to indicate success and errors as
+        specified in the following table.</t>
+
+        <texttable>
+          <preamble>Response Codes</preamble>
+
+          <ttcol>Value</ttcol>
+
+          <ttcol>Error Condition</ttcol>
+
+          <c>200</c>
+
+          <c>No error, operation successful</c>
+
+          <c>400</c>
+
+          <c>The update parameters passed are invalid or would otherwise
+          result in an ambiguous update</c>
+
+          <c>401</c>
+
+          <c>Bad authentication credentials</c>
+
+          <c>403</c>
+
+          <c>Trying to update a record for which the given credentials are not
+          authorized.</c>
+
+          <c>404</c>
+
+          <c>No records were found that match the value in the match parameter
+          of the request.</c>
+
+          <c>406</c>
+
+          <c>A valid update was passed, however, it was not accepted for
+          reasons of update abuse, whereby excessive numbers of duplicate
+          updates have been sent.</c>
+
+          <c>409</c>
+
+          <c>A valid update was passed, however, no change was made as the
+          requested change was preexisting</c>
+
+          <c>501</c>
+
+          <c>The server does not support the specified operation</c>
+
+          <c>503</c>
+
+          <c>The server is too busy to service the request or is otherwise
+          unavailable and the client should wait at least 5 minutes before
+          trying to update again</c>
+        </texttable>
+
+        <t>The body of the response MAY have human readable text that allows a
+        network administrator to learn more about why the request failed.</t>
+      </section>
+    </section>
+
+    <section title="Example">
+      <t>In the examples below, some of the URLs appear broken across multiple
+      lines. This is because of physical width limitations in this document;
+      such URLs need to be read as single URLs with no embedded white space.
+      All of the examples assume that a user called "me@example.net" with
+      password "no" is allowed to update records in the example.com domain.
+      The base URL for the DNS update service of
+      https://dns.example.org/dns/update is used in the examples.</t>
+
+      <t>Each example shows the state of the DNS in a precondition before the
+      request, the requests performed using this specification, and then the
+      resulting state of the DNS in the postcondition.</t>
+
+      <section title="Update an A record">
+        <t>This example shows a basic update where all existing A record
+        values are replaced with a new entry.</t>
+
+        <figure>
+          <artwork><![CDATA[
+Precondition:
+  www.example.com   A    192.0.2.0
+  www.example.com   A    192.0.2.1
+
+Requests:
+  https://dns.example.org/dns/update?user=me%40example.net
+        &password=6E6F&match=*&domain=www.example.com&type=A
+        &rdata=192.0.2.2
+
+Postcondition:
+  www.example.com   A    192.0.2.2
+]]></artwork>
+        </figure>
+      </section>
+
+      <section anchor="ex-multi" title="Create two MX records">
+        <t>This example shows how to create entries where there are multiple
+        records.</t>
+
+        <figure>
+          <artwork><![CDATA[
+Precondition:
+
+Requests:
+  https://dns.example.org/dns/update?user=me%40example.net
+       &password=6E6F&domain=example.com&match=&type=MX
+       &rdata=10%20mail1.example.com
+  https://dns.example.org/dns/update?user=me%40example.net
+       &password=6E6F&domain=example.com&match=&type=MX
+       &rdata=20%20mail2.example.com
+
+Postcondition:
+  example.com   MX    10 mail1.example.com
+  example.com   MX    20 mail2.example.com
+]]></artwork>
+        </figure>
+      </section>
+
+      <section anchor="ex-del" title="Delete an A record">
+        <t>This example shows a simple removal of a record.</t>
+
+        <figure>
+          <artwork><![CDATA[
+Precondition:
+  www.example.com   A    192.0.2.1
+
+Requests:
+  https://dns.example.org/dns/update?user=me%40example.net
+        &password=6E6F&domain=www.example.com&type=A&match=192.0.2.1
+
+Postcondition:
+]]></artwork>
+        </figure>
+      </section>
+
+      <section anchor="ex-add" title="Add a new SRV record">
+        <t>This example shows how to append a record to a list of existing
+        records.</t>
+
+        <figure>
+          <artwork><![CDATA[
+Precondition:
+  _sip._tcp.example.com   SRV 10 1 5060 sip1.example.com
+  _sip._tcp.example.com   SRV 10 1 5060 sip2.example.com
+
+Requests:
+  https://dns.example.org/dns/update?user=me%40example.net
+         &password=6E6F&domain=_sip._tcp.example.com
+         &match=&type=SRV&rdata=10%201%205060%20sip3.example.com
+
+Postcondition:
+  _sip._tcp.example.com   SRV 10 1 5060 sip1.example.com
+  _sip._tcp.example.com   SRV 10 1 5060 sip2.example.com
+  _sip._tcp.example.com   SRV 10 1 5060 sip3.example.com
+]]></artwork>
+        </figure>
+      </section>
+
+      <section anchor="ex-dup" title="Update an existing SRV record">
+        <t>This example is similar to the previous one, in that an entry is
+        being changed.</t>
+
+        <figure>
+          <artwork><![CDATA[
+Precondition:
+  _sip._tcp.example.com   SRV 10 1 5060 sip1.example.com
+  _sip._tcp.example.com   SRV 10 1 5060 sip2.example.com
+  _sip._tcp.example.com   SRV 10 1 5060 sip3.example.com
+
+Requests:
+  https://dns.example.org/dns/update?user=me%40example.net
+        &password=6E6F&domain=_sip._tcp.example.com&type=SRV
+        &match=10%201%205060%20sip2.example.com
+        &rdata=10%201%205060%20sip22.example.com
+
+Postcondition:
+  _sip._tcp.example.com   SRV 10 1 5060 sip1.example.com
+  _sip._tcp.example.com   SRV 10 1 5060 sip22.example.com
+  _sip._tcp.example.com   SRV 10 1 5060 sip3.example.com
+]]></artwork>
+        </figure>
+      </section>
+    </section>
+
+    <section title="IANA Considerations">
+      <t>This document makes no requests of IANA.</t>
+    </section>
+
+    <section title="Security Considerations">
+      <t>TODO</t>
+
+      <t>If a user publishes the IP of their notebook computer, PDA, or smart
+      phone as the move, it is likely that the IP address can be correlated to
+      locations. By looking at the location over time for a specific user, it
+      may be further possible to correlate that to an actual person. These
+      attacks and implications to privacy are discussed in <xref
+      target="dns-track"></xref>.</t>
+    </section>
+
+    <section title="Open Issues">
+      <t>The index in previous draft would likely not work because the clients
+      view of the records may not match the servers as pointed out by Frank
+      Ellermann.</t>
+
+      <t>Issues around using mDNS or NAPTR to get base URL.</t>
+
+      <t>Do we need an operation=add,del,update parameter? And how to keep it
+      RESTful.</t>
+
+      <t>Using HTTP Digest vs URL parameters</t>
+
+      <t>Way to set the resource record to the IP address that the server got
+      the request from.</t>
+    </section>
+
+    <section title="Why not use DNS Dynamic Update?">
+      <t>TODO - lots of work is needed here.</t>
+
+      <t>RFC 2136 and the security for this provided by 3007 and later DNSSEC
+      RFCs provide a robust system for updating DNS that supports static
+      shared secrets and asymmetric key. Security working with asymmetric keys
+      not easy. Doing with static keys vulnerable to offline attacks. Hard to
+      do from Java script. Questions, any issues punching through NATs that
+      have DNS ALGs with this? Hard to integrate with fine web security
+      systems like openid. Trivial to implement this most web
+      environments.</t>
+
+      <t>Questions about deployment success. When were things defined, what is
+      the market choosing? Does it work?</t>
+
+      <t>Is the problem that we just need a simple open source library that
+      does Dynamic Update?</t>
+    </section>
+
+    <section title="Acknowledgements">
+      <t>Thanks to Frank Ellermann, Peter Koch, Stephane Bortzmeyer, Mark
+      Baker, Patrik Faltstrom, Julian Reschke, and ...</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <reference anchor="RFC2616">
+        <front>
+          <title abbrev="HTTP/1.1">Hypertext Transfer Protocol --
+          HTTP/1.1</title>
+
+          <author fullname="Roy T. Fielding" initials="R." surname="Fielding">
+            <organization abbrev="UC Irvine">Department of Information and
+            Computer Science</organization>
+
+            <address>
+              <postal>
+                <street>University of California, Irvine</street>
+
+                <city>Irvine</city>
+
+                <region>CA</region>
+
+                <code>92697-3425</code>
+              </postal>
+
+              <facsimile>+1(949)824-1715</facsimile>
+
+              <email>fielding@ics.uci.edu</email>
+            </address>
+          </author>
+
+          <author fullname="James Gettys" initials="J." surname="Gettys">
+            <organization abbrev="Compaq/W3C">World Wide Web
+            Consortium</organization>
+
+            <address>
+              <postal>
+                <street>MIT Laboratory for Computer Science, NE43-356</street>
+
+                <street>545 Technology Square</street>
+
+                <city>Cambridge</city>
+
+                <region>MA</region>
+
+                <code>02139</code>
+              </postal>
+
+              <facsimile>+1(617)258-8682</facsimile>
+
+              <email>jg@w3.org</email>
+            </address>
+          </author>
+
+          <author fullname="Jeffrey C. Mogul" initials="J." surname="Mogul">
+            <organization abbrev="Compaq">Compaq Computer
+            Corporation</organization>
+
+            <address>
+              <postal>
+                <street>Western Research Laboratory</street>
+
+                <street>250 University Avenue</street>
+
+                <city>Palo Alto</city>
+
+                <region>CA</region>
+
+                <code>94305</code>
+              </postal>
+
+              <email>mogul@wrl.dec.com</email>
+            </address>
+          </author>
+
+          <author fullname="Henrik Frystyk Nielsen" initials="H."
+                  surname="Frystyk">
+            <organization abbrev="W3C/MIT">World Wide Web
+            Consortium</organization>
+
+            <address>
+              <postal>
+                <street>MIT Laboratory for Computer Science, NE43-356</street>
+
+                <street>545 Technology Square</street>
+
+                <city>Cambridge</city>
+
+                <region>MA</region>
+
+                <code>02139</code>
+              </postal>
+
+              <facsimile>+1(617)258-8682</facsimile>
+
+              <email>frystyk@w3.org</email>
+            </address>
+          </author>
+
+          <author fullname="Larry Masinter" initials="L." surname="Masinter">
+            <organization abbrev="Xerox">Xerox Corporation</organization>
+
+            <address>
+              <postal>
+                <street>MIT Laboratory for Computer Science, NE43-356</street>
+
+                <street>3333 Coyote Hill Road</street>
+
+                <city>Palo Alto</city>
+
+                <region>CA</region>
+
+                <code>94034</code>
+              </postal>
+
+              <email>masinter@parc.xerox.com</email>
+            </address>
+          </author>
+
+          <author fullname="Paul J. Leach" initials="P." surname="Leach">
+            <organization abbrev="Microsoft">Microsoft
+            Corporation</organization>
+
+            <address>
+              <postal>
+                <street>1 Microsoft Way</street>
+
+                <city>Redmond</city>
+
+                <region>WA</region>
+
+                <code>98052</code>
+              </postal>
+
+              <email>paulle@microsoft.com</email>
+            </address>
+          </author>
+
+          <author fullname="Tim Berners-Lee" initials="T."
+                  surname="Berners-Lee">
+            <organization abbrev="W3C/MIT">World Wide Web
+            Consortium</organization>
+
+            <address>
+              <postal>
+                <street>MIT Laboratory for Computer Science, NE43-356</street>
+
+                <street>545 Technology Square</street>
+
+                <city>Cambridge</city>
+
+                <region>MA</region>
+
+                <code>02139</code>
+              </postal>
+
+              <facsimile>+1(617)258-8682</facsimile>
+
+              <email>timbl@w3.org</email>
+            </address>
+          </author>
+
+          <date month="June" year="1999" />
+
+          <abstract>
+            <t>The Hypertext Transfer Protocol (HTTP) is an application-level
+            protocol for distributed, collaborative, hypermedia information
+            systems. It is a generic, stateless, protocol which can be used
+            for many tasks beyond its use for hypertext, such as name servers
+            and distributed object management systems, through extension of
+            its request methods, error codes and headers . A feature of HTTP
+            is the typing and negotiation of data representation, allowing
+            systems to be built independently of the data being
+            transferred.</t>
+
+            <t>HTTP has been in use by the World-Wide Web global information
+            initiative since 1990. This specification defines the protocol
+            referred to as "HTTP/1.1", and is an update to RFC 2068 .</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="2616" />
+
+        <format octets="422317"
+                target="ftp://ftp.isi.edu/in-notes/rfc2616.txt" type="TXT" />
+
+        <format octets="5529857"
+                target="ftp://ftp.isi.edu/in-notes/rfc2616.ps" type="PS" />
+
+        <format octets="550558"
+                target="ftp://ftp.isi.edu/in-notes/rfc2616.pdf" type="PDF" />
+
+        <format octets="636125"
+                target="http://xml.resource.org/public/rfc/html/rfc2616.html"
+                type="HTML" />
+
+        <format octets="493420"
+                target="http://xml.resource.org/public/rfc/xml/rfc2616.xml"
+                type="XML" />
+      </reference>
+
+      <reference anchor="RFC2119">
+        <front>
+          <title abbrev="RFC Key Words">Key words for use in RFCs to Indicate
+          Requirement Levels</title>
+
+          <author fullname="Scott Bradner" initials="S." surname="Bradner">
+            <organization>Harvard University</organization>
+
+            <address>
+              <postal>
+                <street>1350 Mass. Ave.</street>
+
+                <street>Cambridge</street>
+
+                <street>MA 02138</street>
+              </postal>
+
+              <phone>- +1 617 495 3864</phone>
+
+              <email>sob@harvard.edu</email>
+            </address>
+          </author>
+
+          <date month="March" year="1997" />
+
+          <area>General</area>
+
+          <keyword>keyword</keyword>
+        </front>
+
+        <seriesInfo name="BCP" value="14" />
+
+        <seriesInfo name="RFC" value="2119" />
+
+        <format octets="4723" target="ftp://ftp.isi.edu/in-notes/rfc2119.txt"
+                type="TXT" />
+
+        <format octets="17491"
+                target="http://xml.resource.org/public/rfc/html/rfc2119.html"
+                type="HTML" />
+
+        <format octets="5777"
+                target="http://xml.resource.org/public/rfc/xml/rfc2119.xml"
+                type="XML" />
+      </reference>
+
+      <reference anchor="RFC2818">
+        <front>
+          <title>HTTP Over TLS</title>
+
+          <author fullname="E. Rescorla" initials="E." surname="Rescorla">
+            <organization></organization>
+          </author>
+
+          <date month="May" year="2000" />
+
+          <abstract>
+            <t>This memo describes how to use Transport Layer Security (TLS)
+            to secure Hypertext Transfer Protocol (HTTP) connections over the
+            Internet. This memo provides information for the Internet
+            community.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="2818" />
+
+        <format octets="15170" target="ftp://ftp.isi.edu/in-notes/rfc2818.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC4648">
+        <front>
+          <title>The Base16, Base32, and Base64 Data Encodings</title>
+
+          <author fullname="S. Josefsson" initials="S." surname="Josefsson">
+            <organization></organization>
+          </author>
+
+          <date month="October" year="2006" />
+
+          <abstract>
+            <t>This document describes the commonly used base 64, base 32, and
+            base 16 encoding schemes. It also discusses the use of line-feeds
+            in encoded data, use of padding in encoded data, use of
+            non-alphabet characters in encoded data, use of different encoding
+            alphabets, and canonical encodings. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="4648" />
+
+        <format octets="35491" target="ftp://ftp.isi.edu/in-notes/rfc4648.txt"
+                type="TXT" />
+      </reference>
+    </references>
+
+    <references title="Informative References">
+      <reference anchor="DynDNS">
+        <front>
+          <title>http://www.dyndns.com/developers/specs/syntax.html</title>
+
+          <author fullname="Dynamic Network Services">
+            <organization></organization>
+          </author>
+
+          <date year="2008" />
+        </front>
+      </reference>
+
+      <reference anchor="telnic">
+        <front>
+          <title>http://www.telnic.net/developers-resources.html</title>
+
+          <author fullname="telnic">
+            <organization></organization>
+          </author>
+
+          <date year="2008" />
+        </front>
+      </reference>
+
+      <reference anchor="SliceHost">
+        <front>
+          <title>http://articles.slicehost.com/assets/2008/5/27/Slicehost_API.pdfl</title>
+
+          <author fullname="SliceManager API">
+            <organization>SliceHost</organization>
+          </author>
+
+          <date month="May" year="2008" />
+        </front>
+      </reference>
+
+      <reference anchor="RFC5205">
+        <front>
+          <title>Host Identity Protocol (HIP) Domain Name System (DNS)
+          Extensions</title>
+
+          <author fullname="P. Nikander" initials="P." surname="Nikander">
+            <organization></organization>
+          </author>
+
+          <author fullname="J. Laganier" initials="J." surname="Laganier">
+            <organization></organization>
+          </author>
+
+          <date month="April" year="2008" />
+
+          <abstract>
+            <t>This document specifies a new resource record (RR) for the
+            Domain Name System (DNS), and how to use it with the Host Identity
+            Protocol (HIP). This RR allows a HIP node to store in the DNS its
+            Host Identity (HI, the public component of the node public-private
+            key pair), Host Identity Tag (HIT, a truncated hash of its public
+            key), and the Domain Names of its rendezvous servers (RVSs). This
+            memo defines an Experimental Protocol for the Internet
+            community.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="5205" />
+
+        <format octets="34799" target="ftp://ftp.isi.edu/in-notes/rfc5205.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC1464">
+        <front>
+          <title abbrev="Storing Arbitrary Attributes in DNS">Using the Domain
+          Name System To Store Arbitrary String Attributes</title>
+
+          <author fullname="Rich Rosenbaum" initials="R." surname="Rosenbaum">
+            <organization>Digital Equipment Corporation</organization>
+
+            <address>
+              <postal>
+                <street>550 King Street</street>
+
+                <street>LKG2-2/Z7</street>
+
+                <city>Littleton</city>
+
+                <region>MA</region>
+
+                <code>01460-1289</code>
+
+                <country>US</country>
+              </postal>
+
+              <phone>+1 508 486 5922</phone>
+
+              <email>rosenbaum@lkg.dec.com</email>
+            </address>
+          </author>
+
+          <date month="May" year="1993" />
+
+          <abstract>
+            <t>While the Domain Name System (DNS),is generally used to store
+            predefined types of information (e.g., addresses of hosts), it is
+            possible to use it to store information that has not been
+            previously classified.</t>
+
+            <t>This paper describes a simple means to associate arbitrary
+            string information (ASCII text) with attributes that have not been
+            defined by the DNS. It uses DNS TXT resource records to store the
+            information. It requires no change to current DNS
+            implementations.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="1464" />
+
+        <format octets="7953" target="ftp://ftp.isi.edu/in-notes/rfc1464.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC2782">
+        <front>
+          <title abbrev="DNS SRV RR">A DNS RR for specifying the location of
+          services (DNS SRV)</title>
+
+          <author fullname="Arnt Gulbrandsen" initials="A."
+                  surname="Gulbrandsen">
+            <organization>Troll Tech</organization>
+
+            <address>
+              <postal>
+                <street>Waldemar Thranes gate 98B</street>
+
+                <city>Oslo</city>
+
+                <region></region>
+
+                <code>N-0175</code>
+
+                <country>NO</country>
+              </postal>
+
+              <phone>+47 22 806390</phone>
+
+              <facsimile>+47 22 806380</facsimile>
+
+              <email>arnt@troll.no</email>
+            </address>
+          </author>
+
+          <author fullname="Paul Vixie" initials="P." surname="Vixie">
+            <organization>Internet Software Consortium</organization>
+
+            <address>
+              <postal>
+                <street>950 Charter Street</street>
+
+                <city>Redwood City</city>
+
+                <region>CA</region>
+
+                <code>94063</code>
+
+                <country>US</country>
+              </postal>
+
+              <phone>+1 650 779 7001</phone>
+            </address>
+          </author>
+
+          <author fullname="Levon Esibov" initials="L." surname="Esibov">
+            <organization>Microsoft Corporation</organization>
+
+            <address>
+              <postal>
+                <street>One Microsoft Way</street>
+
+                <city>Redmond</city>
+
+                <region>WA</region>
+
+                <code>98052</code>
+
+                <country>US</country>
+              </postal>
+
+              <email>levone@microsoft.com</email>
+            </address>
+          </author>
+
+          <date month="February" year="2000" />
+
+          <abstract>
+            <t>This document describes a DNS RR which specifies the location
+            of the server(s) for a specific protocol and domain.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="2782" />
+
+        <format octets="24013" target="ftp://ftp.isi.edu/in-notes/rfc2782.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC3596">
+        <front>
+          <title>DNS Extensions to Support IP Version 6</title>
+
+          <author fullname="S. Thomson" initials="S." surname="Thomson">
+            <organization></organization>
+          </author>
+
+          <author fullname="C. Huitema" initials="C." surname="Huitema">
+            <organization></organization>
+          </author>
+
+          <author fullname="V. Ksinant" initials="V." surname="Ksinant">
+            <organization></organization>
+          </author>
+
+          <author fullname="M. Souissi" initials="M." surname="Souissi">
+            <organization></organization>
+          </author>
+
+          <date month="October" year="2003" />
+
+          <abstract>
+            <t>This document defines the changes that need to be made to the
+            Domain Name System (DNS) to support hosts running IP version 6
+            (IPv6). The changes include a resource record type to store an
+            IPv6 address, a domain to support lookups based on an IPv6
+            address, and updated definitions of existing query types that
+            return Internet addresses as part of additional section
+            processing. The extensions are designed to be compatible with
+            existing applications and, in particular, DNS implementations
+            themselves. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3596" />
+
+        <format octets="14093" target="ftp://ftp.isi.edu/in-notes/rfc3596.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC1035">
+        <front>
+          <title abbrev="Domain Implementation and Specification">Domain names
+          - implementation and specification</title>
+
+          <author fullname="P. Mockapetris" initials="P."
+                  surname="Mockapetris">
+            <organization>USC/ISI</organization>
+
+            <address>
+              <postal>
+                <street>4676 Admiralty Way</street>
+
+                <city>Marina del Rey</city>
+
+                <region>CA</region>
+
+                <code>90291</code>
+
+                <country>US</country>
+              </postal>
+
+              <phone>+1 213 822 1511</phone>
+            </address>
+          </author>
+
+          <date day="1" month="November" year="1987" />
+        </front>
+
+        <seriesInfo name="STD" value="13" />
+
+        <seriesInfo name="RFC" value="1035" />
+
+        <format octets="125626"
+                target="ftp://ftp.isi.edu/in-notes/rfc1035.txt" type="TXT" />
+      </reference>
+
+      <reference anchor="RFC3007">
+        <front>
+          <title>Secure Domain Name System (DNS) Dynamic Update</title>
+
+          <author fullname="B. Wellington" initials="B." surname="Wellington">
+            <organization></organization>
+          </author>
+
+          <date month="November" year="2000" />
+
+          <abstract>
+            <t>This document proposes a method for performing secure Domain
+            Name System (DNS) dynamic updates. [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="3007" />
+
+        <format octets="18056" target="ftp://ftp.isi.edu/in-notes/rfc3007.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="RFC2136">
+        <front>
+          <title abbrev="DNS Update">Dynamic Updates in the Domain Name System
+          (DNS UPDATE)</title>
+
+          <author fullname="Paul Vixie" initials="P." surname="Vixie">
+            <organization>Internet Software Consortium</organization>
+
+            <address>
+              <postal>
+                <street>Star Route Box 159A</street>
+
+                <street>Woodside</street>
+
+                <street>CA 94062</street>
+              </postal>
+
+              <phone>+1 415 747 0204</phone>
+
+              <email>paul@vix.com</email>
+            </address>
+          </author>
+
+          <author fullname="Susan Thomson" initials="S." surname="Thomson">
+            <organization>Bellcore</organization>
+
+            <address>
+              <postal>
+                <street>445 South Street</street>
+
+                <street>Morristown</street>
+
+                <street>NJ 07960</street>
+              </postal>
+
+              <phone>+1 201 829 4514</phone>
+
+              <email>set@thumper.bellcore.com</email>
+            </address>
+          </author>
+
+          <author fullname="Yakov Rekhter" initials="Y." surname="Rekhter">
+            <organization>Cisco Systems</organization>
+
+            <address>
+              <postal>
+                <street>170 West Tasman Drive</street>
+
+                <street>San Jose</street>
+
+                <street>CA 95134-1706</street>
+              </postal>
+
+              <phone>+1 914 528 0090</phone>
+
+              <email>yakov@cisco.com</email>
+            </address>
+          </author>
+
+          <author fullname="Jim Bound" initials="J." surname="Bound">
+            <organization>Digital Equipment Corp.</organization>
+
+            <address>
+              <postal>
+                <street>110 Spitbrook Rd ZK3-3/U14</street>
+
+                <street>Nashua</street>
+
+                <street>NH 03062-2698</street>
+              </postal>
+
+              <phone>+1 603 881 0400</phone>
+
+              <email>bound@zk3.dec.com</email>
+            </address>
+          </author>
+
+          <date month="April" year="1997" />
+
+          <area>Applications</area>
+
+          <keyword>domain name</keyword>
+
+          <keyword>domain name system</keyword>
+
+          <abstract>
+            <t>The Domain Name System was originally designed to support
+            queries of a statically configured database. While the data was
+            expected to change, the frequency of those changes was expected to
+            be fairly low, and all updates were made as external edits to a
+            zone's Master File.</t>
+
+            <t>Using this specification of the UPDATE opcode, it is possible
+            to add or delete RRs or RRsets from a specified zone.
+            Prerequisites are specified separately from update operations, and
+            can specify a dependency upon either the previous existence or
+            nonexistence of an RRset, or the existence of a single RR.</t>
+
+            <t>UPDATE is atomic, i.e., all prerequisites must be satisfied or
+            else no update operations will take place. There are no data
+            dependent error conditions defined after the prerequisites have
+            been met.</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="2136" />
+
+        <format octets="56354" target="ftp://ftp.isi.edu/in-notes/rfc2136.txt"
+                type="TXT" />
+
+        <format octets="67722"
+                target="http://xml.resource.org/public/rfc/html/rfc2136.html"
+                type="HTML" />
+
+        <format octets="54818"
+                target="http://xml.resource.org/public/rfc/xml/rfc2136.xml"
+                type="XML" />
+      </reference>
+
+      <reference anchor="RFC4310">
+        <front>
+          <title>Domain Name System (DNS) Security Extensions Mapping for the
+          Extensible Provisioning Protocol (EPP)</title>
+
+          <author fullname="S. Hollenbeck" initials="S." surname="Hollenbeck">
+            <organization></organization>
+          </author>
+
+          <date month="December" year="2005" />
+
+          <abstract>
+            <t>This document describes an Extensible Provisioning Protocol
+            (EPP) extension mapping for the provisioning and management of
+            Domain Name System security extensions (DNSSEC) for domain names
+            stored in a shared central repository. Specified in XML, this
+            mapping extends the EPP domain name mapping to provide additional
+            features required for the provisioning of DNS security extensions.
+            [STANDARDS TRACK]</t>
+          </abstract>
+        </front>
+
+        <seriesInfo name="RFC" value="4310" />
+
+        <format octets="46326" target="ftp://ftp.isi.edu/in-notes/rfc4310.txt"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="dns-track">
+        <front>
+          <title>Identity Trail: Covert Surveillance Using DNS</title>
+
+          <author fullname="Saikat Guha" initials="S" surname="Guha">
+            <organization></organization>
+          </author>
+
+          <author fullname="Paul Francis" initials="P" surname="Francis">
+            <organization></organization>
+          </author>
+
+          <date month="January" year="2007" />
+        </front>
+
+        <seriesInfo name="RFC" value="4310" />
+
+        <format octets="46326" target="ftp://ftp.isi.edu/in-notes/rfc4310.txt"
+                type="TXT" />
+      </reference>
+    </references>
+  </back>
+</rfc>

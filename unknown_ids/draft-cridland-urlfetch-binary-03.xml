@@ -1,0 +1,464 @@
+<?xml version="1.0"?>
+<?rfc toc="yes"?><?rfc compact="yes"?><?rfc strict="yes"?><?rfc symrefs="yes"?><?rfc sortrefs="yes"?><rfc category="std" ipr="full3978" docName="draft-cridland-urlfetch-binary-03">
+
+<front>
+  <title abbrev="URLFETCH BINARY">Extended URLFETCH for binary and converted parts</title>
+  <author initials="D.A." surname="Cridland" fullname="Dave Cridland">
+<organization>Isode Limited</organization>
+<address>
+	<postal>
+		<street>5 Castle Business Village</street>
+		<street>36, Station Road</street>
+		<city>Hampton</city>
+		<region>Middlesex</region>
+		<code>TW12 2BX</code>
+		<country>GB</country>
+	</postal>
+	<email>dave.cridland@isode.com</email>
+</address>
+</author>
+  <date day="4" month="September" year="2008"/>
+  <area>Applications</area>
+  <abstract>
+    <t>The URLFETCH command defined as part of URLAUTH provides a mechanism for third-parties to gain access to data held within messages in a user's private store, however, this data is sent verbatim, which is not suitable for a number of applications. This memo specifies a method for obtaining data in forms suitable for non-mail applications.</t>
+  </abstract>
+</front>
+
+<middle>
+  <section title="Introduction">
+    <t>Although <xref target="URLAUTH"/> provides a URLFETCH command which can be used to dereference a URL and return the body part data, it does so by returning the encoded form, without sufficient metadata to decode. This is suitable for use in mail applications such as <xref target="BURL"/>, where the encoded form is suitable, but not where access to the actual content is required, such as <xref target="STREAMING"/>.</t>
+    <t>This memo specifies a mechanism which returns additional metadata about the part, such as its <xref target="MEDIATYPE"/> type, as well as removing any content transfer encoding used on the body part.</t>
+  </section>
+
+  <section title="Conventions used in this document">
+    <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+   document are to be interpreted as described in <xref target="KEYWORDS"/>.</t>
+    <t>Protocol examples are line-wrapped for clarity. Protocol strings are prefixed with C: and S: for client and server respectively, and elided data is represented by [...]. Implementors should note these notations are for editorial clarity only.</t>
+  </section>
+
+  <section title="Extended URLFETCH">
+      <t>This extension is available in any IMAP server implementation which includes URLAUTH=BINARY within its capability string.</t>
+      <t>Such servers accept additional, per-URL, parameters to the URLFETCH command, and will provide, upon request, specific data for each URL dereferenced.</t>
+    <section title="Command Parameters">
+    <t>The URLFETCH command is extended by the provision of optional parameters. The extended URLFETCH command is distinct by enclosing each URL and associated parameters in a parenthesized list. The absence of any parameters, or if the URL is sent unenclosed, causes the command to behave precisely as specified in <xref target="URLAUTH"/>.</t>
+    <t>Similarly, if the URL is invalid, the command will behave precisely as specified in <xref target="URLAUTH"/>, and return a simple NIL.</t>
+    <t>Available parameters are:
+    <list style="hanging">
+    <t hangText="BODYPARTSTRUCTURE"><vspace/>Provide a BODYPARTSTRUCTURE.<vspace blankLines="1"/>BODYPARTSTRUCTURE is defined in <xref target="CONVERT"/>, and provides metadata useful for processing applications, such as the type of the data.<vspace blankLines="1"/></t>
+    <t hangText="BINARY"><vspace/>Provide the data without any Content-Transfer-Encoding.<vspace blankLines="1"/>In particular, this means that the data MAY contain NUL octets, and not be formed from textual lines. Data containing NUL octets MUST be transferred using the literal8 syntax defined in <xref target="BINARY"/>.<vspace blankLines="1"/></t>
+    <t hangText="BODY"><vspace/>Provide the data as-is.<vspace blankLines="1"/>This will provide the same data as the unextended <xref target="URLAUTH"/> as a metadata item.<vspace blankLines="1"/></t>
+    </list>
+    </t>
+    <t>Metadata items MUST NOT appear more than once per URL requested, and clients MUST NOT request both BINARY and BODY.</t>
+    </section>
+    <section title="Response Metadata">
+    <t>In order to carry any requested metadata and provide additional information to the consumer, the URLFETCH response is similarly extended.</t>
+    <t>Following the URL itself, servers will include a series of parenthesized metadata elements. Defined metadata elements are as follows:
+    <list style="hanging">
+    <t hangText="BODYPARTSTRUCTURE"><vspace/>The BODYPARTSTRUCTURE provides information about the data contained in the response, as it has been returned. It will reflect any conversions or decoding that have taken place. In particular, this will show an identity encoding if BINARY is also requested.<vspace blankLines="1"/></t>
+    <t hangText="BINARY"><vspace/>The BINARY item provides the content, without any content transfer encoding applied. If this is not possible (for example, the content transfer encoding is unknown to the server), then this MAY contain NIL. Servers MUST understand all identity content transfer encodings defined in <xref target="MIME"/>, as well as the transformation encodings "Base64" <xref target="BASE64"/> and "Quoted-Printable" <xref target="MIME"/>.<vspace blankLines="1"/></t>
+    <t hangText="BODY"><vspace/>The BODY item provides the content as found in the message, with any content transfer encoding still applied. Requesting only the BODY will provide equivalent functionality to the unextended <xref target="URLAUTH"/>, however using the extended syntax described herein.<vspace blankLines="1"/></t>
+    </list></t>
+    <t>Note that unlike <xref target="CONVERT"/>, BODYPARTSTRUCTURE is not appended with the part specifier, as this is implicit in the URL.</t>
+    </section>
+  </section>
+  <section title="Example Exchanges">
+<figure><preamble>A client requests the data with no content transfer encoding.</preamble>
+<artwork>
+C: A001 URLFETCH  ("imap://joe@example.com/INBOX/;uid=20/;
+   section=1.2;urlauth=anonymous:internal:
+   91354a473744909de610943775f92038" BINARY)
+S: * URLFETCH "imap://joe@example.com/INBOX/;uid=20/;
+   section=1.2;urlauth=anonymous:internal:
+   91354a473744909de610943775f92038" (BINARY {28}
+S: Si vis pacem, para bellum.
+S:
+S: )
+S: A001 OK URLFETCH completed
+</artwork>
+<postamble>Note that the data here does not contain a NUL octet, therefore a literal - not literal8 - syntax has been used.</postamble>
+</figure>
+<figure><preamble>A client again requests data with no content transfer encoding, but this time requests the body structure.</preamble>
+<artwork>
+C: A001 URLFETCH  ("imap://joe@example.com/INBOX/;uid=20/;
+   section=1.3;urlauth=anonymous:internal:
+   ae354a473744909de610943775f92038" BINARY BODYPARTSTRUCTURE)
+S: * URLFETCH "imap://joe@example.com/INBOX/;uid=20/;
+   section=1.3;urlauth=anonymous:internal:
+   ae354a473744909de610943775f92038" (BODYPARTSTRUCTURE
+   ("IMAGE" "PNG" () NIL NIL "BINARY" 123)) (BINARY ~{123}
+S: [123 octets of data, some of which is NUL])
+S: A001 OK URLFETCH completed
+</artwork>
+</figure>
+<figure><preamble>A client requests only the body structure.</preamble>
+<artwork>
+C: A001 URLFETCH  ("imap://joe@example.com/INBOX/;uid=20/;
+   section=1.3;urlauth=anonymous:internal:
+   ae354a473744909de610943775f92038" BODYPARTSTRUCTURE)
+S: * URLFETCH "imap://joe@example.com/INBOX/;uid=20/;
+   section=1.3;urlauth=anonymous:internal:
+   ae354a473744909de610943775f92038" (BODYPARTSTRUCTURE
+   ("IMAGE" "PNG" () NIL NIL "BASE64" 164))
+S: A001 OK URLFETCH completed
+</artwork>
+</figure>
+<figure><preamble>A client requests the body structure, and the original content.</preamble>
+<artwork>
+C: A001 URLFETCH  ("imap://joe@example.com/INBOX/;uid=20/;
+   section=1.3;urlauth=anonymous:internal:
+   ae354a473744909de610943775f92038" BODYPARTSTRUCTURE BODY)
+S: * URLFETCH "imap://joe@example.com/INBOX/;uid=20/;
+   section=1.3;urlauth=anonymous:internal:
+   ae354a473744909de610943775f92038" (BODYPARTSTRUCTURE
+   ("IMAGE" "PNG" () NIL NIL "BASE64" 164)) (BODY {164}
+S: [164 octets of base64 encoded data])
+S: A001 OK URLFETCH completed
+</artwork>
+</figure>
+<figure><preamble>Some parts cannot be decoded, so the server will provide the BODYPARTSTRUCTURE of the part as-is, and NIL for the binary content:</preamble>
+<artwork>
+C: A001 URLFETCH ("imap://joe@example.com/INBOX/;uid=20/;
+   section=1.4;urlauth=anonymous:internal:
+   87ecbd02095b815e699503fc20d869c8" BODYPARTSTRUCTURE BINARY)
+S: * URLFETCH "imap://joe@example.com/INBOX/;uid=20/;
+   section=1.4;urlauth=anonymous:internal:
+   87ecbd02095b815e699503fc20d869c8" (BODYPARTSTRUCTURE
+   ("IMAGE" "PNG" () NIL NIL "X-BLURDYBLOOP" 123))
+   (BINARY NIL)
+S: A001 OK URLFETCH completed
+</artwork>
+</figure>
+<figure><preamble>If a part simply doesn't exist, however, or the URI is invalid for some other reason, then NIL is returned instead of metadata:</preamble>
+<artwork>
+C: A001 URLFETCH ("imap://joe@example.com/INBOX/;uid=20/;
+   section=200;urlauth=anonymous:internal:
+   88066d37e2e5410e1a6486350a8836ee" BODYPARTSTRUCTURE BODY)
+S: * URLFETCH "imap://joe@example.com/INBOX/;uid=20/;
+   section=200;urlauth=anonymous:internal:
+   88066d37e2e5410e1a6486350a8836ee" NIL
+S: A001 OK URLFETCH completed
+</artwork>
+</figure>
+  </section>
+  <section title="Formal Syntax">
+    <figure>
+    <preamble>This formal syntax uses ABNF as specified in <xref target="ABNF"/>, and includes productions defined in <xref target="URLAUTH"/>, <xref target="BINARY"/>  and <xref target="IMAP"/>.</preamble>
+    <artwork type="abnf">
+capability       =/ "URLAUTH=BINARY"
+
+   ; Command parameters; see Section 3.1
+
+urlfetch         =  "URLFETCH" 1*(SP url-fetch-arg)
+
+url-fetch-arg    =  url-fetch-simple / url-fetch-ext
+
+url-fetch-simple =  url-full
+   ; Unextended URLFETCH.
+
+url-fetch-ext    =  "(" url-full *(SP url-fetch-param) ")"
+   ; If no url-fetch-param present, as unextended.
+
+url-fetch-param  =  "BODY" / "BINARY" / "BODYPARTSTRUCTURE" / atom
+
+   ; Response; see Section 3.2
+
+urlfetch-data    =  "*" SP "URLFETCH"
+                    1*(SP (urldata-simple / urldata-ext /
+                           urldata-error))
+
+urldata-error    =  SP url-full SP nil
+
+urldata-simple   =  SP url-full SP nstring
+   ; If client issues url-fetch-simple, server MUST respond with
+   ; urldata-simple.
+
+urldata-ext      =  SP url-full url-metadata
+
+url-metadata     =  1*(SP "(" url-metadata-el ")")
+
+url-metadata-el  =  url-meta-bodystruct / url-meta-body /
+                    url-meta-binary
+
+url-bodystruct   =  "BODYPARTSTRUCTURE" SP body
+
+url-binary       =  "BINARY" SP ( nstring / literal8 )
+   ; If content contains a NUL octet, literal8 MUST be used.
+   ; Otherwise, content SHOULD use nstring.
+   ; On decoding error NIL should be used.
+
+url-body         =  "BODY" SP nstring
+
+    </artwork>
+   </figure>
+  </section>
+  <section title="IANA Considerations">
+   <figure><preamble>IMAP4 capabilities are registered by publishing a standards track or
+   IESG approved experimental RFC.  The registry is currently located
+   at:</preamble>
+<artwork>
+      http://www.iana.org/assignments/imap4-capabilities
+</artwork>
+
+   <postamble>This document defines the URLFETCH=BINARY IMAP capability.  IANA is requested to add
+   it to the registry accordingly.</postamble></figure>
+  
+  </section>
+  <section title="Security Considerations">
+  <t>Implementors are directed to the security considerations within <xref target="IMAP"/>, <xref target="URLAUTH"/>, and <xref target="BINARY"/>.</t>
+  <t>The ability of the holder of a URL to be able to fetch metadata about the content pointed to by the URL as well as the content itself allows a potential attacker to discover more about the content than was previously possible, including its original filename, and user-supplied description.</t>
+  <t>The additional value of this information to an attacker in marginal, and applies only to those URLs for which the attacker does not have direct access, such as those produced by <xref target="URLAUTH"/>. Implementors are therefore directed to the security considerations present in <xref target="URLAUTH"/>.</t>
+  </section>
+  <section title="Acknowledgements">
+  <t>Comments were received on the idea, and/or this draft, from Neil Cook, Philip Guenther, Alexey Melnikov, Ken Murchison and others. Whether in agreement or dissent, the comments have refined and otherwise influenced the document.</t>
+  </section>
+</middle>
+<back>
+  <references title="Normative References">
+    <reference anchor="KEYWORDS">
+
+<front>
+<title abbrev="RFC Key Words">Key words for use in RFCs to Indicate Requirement Levels</title>
+<author initials="S." surname="Bradner" fullname="Scott Bradner">
+<organization>Harvard University</organization>
+<address>
+<postal>
+<street>1350 Mass. Ave.</street>
+<street>Cambridge</street>
+<street>MA 02138</street></postal>
+<phone>- +1 617 495 3864</phone>
+<email>sob@harvard.edu</email></address></author>
+<date year="1997" month="March"/>
+<area>General</area>
+<keyword>keyword</keyword>
+<abstract>
+<t>
+   In many standards track documents several words are used to signify
+   the requirements in the specification.  These words are often
+   capitalized.  This document defines these words as they should be
+   interpreted in IETF documents.  Authors who follow these guidelines
+   should incorporate this phrase near the beginning of their document:
+
+<list>
+<t>
+      The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+      NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and
+      "OPTIONAL" in this document are to be interpreted as described in
+      RFC 2119.
+</t></list></t>
+<t>
+   Note that the force of these words is modified by the requirement
+   level of the document in which they are used.
+</t></abstract></front>
+
+<seriesInfo name="BCP" value="14"/>
+<seriesInfo name="RFC" value="2119"/>
+<format type="TXT" octets="4723" target="ftp://ftp.isi.edu/in-notes/rfc2119.txt"/>
+<format type="HTML" octets="17491" target="http://xml.resource.org/public/rfc/html/rfc2119.html"/>
+<format type="XML" octets="5777" target="http://xml.resource.org/public/rfc/xml/rfc2119.xml"/>
+</reference>
+    <reference anchor="IMAP">
+
+<front>
+<title>INTERNET MESSAGE ACCESS PROTOCOL - VERSION 4rev1</title>
+<author initials="M." surname="Crispin" fullname="M. Crispin">
+<organization/></author>
+<date year="2003" month="March"/>
+<abstract>
+<t>The Internet Message Access Protocol, Version 4rev1 (IMAP4rev1) allows a client to access and manipulate electronic mail messages on a server.  IMAP4rev1 permits manipulation of mailboxes (remote message folders) in a way that is functionally equivalent to local folders.  IMAP4rev1 also provides the capability for an offline client to resynchronize with the server.  IMAP4rev1 includes operations for creating, deleting, and renaming mailboxes, checking for new messages, permanently removing messages, setting and clearing flags, RFC 2822 and RFC 2045 parsing, searching, and selective fetching of message attributes, texts, and portions thereof.  Messages in IMAP4rev1 are accessed by the use of numbers.  These numbers are either message sequence numbers or unique identifiers.  IMAP4rev1 supports a single server.  A mechanism for accessing configuration information to support multiple IMAP4rev1 servers is discussed in RFC 2244.  IMAP4rev1 does not specify a means of posting mail; this function is handled by a mail transfer protocol such as RFC 2821. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="3501"/>
+<format type="TXT" octets="227640" target="ftp://ftp.isi.edu/in-notes/rfc3501.txt"/>
+</reference>
+    <reference anchor="CONVERT">
+
+<front>
+<title>Internet Message Access Protocol - CONVERT Extension</title>
+<author initials="A." surname="Melnikov" fullname="A. Melnikov">
+<organization/></author>
+<author initials="P." surname="Coates" fullname="P. Coates">
+<organization/></author>
+<date year="2008" month="July"/>
+<abstract>
+<t>CONVERT defines extensions to IMAP allowing clients to request adaptation and/or transcoding of attachments.  Clients can specify the conversion details or allow servers to decide based on knowledge of client capabilities, on user or administrator preferences, or on server settings. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="5259"/>
+<format type="TXT" octets="63831" target="ftp://ftp.isi.edu/in-notes/rfc5259.txt"/>
+</reference>
+    <reference anchor="URLAUTH">
+
+<front>
+<title>Internet Message Access Protocol (IMAP) - URLAUTH Extension</title>
+<author initials="M." surname="Crispin" fullname="M. Crispin">
+<organization/></author>
+<date year="2006" month="May"/>
+<abstract>
+<t>This document describes the URLAUTH extension to the Internet Message Access Protocol (IMAP) (RFC 3501) and the IMAP URL Scheme (IMAPURL) (RFC 2192). This extension provides a means by which an IMAP client can use URLs carrying authorization to access limited message data on the IMAP server.&lt;/t&gt;&lt;t&gt; An IMAP server that supports this extension indicates this with a capability name of "URLAUTH". [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4467"/>
+<format type="TXT" octets="36714" target="ftp://ftp.isi.edu/in-notes/rfc4467.txt"/>
+</reference>
+    <reference anchor="BINARY">
+
+<front>
+<title>IMAP4 Binary Content Extension</title>
+<author initials="L." surname="Nerenberg" fullname="L. Nerenberg">
+<organization/></author>
+<date year="2003" month="April"/>
+<abstract>
+<t>This memo defines the Binary extension to the Internet Message Access Protocol (IMAP4).  It provides a mechanism for IMAP4 clients and servers to exchange message body data without using a MIME content-transfer- encoding. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="3516"/>
+<format type="TXT" octets="14598" target="ftp://ftp.isi.edu/in-notes/rfc3516.txt"/>
+</reference>
+    <reference anchor="ABNF">
+
+<front>
+<title>Augmented BNF for Syntax Specifications: ABNF</title>
+<author initials="D." surname="Crocker" fullname="D. Crocker">
+<organization/></author>
+<author initials="P." surname="Overell" fullname="P. Overell">
+<organization/></author>
+<date year="2008" month="January"/>
+<abstract>
+<t>Internet technical specifications often need to define a formal syntax.  Over the years, a modified version of Backus-Naur Form (BNF), called Augmented BNF (ABNF), has been popular among many Internet specifications.  The current specification documents ABNF.  It balances compactness and simplicity with reasonable representational power.  The differences between standard BNF and ABNF involve naming rules, repetition, alternatives, order-independence, and value ranges.  This specification also supplies additional rule definitions and encoding for a core lexical analyzer of the type common to several Internet specifications. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="STD" value="68"/>
+<seriesInfo name="RFC" value="5234"/>
+<format type="TXT" octets="26359" target="ftp://ftp.isi.edu/in-notes/rfc5234.txt"/>
+</reference>
+    <reference anchor="MIME">
+
+<front>
+<title abbrev="Internet Message Bodies">Multipurpose Internet Mail Extensions (MIME) Part One: Format of Internet Message Bodies</title>
+<author initials="N." surname="Freed" fullname="Ned Freed">
+<organization>Innosoft International, Inc.</organization>
+<address>
+<postal>
+<street>1050 East Garvey Avenue South</street>
+<city>West Covina</city>
+<region>CA</region>
+<code>91790</code>
+<country>US</country></postal>
+<phone>+1 818 919 3600</phone>
+<facsimile>+1 818 919 3614</facsimile>
+<email>ned@innosoft.com</email></address></author>
+<author initials="N.S." surname="Borenstein" fullname="Nathaniel S. Borenstein">
+<organization>First Virtual Holdings</organization>
+<address>
+<postal>
+<street>25 Washington Avenue</street>
+<city>Morristown</city>
+<region>NJ</region>
+<code>07960</code>
+<country>US</country></postal>
+<phone>+1 201 540 8967</phone>
+<facsimile>+1 201 993 3032</facsimile>
+<email>nsb@nsb.fv.com</email></address></author>
+<date year="1996" month="November"/>
+<abstract>
+<t>STD 11, RFC 822, defines a message representation protocol specifying considerable detail about US-ASCII message headers, and leaves the message content, or message body, as flat US-ASCII text.  This set of documents, collectively called the Multipurpose Internet Mail Extensions, or MIME, redefines the format of messages to allow for</t>
+<t>(1)   textual message bodies in character sets other than US-ASCII,</t>
+<t>(2)   an extensible set of different formats for non-textual message bodies,</t>
+<t>(3)   multi-part message bodies, and</t>
+<t>(4)   textual header information in character sets other than US-ASCII.</t>
+<t>These documents are based on earlier work documented in RFC 934, STD 11, and RFC 1049, but extends and revises them.  Because RFC 822 said so little about message bodies, these documents are largely orthogonal to (rather than a revision of) RFC 822.</t>
+<t>This initial document specifies the various headers used to describe the structure of MIME messages. The second document, RFC 2046, defines the general structure of the MIME media typing system and defines an initial set of media types. The third document, RFC 2047, describes extensions to RFC 822 to allow non-US-ASCII text data in Internet mail header fields. The fourth document, RFC 2048, specifies various IANA registration procedures for MIME-related facilities. The fifth and final document, RFC 2049, describes MIME conformance
+  criteria as well as providing some illustrative examples of MIME message formats, acknowledgements, and the bibliography.</t>
+<t>These documents are revisions of RFCs 1521, 1522, and 1590, which themselves were revisions of RFCs 1341 and 1342.  An appendix in RFC 2049 describes differences and changes from previous versions.</t></abstract></front>
+
+<seriesInfo name="RFC" value="2045"/>
+<format type="TXT" octets="72932" target="ftp://ftp.isi.edu/in-notes/rfc2045.txt"/>
+</reference>
+    <reference anchor="BASE64">
+
+<front>
+<title>The Base16, Base32, and Base64 Data Encodings</title>
+<author initials="S." surname="Josefsson" fullname="S. Josefsson">
+<organization/></author>
+<date year="2006" month="October"/>
+<abstract>
+<t>This document describes the commonly used base 64, base 32, and base 16 encoding schemes.  It also discusses the use of line-feeds in encoded data, use of padding in encoded data, use of non-alphabet characters in encoded data, use of different encoding alphabets, and canonical encodings. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4648"/>
+<format type="TXT" octets="35491" target="ftp://ftp.isi.edu/in-notes/rfc4648.txt"/>
+</reference>
+  </references>
+  <references title="Informative References">
+    <reference anchor="STREAMING">
+<front>
+<title>Streaming Internet Messaging Attachments</title>
+
+<author initials="N" surname="Cook" fullname="Neil Cook">
+    <organization/>
+</author>
+
+<date month="June" day="2" year="2008"/>
+
+<abstract><t>This document describes a method for streaming multimedia attachments received by a resource constrained and/or mobile device from an IMAP server.  It allows such clients, which often have limits in storage space and bandwidth, to play video and audio e-mail content.  The document describes a profile for making use of the IMAP URLAUTH extension (RFC 4467), the Network Announcement SIP Media Service (RFC 4240), and the Media Server Control Markup Language (RFC 5022).</t></abstract>
+
+</front>
+
+<seriesInfo name="Internet-Draft" value="draft-ietf-lemonade-streaming-06"/>
+<format type="TXT" target="http://www.ietf.org/internet-drafts/draft-ietf-lemonade-streaming-06.txt"/>
+</reference>
+    <reference anchor="BURL">
+
+<front>
+<title>Message Submission BURL Extension</title>
+<author initials="C." surname="Newman" fullname="C. Newman">
+<organization/></author>
+<date year="2006" month="May"/>
+<abstract>
+<t>The submission profile of Simple Mail Transfer Protocol (SMTP) provides a standard way for an email client to submit a complete message for delivery.  This specification extends the submission profile by adding a new BURL command that can be used to fetch submission data from an Internet Message Access Protocol (IMAP) server.  This permits a mail client to inject content from an IMAP server into the SMTP infrastructure without downloading it to the client and uploading it back to the server. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name="RFC" value="4468"/>
+<format type="TXT" octets="28614" target="ftp://ftp.isi.edu/in-notes/rfc4468.txt"/>
+</reference>
+    <reference anchor="MEDIATYPE">
+
+<front>
+<title abbrev="Media Types">Multipurpose Internet Mail Extensions (MIME) Part Two: Media Types</title>
+<author initials="N." surname="Freed" fullname="Ned Freed">
+<organization>Innosoft International, Inc.</organization>
+<address>
+<postal>
+<street>1050 East Garvey Avenue South</street>
+<city>West Covina</city>
+<region>CA</region>
+<code>91790</code>
+<country>US</country></postal>
+<phone>+1 818 919 3600</phone>
+<facsimile>+1 818 919 3614</facsimile>
+<email>ned@innosoft.com</email></address></author>
+<author initials="N." surname="Borenstein" fullname="Nathaniel S. Borenstein">
+<organization>First Virtual Holdings</organization>
+<address>
+<postal>
+<street>25 Washington Avenue</street>
+<city>Morristown</city>
+<region>NJ</region>
+<code>07960</code>
+<country>US</country></postal>
+<phone>+1 201 540 8967</phone>
+<facsimile>+1 201 993 3032</facsimile>
+<email>nsb@nsb.fv.com</email></address></author>
+<date year="1996" month="November"/>
+<abstract>
+<t>STD 11, RFC 822 defines a message representation protocol specifying considerable detail about US-ASCII message headers, but which leaves the message content, or message body, as flat US-ASCII text.  This set of documents, collectively called the Multipurpose Internet Mail Extensions, or MIME, redefines the format of messages to allow for</t>
+<t>(1)   textual message bodies in character sets other than US-ASCII,</t>
+<t>(2)   an extensible set of different formats for non-textual message bodies,</t>
+<t>(3)   multi-part message bodies, and</t>
+<t>(4)   textual header information in character sets other than US-ASCII.</t>
+<t>These documents are based on earlier work documented in RFC 934, STD 11 and RFC 1049, but extends and revises them.  Because RFC 822 said so little about message bodies, these documents are largely orthogonal to (rather than a revision of) RFC 822.</t>
+<t>The initial document in this set, RFC 2045, specifies the various headers used to describe the structure of MIME messages. This second document defines the general structure of the MIME media typing sytem and defines an initial set of media types. The third document, RFC 2047, describes extensions to RFC 822 to allow non-US-ASCII text data in Internet mail header fields. The fourth document, RFC 2048, specifies various IANA registration procedures for MIME-related facilities.  The fifth and final document, RFC 2049, describes MIME
+   conformance criteria as well as providing some illustrative examples of MIME message formats, acknowledgements, and the bibliography.</t>
+<t>These documents are revisions of RFCs 1521 and 1522, which themselves were revisions of RFCs 1341 and 1342.  An appendix in RFC 2049 describes differences and changes from previous versions.</t></abstract></front>
+
+<seriesInfo name="RFC" value="2046"/>
+<format type="TXT" octets="105854" target="ftp://ftp.isi.edu/in-notes/rfc2046.txt"/>
+</reference>
+  </references>
+</back>
+</rfc>

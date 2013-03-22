@@ -1,0 +1,342 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd"[
+
+      <!ENTITY rfc2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+      <!ENTITY rfc1633 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.1633.xml'>
+
+    ]>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes" ?>
+<?rfc strict="yes" ?>
+<?rfc linkmailto="yes" ?>
+<rfc docName="draft-briscoe-pcn-boundary-behav-00.txt" ipr="full3978">
+    <front>
+        <title abbrev="PCN Boundary Node Behaviour"> PCN Boundary Node Behaviour</title>
+        <author fullname="Bob Briscoe" initials="B." surname="Briscoe">
+            <organization abbrev="BT &amp; UCL">BT &amp; UCL</organization>
+            <address>
+                <postal>
+                    <street>B54/77,  Sirius House</street>
+                    <street>Adastral Park</street>
+                    <street>Martlesham Heath</street>
+                    <city>Ipswich</city>
+                    <code>IP5 3RE</code>
+                    <country>UK</country>
+                </postal>
+                <phone>+44 1473 645196</phone>
+                <email>bob.briscoe@bt.com</email>
+                <uri>http://www.cs.ucl.ac.uk/staff/B.Briscoe/</uri>
+            </address>
+        </author>
+        <author fullname="Tina Tsou" initials="T." surname="Tsou">
+            <organization abbrev="Huawei">Huawei Technologies</organization>
+            <address>
+                <postal>
+                    <street>F3-5-089S, R&amp;D Center,</street>
+                    <street>Longgang District</street>
+                    <city>Shenzhen</city>
+                    <code>518129</code>
+                    <country>China</country>
+                </postal>
+                <email>tena@huawei.com</email>
+            </address>
+        </author>
+        <author fullname="Tom Taylor" initials="T." surname="Taylor">
+            <organization abbrev="Huawei">Huawei Technologies</organization>
+            <address>
+                <postal>
+                    <street>1852 Lorraine Ave</street>
+                    <city>Ottawa</city>
+                    <region>Ontario</region>
+                    <code>K1H 6Z8</code>
+                    <country>Canada</country>
+                </postal>
+                <phone>+1 613 680 2675</phone>
+                <email>tom.taylor@rogers.com</email>
+            </address>
+        </author>
+        <date month="November" year="2007"/>
+        <area>Transport</area>
+        <workgroup>PCN</workgroup>
+
+        <abstract>
+
+            <t>The Pre-Congestion Notification Architecture document defines a PCN domain and the PCN-ingress and PCN-egress nodes that form its boundary. The present document is an attempt to describe the detailed behaviour of the PCN boundary nodes. It is a contribution toward the PCN WG milestone: "Suggested Flow Admission and Termination Boundary Mechanisms". This first version is expected to evolve with discussion and further thought toward a more precise and prescriptive view of boundary node behaviour.  </t>
+
+        </abstract>
+
+</front>
+
+<middle>
+
+<section anchor="intro" title="Introduction">
+
+<t>The Pre-Congestion Notification Architecture document <xref target="I-D.PCNarch"/> defines a PCN domain and the PCN-ingress and PCN-egress nodes that form its boundary. The present document is an attempt to describe the detailed behaviour of the PCN boundary nodes. As part of this effort, it deals with the following issues:
+<list style="symbols">
+<t>mapping from flows to aggregates;</t>
+<t>discovery of peer addresses;</t>
+<t>processing of observations at the PCN-egress-node;</t>
+<t>transmission policy for congestion level estimates (CLE).</t>
+</list>
+</t>
+
+</section><!-- intro -->
+
+<section anchor="term" title="Terminology">
+
+<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+   document are to be interpreted as described in RFC 2119. </t>
+
+<t>The formal definitions of "PCN-domain", "PCN-boundary-node", "PCN-interior-node", "PCN-ingress-node" and "PCN-egress-node" are given in section 2 of <xref target="I-D.PCNarch"/>. These terms are used here, generally without the hyphens, to have the same meaning.</t>
+
+<t>This memo uses the following abbreviations:
+  <list style="hanging">
+    <t hangText="CE   ">Congestion Experienced (ECN marking) </t>
+    <t hangText="CLE  ">Congestion level estimates </t>
+    <t hangText="DSCP ">Differentiated Services Codepoint </t>
+    <t hangText="ECMP ">Equal cost multi-path </t>
+    <t hangText="ECN  ">Explicit congestion notification </t>
+    <t hangText="PCN  ">Pre-congestion notification </t>
+  </list>
+</t>
+
+</section><!-- term -->
+
+<section anchor="funcover" title="Overview of Boundary Node Functions">
+
+<t>A PCN domain is a self-controlled group of nodes, some of which, the PCN boundary nodes, connect the PCN domain to other network domains. PCN boundary nodes play an extremely important role in the implementation of the PCN mechanism; they are in charge of flow admission and flow termination so as to protect the existing payload within the PCN domain. PCN boundary nodes fulfill two functional roles, those of PCN-ingress-node and of PCN-egress-node. A given flow enters the PCN domain through the PCN-ingress-node and leaves it through the PCN-egress-node. In physical terms, the flow passes through an ingress-egress pair. This natural pairing of the PCN boundary nodes through which a given flow passes is bi-directional: the PCN boundary node that serves as the PCN-ingress-node for one flow also serves as the PCN-egress-node for a flow in the opposite direction and vice versa.</t>
+
+<t>As <xref target="I-D.PCNarch"/> specifies, a PCN domain is a Diffserv domain. There are different priority traffic classes within the PCN domain. When a flow is presented to the PCN domain, the PCN-ingress-node should figure out whether it is a PCN flow or not. If it is, the PCN-ingress-node marks the flow packets accordingly. When these packets leave the domain, the PCN-egress-node should remove the PCN markings so they do not confuse a subsequent domain.
+</t>
+
+<t>It is obvious that the PCN-ingress-node supports flow recognition. This is a necessity if the PCN-ingress-node is to enforce flow admission and termination (policy action). </t>
+
+<t> The PCN-egress-node measures the aggregate flow for each PCN-ingress/PCN-egress pair for which it is the PCN-egress-node. In some circumstances, the PCN-egress-node should also support flow recognition. At present, we do not require this, for reasons of scalability and simplicity. If the PCN-egress-node did measure each individual flow, it would add too much cost to the cached flow table.</t>
+
+<t>As part of its measurements for a given ingress-egress aggregate, the PCN-egress-node obtains information relating to congestion level estimates (CLE). The PCN-egress-node sends the CLE in a message to the PCN-ingress-node or to a node acting as centralized collection point. The strategy for when the CLE messages are sent is discussed in <xref target="Eg2In"/>. The PCN-ingress-node or the centralized collector node acting on its behalf makes flow admission or termination judgements based on these CLE messages.</t>
+
+<t>When the aggregate flow from some PCN-ingress-node contains no traffic or too low a traffic level,  no measurement or too inaccurate measurement of congestion can be performed.  No CLE message can be sent or the CLE message sent is too inaccurate to make the right decision. In this case the PCN-ingress-node needs to send a probe message to the PCN-egress-node to gain more information. According to the design requirement, ECMP within a PCN domain can also best be resolved by a probe message. For the sake of efficiency, the probing operation requires careful design to ensure that it does not significantly affect the existing load within the domain. Current discussion has concluded that probing is a topic that should be considered after the basic mechanisms have been defined.</t>
+
+<t>The following sections deal with three major topics. 
+<xref target="detail"/> is a detailed functional definition of the PCN-ingress-node and PCN-egress-node. This part will draw upon the existing content of <xref target="I-D.PCNarch"/>, but will identify specific issues that have to be addressed. 
+<xref target="addrDet"/> deals with the specific issues of flow-to-aggregate mapping and peer address determination. 
+Finally, <xref target="internode"/> considers the control and communication messaging that must occur between the PCN-ingress-node and PCN-egress-node. 
+</t>
+
+</section><!-- funcover -->
+
+<section anchor="detail" title="Details of Boundary Node Functions">
+
+<section anchor="ingress" title="PCN-ingress-node Functions">
+
+<t>The PCN-ingress-node enforces flow admission and flow termination decisions on flows offered to the PCN domain. Quoting from section 5.2 of <xref target="I-D.PCNarch"/>, its functions are: 
+  <list style="symbols">
+
+    <t> Packet classify</t>
+
+    <t> Police</t>
+
+    <t> PCN-color</t>
+
+    <t> PCN-meter</t>
+
+  </list>
+</t>
+
+<t>These basic actions imply some additional requirements on the PCN-ingress-node:
+
+<list style="letters">
+
+ <t>The PCN-ingress-node should know the address of the PCN-egress-node for each new flow request that arrives. This is the key that allows the PCN-ingress-node to select the applicable CLE information from the messages it has received. See <xref target="addrDet"/> for a discussion of how the PCN-ingress-node and PCN-egress-node determine each other's address and associate individual flows to the aggregate flow between them.</t>
+
+ <t>When the admission decision function is implemented in the PCN-ingress-node, that node should know the congestion level to each PCN-egress-node to which it has admitted flows. This is needed to perform flow admission and flow termination. Generally, the PCN-ingress-node should possess the latest congestion level information. The information is saved and refreshed periodically as new CLE messages are received. If too long a period elapses without receipt of congestion level information from a given PCN-egress-node, the PCN-ingress-node may have to take an active part in gathering the information, by polling or by sending a probing message.
+
+
+<list style="empty">
+<t>It would seem undesirable to add to network load by polling or probing unless there is a decision to be made. Admission decisions (and consequent probes) are covered by the preceding bullet. The one case that may require thought is where CLE messages fail to get through because of congestion in the egress-to-ingress direction, and this is matched by congestion in the ingress-to-egress direction that would call for flow termination.</t>
+</list>
+
+Although it is out of scope of the current charter, the admission decision function may be implemented in a centralized control node. CLE maintenance and refreshment will then be the responsibility of this centralized node. In that case, the PCN-ingress-node will act as a policy enforcement point only, admitting or rejecting flow in accord with the policy provided by the centralized control node.
+</t>
+
+<t>Currently, the PCN architectural requirements do not include support of ECN. <xref target="I-D.PCNarch"/> spells out the present assumptions about the interaction between ECN and PCN.</t>
+
+<t>When the PCN-ingress-node terminates a flow, it should send a signaling message to notify the flow source about the congestion condition and reason for termination.</t>
+
+</list>
+</t>
+
+</section><!-- ingress -->
+
+<section anchor="egress" title="PCN-egress-node Functions">
+
+<t>The PCN-egress-node is in charge of aggregate flow measurement and emission of CLE messages. The basic functions of the PCN-egress-node are listed in <xref target="I-D.PCNarch"/>: packet classify, PCN-meter, and PCN-color -- but this section adds more details.
+
+<list style="letters">
+
+<t>Packet classify - determine which PCN-ingress-node a PCN-packet has come from. This is a requirement of measurement. After packet classification, all packets arriving at the PCN-egress-node are grouped into their respective ingress-egress aggregate flows. In the case of tunnelled packets, the PCN-egress-node differentiates ingress nodes according to the ingress node address in tunnel encapsulation header. Otherwise the PCN-egress-node must use the source address and possibly other information within the packet header.
+<vspace blankLines='1' />
+In this latter case, the PCN-egress-node must in concept keep a boundary node address table, in which it saves the PCN-ingress-node address and flow source/destination prefix mapping. By searching on the flow source/destination address, the PCN-egress-node can get the PCN-ingress-node address. For a discussion on how this table can be set up, see <xref target="addrDet"/>.</t>
+
+<t>PCN-meter - make "measurements of PCN-traffic". The measurements are made on the aggregate flow of all PCN-packets from a particular PCN-ingress-node. Smoothing is done over time, using for example the EWMA (Exponentially Weighted Moving Average) method applied separately to numerator and denominator of the congestion ratio. The measurement period for individual observations requires careful calculation. Shorter measurement periods increase the amount of computation required at the PCN-egress-node while increasing the volatility of the results. Too long a measurement period reduces the responsiveness of the system to signs of approaching congestion. Smoothing has a similar effect to lengthening the measurement period, but gives more weight to more recent measurements.
+
+<vspace blankLines="1" />
+Instead of smoothing, one might consider looking at the process as one of statistical estimation of a marking probability that is step-wise time-varying. One assesses each new observation to decide whether it represents a continuation of the previous regime or is the result of a new value of the estimated probability. The decision would use a standard deviation based on the assumption of a binomial probability distribution.
+
+<vspace blankLines="1" />
+Once the PCN-marking rate calculations have been carried out, the PCN-egress-node must send a CLE message back to the PCN-ingress-node providing the results. Again there is a requirement to know the peer address. See <xref target="addrDet"/>.
+ </t>
+
+<t>PCN-color - for PCN-packets, set the DSCP field or DSCP and ECN fields to the appropriate value(s) for use outside the PCN-domain.</t>
+
+</list>
+</t>
+
+</section><!-- egress -->
+
+<section anchor="addrDet" title="Peer Address Determination and Flow Aggregation">
+
+<t>Both at ingress and at egress the boundary nodes are faced with the problem of classifying flows by aggregate. As mentioned in the previous section, this is conceptually equivalent to having a table in each node, mapping source/destination prefix pair to the identity of the peer node. Using tunnels between ingress and egress requires the equivalent information, since otherwise the ingress node does not know the tunnel to which a given flow should be directed. The PCN-egress-node must in addition have a mapping from the PCN-ingress-node identity to its address. This mapping is trivial if the node address is used to represent its identity.</t>
+
+<t>The table just described is equivalent to the information required to establish full-mesh direct routing between the boundary nodes. It seems unfortunate if it is really necessary to bypass the information-hiding benefits of routing through interior nodes. Let us consider the possibilities for acquiring the necessary mappings, to see if we can do better. 
+<list style="symbols">
+<t>The mappings could be installed in each boundary node by configuration. This raises obvious concerns for scalability and responsiveness to changes in the external prefixes served by each boundary node. </t>
+
+<t>The mappings could be acquired by an automatic peer-to-peer discovery procedure tied to the exchange of routing data within the PCN-domain. </t>
+
+<t>The mapping for each flow could be determined as it is offered to the PCN-ingress-node, through use of an RSVP PATH message or NSIS equivalent.</t>
+</list>
+</t>
+
+<t>The first two methods have the disadvantage that they require the persistent storage of a full mapping table at each boundary node. Their advantage is that they would require less messaging and associated resource consumption than the third approach. Moreover, when a new flow is offered to the PCN-ingress-node, it is in a position to make an immediate decision to admit or not, rather than having to wait a round-trip for a response from the PCN-egress-node.</t>
+
+<t>The third method, per-flow mapping query, works best if flows tend to be focussed between specific ingress-egress pairs rather than spread uniformly around the network. The per-flow burden will be reduced to the extent that flow mappings can be cached and reused at the ingress and egress nodes. Since in general new flows will not be between the same source and destination addresses as existing ones, reusability of the mapping data requires that the information exchanged between the ingress and egress nodes be in the form of the prefixes routed through the respective nodes rather than the specific addresses involved in the flow that triggered the information exchange.</t>
+
+<t>While the use of one or more centralized collector nodes is out of scope of the current PCN charter, one can visualize a system wherein such nodes acquire the list of served prefixes from each boundary node and provide aggregate identifiers in response to per-flow queries from ingress and egress nodes. The collector nodes receive the CLE messages from the PCN-egress-nodes, with metered results presented for each aggregate identifier active at the egress node. They forward the CLE results to the PCN-ingress-nodes after mapping from aggregate identifier to PCN-ingress-node address. It would be desirable not to exclude this model of operation when creating the basic PCN design.  </t>
+
+</section><!-- addrDet -->
+
+</section><!-- detail -->
+
+<section anchor="internode" title="Communication Behavior between Boundary Nodes">
+
+<section anchor="In2Eg" title="PCN-ingress-node to PCN-egress-node">
+
+<t>The discussion of the previous section suggests that, except when configuration is used to provide the flow-to-aggregate and aggregate-to peer address mappings, the PCN-ingress-node will have to send some sort of message to the PCN-egress-node to establish these mappings, for a specific flow or all flows that could occur between them. We have already remarked on the possible use of the RSVP PATH message (modified to carry source prefix information as well as the specific source and destination addresses) in the ingree-to-egress direction on a per-flow basis. In the reverse direction, the RESV (which may contain a CLE message) would carry the destination prefix served by the PCN-egress-node. Whether the prefix information in each direction is merely the range within which the specific source or destination address of the flow lies or the complete set of prefixes served by the respective node is for further discussion.</t>
+
+<t>In addition to the creation of mappings, the PCN-ingress-node may also send probe messages to the PCN-egress-node. Current list discussion seems to lean toward putting off any consideration of probing in our initial work, but we may come back to it in the future. Probe messages are useful when there is no traffic between ingress and egress or too little traffic for the PCN-egress-node to measure accurately. Probing would be initiated at the PCN-ingress-node if after mapping an offered flow to an aggregate it found stale or no CLE information for that aggregate. The design of the probing operation should consider the appropriate action if there is excessiive delay in receiving the probe response.</t>
+
+</section><!-- In2Eg -->
+
+<section anchor="Eg2In" title="PCN-egress-node to PCN-ingress-node">
+
+<t>The messaging that the PCN-egress-node may have to do as part of the flow-to-aggregate mapping procedure has already been discussed. The previous section also suggested that the PCN-egress-node will have to respond to probe messages. The nature of that response depends on the particular marking behaviour and algorithms used in the network.</t>
+
+<t>Aside from helping to generate mappings and responding to probes, the PCN-egress-node must report the results of its measurements. As indicated already, this is done by sending a CLE message to each PCN-ingress-node (or to a central collector node on its behalf). The content of these messages provides the basis for the PCN-ingress-node or some other policy entity to make flow admission or flow termination decisions.</t>
+
+<t>One question that must be addressed is: when should the CLE message be sent? There are three basic possibilities: 
+<list style="symbols">
+<t>The CLE message is sent in response to polling by the PCN-ingress-node. An interesting variant of this is that the trigger for sending the CLE is receipt of an RSVP PATH message or NSIS equivalent, sent to acquire the mapping between a specific flow and an aggregate. The CLE information would thus be made available precisely when it is needed to make the admission decision. This fails to take care of the requirements for flow termination, however, so something more would be needed.</t>
+
+<t>The second possibility is that the CLE message is sent autonomously whenever the congestion level estimate crosses pre-configured lower and upper thresholds. Because of the lack of information redundancy in the CLE messages transmitted compared the other methods, this approach requires that the CLE message be delivered reliably. This method could be used to supplement the polling approach described in the previous bullet, with the CLE messages being sent autonomously only for transitions across the upper threshold.</t>
+
+<t>The final possibility is that the CLE message is sent periodically at a fixed interval. This method is more robust than the others when CLE messages go missing, since the PCN-ingress-node has past data which it can extrapolate until the next measurement arrives. </t>
+</list>
+</t>
+
+</section><!-- Eg2In -->
+
+</section><!-- internode -->
+
+<section anchor="seccons" title="Security Considerations">
+
+<t>PCN-ingress-node and PCN-egress-node dealing with DDOS attack and similarities. When DDOS attack arrives at PCN-ingress-node. PCN-ingress-node should figure them out and take some action to protect the existing payload and itself from failure.</t>
+
+</section><!-- seccons -->
+
+<section anchor="IANA" title="IANA Considerations">
+
+<t>This memo presents no IANA considerations.</t>
+
+</section><!-- IANA -->
+
+<section anchor="ack" title="Acknowledgements">
+
+<t>Thanks to Gabriele Corliano for ideas contributed in preliminary discussion, and to Philip Eardley for an excellent review of an earlier version of this memo.</t>
+
+</section><!-- ack -->
+
+</middle>
+
+<back>
+   <references title="Normative References">
+      &rfc2119;
+      <reference anchor='I-D.PCNarch'>
+        <front>
+            <title>Pre-Congestion Notification Architecture</title>
+            <author initials='P.' surname='Eardley'
+                    fullname='Philip Eardley'>
+                <organization abbrev='BT'>
+                British Telecom
+                </organization>
+            </author>
+
+            <date month='October' year='2007' />
+        </front>
+        <format type='TXT' 
+                target='http://www.ietf.org/internet-drafts/draft-ietf-pcn-architecture-01.txt' />
+    </reference>
+   </references><!-- Normative -->
+
+   <references title="Informative References">
+      &rfc1633;
+      <reference anchor='I-D.encodComp'>
+        <front>
+            <title>Pre-Congestion Notification Encoding Comparison</title>
+            <author initials='K.' surname='Chan'
+                    fullname='Kwok-Ho Chan'>
+                <organization abbrev='Nortel'>
+                Nortel
+                </organization>
+            </author>
+            <author initials='G.' surname='Karagiannis'
+                    fullname='Giorgios Karagiannis'>
+                <organization abbrev='U. Twente'>
+                University of Twente
+                </organization>
+            </author>
+
+            <date month='July' year='2007' />
+        </front>
+        <format type='TXT' 
+                target='http://www.ietf.org/internet-drafts/draft-chan-pcn-encoding-comparison-00' />
+        <annotation>draft-chan-pcn-encoding-comparison-00.txt</annotation>
+        <annotation>(Work in progress.)</annotation>
+    </reference>
+
+      <reference anchor='I-D.tsvwgCLarch'>
+        <front>
+            <title>Pre-Congestion Notification Encoding Comparison</title>
+            <author initials='B.' surname='Briscoe'
+                    fullname='Bob Briscoe'>
+                <organization abbrev='BT'>
+                BT Research
+                </organization>
+            </author>
+
+            <date month='October' year='2006' />
+        </front>
+        <format type='TXT' 
+                target='http://doc.tm.uka.de/i-d/individual/briscoe/draft-briscoe-tsvwg-cl-architecture-04.txt.gz' />
+        <annotation>draft-briscoe-tsvwg-cl-architecture-04.txt</annotation>
+        <annotation>(Expired work in progress.)</annotation>        
+    </reference>
+
+   </references><!-- Informative -->
+</back>
+</rfc>
+

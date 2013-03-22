@@ -1,0 +1,1114 @@
+<?xml version="1.0"?>
+
+<?rfc compact="yes" ?>
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes"?>
+<!-- use symbolic references tags, i.e, [RFC2119] instead of [1] -->
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+    <!ENTITY rfc2131 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2131.xml'>
+    <!ENTITY rfc3315 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3315.xml'>
+    <!ENTITY rfc3633 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3633.xml'>
+    <!ENTITY rfc4301 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4301.xml'>
+    <!ENTITY rfc4614 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4614.xml'>
+    <!ENTITY rfc4649 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4649.xml'>
+    <!ENTITY rfc5007 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.5007.xml'>
+]>
+
+<rfc ipr="full3978"
+    docName="draft-ietf-dhc-dhcpv6-bulk-leasequery-04.txt" category="std">
+
+<front>
+
+<title>DHCPv6 Bulk Leasequery</title>
+
+<author initials="M." surname="Stapp" fullname="Mark Stapp">
+<organization>Cisco Systems, Inc.</organization>
+<address>
+<postal>
+<street>1414 Massachusetts Ave.</street>
+<city>Boxborough</city> <region>MA</region> <code>01719</code>
+<country>USA</country>
+</postal>
+<phone>+1 978 936 0000</phone>
+<email>mjs@cisco.com</email>
+</address>
+</author>
+
+<date day="16" month="October" year="2008"></date>
+<workgroup>DHC</workgroup>
+<keyword>I-D</keyword>
+<keyword>Internet-Draft</keyword>
+<keyword>DHCP</keyword>
+<keyword>IPv6</keyword>
+<keyword>LEASEQUERY</keyword>
+<keyword>DHCPv6</keyword>
+
+<abstract>
+<t>
+The Dynamic Host Configuration Protocol for IPv6 (DHCPv6) has been
+extended with a Leasequery capability that allows a client to request
+information about DHCPv6 bindings. That mechanism is limited to
+queries for individual bindings. In some situations individual binding
+queries may not be efficient, or even possible. This document expands
+on the Leasequery protocol, adding new query types and allowing for
+bulk transfer of DHCPv6 binding data via TCP.
+</t>
+</abstract>
+
+</front>
+
+<middle>
+
+<!--------------------------->
+
+<section title="Introduction">
+
+<t>
+The DHCPv6 <xref target="RFC3315"/> protocol specifies a mechanism for
+the assignment of IPv6 address and configuration information to IPv6
+nodes. IPv6 Prefix Delegation for DHCPv6 (PD) <xref target="RFC3633"/>
+specifies a mechanism for DHCPv6 delegation of IPv6 prefixes and
+related data. DHCPv6 servers maintain authoritative information
+including binding information for delegated IPv6 prefixes.
+</t>
+
+<t>
+The client of a PD binding is typically a router, which then
+advertises the delegated prefix to locally-connected hosts. The
+delegated IPv6 prefix must be routeable in order to be useful. The
+actual DHCPv6 PD client may not be permitted to inject routes into the
+delegating network. In service-provider (SP) networks, for example, an
+edge router typically acts as a DHCPv6 relay agent, and this edge
+router often has the responsibility to maintain routes within the
+service-provider network for clients' PD bindings.
+</t>
+
+<t>
+A DHCPv6 relay with this responsibility requires a means to recover
+binding information from the authoritative DHCPv6 server(s) in the
+event of replacement or reboot, in order to restore routeability to
+delegated prefixes. The relay may be a network device without adequate
+local storage to maintain the necessary binding-to-route data. A
+DHCPv6 Leasequery protocol <xref target="RFC5007"/> has been developed
+that allows queries for individual bindings from the authoritative
+DHCPv6 Server(s). The individual query mechanism is only useable when
+the target binding is known to the requestor, such as upon receipt
+of traffic. In the case of DHCPv6 Prefix Delegation, the PD binding
+data may need to be known before any traffic arrives from the client
+router. The DHCPv6 relay router may not be able to form individual
+queries in such cases.
+</t>
+
+<t>
+This document extends the DHCPv6 Leasequery protocol to add support
+for queries that address these requirements. At the SP edge there may
+be many thousands of delegated prefixes per relay, so we specify the
+use of TCP <xref target="RFC4614" /> for efficiency of data
+transfer. We specify a new DHCPv6 option, the Relay Identifier option,
+to support efficient recovery of all data associated with a specific
+relay agent; we also add a query-type for this purpose. We add
+query-types by network segment and by Remote-ID option value, to
+assist a relay that needs to recover a subset of its clients'
+bindings.
+</t>
+
+</section>
+
+<!-- =============================================================== -->
+
+<section title="Terminology">
+<t>
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+document are to be interpreted as described in <xref target="RFC2119"/>.
+</t>
+
+<t>
+DHCPv6 terminology is defined in <xref target="RFC3315"/>. DHCPv6
+Leasequery terminology is defined in <xref target="RFC5007"/>.
+</t>
+
+</section>
+
+<!-- ===============================================================-->
+
+<section title="Protocol Overview">
+
+<t>
+The Bulk Leasequery mechanism is modeled on the existing individual
+Leasequery protocol in <xref target="RFC5007"/>; most differences
+arise from the use of TCP. A Bulk Leasequery client opens a TCP
+connection to a DHCPv6 Server, using the DHCPv6 port 547. Note that
+this implies that the Leasequery client has server IP address(es)
+available via configuration or some other means, and that it has
+unicast IP reachability to the server. No relaying for bulk leasequery
+is specified.
+</t>
+
+<t>
+After establishing a connection, the client sends a LEASEQUERY
+message containing a query-type and data about bindings it is
+interested in. The server uses the query-type and the data to identify
+any relevant bindings. In order to support some query-types, servers
+may have to maintain additional data structures or be able to locate
+bindings based on specific option data. The server replies with a
+LEASEQUERY-REPLY message, indicating the success or failure of the
+query. If the query was successful, the server includes the first
+client's binding data in the LEASEQUERY-REPLY message also. If more
+than one client's bindings are being returned, the server then
+transmits the additional client bindings in a series of
+LEASEQUERY-DATA messages. If the server has sent at least one client's
+bindings, it sends a LEASEQUERY-DONE message when it has finished
+sending its replies. The client may reuse the connection to send
+additional queries. Each end of the TCP connection can be closed
+after all data has been sent.
+</t>
+
+<t>
+This specification includes a new DHCPv6 option, the Relay-ID
+option. The option contains a DUID identifying a DHCPv6 relay
+agent. Relay agents can include this option in Relay-Forward messages
+they send. Servers can retain the Relay-ID and associate it with
+bindings made on behalf of the relay's clients. A relay can then
+recover binding information about downstream clients by using the
+Relay-ID in a LEASEQUERY message. The Relay-ID option is defined in
+<xref target="section.relayid"/>.
+</t>
+
+<t>
+Bulk Leasequery supports the queries by IPv6 address and by Client
+DUID as specified in <xref target="RFC5007">RFC5007</xref>. The Bulk
+Leasequery protocol also adds several new queries. The new queries
+introduced here cannot be used effectively with the UDP Leasequery
+protocol. Requestors MUST NOT send these new query-types in <xref
+target="RFC5007">RFC5007</xref> query messages.
+</t>
+
+<t>
+<list style="hanging">
+<t>
+</t>
+
+<t hangText="Query by Relay Identifier -">
+This query asks a server for the bindings associated with a specific
+relay; the relay is identified by a DUID carried in a Relay-ID option.
+</t>
+<t>
+</t>
+
+<t hangText="Query by Link Address -">
+This query asks a server for the bindings on a particular network
+segment; the link is specified in the query's link-address field.
+</t>
+<t>
+</t>
+
+<t hangText="Query by Remote ID -">
+This query asks a server for the bindings associated with a Relay
+Agent Remote-ID option <xref target="RFC4649"/> value.
+</t>
+<t>
+</t>
+
+</list>
+</t>
+
+</section>
+
+<!-- =============================================================== -->
+
+<section title="Interaction Between UDP Leasequery and Bulk
+Leasequery" anchor="section.interaction">
+
+<t>
+Bulk Leasequery can be seen as an extension of the existing UDP
+Leasequery protocol <xref target="RFC5007"/>. This section tries to
+clarify the relationship between the two protocols.
+</t>
+
+<t>
+The query-types introduced in the UDP Leasequery protocol can be used
+in the Bulk Leasequery protocol. One change in behavior is permitted
+when Bulk Leasequery is used. <xref target="RFC5007">RFC5007</xref>,
+in sections 4.1.2.5 and 4.3.3, specifies the use of a Client Link
+option in LEASEQUERY-REPLY messages in cases where multiple bindings
+were found. When Bulk Leasequery is used, this mechanism is not
+necessary: a server returning multiple bindings simply does so
+directly as specified in this document. The Client Link option MUST
+NOT appear in Bulk Leasequery replies.
+</t>
+
+<t>
+Only LEASEQUERY, LEASEQUERY-REPLY, LEASEQUERY-DATA, and
+LEASEQUERY-DONE messages are allowed over the Bulk Leasequery
+connection. No other DHCPv6 messages are supported. The Bulk
+Leasequery connection is not an alternative DHCPv6 communication
+option for clients seeking DHCPv6 service.
+</t>
+
+<t>
+The new queries introduced in this specification cannot be used with
+the UDP Leasequery protocol. Servers that implement this specification
+and also permit UDP queries MUST NOT accept Bulk Leasequery
+query-types in UDP Leasequery messages. Such servers MUST respond with
+an error status code of <xref target="RFC5007">NotAllowed</xref>.
+</t>
+
+</section>
+
+<!-- =============================================================== -->
+
+<section title="Message and Option Definitions">
+
+<!-- =============================================================== -->
+
+<section title="Message Framing for TCP" anchor="section.framing">
+
+<t>
+The use of TCP for the Bulk Leasequery protocol permits one or more
+DHCPv6 messages to be sent at a time. The receiver needs to be able to
+determine how large each message is. Two octets containing the message
+size in network byte-order are prepended to each DHCPv6 message sent
+on a Bulk Leasequery TCP connection. The two message-size octets
+'frame' each DHCPv6 message.
+</t>
+
+<figure>
+<preamble>DHCPv6 message framed for TCP:</preamble>
+<artwork>
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |         message-size          |    msg-type   |   trans-id    |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |   transaction-id (cont'd)     |                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               |
+   |                                                               .
+   .                            options                            .
+   .                           (variable)                          .
+   |                                                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+    message-size    the number of octets in the message that
+                    follows, as a 16-bit integer in network
+                    byte-order.
+
+</artwork>
+</figure>
+
+<t>
+All other fields are as specified in DHCPv6 <xref target="RFC3315"/>.
+</t>
+
+</section>
+
+<!-- =============================================================== -->
+
+<section title="Messages" anchor="section.messages">
+
+<t>
+The LEASEQUERY and LEASEQUERY-REPLY messages are defined in <xref
+target="RFC5007">RFC5007</xref>. In a Bulk Leasequery exchange, a
+single LEASEQUERY-REPLY message is used to indicate the success or
+failure of a query, and to carry data that do not change in the
+context of a single query and answer, such as the Server-ID and
+Client-ID options. If a query is successful, only a single
+LEASEQUERY-REPLY message MUST appear. If the server is returning
+binding data, the LEASEQUERY-REPLY also contains the first client's
+binding data in an OPTION_CLIENT_DATA option.
+</t>
+
+<!-- =============================================================== -->
+
+<section title="LEASEQUERY-DATA">
+
+<t>
+The LEASEQUERY-DATA message (message type TBD) carries data about a
+single DHCPv6 client's leases and/or PD bindings on a single link. The
+purpose of the message is to reduce redundant data when there are
+multiple bindings to be sent.  The LEASEQUERY-DATA message MUST be
+preceded by a LEASEQUERY-REPLY message. The LEASEQUERY-REPLY conveys
+the query's status, carries the Leasequery's Client-ID and Server-ID
+options, and carries the first client's binding data if the query was
+successful.
+</t>
+
+<t>
+LEASEQUERY-DATA MUST ONLY be sent in response to a successful
+LEASEQUERY, and only if more than one client's data is to be sent. The
+LEASEQUERY-DATA message's transaction-id field MUST match the
+transaction-id of the LEASEQUERY request message. The Server-ID,
+Client-ID, and OPTION_STATUS_CODE options SHOULD NOT be included: that
+data should be constant for any one Bulk Leasequery reply, and should
+have been conveyed in the LEASEQUERY-REPLY message.
+</t>
+
+</section>
+
+<!-- =============================================================== -->
+
+<section title="LEASEQUERY-DONE">
+
+<t>
+The LEASEQUERY-DONE message (message type TBD) indicates the end of a
+group of related Leasequery replies. The LEASEQUERY-DONE message's
+transaction-id field MUST match the transaction-id of the LEASEQUERY
+request message. The presence of the message itself signals the end of
+a stream of reply messages. A single LEASEQUERY-DONE MUST BE sent
+after all replies (a successful LEASEQUERY-REPLY and zero or more
+LEASEQUERY-DATA messages) to a successful Bulk Leasequery request that
+returned at least one binding.
+</t>
+
+<t>
+A server may encounter an error condition after it has sent the
+initial LEASEQUERY-REPLY. In that case, it SHOULD attempt to send a
+LEASEQUERY-DONE with an OPTION_STATUS_CODE option indicating the error
+condition to the requestor. Other DHCPv6 options SHOULD NOT be
+included in the LEASEQUERY-DONE message.
+</t>
+
+</section>
+
+</section>
+
+<!-- =============================================================== -->
+
+<section title="Query Types">
+
+<t>
+The OPTION_LQ_QUERY option is defined in <xref target="RFC5007"/>. We
+introduce the following new query-types: QUERY_BY_RELAY_ID,
+QUERY_BY_LINK_ADDRESS, QUERY_BY_REMOTE_ID. These queries are designed
+to assist relay agents in recovering binding data in circumstances
+where some or all of the relay's binding data has been lost.
+</t>
+
+<!-- =============================================================== -->
+
+<section title="QUERY_BY_RELAY_ID" anchor="section.relayquery">
+
+<t>
+This query asks the server to return bindings associated with the
+specified relay DUID.
+</t>
+
+<t>
+<list style="hanging">
+
+<t></t>
+
+<t hangText="QUERY_BY_RELAY_ID (3) - ">
+The query-options MUST contain an OPTION_RELAY_ID option. If the
+link-address field is 0::0, the query asks for all bindings associated
+with the specified relay DUID. If the link-address is specified, the
+query asks for bindings on that link.
+</t>
+
+</list>
+</t>
+
+</section>
+
+<!-- =============================================================== -->
+
+<section title="QUERY_BY_LINK_ADDRESS" anchor="section.linkquery">
+
+<t>
+The QUERY_BY_LINK_ADDRESS asks the server to return bindings on a
+network segment identified by an link-address value from a relay's
+Relay-Forward message.
+</t>
+
+<t>
+<list style="hanging">
+
+<t></t>
+
+<t hangText="QUERY_BY_LINK_ADDRESS (4) - ">
+The query's link-address contains an address a relay may have used in
+the link-address of a Relay-Forward message. The Server attempts to
+locate bindings on the same network segment as the link-address.
+</t>
+
+</list>
+</t>
+
+</section>
+
+<!-- =============================================================== -->
+
+<section title="QUERY_BY_REMOTE_ID" anchor="section.remotequery">
+
+<t>
+The QUERY_BY_REMOTE_ID asks the server to return bindings associated
+with a Remote-ID option value from a relay's Relay-Forward
+message. The query-options MUST include a <xref
+target="RFC4649">Relay Agent Remote-ID option</xref>.
+</t>
+
+<t>
+In order to support this query, a server needs to record the
+most-recent Remote-ID option value seen in a Relay-Forward message
+along with its other binding data.
+</t>
+
+<t>
+<list style="hanging">
+
+<t></t>
+
+<t hangText="QUERY_BY_REMOTE_ID (5) - ">
+The query-options MUST include a <xref target="RFC4649">Relay Agent
+Remote-ID option</xref>. If the Server has recorded Remote-ID values
+with its bindings, it uses the option's value to identify bindings to
+return.
+</t>
+
+</list>
+</t>
+
+</section>
+
+<!-- =============================================================== -->
+
+</section>
+
+<!-- =============================================================== -->
+
+<section title="Options">
+
+<!-- =============================================================== -->
+
+<section title="Relay-ID Option" anchor="section.relayid">
+
+<t>
+The Relay-ID option carries a <xref target="RFC3315">DUID</xref>. A
+relay agent MAY include the option in Relay-Forward messages it
+sends. Obviously, it will not be possible for a server to respond to
+QUERY_BY_RELAY_ID queries unless the relay agent has included this
+option. A relay SHOULD be able to generate a DUID for this purpose,
+and capture the result in stable storage. A relay SHOULD also allow
+the DUID value to be configurable: doing so allows an administrator to
+replace a relay agent while retaining the association between the
+relay and existing DHCPv6 bindings.
+</t>
+
+<t>
+A DHCPv6 Server MAY associate Relay-ID options from Relay-Forward
+messages it processes with PD and/or lease bindings that result. Doing
+so allows it to respond to QUERY_BY_RELAY_ID Leasequeries.
+</t>
+
+<figure>
+<preamble>The format of the Relay-ID option is shown below:</preamble>
+<artwork>
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |       OPTION_RELAY_ID         |          option-len           |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   .                                                               .
+   .                              DUID                             .
+   .                        (variable length)                      .
+   .                                                               .
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+   option-code   OPTION_RELAY_ID (TBD).
+
+   option-len    Length of DUID in octets.
+
+   DUID          The DUID for the relay agent.
+
+</artwork>
+</figure>
+
+</section>
+
+</section>
+
+<!-- =============================================================== -->
+
+<section title="Status Codes" anchor="section.statuscodes">
+
+<t>
+QueryTerminated (TBD) - Indicates that the server is unable to perform
+a query or has prematurely terminated the query for some reason (which
+should be communicated in the text message). This may be because the
+server is short of resources or is being shut down. The requestor may
+retry the query at a later time. The requestor should wait at least a
+short interval before retrying. Note that while a server may simply
+prematurely close its end of the connection, it is preferable for the
+server to send a LEASEQUERY-REPLY or LEASEQUERY-DONE with this
+status-code to notify the requestor of the condition.
+</t>
+
+</section>
+
+<!----------------------------------------------------------------->
+
+<section title="Connection and Transmission Parameters" anchor="section.params">
+
+<t>
+DHCPv6 Servers that support Bulk Leasequery SHOULD listen for incoming
+TCP connections on the DHCPv6 server port 547. Implementations MAY
+offer to make the incoming port configurable, but port 547 MUST be the
+default. Client implementations SHOULD make TCP connections to port
+547, and MAY offer to make the destination server port configurable.
+</t>
+
+<t>
+This section presents a table of values used to control Bulk
+Leasequery behavior, including recommended defaults. Implementations
+MAY make these values configurable.
+</t>
+
+<figure>
+<artwork>
+Parameter             Default  Description
+------------------------------------------
+BULK_LQ_CONN_TIMEOUT  30 secs  Bulk Leasequery connection timeout
+BULK_LQ_DATA_TIMEOUT  30 secs  Bulk Leasequery data timeout
+BULK_LQ_MAX_RETRY     60 secs  Max Bulk Leasequery retry timeout
+BULK_LQ_MAX_CONNS     10       Max Bulk Leasequery TCP connections
+</artwork>
+</figure>
+
+</section>
+
+</section>
+
+<!-- ====================================================== -->
+
+<section title="Requestor Behavior" anchor="section.client">
+
+<!-- ====================================================== -->
+
+<section title="Connecting">
+
+<t>
+A Requestor attempts to establish a TCP connection to a DHCPv6 Server
+in order to initiate a Leasequery exchange. The Requestor SHOULD be
+prepared to abandon the connection attempt after
+BULK_LQ_CONN_TIMEOUT. If the attempt fails, the Requestor MAY retry.
+Retries MUST use an exponential backoff timer, increasing the interval
+between attempts up to BULK_LQ_MAX_RETRY.
+</t>
+
+</section>
+
+<!-- ====================================================== -->
+
+<section title="Forming Queries">
+
+<t>
+After a connection is established, the Requestor constructs a
+Leasequery message, as specified in <xref target="RFC5007"/>. The
+query may have any of the defined query-types, and includes the
+options and data required by the query-type chosen. The Requestor
+sends the message size then sends the actual DHCPv6 message, as
+described in <xref target="section.framing"/>.
+</t>
+
+<t>
+If the TCP connection becomes blocked while the Requestor is sending
+its query, the Requestor SHOULD be prepared to terminate the
+connection after BULK_LQ_DATA_TIMEOUT. We make this recommendation to
+allow Requestors to control the period of time they are willing to
+wait before abandoning a connection, independent of notifications from
+the TCP implementations they may be using.
+</t>
+
+</section>
+
+<!-- ====================================================== -->
+
+<section title="Processing Replies">
+
+<t>
+The Requestor attempts to read a LEASEQUERY-REPLY message from the
+TCP connection. If the stream of replies becomes blocked, the
+Requestor SHOULD be prepared to terminate the connection after
+BULK_LQ_DATA_TIMEOUT, and MAY begin retry processing if configured to
+do so.
+</t>
+
+<t>
+The Requestor examines the LEASEQUERY-REPLY message, and determines
+how to proceed. Message validation rules are specified in DHCPv6
+Leasequery <xref target="RFC5007"/>. If the reply contains an error
+status code (carried in an OPTION_STATUS_CODE option), the Requestor
+follows the recommendations in <xref target="RFC5007"/>. A successful
+reply that does not include an OPTION_CLIENT_DATA option indicates
+that the target server had no bindings matching the query.
+</t>
+
+<t>
+Note: The Leasequery protocol uses the OPTION_CLIENT_LINK option as an
+indicator that multiple bindings were present in response to a single
+query. For Bulk Leasequery, the OPTION_CLIENT_LINK option is not used,
+and MUST NOT be present in replies.
+</t>
+
+<t>
+A successful LEASEQUERY-REPLY that is returning binding data includes
+an OPTION_CLIENT_DATA option and possibly additional options. If there
+are additional bindings to be returned, they will be carried in
+LEASEQUERY-DATA messages. Each LEASEQUERY-DATA message contains an
+OPTION_CLIENT_DATA option, and possibly other options. A
+LEASEQUERY-DATA message that does not contain an OPTION_CLIENT_DATA
+MUST BE discarded.
+</t>
+
+<t>
+A single bulk query can result in a large number of replies. For
+example, a single relay agent might be responsible for routes for
+thousands of clients' delegated prefixes. The Requestor MUST be
+prepared to receive more than one LEASEQUERY-DATA with transaction-ids
+matching a single LEASEQUERY message.
+</t>
+
+<t>
+The LEASEQUERY-DONE message ends a successful Bulk Leasequery request
+that returned at least one binding. A LEASEQUERY-REPLY without any
+bindings MUST NOT be followed by a LEASEQUERY-DONE message for the
+same transaction-id. After receiving LEASEQUERY-DONE from a server,
+the Requestor MAY close the TCP connection to that server. If the
+transaction-id in the LEASEQUERY-DONE does not match an outstanding
+LEASEQUERY message, the client MUST close the TCP connection.
+</t>
+
+<!-- ====================================================== -->
+
+<section title="Reply Completion">
+
+<t>
+The reply to a Bulk Leasequery request is complete (i.e., no further
+messages for that request xid will be received) when one of these
+conditions is met:
+
+<vspace blankLines="1" />
+
+<list style="numbers">
+<t>
+if the LEASEQUERY-REPLY message had no OPTION_CLIENT_DATA option, when
+the LEASEQUERY-REPLY is received,
+<vspace blankLines="1" />
+</t>
+
+<t>
+else if the LEASEQUERY-REPLY did have an OPTION_CLIENT_DATA, when the
+corresponding LEASEQUERY-DONE message is received,
+<vspace blankLines="1" />
+</t>
+
+<t>
+else when the connection is closed.
+</t>
+
+</list>
+</t>
+
+</section>
+
+</section>
+
+<!-- ====================================================== -->
+
+<section title="Querying Multiple Servers">
+
+<t>
+A Bulk Leasequery client MAY be configured to attempt to connect to
+and query from multiple DHCPv6 servers in parallel. The DHCPv6
+Leasequery specification <xref target="RFC5007"/> includes a
+discussion about reconciling binding data received from multiple
+DHCPv6 servers.
+</t>
+
+</section>
+
+<!-- ====================================================== -->
+
+<section title="Multiple Queries to a Single Server"
+ anchor="section.client.multi.query">
+
+<t>
+Bulk Leasequery clients may need to make multiple queries in order to
+recover binding information. A Requestor MAY use a single connection
+to issue multiple queries. Each query MUST have a unique transaction
+id. A server MAY process more than one query at a time. A server that
+is willing to do so MAY interleave replies to the multiple queries
+within the stream of reply messages it sends. Clients need to be aware
+that replies for multiple queries may be interleaved within the stream
+of reply messages. Clients that are not able to process interleaved
+replies (based on transaction id) MUST NOT send more than one query at
+a time. Requestors should be aware that servers are not required to
+process queries in parallel, and that servers are likely to limit the
+rate at which they process queries from any one Requestor.
+</t>
+
+<!-- ====================================================== -->
+
+<section title="Example">
+
+<t>
+This example illustrates what a series of queries and responses might
+look like. This is only an example - there is no requirement that this
+sequence must be followed, or that clients or servers must support
+parallel queries.
+</t>
+
+<t>
+In the example session, the client sends four queries after
+establishing a connection. Query 1 results in a failure; query 2
+succeeds and the stream of replies concludes before the client issues
+any new query. Query 3 and query 4 overlap, and the server interleaves
+its replies to those two queries.
+</t>
+
+<figure>
+<artwork><![CDATA[
+     Client                        Server
+     ------                        ------
+     LEASEQUERY xid 1 ----->
+                      <-----       LEASEQUERY-REPLY xid 1 (w/error)
+     LEASEQUERY xid 2 ----->
+                      <-----       LEASEQUERY-REPLY xid 2
+                      <-----       LEASEQUERY-DATA xid 2
+                      <-----       LEASEQUERY-DATA xid 2
+                      <-----       LEASEQUERY-DONE xid 2
+     LEASEQUERY xid 3 ----->
+     LEASEQUERY xid 4 ----->
+                      <-----       LEASEQUERY-REPLY xid 4
+                      <-----       LEASEQUERY-DATA xid 4
+                      <-----       LEASEQUERY-REPLY xid 3
+                      <-----       LEASEQUERY-DATA xid 4
+                      <-----       LEASEQUERY-DATA xid 3
+                      <-----       LEASEQUERY-DONE xid 3
+                      <-----       LEASEQUERY-DATA xid 4
+                      <-----       LEASEQUERY-DONE xid 4
+]]></artwork>
+</figure>
+
+</section>
+
+</section>
+
+<!-- ====================================================== -->
+
+<section title="Closing Connections">
+
+<t>
+The Requestor MAY close its end of the TCP connection after sending a
+LEASEQUERY message to the server. The Requestor MAY choose to retain
+the connection if it intends to issue additional queries. Note that
+this client behavior does not guarantee that the connection will be
+available for additional queries: the server might decide to close the
+connection based on its own configuration.
+</t>
+
+</section>
+
+</section>
+
+<!-- ====================================================== -->
+
+<section title="Server Behavior" anchor="section.server">
+
+<!-- ====================================================== -->
+
+<section title="Accepting Connections">
+
+<t>
+Servers that implement DHCPv6 Bulk Leasequery listen for incoming TCP
+connections. Port numbers are discussed in <xref
+target="section.params"/>. Servers MUST be able to limit the number of
+currently accepted and active connections. The value BULK_LQ_MAX_CONNS
+MUST be the default; implementations MAY permit the value to be
+configurable.
+</t>
+
+<t>
+Servers MAY restrict Bulk Leasequery connections and LEASEQUERY
+messages to certain clients. Connections not from permitted clients
+SHOULD BE closed immediately, to avoid server connection resource
+exhaustion. Servers MAY restrict some clients to certain query
+types. Servers MAY reply to queries that are not permitted with the
+NotAllowed status code <xref target="RFC5007"/>, or MAY close the
+connection.
+</t>
+
+<t>
+If the TCP connection becomes blocked while the server is accepting a
+connection or reading a query, it SHOULD be prepared to terminate the
+connection after BULK_LQ_DATA_TIMEOUT. We make this recommendation to
+allow Servers to control the period of time they are willing to wait
+before abandoning an inactive connection, independent of the TCP
+implementations they may be using.
+</t>
+
+</section>
+
+<!-- ====================================================== -->
+
+<section title="Forming Replies">
+
+<t>
+The DHCPv6 Leasequery <xref target="RFC5007"/> specification describes
+the initial construction of LEASEQUERY-REPLY messages and the
+processing of QUERY_BY_ADDRESS and QUERY_BY_CLIENTID. Use of the
+LEASEQUERY-REPLY and LEASEQUERY-DATA messages to carry multiple
+bindings are described in <xref target="section.messages"/>. Message
+transmission and framing for TCP is described in <xref
+target="section.framing"/>. If the connection becomes blocked while
+the server is attempting to send reply messages, the server SHOULD be
+prepared to terminate the TCP connection after BULK_LQ_DATA_TIMEOUT.
+</t>
+
+<t>
+If the server encounters an error during initial query processing,
+before any reply has been sent, it SHOULD send a LEASEQUERY-REPLY
+containing an error code in an OPTION_STATUS_CODE option. This signals
+to the requestor that no data will be returned. If the server
+encounters an error while processing a query that has already resulted
+in one or more reply messages, the server SHOULD send a
+LEASEQUERY-DONE message with an error status. The server SHOULD close
+its end of the connection as an indication that it was not able to
+complete query processing.
+</t>
+
+<t>
+If the server does not find any bindings satisfying a query, it SHOULD
+send a LEASEQUERY-REPLY without an OPTION_STATUS_CODE option and
+without any OPTION_CLIENT_DATA option. Otherwise, the server sends
+each binding's data in a reply message. The first reply message is a
+LEASEQUERY-REPLY. The binding data is carried in an OPTION_CLIENT_DATA
+option, as specified in <xref target="RFC5007"/> and extended
+below. The server returns subsequent bindings in LEASEQUERY-DATA
+messages, which can avoid redundant data (such as the requestor's
+Client-ID).
+</t>
+
+<t>
+For QUERY_BY_RELAY_ID, the server locates each binding associated with
+the query's Relay-ID option value. In order to give a meaningful reply
+to a QUERY_BY_RELAY_ID, the server has to be able to maintain this
+association in its DHCPv6 binding data. If the query's link-address is
+not set to 0::0, the server only returns bindings on links that could
+contain that address. If the link-address is not 0::0 and the server
+cannot find any matching links, the server SHOULD return the
+NotConfigured status in a LEASEQUERY-REPLY.
+</t>
+
+<t>
+For QUERY_BY_LINK_ADDRESS, the server locates each binding associated
+with the link identified by the query's link-address value.
+</t>
+
+<t>
+For QUERY_BY_REMOTE_ID, the server locates each binding associated
+with the query's Relay Remote-ID option value. In order to be able to
+give meaningful replies to this query, the server has to be able to
+maintain this association in its binding database. If the query
+message's link-address is not set to 0::0, the server only returns
+bindings on links that could contain that address. If the link-address
+is not 0::0 and the server cannot find any matching links, the server
+SHOULD return the NotConfigured status in a LEASEQUERY-REPLY.
+</t>
+
+<t>
+The server sends the LEASEQUERY-DONE message as specified in <xref
+target="section.messages"/>.
+</t>
+
+</section>
+
+
+<!-- ====================================================== -->
+
+<section title="Multiple or Parallel Queries">
+
+<t>
+As discussed in <xref target="section.client.multi.query" />,
+Requestors may want to leverage an existing connection if they need to
+make multiple queries. Servers MAY support reading and processing
+multiple queries from a single connection. A server MUST NOT read more
+query messages from a connection than it is prepared to process
+simultaneously.
+</t>
+
+<t>
+This MAY be a feature that is administratively controlled. Servers
+that are able to process queries in parallel SHOULD offer
+configuration that limits the number of simultaneous queries permitted
+from any one Requestor, in order to control resource use if there are
+multiple Requestors seeking service.
+</t>
+
+</section>
+
+<!-- ====================================================== -->
+
+<section title="Closing Connections">
+
+<t>
+The server MAY close its end of the TCP connection after sending its
+last message (a LEASEQUERY-REPLY or a LEASEQUERY-DONE) in response to
+a query. Alternatively, the server MAY retain the connection and wait
+for additional queries from the client. The server SHOULD be prepared
+to limit the number of connections it maintains, and SHOULD be
+prepared to close idle connections to enforce the limit.
+</t>
+
+<t>
+The server MUST close its end of the TCP connection if it encounters
+an error sending data on the connection. The server MUST close its end
+of the TCP connection if it finds that it has to abort an in-process
+request. A server aborting an in-process request MAY attempt to signal
+that to its clients by using the <xref target="section.statuscodes">
+QueryTerminated</xref> status code. If the server detects that the
+client end has been closed, the server MUST close its end of the
+connection after it has finished processing any outstanding requests
+from the client.
+</t>
+
+</section>
+
+</section>
+
+<!-- ====================================================== -->
+
+<section title="Security Considerations" anchor="section.security">
+
+<t>
+The "Security Considerations" section of <xref target="RFC3315"/>
+details the general threats to DHCPv6. The DHCPv6 Leasequery
+specification <xref target="RFC5007"/> describes recommendations for
+the Leasequery protocol, especially with regard to relayed LEASEQUERY
+messages, mitigation of packet-flooding DOS attacks, restriction to
+trusted clients, and use of IPsec <xref target="RFC4301"/>.
+</t>
+
+<t>
+The use of TCP introduces some additional concerns. Attacks that
+attempt to exhaust the DHCPv6 server's available TCP connection
+resources, such as SYN flooding attacks, can compromise the ability of
+legitimate clients to receive service. Malicious clients who succeed
+in establishing connections, but who then send invalid queries,
+partial queries, or no queries at all also can exhaust a server's
+pool of available connections. We recommend that servers offer
+configuration to limit the sources of incoming connections, that they
+limit the number of accepted connections and the number of in-process
+queries from any one connection, and that they limit the period of
+time during which an idle connection will be left open.
+</t>
+
+</section>
+
+<!-- ================================================================= -->
+
+<section title="IANA Considerations" anchor="section.IANA">
+<t>
+IANA is requested to assign a new DHCPv6 Option Code in the registry
+maintained in http://www.iana.org/assignments/dhcpv6-parameters:
+</t>
+
+<t>
+<list>
+<t>OPTION_RELAY_ID</t>
+<t></t>
+</list>
+</t>
+
+<t>
+IANA is requested to assign a new value in the registry of DHCPv6
+Status Codes maintained in
+http://www.iana.org/assignments/dhcpv6-parameters:
+</t>
+
+<t><list>
+<t>QueryTerminated</t>
+<t></t>
+</list></t>
+
+<t>
+IANA is requested to assign values for the following new DHCPv6
+Message types in the registry maintained in
+http://www.iana.org/assignments/dhcpv6-parameters:
+</t>
+
+<t><list>
+<t>LEASEQUERY-DONE</t>
+<t>LEASEQUERY-DATA</t>
+<t></t>
+</list></t>
+
+<t>
+IANA is requested to assign the following new values in the registry
+of query-types for the DHCPv6 OPTION_LQ_QUERY option:
+</t>
+
+<t><list>
+<t>QUERY_BY_RELAY_ID</t>
+<t>QUERY_BY_LINK_ADDRESS</t>
+<t>QUERY_BY_REMOTE_ID</t>
+</list></t>
+
+</section>
+
+<!-- ============================================================= -->
+
+<section title="Acknowledgements">
+<t>
+Many of the ideas in this document were originally proposed by Kim
+Kinnear, Richard Johnson, Hemant Singh, Ole Troan, and Bernie
+Volz. Further suggestions and improvements were made by participants
+in the DHC working group, including John Brzozowski, Marcus Goller,
+Ted Lemon, and Bud Millwood.
+</t>
+</section>
+
+<section title="Modification History">
+</section>
+
+<!-- ============================================================= -->
+
+</middle>
+
+<!-- ============================================================= -->
+
+<back>
+
+<references title="Normative References">
+
+&rfc3315;
+&rfc3633;
+&rfc2119;
+&rfc4649;
+&rfc5007;
+
+</references>
+
+<references title="Informative References">
+
+&rfc4301;
+&rfc4614;
+
+</references>
+
+</back>
+
+</rfc>

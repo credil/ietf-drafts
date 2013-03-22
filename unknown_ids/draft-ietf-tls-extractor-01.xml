@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY RFC2119 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+<!ENTITY RFC2434 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2434.xml">
+<!ENTITY RFC3711 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.3711.xml">
+<!ENTITY RFC4346 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4346.xml">
+<!ENTITY RFC4347 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.4347.xml">
+
+<!ENTITY I-D.ietf-avt-dtls-srtp SYSTEM "http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-avt-dtls-srtp">
+
+o]>
+<!-- $Id -->
+<?rfc inline="yes"?>
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc iprnotified="no" ?>
+<!--<?rfc strict="yes" ?>-->
+<?rfc compact="yes" ?>
+<?rfc sortrefs="no" ?>
+<?rfc colonspace='yes' ?>
+<rfc category="std" docName="draft-ietf-tls-extractor-01.txt" ipr="full3978">
+  <front>
+    <title abbrev="TLS Extractors">Keying Material Extractors for Transport Layer Security (TLS)</title>
+
+    <author fullname="Eric Rescorla" initials="E." surname="Rescorla">
+      <organization>Network Resonance</organization>
+
+      <address>
+        <postal>
+          <street>2064 Edgewood Drive</street>
+
+          <city>Palo Alto</city>
+
+          <region>CA</region>
+
+          <code>94303</code>
+
+          <country>USA</country>
+        </postal>
+
+        <email>ekr@networkresonance.com</email>
+      </address>
+    </author>
+
+    <date day="20" month="February" year="2008" />
+
+    <abstract>
+      <t>A number of protocols wish to leverage Transport Layer Security (TLS)
+      to perform key establishment but then use some of the keying material
+      for their own purposes. This document describes a general mechanism
+      for allowing that.
+      </t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+    <t>A number of protocols wish to leverage Transport Layer Security (TLS) <xref target="RFC4346"/> or Datagram TLS (DTLS) <xref target="RFC4347"/>
+      to perform key establishment but then use some of the keying material
+      for their own purposes. A typical example is DTLS-SRTP <xref target="I-D.ietf-avt-dtls-srtp"/>, which uses DTLS to perform a key exchange and 
+      negotiate the SRTP <xref target="RFC3711"/> protection suite and
+      then uses the DTLS master_secret to generate the SRTP keys.
+    </t>
+    <t>
+      These applications imply a need to be
+      able to extract keying material (later called Exported Keying Material
+      or EKM) from TLS/DTLS, and securely agree on the upper-layer context
+      where the keying material will be used. The mechanism for extracting
+      the keying material has the following requirements:
+      </t>
+      <t>
+      <list style="symbols">
+      <t>Both client and server need to be able to extract the same EKM value.</t>
+      <t>EKM values should be indistinguishable from random 
+         by attackers who don't know the master_secret.</t>
+      <t>It should be possible to extract multiple EKM values
+	 from the same TLS/DTLS association.</t>
+      <t>Knowing one EKM value should not reveal any 
+         information about the master_secret or about other EKM values.</t>
+      </list>
+      </t>
+    <t>
+    The mechanism described in this document is intended to fill these
+    requirements.
+    </t>
+    </section>
+    <section title="Conventions Used In This Document">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119"></xref>.</t>
+    </section>
+    <section title="Binding to Application Contexts" anchor="sec.binding">
+     <t>
+     In addition to extracting keying material, an application using the
+     keying material has to securely establish the upper-layer layer
+     context where the keying material will be used.  The details of this
+     context depend on the application, but it could include things such as
+     algorithms and parameters that will be used with the keys,
+     identifier(s) for the endpoint(s) who will use the keys, identifier(s)
+     for the session(s) where the keys will be used, and the lifetime(s)
+     for the context and/or keys. At minimum, there should be some
+     mechanism for signalling that an extractor will be used.
+     </t>
+     <t>
+     This specification does not mandate a single mechanism for agreeing
+     on such context; instead, there are several possibilities that
+     can be used (and can complement each other). For example:
+     </t>
+     <t>
+     <list style="symbols">
+     <t>One important part of the context -- which application will
+        use the extracted keys -- is given by the disambiguating label 
+	string (see Section 4).
+     </t>
+     <t>Information about the upper-layer context can be included in
+     the optional data after the extractor label (see Section 4).
+     </t>
+     <t>Information about the upper-layer context can be exchanged in TLS
+     extensions included in the ClientHello and ServerHello messages.  
+     This approach is used in [DTLS-SRTP].
+     The handshake messages are protected by the Finished messages, so
+     once the handshake completes, the peers will have the same view of the
+     information. Extensions also allow a limited form of negotiation:
+     for example, the TLS client could propose several alternatives for
+     some context parameters, and TLS server could select one of them.
+     </t>
+     <t>The upper-layer protocol can include its own handshake which can
+      be protected using the keys extracted from TLS.
+     </t>
+     </list>
+     </t>
+     <t>
+     It is important to note that just embedding TLS messages in the
+     upper-layer protocol may not automatically secure all the important
+     context information, since the upper-layer messages are not covered by
+     TLS Finished messages.
+    </t>
+    </section>
+    <section title="Extractor Definition" anchor="extractor.def">
+    <t>
+    An extractor takes as input three values:
+    </t>
+    <t>
+    <list style="symbols">
+    <t>A disambiguating label string</t>
+    <t>A per-association context value provided by the
+       extractor using application</t>
+    <t>A length value</t>
+    </list>
+    </t>
+    <t>
+    It then computes:
+    </t>
+    <t>
+        <figure>
+          <artwork><![CDATA[	
+       PRF(master_secret, label, 
+           SecurityParameters.client_random +
+           SecurityParameters.server_random +
+           context_value_length + context_value
+           )[length]
+]]></artwork>
+    </figure>
+     </t>
+    <t>
+    The output is a pseudorandom bit string of length bytes
+    generated from the master_secret. 
+    </t>
+    <t>
+    Label values beginning with "EXPERIMENTAL" MAY be used
+    for private use without registration. All other
+    label values MUST be registered via Specification Required as
+    described by RFC 2434 <xref target="RFC2434"/>.
+    Note that extractor labels have the potential to collide with 
+    existing PRF labels. In order to prevent this, labels SHOULD
+    begin with "EXTRACTOR". This is not a MUST because there are
+    existing uses which have labels which do not begin with
+    this prefix.
+    </t>
+    <t>
+    The context value allows the application using the extractor
+    to mix its own data with the TLS PRF for the extractor
+    output. The context value length is encoded as an unsigned
+    16-bit quantity (uint16) representing the length of the
+    context value.
+    </t>
+    </section>
+    <section anchor="section.sec" title="Security Considerations">
+    <t>
+    Because an extractor produces the same value if applied twice
+    with the same label to the same master_secret, it is critical
+    that two EKM values generated with the same label be used
+    for two different purposes--hence the requirement for IANA
+    registration. 
+    However, because extractors depend on the TLS PRF, it is not a
+    threat to the use of an EKM value generated from one label to reveal an
+    EKM value generated from another label.
+    </t>
+    </section>
+    <section anchor="section.iana" title="IANA Considerations">
+    <t>
+   IANA is requested to create (has created) a TLS Extractor Label 
+   registry for this purpose. The initial contents of the registry 
+   are given below:
+    </t>
+<figure><artwork>
+   Value                          Reference
+   -----                          ------------
+   client finished                [RFC4346]
+   server finished                [RFC4346]
+   master secret                  [RFC4346]
+   key expansion                  [RFC4346]
+   client EAP encryption          [RFC2716]
+   ttls keying material           [draft-funk-eap-ttls-v0-01]
+</artwork></figure>
+<t>
+Future values are allocated via RFC2434 Specification Required
+policy. The label is a string consisting of printable ASCII
+characters.  IANA MUST also verify that one label is not a prefix
+of any other label. For example, labels "key" or "master secretary"
+are forbidden.
+</t>
+    </section>
+    <section title="Acknowledgments">
+    <t>
+    Thanks to Pasi Eronen for valuable comments and the contents of the IANA section
+    and <xref target="sec.binding"/>.
+    </t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      &RFC2119;
+      &RFC2434;
+      &RFC4346;
+    </references>
+    <references title="Informational References">
+      &RFC4347;
+      &RFC3711;
+      &I-D.ietf-avt-dtls-srtp;
+    </references> 
+  </back>
+</rfc>
+<!-- Keep this comment at the end of the file
+Local variables:
+mode: xml
+sgml-omittag:nil
+sgml-shorttag:nil
+sgml-namecase-general:nil
+sgml-general-insert-case:lower
+sgml-minimize-attributes:nil
+sgml-always-quote-attributes:t
+sgml-indent-step:2
+sgml-indent-data:nil
+sgml-parent-document:nil
+sgml-exposed-tags:nil
+sgml-local-catalogs:nil
+sgml-local-ecat-files:nil
+End:
+-->
+

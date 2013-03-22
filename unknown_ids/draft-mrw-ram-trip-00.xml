@@ -1,0 +1,720 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+        'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+    <!ENTITY rfc2629 PUBLIC '' 
+        'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2629.xml'>
+    <!ENTITY rfc2640 PUBLIC '' 
+        'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2640.xml'>
+    <!ENTITY raws PUBLIC ''
+        'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.iab-raws-report.xml'>
+    <!ENTITY lisp PUBLIC ''
+        'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.farinacci-lisp.xml'>
+    <!ENTITY hip PUBLIC ''
+        'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-hip-base.xml'>
+    <!ENTITY shim6 PUBLIC ''
+        'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-shim6-proto.xml'>
+
+<?rfc toc="yes"?>
+<?rfc tocompact="yes"?>
+<?rfc tocdepth="6"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+
+<rfc ipr="full3978" docName="draft-mrw-ram-trip-00.txt">
+    <front>
+    <title>Tiered Routing for IPv4 and IPv6 (TRIP)</title>
+    <author initials="M." surname="Wasserman" fullname="Margaret Wasserman">
+        <organization>Sandstorm Enterprises</organization>
+        <address>
+        <postal>
+            <street>14 Summer St. 4th Floor</street>
+            <city>Malden</city> <region>MA</region>
+            <code>02148</code>
+            <country>USA</country>
+        </postal>
+        <phone>+1 781 333-3213</phone>
+        <email>mrw@sandstorm.net</email>
+        <uri>http://www.sandstorm.net</uri>
+        </address>
+    </author>
+    <date month="December" year="2008" />
+    <area>Internet</area>
+    <workgroup>Network Working Group</workgroup>
+
+<abstract>
+<t>
+This document describes a mechanism for scalable, tiered Internet
+routing, called TRIP.  The goal of TRIP is to decrease the growth
+rate of the core Internet routing tables by increasing route
+aggregation and constraining the propagation of multihoming and
+traffic engineering routes.
+</t>
+<t>
+TRIP accomplishes this goal by defining separate routing domains for
+edge networks and transit networks.  All current, non-TRIP-aware
+networks and nodes are considered part of the transit domain.  Edge
+network domains may be created by deploying TRIP at a domain-boundary
+routers or within IP (v4 or v6) endpoints.
+</t>
+<t>
+In addition to defining the basic TRIP mechanism, this document
+describes an incremental deployment path that provides a means for
+endpoints in TRIP-enabled edge networks to talk directly to
+non-TRIP-aware end-points in transit domain.  This is accomplished
+without the need to advertise edge network prefixes in the global
+routing tables or to create a separate global routing domain for edge
+network prefixes.
+</t>
+</abstract>
+    </front>
+
+    <middle>
+    <section title="Introduction">
+<t>
+The growth rate of the core BGP routing tables has been identified as
+a serious scaling problem for the Internet <xref
+target="I-D.iab-raws-report"/>.  The core BGP routing tables are
+growing faster than the number of Internet hosts for several reasons,
+including: (1) the introduction of IPv6 routes, including IPv6 routes
+to dual-stack networks that are already represented by IPv4 routes,
+(2) end-user demand for provider-independent addressing, which reduces
+the efficiency of route aggregation, and (3) the propagation of
+multihoming and traffic engineering (VPN) routes into the core BGP
+routing tables.  End user requirements for (2) and (3) are in direct
+conflict with the route aggregation required for scalable Internet
+routing.  The eFIT document (reference needed)
+describes this conflict in more detail and makes a sound argument that
+the number of routes propagated into the DFZ for these reasons can be
+reduced or eliminated by separating the address space used on transit
+networks from the address space used on edge networks.
+</t>
+<t>
+This document describes a mechanism for scalable, tiered Internet
+routing, called TRIP.  The goal of TRIP is to decrease the rate of
+growth of the core Internet routing tables by increasing route
+aggregation and constraining the propagation of multihoming and
+traffic engineering routes.  TRIP also makes it possible to eliminate
+redundant IPv4 and IPv6 routes to dual-stack networks when both
+protocols are equally available at an edge network's Internet
+attachment points.
+</t>
+<t>
+TRIP conceptually divides the IP (v4 and v6) address space into two
+sets: a set of topologically-assigned Global LOCators (GLOCs) that are
+used for routing across transit networks, and a set of
+provider-independent Endpoint IDentifiers (EIDs) that are used for
+both routing and end-point identification within TRIP-enabled edge
+networks.  A TRIP-enabled edge network is created by deploying TRIP
+within one or more domain-boundary routers (DBRs) that create a border
+between the edge network and its attached transit network(s).  TRIP
+can be implemented entirely within DBRs, without any modifications to
+endpoints or non-DBR routers.
+</t>
+<t>
+TRIP can be deployed at any level of the topology, from an individual
+end node, to an end-user/ISP boundary, to an ISP/ISP boundary.  As
+specified, TRIP creates exactly two addressing and routing domains,
+the edge network domain and the transit network domain.  Further
+investigation would be required to determine how/if a TRIP-derived 
+mechanism could be used to create more than two domains.
+</t>
+<t>
+To allow TRIP to be incrementally deployed on individual networks or
+nodes, TRIP DBRs include mechanisms that allow endpoints on
+TRIP-enabled networks to communicate directly with non-TRIP-aware
+endpoints, and vice versa.  These mechanisms do have some limitations,
+but will provide a level of service equal to or better than an IPv4
+NAT.  Many IPv4 enterprises have determined that such limitations are
+an acceptable price to pay for provider-independent internal
+addressing and/or local network topology hiding, both of which can be
+provided using the TRIP mechanism.  A TRIP DBR could also be
+integrated with a stateful firewall function, creating a boundary
+router that provides essentially the same set of protections afforded
+by an IPv4 NAT, with the same or fewer limitations.
+</t> 
+    </section>
+    <section title="Requirements Terminology">
+<t>
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+document are to be interpreted as described in RFC 2119 <xref
+target="RFC2119"/>.
+</t>
+    </section>
+    <section title="TRIP Overview">
+<t>
+TRIP is a tiered routing mechanism that divides the Internet into two
+addressing and routing domains: the transit network domain and the edge
+network domain.  To accomplish this, TRIP conceptually divides the IP
+(v4 or v6) address space into a set of Global LOCators (GLOCs) that
+are used for routing within the transit domain, and a set of globally
+unique Endpoint IDentifiers that are used to globally identify
+individual endpoints.  EIDs can be used for routing only within their
+local edge networks.  
+</t>
+<t>
+From a TRIP perspective, all of the nodes that are currently attached
+to the Internet are located in the transit domain, as their IP
+addresses can be used to route packets across the global Internet.
+Because their IP addresses can also be used for endpoint
+identification, their IP addresses currently serve as both GLOCs and
+EIDs.  The incremental deployment of TRIP involves moving individual
+networks and nodes into the edge routing domain, where they will be
+represented by separate EIDs and GLOCs, while retaining their ability
+to communicate with nodes that remain in the transit domain.
+</t>
+<t>
+The two separate routing domains are connected via Domain Boundary
+Routers (DBRs) that use the TRIP mechanism to forward packets from
+the edge network domain onto transit networks and from the transit
+network domain onto edge network.  Except in cases where sufficent
+IPv4 address space is not available (see below), GBRs maintain a
+two-way, one-to-one mapping between GLOCs and EIDs.
+</t>
+        <section title="Example of a TRIP-Enabled Edge Network">
+<t>
+The diagram below shows a multi-homed TRIP-enabled edge network.  The
+network has two DBRs, connecting the edge network to two different
+Internet Service Providers (ISPs).  The enterprise administrator has
+chosen to place a server (S) across the transit network/edge network
+boundary, so that it will be easily accessible from Internet nodes
+that remain in the transit domain, as well as from nodes in this and
+other TRIP-enabled edge networks.  This example edge network also
+contains a set of internal routers (R) and hosts (H).
+</t>
+<figure>
+<artwork>
+<![CDATA[
+
+        _________________________________________________________
+         \__                                                 __/
+           \__                 INTERNET                   __/
+              \__________________________________________/ 
+                          ^                     ^
+                          |                  ISP  #2
+                       ISP  #1               TRANSIT
+                       TRANSIT               NETWORK
+                       NETWORK                  v
+                          |      _________________________________
+TRANSIT                   v                |           |
+NETWORK                +-----+          +-----+      +---+
+- - - - - - - - - - - -|-DBR-|- - - - - |-DBR-|- - - | S | - - - -
+TRIP-ENABLED          +-----+          +-----+      +---+
+EDGE                      |                |           |
+NETWORK     ______________|________________|___________|__________
+                  |                |               |
+                +---+            +---+           +---+
+                | R |            | R |           | R |
+                +---+            +---+           +---+
+                  |                |               |
+            ______|______    ______|_______________|______________
+             |  |   |  |      |         |     |         |     |
+             H  H   H  H      H         H     H         H     H
+
+
+            Figure 1:  Multi-homed TRIP-enabled edge network.
+]]>
+</artwork>
+</figure>
+        </section>
+        <section title="TRIP EID and GLOC Assignment">
+<t>
+Each TRIP-enabled edge network will be assigned at least one globally
+unique, provider-independent EID prefix.  Internal subnet prefixes and
+EIDs will be allocated from within the EID prefix(es).  EIDs will be
+routable within the local network and can be used globally to identify
+nodes within the edge network.  The EID prefix(es) will not be
+advertised in the transit domain by either of the edge network's ISPs,
+and will not be used for routing outside of the edge network.
+</t>
+<t>
+Each ISP will assign at least one globally unique, globally routable
+GLOC prefix to the edge network.  Although GLOCs will not be allocated
+directly to the internal network nodes, the GLOC prefix should be
+large enough to allow a unique GLOC to be associated with each edge
+network EID.  Except in cases were insufficient IPv4 address space is
+available (see below), each DBR will maintain a two-way, one-to-one
+mapping between the GLOC(s) and EID(s) associated with each node on
+its attached edge network(s).  In cases where topology hiding is not
+required, this mapping may be a simple prefix-to-prefix mapping, with
+the same subnet and host (or IID) values being used for corresponding
+GLOCs and EIDs.
+</t>
+<t>
+In the example edge network represented in Figure 1, each node in the
+edge network will be assigned at least one EID from the local EID
+prefix.  The EID(s) will be assigned directly to each node using a
+current IP address assignment mechanism, such as manual configuration,
+DHCP or IPv6 Address Autoconfiguration.  The nodes inside the edge
+nework are unmodified IP nodes, so they will treat the EIDs as their
+IP addresses.
+</t>
+<t>
+There will also be at least two GLOC Prefixess assigned to the site,
+one assigned by ISP #1 (GLOC Prefix #1), and one assigned by ISP #2
+(GLOC Prefix #2).  The DBR attached to ISP #1 will associate a GLOC
+from GLOC Prefix #1 with each EID in the edge network, and the DBR
+attached to ISP #2 will associate a GLOC from GLOC Prefix #2 with each
+EID in the edge network.  ISPs will advertise the GLOC prefixes into
+the global Internet routing tables (perhaps as part of a larger
+aggregation), and the GLOCs will be used to route traffic to/from edge
+network nodes across the global Internet.  GLOCs will not be assigned
+directly to edge network nodes, and they will not be used for
+identification or routing within the edge network.
+</t>
+<t>
+The server that is located at the edge network/transit network
+boundary will be assigned at least one EID from the edge network's EID
+prefix on its edge network interface.  Both GBRs will associate GLOCs
+with the server's EID(s), as for any other edge network node.
+However, the server will also be assigned an address from GLOC Prefix
+#2 which will serve as both the GLOC and the EID for the server's
+transit network interface.  Nodes in the transit network that wish to
+reach the server will send packets to the server's transit network
+EID/GLOC for server identification and routing.  Nodes within the
+local edge network will use the server's edge network EID for both
+identification and routing.  Nodes in other TRIP-enabled edge
+networks will use the server's edge network EID for identification,
+and their packets will be routed to either one of the GLOCs
+corresponding to that EID.
+</t>
+        </section>
+        <section title="TRIP DNS Configuration">
+<t>
+The DNS will be configured to return the EIDs in response to A and
+AAAA record queries for nodes in TRIP-enabled edge networks.  The DNS
+configuration for nodes on transit networks will be unmodified, and
+the DNS will continue to return IP addresses (which can be used as
+EIDs and GLOCs) for transit network nodes.
+</t>
+<t>
+A new DNS record, the GLOC record, is defined below and can be used to
+map an EID to its corresponding GLOC.  For TRIP to function properly,
+a GLOC record must be configured for each edge network EID, and transit
+network nodes must not be represented by GLOC records in the DNS.
+</t>
+        </section>
+        <section title="Example TRIP Packet Exchange">
+<t>
+When a host in a TRIP-enabled edge network chooses to initiate
+communication with a node outside of the edge network, it will first
+determine the EID for the destination node, perhaps by performing a
+DNS look-up.  The sending host will construct an IP packet that
+contains the EID of the remote node as the destination address and the
+EID of the sending host as the source address.  Since the destination
+address is not on the local subnet, the sending host will forward the
+packet to its default router.  The packet will then be routed normally
+through the edge network towards the Internet, until it reaches a DBR.
+</t>
+<t>
+When the DBR receives a packet from an edge network that will be
+forwarded onto a transit network, it will use its local mapping to
+determine the local GLOC associated with the source EID.  The GBR will
+also look up the GLOC associated with the destination EID by checking
+the local cache or, if necessary, by performing a DNS query using the
+GLOC DNS record defined later in this document.
+</t>
+<t>
+If the destination GLOC lookup is successful, then the destination
+node is located in a TRIP-enabled edge network domain.  In this case,
+the GBR will perform an IP-version-dependent SPRINT transformation
+that will result in the source and destination GLOCs being copied into
+the source and destination address fields of the outermost IP header,
+and the original source and destination EIDs being stored elsewhere
+(either in a tunneled IPv4 header, or in an IPv6 SPRINT Destination
+Option defined later in this document.  The packet will then be
+forwarded towards the destination GLOC).  This will result in the
+packet traversing a remote GBR, where it will be transformed back into
+its original form and forwarded to its final destination on an edge
+network attached to the remote GBR..
+</t>
+<t>
+If the GLOC look-up is unsuccesful, then the destination node is
+presumed to be in the transit network domain, where its destination
+GLOC will be the same as its destination EID.  In that case, the GBR
+performs a different IP-version-dependent transformation that will
+result in the packet being sent to its original destination EID/GLOC
+from the source GLOC.  Because there will be no remote GBR to reverse
+the transformation, the local GBR will also modify the next-layer
+checksums to reflect the new source address in the IP header, and it
+will replace any source addresses used in upper layer protocols with
+the source GLOC, so that reply packets can be routed to the correct
+edge network from the transit domain.  This transformation is very
+similar to the the transformation performed by an IPv4 NAT box.
+</t>
+<t>
+When a GBR receives a packet with one of its local GLOCs as its
+destination address, the GBR first determines whether the packet was
+sent from a remote GBR or from a transit node.  If the packet was sent
+from a remote GBR, the packet will contain all of the information
+necessary to reverse the IP-version-specific SPRINT transformation and
+forward the packet to the original destination EID with the IP header
+in its original form.  No changes to the upper layers will be
+required.  In this case, the GBR will also cache the EID-to-GLOC
+mapping, so that it can be used for return traffic.
+</t>
+<t>
+If the packet was not sent from a remote GBR, the local GBR uses
+its internal mapping to map the destination GLOC to the corresponding
+local EID.  It copies the EID into the destination address field of the IP
+header and performs a NAT-like transformation to adjust the next-layer
+checksums before forwarding the packet to its final destination.
+</t>
+<t>
+This mechanism results in a very clean separation between edge network
+routing domains and the transit network domain.  Edge network (EID)
+prefixes are never adverstised in the transit routing domain, and
+transit domain (GLOC) prefixes are never advertised within edge
+networks.  With the exception of transit domain nodes whose EIDs and
+GLOCs are identical, edge network addresses (EIDs) are never used as
+the source or destination addresses of IP packets being routed through
+the transit domain, and transit network addresses (GLOCs) are never
+used as source or destination addresses of IP packets being routed
+through edge network domains.
+</t>
+    </section> 
+    <section title="GLOC DNS Record">
+<t>
+Note: This section will define a GLOC DNS records that is used for
+mapping EIDs to GLOCs if/when I find (or become?) someone with enough
+DNS clue to write it.
+</t>
+        </section>
+	</section>
+    <section title="TRIP IPv6 Destination Option">
+<t>
+For IPv6 packets, TRIP uses a IPv6 Destination Option to hold the
+EIDs while the packet is being routed across the transit domain.  This
+option also includes a "Cache Time-To-Live" field that indicates the
+amount of time, in seconds that a remote DBR should cache the EID to
+GLOC mapping information contained in this packet.  
+</t>
+<figure> 
+<artwork>
+<![CDATA[
+
+    + - - - - - - - - - - - - - - - +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                               |Version|4|T|S|D|   Reserved    |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                           Cache TTL                           |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    +                                                               +
+    |                                                               |
+    +                      Source EID or GLOC                       +
+    |                                                               |
+    +                                                               +
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    +                                                               +
+    |                                                               |
+    +                    Destination EID or GLOC                    +
+    |                                                               |
+    +                                                               +
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+]]>
+</artwork>
+</figure>
+<t>
+TBD: Need to add explanation of destination option fields.
+</t>
+	</section>
+    <section title="TRIP Translation Mechanisms">
+<t>
+TBD
+</t>
+        <section title="Recognized Upper Layer Protocols">
+<t>
+TBD
+</t>
+        </section>
+        <section title="Comparison to IPv4 NAT">
+<t>
+TBD
+</t>
+        </section>
+    </section>
+    <section title="'No Translation Needed' ICMP Message"> 
+<t>
+TBD
+</t>
+    </section>
+    <section title="DBR Transformations for IPv6">
+<t>
+This section describes how DBRs process IPv6 packets.
+</t>
+        <section title="IPv6 Edge-to-Transit Transformation">
+<t>
+When a DBR receives a packet from an edge network that will be forwarded
+onto the transit network, it performs the following steps:
+</t>
+<list style='numbers'>
+<t>
+If there is already a TRIP IPv6 Destination Option in the packet,
+indicating that another DBR has previously processed the packet, the
+DBR checks the destination GLOC to see if it matches one of the local
+GLOCs.  If the packet is not addressed to one of the DBRs local GLOCs,
+the DBR forwards the packet onto the transit network without further
+processing.  If the packet is addressed to one of the DBRs local
+GLOCs, the DBR processes the packet as if it were received from the
+transit network (see below).
+</t>
+<t>
+The DBR uses its local EID to GLOC mapping information to map the
+source EID (from the source address field of the IP header) to a GLOC.
+If this mapping does not succeed, this indicates a configuration
+problem within the edge network, and the packet will be
+discarded. ICMP error?
+</t>
+<t>
+The DBR will then attempt to lookup the destination GLOC associated
+with the destination EID.  To accomplish this, the GBR MAY check the
+local cache to see if it has an existing EID to GLOC mapping for the
+destination EID (from the destination address of the IP header).  If
+not, it performs a DNS query using the GLOC DNS record to map the
+destination EID to a destination GLOC.  If a GLOC is returned, the GBR
+MAY cache the implied EID-to-GLOC mapping for the length of time
+indicated by the TTL in the DNS response.  If a DNS response was
+received indicating that there is no GLOC corresponding to the
+destination EID, the GBR MAY also cache that information for up to one
+hour.  If no response is received from the DNS query, the packet is
+processed as if no GLOC was returned, but the result MUST NOT be
+cached.  If the GLOC lookup is successful, the GBR knows that the
+destination is located in a TRIP-enabled edge network.  Otherwise,
+the GBR assumes that the destination is located in the transit domain,
+where the destination EID can also be used as the destination GLOC.
+</t>
+<t>
+The DBR inserts a TRIP Source IPv6 Destination Option into the
+packet.  It clears the "IPv4" field (sets it to zero) to indicate that
+the original packet was an IPv6 packet.  It copies the original source
+EID into the "Source EID or GLOC" field and clears the "Source" flag
+(sets it to 0) to indicate that the "Source EID or GLOC" field
+currently contains the source EID.  It also copies the destination EID
+into the "Destination EID or GLOC field" and clears the "Destination"
+flag, to indicate that the "Destination EID or GLOC" currently
+contains an EID.
+</t>
+<t>
+The GBR copies the source GLOC into the source address field of the 
+IPv6 header.
+</t>
+<t>
+If the packet is being sent to a TRIP-enabled edge network, the GBR
+copies the destination GLOC into the destination address field of the
+IPv6 header.  The GBR will clear the "Translated" flag in
+the TRIP Destination Option, because the remote DBR will restore the
+packet to its original form, so there is no need to modify the
+next-layer checksums or to translate source addresses in upper layer
+packets.
+</t>
+<t>
+If the packet is being sent to a destination in the transit domain,
+the GBR will adjust the next header checksum to compensate for the
+source address change.  If the next header is not recognixed, the
+checksum will not be changed.  It will also translate source addresses
+used in the upper layer protocol from the original EID to the source
+GLOC.  If an upper layer protocol is not recognized, no translation
+will be performed.  A list of the next and upper layer protocols that
+TRIP DBRs are required to recognize is included in a later section.
+If any adjustment or translation has occurred, the DBR will set the
+"Translated" flag in the TRIP Destination Option to indicate that the
+packet has been translated to match the new source address.
+</t>
+<t>
+The DBR will forward the resulting packet onto the transit network,
+where it will be routed using the destination GLOC, which is now the
+destination address in the IPv6 header.
+</t>
+</list>
+        </section>
+        <section title="IPv6 Transit-to-Edge Transformation">
+<t>
+When a DBR receives an IPv6 packet (typically from the transit
+network) whose destination address matches one of the DBR's local
+GLOCs, the DBR will perform the following steps:
+</t>
+    <list style='numbers'>
+<t>
+The DBR will first determine whether there is a TRIP Destination
+Option present in the packet.  If a TRIP Destination Option is
+present, that indicates that this packet was sent from a TRIP-enabled
+edge network.  If not, the packet must have been sent from a node in
+the transit domain.
+</t>
+<t>
+If the TRIP Destination Option is not present, the DBR performs the following steps:
+</t>
+        <list style='symbols'>
+<t>
+The DBR MAY cache an indication that the IPv6 source address refers to an
+EID that is located in the transit network domain, or it may refresh
+the timeout for an existing cache entry for this EID.  The resulting
+cache entry MUST NOT have a lifetime of more than 1 hour.
+</t>
+<t>
+The DBR looks in its local mapping table to map the destination GLOC
+(contained in the IPv6 destination address field) to a local EID and
+copies that EID into the IPv6 destination address field.
+</t>
+<t>
+If the next header value is recognized, the DBR adjusts the next-layer
+checksum to reflect the modified destination address and fowards the resulting packet onto the edge network.
+</t>
+        </list>
+<t>
+If the TRIP Destination Option is present, the DBR will peform the
+following checks to determine how/if the packet should be processed:
+</t>
+        <list style='symbols'>
+<t>
+The DBR will check the "IPv4" flag to determine if the original packet
+was an IPv4 packet.  If so, the GBR will check the IPv4 destination
+address to determine if it matches one of the local IPv4 EIDs.  If so,
+the GBR will remove the outer IPv6 header and all associated extension
+headers and forward the IPv4 packet onto the edge network.
+</t>
+<t>
+The DBR will check the "Translated" flag in the TRIP Destination
+Option to mae sure that translation was not performed on this packet.
+If the flag is set, that indicates that the remote DBR was unaware
+that the destination was on a TRIP-enabled Edge Network.  In this
+case, the packet is dropped and an ICMP "No Translation Required"
+message is returned to the IPv6 source address of the packet.
+</t>
+<t>
+The DBR will check the "Destination flag and the "Destination EID or
+GLOC" field in the TRIP Destination Option to determine if the field
+contains an EID that matches the EID prefix assigned to (one of) the
+GBRs attached edge network(s). the GBR will drop the packet. ICMP
+error message?
+</t>
+        </list> 
+<t>
+If the packet has passed all of the previous checks without being
+dropped or forwarded, the DBR will perform the following steps:
+</t>
+        <list style='symbols'>
+<t>
+The DBR will check the "Source" flag in the TRIP Destination Option
+to determine if the source EID is currently stored in the TRIP
+Destination Option (flag is 0) or in the source address field of the
+IPv6 packet (flag is 1).  The DBR then knows that the source GLOC is
+stored in the other location.  Once the DBR knows which address is
+which, it MAY cache a GLOC to EID mapping, or refresh an existing
+cache entry for the mapping, so that the DBR will be able to send
+return traffic to the source EID without performing a DNS lookup.  The
+lifetime of the cache entry MUST NOT exceed the the length of time
+indicated by the "Cache TTL" field in the TRIP Destination Option.
+</t>
+<t>
+The GBR will copy the destination EID into the destination address
+field of the IPv6 packet.  It will store the destination GLOC in the
+"Destination EID or GLOC" field of the TRIP Destination Option and
+set the "Destination" flag to indicate that the field currently
+contains a GLOC.
+</t>
+<t>
+If the source address field in the IPv6 header currently contains a
+GLOC, the DBR will copy the source EID into the source address field
+of the IPv6 packet.  It will store the source GLOC in the "Source EID
+or GLOC" field of the TRIP Destination Option and set the "Source"
+flag to indicate that the field currently contains a GLOC.
+</t>
+<t>
+Question: For AH to work properly, would the DBR need to remove the
+TRIP Source option and the IPv6 Routing Header and restore the Next
+Header field in the IPv6 header to its original value?
+</t>
+<t>
+The GBR will resulting packet on to the edge network.
+</t>
+        </list>
+    </list>
+        </section>
+        <section title="ICMPv6 Error Handling">
+TBD
+        </section>
+    </section>
+    <section title="TRIP Transformations for IPv4">
+<t>
+Due to protocol and operational difference between IPv4 and IPv6,
+TRIP operates somewhat differently for IPv4 packets than it does for
+IPv6.
+</t>
+        <section title="IPv4 Edge-to-Transit Transformation">
+<t>
+For IPv4 edge networks, IPv4 addresses are used for EIDs, but GLOCs
+may be either IPv4 or IPv6 addresses.  Because IPv4 does not provide
+an equivalent to IPv6 destination options, IP-in-IP encapsulation is
+used between TRIP-enabled IPv4 networks, with the version of the outer
+IP header being dependent upon the IP version of the GLOC.
+</t>
+<t>
+More detail TBD.
+</t>
+        </section>
+        <section title="IPv4 Transit-to-Edge Transformation">
+<t>
+TBD
+</t>
+        </section>
+        <section title="ICMP(v4) Message Handling">
+TBD
+        </section>
+    </section>
+    <section title="Incremental Deployment of TRIP">
+<t>
+TBD
+</t>
+    </section>
+    <section title="Security Considerations">
+<t>
+TBD
+</t>
+    </section>
+    <section title="IANA Considerations">
+<t>
+TBD
+</t>
+    </section>
+    <section title="Acknowledgements">
+<t>
+Aspects of this work were inspired by earlier work in this area,
+including: ENCAPS, GSE, HIP <xref target="I-D.ietf-hip-base"/>, SHIM6
+<xref target="I-D.ietf-shim6-proto"/>, eFit, and LISP <xref
+target="I-D.farinacci-lisp"/>.
+</t>
+<t>
+The following people provided advice or review comments that
+substantially improved this document: TBD.
+</t>
+<t>
+This document was written using the xml2rfc tool described in RFC 2629
+<xref target="RFC2629"/>.
+</t>
+    </section> 
+    </middle>
+        
+    <back>
+    <references title="Normative References">
+	&rfc2119;
+	&rfc2640;
+    </references>
+
+    <references title="Informative References">
+        &raws;
+        &hip;
+        &shim6;
+        &efit;
+        &lisp;
+        &rfc2629;
+    </references>
+    </back>
+</rfc>
+

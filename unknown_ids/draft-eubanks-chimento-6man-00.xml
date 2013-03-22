@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc tocompact="yes"?>
+<?rfc tocdepth="3"?>
+<?rfc tocindent="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc comments="yes"?>
+<?rfc inline="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<rfc category="std" docName="draft-eubanks-chimento-6man-00" ipr="trust200811">
+  <front>
+    <title abbrev="udp-checksum">UDP Checksums for Tunneled Packets</title>
+
+    <author fullname="Marshall Eubanks" initials="M." surname="Eubanks">
+      <organization>Iformata Communications</organization>
+
+      <address>
+        <postal>
+          <street></street>
+
+          <city></city>
+
+          <region></region>
+
+          <code></code>
+
+          <country></country>
+        </postal>
+
+        <phone></phone>
+
+        <facsimile></facsimile>
+
+        <email>tme@multicasttech.com</email>
+
+        <uri></uri>
+      </address>
+    </author>
+
+    <author fullname="P.F. Chimento" initials="P.F." surname="Chimento">
+      <organization>Johns Hopkins University Applied Physics
+      Laboratory</organization>
+
+      <address>
+        <postal>
+          <street>11100 Johns Hopkins Road</street>
+
+          <city>Laurel</city>
+
+          <region>MD</region>
+
+          <code>20723</code>
+
+          <country>USA</country>
+        </postal>
+
+        <phone>+1-443-778-1743</phone>
+
+        <facsimile></facsimile>
+
+        <email>Philip.Chimento@jhuapl.edu</email>
+
+        <uri></uri>
+      </address>
+    </author>
+
+
+    <date day="23" month="February" year="2009" />
+
+    <abstract>
+      <t>We address the problem of computing the UDP checksum on tunneling
+      IPv6 packets when using lightweight tunneling protocols.</t>
+    </abstract>
+
+    <note title="Requirements Language">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119">RFC 2119</xref>.</t>
+    </note>
+  </front>
+
+  <middle>
+    <section anchor="Intro" title="Introduction">
+      <t>The origin of this I-D is the problem raised by the draft titled
+      "Automatic IP Multicast Without Explicit Tunnels", also known as "AMT".
+      This draft uses UDP as the layer protocol in tunneling packets; that is,
+      the outer packet carrying a tunneled (inner) packet. The draft specifies
+      that for packets carrying tunneled multicast data only, the UDP checksum
+      in the UDP header of the outer packet SHOULD be 0 (See
+      draft-ietf-mboned-auto-multicast-09, Section 6.6). However RFC 2460
+      (IPv6) explicitly states that IPv6 receivers MUST discard UDP packets
+      with a 0 checksum. So, while sending a UDP packet with a 0 checksum is
+      permitted in IPv4 packets, it is explicitly forbidden in IPv6
+      packets.</t>
+
+      <t>The computation of an additional checksum, when the inner packet(s)
+      are already adequately protected, is seen to be an unwarranted burden on
+      nodes implementing lightweight tunneling protocols.</t>
+
+      <section anchor="term" title="Some Terminology">
+        <t>For the remainder of this draft, we discuss only IPv6, since this
+        problem does not exist for IPv4. So any reference to 'IP' should be
+        understood as a reference to IPv6.</t>
+
+        <t>Although we will try to avoid them when possible, we may use the
+        terms "tunneling" and "tunneled" as adjectives when describing
+        packets. When we refer to 'tunneling packets' we refer to the outer
+        packet header that provides the tunneling function. When we refer to
+        'tunneled packets' we refer to the inner packet, i.e. the packet being
+        carried in the tunnel.</t>
+      </section>
+
+      <section anchor="Prob" title="Problem Statement">
+        <t>The argument made by the draft authors is that since multicast
+        packets already have a UDP header with a checksum, there is no
+        additional benefit and indeed some cost to nodes to both compute and
+        check the UDP checksum of the outer (encapsulating) header. However,
+        Consequently, IPv6 should make an exception to the rule that the UDP
+        checksum MUST not be 0, and allow tunneling protocols to set the
+        checksum field of the outer header only to 0 and skip both the sender
+        and receiver computation.</t>
+      </section>
+
+      <section anchor="alts" title="Alternate Solutions">
+        <t><list style="numbers">
+            <t>UDP-lite: Some suggestions on the mailing list have been to use
+            UDP-lite <xref target="RFC3828">(RFC 3828)</xref>. This solution
+            minimizes computation. For example, if a tunneling protocol were
+            to use UDP-lite with a checksum coverage field of 8 to construct
+            the outer (tunneling) packet, the only variable quantity for a
+            given tunnel is the packet length of the inner (tunneled) packet,
+            since the IPv6 pseudo-header is otherwise fixed. This is a
+            constant value then added to the inner packet length (which should
+            be known when the outer packet is constructed). This is simply an
+            add and store, and a computation of the pseudo-header checksum
+            when the tunnel is created. The possible objections to this
+            approach are twofold: First, it still involves computation which
+            some view as unnecessary. Second, NAT traversal is a problem for
+            UDP-lite and may cause packet loss.</t>
+
+            <t>No exception for lightweight tunneling: Retain the IPv6
+            specification as it stands and do not allow a UDP checksum equal
+            to 0 in an outer IPv6 tunneling packet.</t>
+
+            <t>Exception for lightweight tunneling: Amend IPv6 to allow a 0
+            value in the UDP checksum field for leightweight tunneling
+            protocols which allows them to bypass any checksum computation in
+            the outer header if the inner packet is protected. Rules for usage
+            in this case must be developed.</t>
+
+            <t>Another possibilty is to allow an exception for the AMT
+            protocol only. This may seem undesirable, but it would restrict
+            the implementation of a zero checksum UDP header over IPv6 only to
+            the AMT endpoints. Any misdelivered packets (i.e. arriving at a
+            non-AMT endpoint) would simply be discarded.</t>
+          </list></t>
+      </section>
+
+      <section anchor="pits" title="Possible Pitfalls of a change">
+        <t>One potential problem with the approach which allows an exception
+        to the IPv6 UDP checksum rule is that in general, tunneling (outer)
+        IPv6 packets could be encapsulating either IPv6 packets or IPv4
+        packets. If the inner (tunneled) packet is an IPv4 packet with a 0 UDP
+        checksum, then the neither the inner nor the outer packet will provide
+        any checksum protection. This would likewise be the case if the inner
+        packet were an IPv6 packet produced by another (future) protocol which
+        uses an exception to the IPv6 rule.</t>
+
+        <t>Others on the mailing list have pointed out other issues with
+        changing the IPv6 specification to allow a checksum of 0 on the outer
+        packet header. In particular, Matt Mathis points out that some
+        tunneling devices ignore the DF bit and fragment silently. This would
+        allow two fragmented UDP packets to be spliced together and be
+        decapsulated and forwarded by a tunnel endpoint.</t>
+
+        <t>One notes also that there is no IPv6 header checksum.</t>
+
+        <t>There is also the possibility of deep-inspection firewall devices
+        or other middleboxes actually checking the UDP checksum field of the
+        outer packet and discarding the tunneling packets. This is would be an
+        issue also for legacy systems which have not implemented the change in
+        the IPv6 specification. So in any case, there may be packet loss of
+        lightweight tunneling packets because of mixed new-rule and old-rule
+        nodes.</t>
+      </section>
+
+      <section anchor="rec" title="Recommended Solution">
+        <t>There seems to be some general opinion that a UDP checksum of 0
+        could be allowed on the outer encapsulating packet of a lightweight
+        tunneling protocol. This would imply that UDP endpoints handling that
+        protocol must change their behavior and not discard UDP packets
+        received with a 0 checksum on the outer packet.</t>
+
+        <t>Magnus Westerlund proposed some restrictions on using a UDP header
+        checksum of 0. These are:</t>
+
+        <t><list style="numbers">
+            <t>There must be some way to verify the integrity of the inner
+            (tunneled) packet.</t>
+
+            <t>The tunneling protocol and implementation must not use
+            fragmentation of the inner packets being carried.</t>
+          </list>We would suggest the following elaborations of the above
+        restrictions, if a change in the IPv6 specification moves forward:</t>
+
+        <t><list style="symbols">
+            <t>An inner IPv4 packet with a UDP checksum equal to 0 must not be
+            tunneled.</t>
+
+            <t>Non-IP inner packets must have a CRC or other mechanism for
+            checking packet integrity.</t>
+
+            <t>Other tunneling protcocols that use the UDP checksum equal to 0
+            MUST NOT be tunneled themselves, even if more deeply encapsulated
+            packets have checksums or other integrity checking mechanisms.</t>
+
+            <t>We would recommend that general protocol stack implementations
+            do NOT implement this change. The exception should remain
+            restricted to devices serving as endpoints of the lightweight
+            tunneling protocol adopting the change.</t>
+          </list></t>
+
+        <t>In addition, we would recommend that a security analysis be done in
+        order to assess whether any new vulnerabilities are introduced by such
+        a change.</t>
+      </section>
+    </section>
+
+    <section anchor="IANA" title="IANA Considerations">
+      <t>This document makes no request of IANA.</t>
+
+      <t>Note to RFC Editor: this section may be removed on publication as an
+      RFC.</t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t></t>
+    </section>
+
+    <section anchor="Acknowledgements" title="Acknowledgements">
+      <t></t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+       
+
+      <?rfc include="reference.RFC.3828"?>
+
+       
+
+      <?rfc include="reference.RFC.2119"?>
+
+       
+
+      <?rfc include='reference.RFC.2401'?>
+
+       
+
+      <?rfc include="reference.RFC.2460"?>
+
+       "&gt; 
+    </references>
+  </back>
+</rfc>

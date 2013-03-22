@@ -1,0 +1,363 @@
+<?xml version="1.0"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+
+<!-- Copyright (C) 2009 Simon Josefsson -->
+
+<?rfc compact="no"?>
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+
+<rfc category="std" ipr="trust200902" updates="4120"
+     docName="draft-josefsson-krb5starttls-bootstrap-01">
+
+  <front>
+
+    <title>
+      Kerberos V5 Reply Keys From TLS
+    </title>
+
+    <author initials="S." surname="Josefsson" fullname="Simon Josefsson">
+      <organization abbrev="SJD AB">
+	Simon Josefsson Datakonsult AB
+      </organization>
+      <address>
+       <postal>
+           <street>Hagagatan 24</street>
+           <city>Stockholm</city>
+           <code>113 47</code>
+           <country>Sweden</country>
+       </postal>
+	<email>simon@josefsson.org</email>
+	<uri>http://josefsson.org/</uri>
+      </address>
+    </author>
+    
+    <date month="March" year="2009"/>
+
+    <abstract>
+
+      <t>This document describes how the Kerberos V5 over TLS protocol
+	together with a users' long term shared secret can be used to
+	1) allow clients to securely learn a realm's KDC X.509
+	certificate, 2) distribute the X.509 trust anchors used by the
+	KDC, and 3) make it possible for clients to use Kerberos V5
+	over TLS without having to validate the server
+	certificates.</t>
+
+      <t>We also describe how the Kerberos V5 over TLS protocol can be
+	used to 4) avoid the need for a long term shared key between
+	the user and the KDC by instead using TLS user
+	authentication.</t>
+
+      <t>This goals are achieved by introducing two new Kerberos V5
+	pre-authentication mechanisms that modify how the Kerberos V5
+	reply key is derived.</t>
+
+    </abstract>
+
+  </front>
+  
+  <middle>
+
+    <section title="Introduction and Background">
+
+      <t>This document describes a <xref target="RFC4120">Kerberos
+	V5</xref> pre-authentication mechanism that
+	uses <xref target="I-D.josefsson-kerberos5-starttls">Kerberos
+	V5 over TLS</xref> to achieve:</t>
+
+      <t><list style="symbols">
+
+	  <t>Allow Kerberos V5 clients to securely learn a Kerberos V5
+	    realm's Key Distribution Center (KDC) certificates.</t>
+
+	  <t>Securely distribute the trust anchors used by the Key
+	    Distribution Center (KDC) in a Kerberos V5 realm.</t>
+
+	  <t>The ability to use Kerberos V5 over TLS without having to
+	    validate the server certificates.</t>
+
+      </list></t>
+
+      <t>These goals are achieved by having the client connect to a
+	KDC, take a note of the server's certificate, and verify them
+	as belonging to the KDC the user trusts by properly decrypting
+	the Kerberos V5 response using the user's password.  Only the
+	correct KDC will be able to generate a Kerberos V5 response
+	using the user's password and the secrets derived from the TLS
+	channel.</t>
+
+      <t>The mechanism to achieve the above goals is for the KDC to
+	strengthen the Kerberos V5 reply key using keying material
+	derived from the <xref target="RFC5246">TLS channel</xref>
+	using the algorithm specified
+	in <xref target="I-D.ietf-tls-extractor">Keying Material
+	Exporters for Transport Layer Security (TLS)</xref>.</t>
+
+      <t>The document also describes a pre-authentication mechanism
+	that can be used to achieve:</t>
+
+      <t><list style="symbols">
+
+	  <t>Allow use of Kerberos V5 without a long-term shared
+	    secret between the user and the KDC.</t>
+
+      </list></t>
+
+      <t>This goal is achieved by having the client authenticate
+	itself using TLS, and having the KDC request that the client
+	send a PA-ENC-TIMESTAMP pre-authentication data encrypted
+	using a key derived from the TLS channel.  If successful, the
+	KDC will encrypt the response using a reply key derived only
+	from the TLS channel.</t>
+
+      <t>This document requires that both the client and the KDC MUST
+	support <xref target="I-D.josefsson-kerberos5-starttls">Kerberos
+	V5 over TLS</xref>.</t>
+
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+	NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and
+	"OPTIONAL" in this document are to be interpreted as described
+	in <xref target="RFC2119">RFC 2119</xref>.</t>
+
+    </section>
+
+    <section title="TLS Exporter Function">
+
+      <t>The following function Krb5KeyFromTLS is used elsewhere to
+	derive keys from a TLS session.</t>
+
+      <figure>
+	<artwork>
+   Krb5KeyFromTLS (inkey, inkey_len, tlscb, tlscb_len, length, label)
+
+   Input:          inkey      encryption key, an octet string
+                   inkey_len  length of encryption key,
+                              a positive integer
+                   tlscb      channel binding data, an octet string,
+                   tlscb_len  length of channel binding data,
+                              a positive integer
+                   length     number of bytes to derive,
+                              a positive integer
+                   label      the TLS PRF label to use,
+                              a IANA registered string
+
+   Output:         outkey   derived key, an "length"-octet string
+
+   Steps:
+
+      1. Perform the TLS Exporter step:
+
+          outkey = PRF(master_secret, label,
+                       SecurityParameters.client_random +
+                       SecurityParameters.server_random +
+                       context_value_length + context_value
+                      )[length]
+
+         The "context_value" should be the concatenation of "inkey"
+         followed by "tlscb".
+
+         Consequently, the length of "context_value" (which used to
+         derived "context_value_length") will be the sum of
+         "inkey_len" and "tlscb_len".
+
+         The values of "length" and "label" are as the inputs to this
+         function.
+
+      3. Output the derived key "outkey".
+	</artwork>
+      </figure>
+
+    </section>
+
+    <section title="Reply Key Strengthening">
+
+      <t>If the client do not (yet) have trust anchors for the KDC, it
+	should delay verification of the server certificate.</t>
+
+      <t>To signal that the client wishes the KDC to strengthen the
+	reply key using keying material derived from the TLS session,
+	it sends a pre-authentication mechanism called
+	"pa-krb5starttls-strengthen".  It has a pdata-type integer
+	value of #TBD.</t>
+
+      <t>The pre-authentication structure is defined in RFC 4120 as:</t>
+
+      <figure>
+	<artwork>
+  PA-DATA         ::= SEQUENCE {
+          -- NOTE: first tag is [1], not [0]
+          padata-type     [1] Int32,
+          padata-value    [2] OCTET STRING -- might be encoded AP-REQ
+  }
+	</artwork>
+      </figure>
+
+      <t>The content of the padata-value should be the DER encoding of
+	the empty string.</t>
+
+      <t>When receiving the request to use the
+	"pa-krb5starttls-strengthen" pre-authentication message, the
+	KDC needs to decide whether to honor it or not.  This is a
+	policy decision that can depend on several reasons, including
+	the content of the request.  If the KDC decides that it does
+	not wish to honor the "pa-krb5starttls-strengthen" request,
+	the KDC MUST fail the request by returning
+	KDC_ERR_PREAUTH_FAILED.</t>
+
+      <t>When the KDC decides to honor the client's request, it will
+	process the incoming request as usual except that the KDC-REP
+	reply key is post processed.  The post processing
+	uses <xref target="I-D.ietf-tls-extractor">Keying Material
+	Exporters for Transport Layer Security (TLS)</xref>, by
+	invoking the Krb5KeyFromTLS function with the following
+	inputs:</t>
+
+      <figure>
+	<artwork>
+   inkey: user's long term shared secret
+   inkey_len: length of "inkey"
+   tlscb: the client's TLS Finished message data,
+          as described in the "tls-unique" channel binding
+          registration.
+   tlscb_len: length of "tlscb".
+   length: same as "inkey_len"
+   label: "Kerberos V5 strengthen key"
+	</artwork>
+      </figure>
+
+      <t>The client will strengthen its local KDC-REP reply key using
+	the same procedure.</t>
+
+      <t>On successful decryption of the KDC-REP, the clients is
+	certain that it is talking to a KDC that knows the client's
+	shared key without any man-in-the-middle.  The client can then
+	remember the KDC server certificate and/or trust anchors
+	transferred during the TLS handshake, to be used during future
+	Kerberos V5 over TLS connections.</t>
+
+      <t>The client MAY skip using this protocol for future
+	connections, and instead rely on the standard Kerberos V5 over
+	TLS protocol with proper validation of server certificate.</t>
+
+    </section>
+
+    <section title="Avoiding Use Of Long-Term Shared Key">
+
+      <t>The ETYPE-INFO-TLS pre-authentication type is sent by the KDC
+	in a KRB-ERROR indicating a requirement for additional
+	pre-authentication before sending a reply protected using a
+	key derived only from the TLS session.  It is used to notify a
+	client of which encryption type to use for the encryption of
+	an encrypted timestamp for the purposes of sending a
+	PA-ENC-TIMESTAMP pre-authentication value using an encryption
+	key derived from the TLS session.</t>
+
+      <figure>
+	<artwork>
+ETYPE-INFO-TLS          ::= SEQUENCE OF Int32 -- EncryptionType
+                                    -- in preference order --,
+	</artwork>
+      </figure>
+
+      <t>The client choses a supported encryption type and re-send the
+	request with a PA-ENC-TIMESTAMP encrypted using a key derived
+	from the TLS session by using Krb5KeyFromTLS with the
+	following input:</t>
+
+      <figure>
+	<artwork>
+   inkey: empty string
+   inkey_len: 0
+   tlscb: the client's TLS Finished message data,
+          as described in the "tls-unique" channel binding
+          registration.
+   tlscb_len: length of "tlscb".
+   length: key length of the chosen encryption type
+   label: "Kerberos V5 pre-auth key"
+	</artwork>
+      </figure>
+
+      <t>The KDC verifies the PA-ENC-TIMESTAMP and if successful it
+	knows it is talking to the authenticated user and can send a
+	response encrypted using the same encryption type as the
+	client selected but with a key derived using Krb5KeyFromTLS
+	with the same inputs except for:</t>
+
+      <figure>
+	<artwork>
+    label: "Kerberos V5 derive key"
+	</artwork>
+      </figure>
+
+      <t>The client derives the key the same way, and will be able to
+	decrypt the response.</t>
+
+      <t>Note that this means the long term shared key will not be
+	involved in deriving the reply that protects the Kerberos V5
+	response.</t>
+
+      <t>(The reason for encrypting the response is because Kerberos
+	V5 does not have any null encryption scheme.)</t>
+
+    </section>
+
+    <section title="IANA Considerations">
+
+      <t>The IANA is requested to allocate the string "kerberos V5
+	reply key" in the TLS Exporter label registry.</t>
+
+    </section>
+
+    <section title="Acknowledgements">
+
+      <t>Nicolas Williams mentioned the advantages in
+	&lt;http://permalink.gmane.org/gmane.ietf.krb-wg/5016&gt;, and
+	also suggested the use of PA-ENC-TIMESTAMP.</t>
+
+    </section>
+
+    <section title="Security Considerations">
+
+      <t>The security considerations
+	in <xref target="RFC4120">Kerberos V5</xref>,
+	<xref target="RFC5246">TLS</xref>, <xref target="RFC5021">Kerberos
+	V5 TCP extension</xref>,
+	and <xref target="I-D.josefsson-kerberos5-starttls">Kerberos
+	V5 over TLS</xref> are inherited.</t>
+
+      <t>By using ETYPE-INFO-TLS the long-term shared key of the user
+	is no longer involved in deriving the Kerberos V5 ticket.
+	Instead only the authentication from the TLS channel is used.
+	This changes the cryptographic model of Kerberos V5
+	significantly, and makes it possible to operate Kerberos V5
+	without even having a long term shared key for a particular
+	user.  This changes how a Kerberos V5 security analysis should
+	be made, so be aware of this model change when reading other
+	literature.</t>
+
+    </section>
+
+  </middle>
+
+  <back>
+
+    <references title="Normative References">
+
+      <?rfc include="reference.RFC.2119.xml"?>
+      <?rfc include="reference.RFC.4120.xml"?>
+      <?rfc include="reference.I-D.josefsson-kerberos5-starttls"?>
+      <?rfc include="reference.I-D.ietf-tls-extractor.xml"?>
+
+    </references>
+
+    <references title="Informative References">
+
+      <?rfc include="reference.RFC.5021.xml"?>
+      <?rfc include="reference.RFC.5246.xml"?>
+
+    </references>
+
+  </back>
+
+</rfc>

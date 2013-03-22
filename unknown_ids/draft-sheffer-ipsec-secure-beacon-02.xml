@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY draft-ietf-mip4-vpn-problem-solution PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml3/reference.I-D.ietf-mip4-vpn-problem-solution.xml'>
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+    <!ENTITY rfc4301 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4301.xml'>
+    <!ENTITY rfc4306 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4306.xml'>
+    <!ENTITY rfc4436 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4436.xml'>
+    <!ENTITY rfc4555 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4555.xml'>
+    <!ENTITY rfc4718 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4718.xml'>
+]>
+
+<rfc category="std" ipr="full3978" docName="draft-sheffer-ipsec-secure-beacon-02">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+
+    <front>
+        <title abbrev="IPsec Secure Beacon">Secure Beacon: Securely Detecting a Trusted Network</title>
+    <author initials="Y." surname="Sheffer" fullname="Yaron Sheffer">
+      <organization abbrev="Check Point">Check Point Software Technologies Ltd.</organization>
+      <address>
+        <postal>
+          <street>5 Hasolelim st.</street>
+          <city>Tel Aviv</city>
+          <code>67897</code>
+          <country>Israel</country>
+        </postal>
+        <email>yaronf@checkpoint.com</email>
+      </address>
+    </author>
+    <author initials="Y." surname="Nir" fullname="Yoav Nir">
+      <organization abbrev="Check Point">Check Point Software Technologies Ltd.</organization>
+      <address>
+        <postal>
+          <street>5 Hasolelim st.</street>
+          <city>Tel Aviv</city>
+          <code>67897</code>
+          <country>Israel</country>
+        </postal>
+        <email>ynir@checkpoint.com</email>
+      </address>
+    </author>
+        <date year="2007"/>
+        <abstract><t>Remote access clients, in particular IPsec-based ones, are heavily deployed 
+        in enterprise environments.
+        In many enterprises the security policy allows remote-access clients to switch
+        to unprotected operation when entering the trusted network. This document specifies a method
+        that lets a client detect this situation in a secure manner, with the help of a security gateway.
+        We propose a minor extension to IKEv2 to achieve this goal.
+        </t></abstract>
+    </front>
+
+    <middle>
+        <section title="Requirements Notation">
+            <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+            "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+            and "OPTIONAL" in this document are to be interpreted as
+            described in <xref target="RFC2119"/>.</t>
+        </section>
+
+<section title="Introduction">
+<t>
+The IKE and IPsec protocols are often used for remote-access clients. IKE version 2 <xref target="RFC4306"/> provides enhanced support for remote-access clients through the use of EAP. In many cases, IPsec clients need to be "turned off" when the client roams into the internal, or "trusted" network of an enterprise. 
+This operation is very sensitive, since an adversary may use this mechanism to force the client to send unprotected packets into the network.
+This document defines an extension to IKEv2 where the client contacts a trusted gateway, the gateway detects that the client is located in a trusted network, and delivers an indication to the client in a secure manner.
+An important property of this protocol is that the exchange may terminate early, if the client and the server agree that IPsec is not required; otherwise the protocol will "fall through" into a standard IKEv2 exchange, generating IKE and Child security associations.
+</t>
+<t>
+Unfortunately at the time of writing, there is no IETF work group chartered with IPsec. We encourage discussion of this draft on the IPsec mailing list, https://www1.ietf.org/mailman/listinfo/ipsec.
+</t>
+<section title="Goals">
+<t>
+The proposed protocol should fulfill the following goals.
+<list style="symbols">
+<t>Security, in particular the protocol should not adversely affect the security of IKE. </t>
+<t>Robustness: the protocol should fall back into a full IKE exchange if any error is detected.</t>
+<t>Performance: minimize the number of exchanges and the CPU effort expanded, whether the client is in the trusted or untrusted network.</t>
+<t>Usability: the user should not be required to perform any action unless this is required for security.
+We avoid sending the client's identity, because this normally requires input from the user.</t>
+<t>Simplicity: the protocol should deal with the case of "simple" networks, meaning networks where the internal network is wholly trusted. It does not need to cover more complex topologies.</t>
+<t>Extensibility: however, the base protocol can be extended, e.g. to handle more complex networks.</t> </list> </t> </section> <section title="Client Mobility"> <t> Client mobility in IKEv2 is defined using the MOBIKE protocol extension, <xref target="RFC4555"/>.
+<xref target="mobike"/> below specifies how the Secure Beacon solution coexists with MOBIKE. 
+</t>
+</section>
+<section title="Alternative Solutions">
+<t>
+There are several alternatives for providing the functionality discussed here.
+<list style="symbols">
+<t>Several proposals related to Mobile IP, such as <xref target="I-D.ietf-mip4-vpn-problem-solution"/>,
+rely on secure connectivity to the Home Agent, which is assumed to be in the trusted network. This solution obviously can only be applied in a Mobile IP setting.</t> <t>Some proprietary solutions rely on secure connectivity to other "internal" hosts, for example the Windows Domain Controller.</t> <t>Another solution we have considered is to open a dedicated, short-lived TLS connection into the security gateway.
+This would
+enable the client to authenticate the gateway. However an IPsec gateway should not be assumed to implement TLS.</t> <t>Lastly, we considered a new protocol, possibly derived from IKE. A separate protocol offers modularity as its main benefit. However we have chosen to reuse IKE itself, where the exchange can be completed as a full IKE exchange. This results in fewer exchanges, and possibly in a simpler implementation.</t> </list> </t> </section> </section> <section title="Protocol Details"> <t> The following sections describe the protocol, first at the exchange level and then at the payload level. Following that, we discuss two central issues: how the client detects that it has moved, so that this protocol can be run, and how the gateway can make the decision whether the client is in the trusted or untrusted network.
+</t>
+<section title="Extending IKE for Secure Network Detection"> <t> To summarize, we add an IKE notification to message #1 of the protocol, and another to message #2.
+However, the protocol is only
+terminated after the initiator has authenticated the responder, i.e. after message #4. It is important to note that the initiator's identity may not be authenticated if the protocol is terminated early.
+</t>
+<section title="The IKE_SA_INIT Exchange"> <t> The IKE_SA_INIT exchange is modified as follows:
+<figure>
+<artwork>
+        Initiator                    Responder
+      -----------                   -----------
+      HDR, SAi1, KEi, Ni, N1  -->
+                             &lt;--    HDR, SAr1, KEr, Nr, N2, [CERTREQ]
+</artwork>
+</figure>
+</t>
+<t>
+All payloads, with the exception of the notifications, have their usual semantics.
+The first notification, N1, is of type SECURE_NETWORK_DETECT.
+It denotes to the responder that it SHOULD respond with a second notification (N2), which is of type SECURE_NETWORK_DETECTED.
+Both notifications are defined in
+<xref target="notifications"/>. Note that both notifications are sent in the clear.
+</t>
+<t>
+Following the first exchange, there are three options:
+<list style="symbols">
+<t>If there is no response after the normal retransmission period, the client SHOULD assume
+it is on an untrusted network, and is experiencing connectivity problems. For example, the IKE port may be blocked.</t> <t>Otherwise, a response was received. If N2 is not received, or if it is received but explicitly specifies that the initiator is in an untrusted network, the protocol continues according to standard IKE rules. This would be the case if the responder does not understand the SECURE_NETWORK_DETECT notification.</t> <t>If N2 indicates that the initiator is in a trusted network, the protocol continues as detailed in <xref target="ike auth"/> below.</t> </list> </t> </section> <section title="The IKE_AUTH Exchange" anchor="ike auth"> <t> The initiator now responds with a truncated IKE_AUTH exchange:
+<figure>
+<artwork>
+      HDR, SK {[IDi, CERT,] [CERTREQ,] [IDr,] [AUTH]}     -->
+</artwork>
+</figure>
+The initiator sends the AUTH payload only if it can be authenticated in message #2,
+i.e. if it uses a shared secret or certificate, rather than EAP.
+Even if the initiator normally authenticates using one of these methods,
+it MAY omit both IDi and AUTH, in order to avoid user interaction.
+If AUTH is included, then the responder MUST authenticate the initiator.
+</t>
+<t>
+The responder replies with:
+<figure>
+<artwork>
+                                   &lt;--   HDR, SK {IDr, [CERT,] AUTH}
+</artwork>
+</figure>
+The initiator MUST now validate the identity of the responder as defined in <xref target="RFC4306"/>, and following that, MUST terminate the protocol. Obviously in this case, no Child SA is created and therefore no IPsec-protected traffic will be sent. Moreover, no long-term IKE SA is created, and both parties SHOULD delete their IKE SAs. The initiator SHOULD send an Informational exchange containing a Delete payload for the IKE SA.
+
+The responder should regard a persistent IKE SA where a secure network has been detected as anomalous
+and audit their existence.
+The responder MUST NOT allow any Create Child SA exchanges based on such an IKE SA.
+</t>
+<t>
+See also <xref target="policy"/> regarding implications on the client's security policy.
+</t>
+<t>
+It is RECOMMENDED that the client display a message to the user at this point, announcing that it has moved into unprotected mode.
+</t>
+</section>
+</section>
+<section title="IKE Notify Payloads" anchor="notifications"> <t> We define two new notify payload types, SECURE_NETWORK_DETECT and SECURE_NETWORK_DETECTED.
+</t>
+<section title="SECURE_NETWORK_DETECT">
+<t>
+This notification type has the value [TBD-BY-IANA1]. It contains no data.
+</t>
+</section>
+<section title="SECURE_NETWORK_DETECTED"> <t> This notification type has the value [TBD-BY-IANA2].
+</t>
+<t>
+This notify payload includes a single 1-octet data item. It has the value 0 if the responder believes that the initiator is coming from an untrusted network, or if the responder cannot determine where the initiator is coming from. It has the value 1 if the responder believes that the initiator is coming from a trusted network.
+</t>
+<t>
+Implementations MAY include additional data in this notify payload, however this usage SHOULD be signaled with a Vendor ID payload. Such additional data MUST be ignored by the receiver if not understood.
+</t>
+</section>
+</section>
+<section title="Detecting Movement" anchor="detecting_mv"> <t> Mobility detection is outside the scope of this document. The procedures involved are best described in <xref target="RFC4436"/> for IPv4. 
+The DNA procedures SHOULD be followed, so that the client can employ the mechanism defined here whenever it suspects that it has moved into a new network, particularly from a trusted to an untrusted network.
+</t>
+</section>
+<section title="The Gateway's Decision" anchor="decision"> <t> The gateway MUST be configured to make a correct decision regarding the client's location. Typically, the gateway would only detect clients connecting through the trusted network if their IKE packets arrive from a trusted physical network interface. Determining which network or network type is considered trusted is left to local policy.
+</t><t>
+It is RECOMMENDED that the gateway indicate an untrusted network, if it detects that the client is behind a NAT. See <xref target="security"/> for rationale.
+</t>
+</section>
+<section title="Client Security Policy" anchor="policy"> <t> If the client sends the SECURE_NETWORK_DETECT notification and does not receive an indication of a trusted network, it SHOULD NOT change its existing SPD and SPD Cache.
+</t><t>
+If the client receives the SECURE_NETWORK_DETECTED notification indicating a trusted network, it should alter its behavior as follows.
+</t>
+<t>
+The client SHOULD create BYPASS entries in the SPD Cache for all PROTECT entries in the SPD which are associated with the peer gateway.
+An entry is said to be associated with a peer gateway if it is a transport mode entry and the remote address is the peer gateway address, or if it is a tunnel mode entry, and the remote tunnel address is the peer gateway address.
+</t><t>
+The above SPD Cache entries MUST be reset (flushed) whenever the client detects that it has 
+moved from one network attachment to another. See <xref target="detecting_mv"/>.
+</t>
+<t>
+IKEv2 allows the client to populate the SPD Cache dynamically based on the INTERNAL_IPv*_SUBNET attributes in the configuration payload (see section 6.3 in IKEv2 Clarifications <xref target="RFC4718"/>).
+However, since the client does not reach this state, depending on its static SPD configuration, such a client might effectively create a BYPASS entry for the entire IP address space.
+</t>
+</section>
+</section>
+<section title="Interoperation with MOBIKE" anchor="mobike"> <t> The client MAY include the SECURE_NETWORK_DETECT notification in any Informational exchange that contains an UPDATE_SA_ADDRESSES notification.
+</t><t>
+By this time, the client has already determined that the gateway supports both MOBIKE and the Secure Beacon extension.
+The gateway MUST respond with a SECURE_NETWORK_DETECTED notification in the response to this Informational exchange.
+</t><t>
+If the gateway's response specifies that the client is in a trusted network:
+<list style="symbols">
+<t>The gateway MUST NOT attempt
+a return routability check, if such a check would have normally been required.
+</t>
+<t>Both client and gateway MUST tear down the existing IKE SA, and terminate the IKE protocol.
+The client SHOULD send an Informational exchange containing a Delete payload for the IKE SA.
+</t>
+<t>
+It is RECOMMENDED that the client display a message to the user at this point, announcing that it has moved into unprotected mode.
+</t><t>
+The next time the client detects that it has moved, it SHOULD re-initiate an IKE exchange.
+</t>
+</list>
+</t>
+</section>
+        <section title="IANA Considerations">
+        <t>
+   This document does not create any new namespaces to be maintained by
+   IANA, but it requires new values in namespaces that have been defined
+   in the IKEv2 base specification.
+</t>
+<t>
+   This document defines several new IKEv2 notifications whose values
+   are to be allocated from the "IKEv2 Notify Message Types" namespace.
+</t>
+<figure>
+<artwork>
+      Notify Messages - Error Types     Value
+      -----------------------------     -----
+      None
+			
+      Notify Messages - Status Types    Value
+      ------------------------------    -----
+      SECURE_NETWORK_DETECT             TBD-BY-IANA1 (16396..40959)
+      SECURE_NETWORK_DETECTED           TBD-BY-IANA2 (16396..40959)
+</artwork>
+</figure>
+        </section>
+<section title="Security Considerations" anchor="security"> <t>The proposed solution needs to be analyzed carefully, since it may cause a host to switch from protected to unprotected communication. Following are the threats that we have identified.
+<list style="numbers">
+<t>The notifications are sent in the clear. A passive attacker will learn whether the responder
+is receiving traffic over a trusted or untrusted interface.
+This is information that the attacker is probably able to obtain otherwise.</t>
+<t>An active attacker may be able to change either or both notifications.
+The first notification N1 does not carry any data, so it can at worst be deleted.
+In this case the protocol will revert to normal IKE.</t>
+<t>An active attacker's change to the N2 notification (or deletion of N2)
+will be detected since IKE message #2 is authenticated and integrity-protected.
+Therefore this attack is only equivalent to a DoS attack on IKE.
+Moreover, the protocol is "fail safe" since any detected failures or attacks will at worst result
+in the client using a secure channel where one is not required by policy.</t>
+<t>This protocol can be defeated by an active attacker who can inject packets into the trusted network
+and relay the responses to such packets back into the untrusted network.
+Such an attacker will be able to cheat the client into believing that it is on the trusted network.
+We believe we do not have to address this threat.</t>
+<t>This protocol MUST NOT be used if the network can change the path between the client
+and the security gateway without the client's awareness, causing its security properties to change.
+That is, if the network can route traffic sometimes over a trusted path and sometimes over an untrusted one,
+without notifying the end-point.
+Such a situation might be possible in incorrectly configured Mobile IP deployments, e.g. where the same Home Agent is shared between a trusted Wi-Fi access network and an untrusted one, and where the IPsec layer is not informed of the connectivity changes.</t> <t>There are rare cases when a client is collocated with a NAT. One such case is a client implemented within a software virtual machine.
+In such cases the client is likely to remain unaware when moving from a trusted to an untrusted network.
+Therefore we recommend (<xref target="decision"/>)
+to always indicate an untrusted network to clients behind NAT.</t> </list> </t>
+</section>
+<section title="Change Log">
+        <section title="-02">
+        <t>
+        Minor editorial changes.
+        </t>
+        </section>
+        <section title="-01">
+        <t>
+        Added a section on the client's security policy, per <xref target="RFC4301"/>.
+        Added discussion of the interaction with MOBIKE. Added treatment of client behind NAT.
+        </t>
+        </section>
+        <section title="-00">
+        <t>
+        Initial version.
+        </t>
+        </section>
+</section>
+<section title="Acknowledgements">
+<t>
+We would like to thank Ariel Shaqed for his many useful comments. Thanks to Steve Kent for helping to clarify security policy issues.
+</t>
+</section>
+    </middle>
+
+  <back>
+    <references title='Normative References'>
+     &rfc2119;
+     &rfc4301;
+     &rfc4306;
+     &rfc4436;
+     &rfc4555;
+    </references>
+    <references title='Informative References'>
+     &rfc4718;
+     &draft-ietf-mip4-vpn-problem-solution;
+    </references>
+    </back>
+</rfc>

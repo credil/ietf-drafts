@@ -1,0 +1,1035 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    This XML document is the output of clean-for-DTD.xslt; a tool that strips
+    extensions to RFC2629(bis) from documents for processing with xml2rfc.
+-->
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?><!--<!DOCTYPE rfc SYSTEM "rfc2629.dtd">-->
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc compact="yes"?>
+<?rfc comments="yes"?>
+<?rfc inline="yes"?>
+<?rfc subcompact="no"?>
+<!DOCTYPE rfc
+  PUBLIC "" "rfc2629.dtd">
+<rfc ipr="full3978" docName="draft-reschke-http-get-location-01" category="std">
+  
+  
+  
+  
+  
+  
+  
+	<front>
+  <title abbrev="HTTP GET-Location Header">The Hypertext Transfer Protocol (HTTP)
+  GET-Location header</title>
+
+  <author initials="J. F." surname="Reschke" fullname="Julian F. Reschke">
+    <organization abbrev="greenbytes">greenbytes GmbH</organization>
+    <address>
+      <postal>
+        <street>Hafenweg 16</street>
+        <city>Muenster</city><region>NW</region><code>48155</code>
+        <country>Germany</country>
+      </postal>
+      <phone>+49 251 2807760</phone>	
+      <email>julian.reschke@greenbytes.de</email>	
+      <uri>http://greenbytes.de/tech/webdav/</uri>	
+    </address>
+  </author>
+
+  <date month="April" year="2008" day="4"/>
+  
+  <abstract>
+  <t>
+    Several hypertext transfer protocol (HTTP) extensions use methods other than
+    GET to expose information. This has the drawback that this kind of
+    information is harder to identify (missing a URL to which a GET request could 
+    be applied) and to cache.
+  </t>
+  <t>
+    This document specifies a simple extension header through which a server
+    can advertise a substitute URL that an HTTP client subsequently can use
+    with the GET method.
+  </t>
+  </abstract>
+  
+  <note title="Editorial Note (To be removed by RFC Editor before publication)">
+    <t>
+      Distribution of this document is unlimited. Please send comments to the 
+      Hypertext Transfer Protocol (HTTP) mailing list at <eref target="mailto:ietf-http-wg@w3.org">ietf-http-wg@w3.org</eref>, which may be joined by sending a message with subject 
+      "subscribe" to <eref target="mailto:ietf-http-wg-request@w3.org?subject=subscribe">ietf-http-wg-request@w3.org</eref>.
+    </t>
+    <t>
+      Discussions of the HTTP working group are archived at
+      <eref target="http://lists.w3.org/Archives/Public/ietf-http-wg/"/>.               
+    </t> 
+    <t>
+      XML versions, latest edits and the issues list for this document
+      are available from <eref target="http://greenbytes.de/tech/webdav/#draft-reschke-http-get-location"/>.
+    </t>
+  </note>
+  </front>
+
+  <middle>
+
+
+
+<section title="Introduction" anchor="introduction">
+  <t>
+    Several HTTP (<xref target="RFC2616"/>) extensions use methods other than
+    GET to expose information. This has the drawback that this kind of information
+    is harder to identify (missing a URL to which a GET request could 
+    be applied) and to cache.
+  </t>
+  <t>
+    This document specifies a simple extension header through which a server
+    can advertise a substitute URL that an HTTP client subsequently can use
+    with the GET method.
+  </t>
+</section>
+
+<section title="Notational Conventions" anchor="notational.conventions">
+  <t>
+    The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL-NOT", "SHOULD",
+    "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be
+    interpreted as described in <xref target="RFC2119"/>. 
+  </t>
+  <t>
+    The terminology used here follows and extends that in the HTTP specification
+    <xref target="RFC2616"/>.
+  </t>
+</section>
+
+<section title="The 'GET-Location' Header" anchor="header.get-location">
+<t>
+  The GET-Location entity header identifies a substitute resource that
+  can be used in subsequent requests for the same information, but using the
+  GET method.
+</t>
+<t>
+  Note that, by definition, the GET-Location header can only used
+  on responses to safe methods.
+</t>
+<figure>
+<preamble>Syntax (using the the augmented Backus-Naur Form (BNF) defined
+    in Section 2.1 of <xref target="RFC2616"/>):</preamble>
+<artwork type="abnf2616"><![CDATA[
+GET-Location = "GET-Location" ":" "<" Simple-ref ">"
+                                  *( ";" location-directive ) )
+
+location-directive = "etag=" entity-tag
+                   | "max-age" "=" delta-seconds 
+                   | location-extension
+
+location-extension = token [ "=" ( token | quoted-string ) ]
+
+Simple-ref     = absolute-URI | ( path-absolute [ "?" query ] )
+
+absolute-URI   = <defined in [RFC3986], Section 4.3>
+delta-seconds  = <defined in [RFC2616], Section 3.3.2>
+entity-tag     = <defined in [RFC2616], Section 3.11>
+path-absolute  = <defined in [RFC3986], Section 3.3>
+quoted-string  = <defined in [RFC2616], Section 2.2>
+query          = <defined in [RFC3986], Section 3.4>
+token          = <defined in [RFC2616], Section 2.2>
+]]></artwork></figure>
+<t>
+  Where:
+  <list style="hanging">
+    <t hangText="Simple-ref">
+      Contains either the URI or the absolute path of the location.
+    </t>
+    <t hangText="etag">
+      The server can include the entity tag for the returned entity, if it would
+      have been retrieved by a GET request to the substitute resource. Note that
+      this is different from the value of the "ETag" header which could also
+      be included in the response, but which would apply to the resource identified
+      by the Request-URI.  
+    </t>
+    <t hangText="max-age">
+      Specifies a lifetime for the information returned by this header. A
+      client MUST discard any information related to this header after
+      the specified amount of time.
+    </t>
+  </list>
+</t>
+<t>
+  The freshness lifetime for the information obtained from the GET-Location
+  header does not depend on the cacheability of the response it was obtained from
+  (which, in general, may not be cacheable at all). The "max-age" directive
+  allows the server to specify after how many seconds a client should discard
+  knowledge about the alternate resource. In absence of that header, clients
+  SHOULD discard the information after 3600 seconds. 
+</t>
+
+
+<t>
+  There is no direct relation between the status code of the
+  HTTP response that included GET-Location and the status codes for 
+  subsequent GET requests on the substitute resource.  For instance,
+  GET-Location could be included in a 207 response to PROPFIND
+  (<xref target="RFC4918"/>, Section 9.1), but the response code for
+  a succesful GET on the substitute resource would usually be 200.
+</t>  
+
+
+
+<t>
+  Note that servers may, but are not required to support methods other than
+  GET or head on the substitute resource.
+</t>
+
+</section>
+
+
+<section title="Security Considerations">
+<t>
+  This specification introduces no new security considerations beyond those
+  discussed in Section 15 of <xref target="RFC2616"/>.
+</t>
+</section>
+
+<section title="IANA Considerations">
+<t>
+  This document specifies the new HTTP header listed below, to be added to
+  the permanent registry (see <xref target="RFC3864"/>).
+</t>
+<t>
+<list style="hanging">
+  <t hangText="Header field name:">GET-Location</t>
+  <t hangText="Applicable protocol:">http</t>
+  <t hangText="Status:">standard</t>
+  <t hangText="Author/Change controller:">IETF</t>
+  <t hangText="Specification document:"><xref target="header.get-location"/> of this specification</t>
+</list></t>
+</section>
+
+
+<section title="Acknowledgments">
+<t>
+  This document has benefited from thoughtful discussion by Stefan Eissing and
+  Henrik Nordstrom.
+</t>
+</section>
+
+
+  </middle>
+
+  <back>
+    <references title="Normative References">
+
+  <reference anchor="RFC2119">
+    <front>
+      <title abbrev="RFC Key Words">Key words for use in RFCs to Indicate Requirement Levels</title>
+      <author initials="S." surname="Bradner" fullname="Scott Bradner">
+      <organization>Harvard University</organization>
+      <address>
+        <email>sob@harvard.edu</email>
+      </address></author>
+      <date month="March" year="1997"/>
+    </front>
+    <seriesInfo name="BCP" value="14"/>
+    <seriesInfo name="RFC" value="2119"/>
+  </reference>
+  
+  <reference anchor="RFC2616">
+    <front>
+      <title>Hypertext Transfer Protocol -- HTTP/1.1</title>
+      <author initials="R." surname="Fielding" fullname="R. Fielding">
+        <organization>University of California, Irvine</organization>
+        <address><email>fielding@ics.uci.edu</email></address>
+      </author>
+      <author initials="J." surname="Gettys" fullname="J. Gettys">
+        <organization>W3C</organization>
+        <address><email>jg@w3.org</email></address>
+      </author>
+      <author initials="J." surname="Mogul" fullname="J. Mogul">
+        <organization>Compaq Computer Corporation</organization>
+        <address><email>mogul@wrl.dec.com</email></address>
+      </author>
+      <author initials="H." surname="Frystyk" fullname="H. Frystyk">
+        <organization>MIT Laboratory for Computer Science</organization>
+        <address><email>frystyk@w3.org</email></address>
+      </author>
+      <author initials="L." surname="Masinter" fullname="L. Masinter">
+        <organization>Xerox Corporation</organization>
+        <address><email>masinter@parc.xerox.com</email></address>
+      </author>
+      <author initials="P." surname="Leach" fullname="P. Leach">
+        <organization>Microsoft Corporation</organization>
+        <address><email>paulle@microsoft.com</email></address>
+      </author>
+      <author initials="T." surname="Berners-Lee" fullname="T. Berners-Lee">
+        <organization>W3C</organization>
+        <address><email>timbl@w3.org</email></address>
+      </author>
+      <date month="June" year="1999"/>
+    </front>
+    <seriesInfo name="RFC" value="2616"/>
+  </reference>
+    
+  <reference anchor="RFC3986">
+    <front>
+      <title abbrev="URI Generic Syntax">Uniform Resource Identifier (URI): Generic Syntax</title>
+      <author initials="T." surname="Berners-Lee" fullname="Tim Berners-Lee">
+      <organization abbrev="W3C/MIT">World Wide Web Consortium</organization>
+      <address>
+      <postal>
+      <street>Massachusetts Institute of Technology</street>
+      <street>77 Massachusetts Avenue</street>
+      <city>Cambridge</city>
+      
+      <region>MA</region>
+      <code>02139</code>
+      <country>USA</country></postal>
+      <phone>+1-617-253-5702</phone>
+      <facsimile>+1-617-258-5999</facsimile>
+      <email>timbl@w3.org</email>
+      <uri>http://www.w3.org/People/Berners-Lee/</uri></address></author>
+      <author initials="R." surname="Fielding" fullname="Roy T. Fielding">
+      <organization abbrev="Day Software">Day Software</organization>
+      
+      <address>
+      <postal>
+      <street>5251 California Ave., Suite 110</street>
+      <city>Irvine</city>
+      <region>CA</region>
+      <code>92617</code>
+      <country>USA</country></postal>
+      <phone>+1-949-679-2960</phone>
+      <facsimile>+1-949-679-2972</facsimile>
+      <email>fielding@gbiv.com</email>
+      
+      <uri>http://roy.gbiv.com/</uri></address></author>
+      <author initials="L." surname="Masinter" fullname="Larry Masinter">
+      <organization abbrev="Adobe Systems">Adobe Systems Incorporated</organization>
+      <address>
+      <postal>
+      <street>345 Park Ave</street>
+      <city>San Jose</city>
+      <region>CA</region>
+      <code>95110</code>
+      <country>USA</country></postal>
+      
+      <phone>+1-408-536-3024</phone>
+      <email>LMM@acm.org</email>
+      <uri>http://larry.masinter.net/</uri></address></author>
+      <date year="2005" month="January"/>
+    </front>
+    <seriesInfo name="RFC" value="3986"/>
+  </reference>
+
+    </references>
+    
+    <references title="Informative References">
+
+
+  <reference anchor="RFC2068">
+    <front>
+      <title abbrev="HTTP/1.1">Hypertext Transfer Protocol -- HTTP/1.1</title>
+      <author initials="R." surname="Fielding" fullname="Roy T. Fielding">
+        <organization>University of California, Irvine, Department of Information and Computer Science</organization>
+        <address><email>fielding@ics.uci.edu</email></address>
+      </author>
+      <author initials="J." surname="Gettys" fullname="Jim Gettys">
+        <organization>MIT Laboratory for Computer Science</organization>
+        <address><email>jg@w3.org</email></address>
+      </author>
+      <author initials="J." surname="Mogul" fullname="Jeffrey C. Mogul">
+        <organization>Digital Equipment Corporation, Western Research Laboratory</organization>
+        <address><email>mogul@wrl.dec.com</email></address>
+      </author>
+      <author initials="H." surname="Nielsen" fullname="Henrik Frystyk Nielsen">
+        <organization>MIT Laboratory for Computer Science</organization>
+        <address><email>frystyk@w3.org</email></address>
+      </author>
+      <author initials="T." surname="Berners-Lee" fullname="Tim Berners-Lee">
+        <organization>MIT Laboratory for Computer Science</organization>
+        <address><email>timbl@w3.org</email></address>
+      </author>
+      <date month="January" year="1997"/>
+    </front>
+    <seriesInfo name="RFC" value="2068"/>
+  </reference>
+
+
+  <reference anchor="RFC3253">
+    <front>
+      <title>Versioning Extensions to WebDAV</title>
+      <author initials="G." surname="Clemm" fullname="G. Clemm">
+        <organization>Rational Software</organization>
+        <address><email>geoffrey.clemm@rational.com</email></address>
+      </author>
+      <author initials="J." surname="Amsden" fullname="J. Amsden">
+        <organization>IBM</organization>
+        <address><email>jamsden@us.ibm.com</email></address>
+      </author>
+      <author initials="T." surname="Ellison" fullname="T. Ellison">
+        <organization>IBM</organization>
+        <address><email>tim_ellison@uk.ibm.com</email></address>
+      </author>
+      <author initials="C." surname="Kaler" fullname="C. Kaler">
+        <organization>Microsoft</organization>
+        <address><email>ckaler@microsoft.com</email></address>
+      </author>
+      <author initials="J." surname="Whitehead" fullname="J. Whitehead">
+        <organization>UC Santa Cruz, Dept. of Computer Science</organization>
+        <address><email>ejw@cse.ucsc.edu</email></address>
+      </author>
+      <date month="March" year="2002"/>
+    </front>
+    <seriesInfo name="RFC" value="3253"/>
+  </reference>
+
+  <reference anchor="RFC3864">
+    <front>
+      <title>Registration Procedures for Message Header Fields</title>
+      <author initials="G." surname="Klyne" fullname="G. Klyne">
+        <organization/>
+      </author>
+      <author initials="M." surname="Nottingham" fullname="M. Nottingham">
+        <organization/>
+      </author>
+      <author initials="J." surname="Mogul" fullname="J. Mogul">
+        <organization/>
+      </author>
+      <date year="2004" month="September"/>
+    </front>
+    <seriesInfo name="BCP" value="90"/>
+    <seriesInfo name="RFC" value="3864"/>
+  </reference>
+
+  <reference anchor="RFC4918">
+    <front>
+      <title>HTTP Extensions for Web Distributed Authoring and Versioning (WebDAV)</title>
+      <author initials="L." surname="Dusseault" fullname="Lisa Dusseault" role="editor">
+        <organization>CommerceNet</organization>
+        <address>
+          <postal>
+            <street>2064 Edgewood Dr.</street>
+            <city>Palo Alto</city> <region>CA</region> <code>94303</code>
+            <country>US</country>
+          </postal>
+          <email>ldusseault@commerce.net</email>
+        </address>
+      </author>
+      <date month="June" year="2007"/>
+    </front>
+    <seriesInfo name="RFC" value="4918"/>
+  </reference>
+  
+
+  <reference anchor="draft-gregorio-uritemplate">
+    <front>
+      <title>URI Template</title>
+      <author initials="J.C." surname="Gregorio" fullname="Joe Gregorio" role="editor">
+        <organization>Google</organization>
+        <address>
+          <email>joe@bitworking.org</email>
+          <uri>http://bitworking.org/</uri>
+        </address>
+      </author>
+      <author initials="M." surname="Hadley" fullname="Marc Hadley" role="editor">
+        <organization>Sun Microsystems</organization>
+        <address>
+          <email>Marc.Hadley@sun.com</email>
+          <uri>http://sun.com/</uri>
+        </address>
+      </author>
+      <author initials="M." surname="Nottingham" fullname="Mark Nottingham" role="editor">
+        <organization/>
+        <address>
+          <email>mnot@pobox.com</email>
+          <uri>http://mnot.net/</uri>
+        </address>
+      </author>
+      <author initials="D." surname="Orchard" fullname="David Orchard"> 
+        <organization>BEA Systems, Inc.</organization>
+        <address>
+          <email>dorchard@bea.com</email>
+          <uri>http://bea.com/</uri>
+        </address>
+      </author>
+      <date month="March" year="2008"/>
+    </front>
+    <seriesInfo name="Internet-Draft" value="draft-gregorio-uritemplate-03"/>
+  </reference>
+
+  
+</references>
+
+<section title="Examples" anchor="examples">
+
+<section title="WebDAV Collection Membership" anchor="webdav.collection.membership">
+  <t>
+    In this example the client uses the WebDAV
+    PROPFIND method ("HTTP Extensions for Web Distributed Authoring and Versioning", <xref target="RFC4918"/>, Section 9.1)
+    to get a list of all collection members, along with their DAV:resourcetype
+    property (<xref target="RFC4918"/>, Section 15.9):
+  </t>
+  <figure>
+    <preamble>&gt;&gt;Request</preamble>
+    <artwork type="message/http: msgtype=&#34;request&#34;"><![CDATA[
+PROPFIND /collection/ HTTP/1.1 
+Host: example.com
+Depth: 1
+Content-Type: application/xml
+
+<propfind xmlns="DAV:">
+  <prop>
+    <resourcetype/>
+  </prop>
+</propfind>
+]]></artwork></figure>
+  <t>
+    The response contains the requested information, plus the 
+    GET-Location header, identifying a separate resource which can
+    provide the same information using the HTTP GET method:
+  </t>
+  <figure>
+    <preamble>&gt;&gt;Response</preamble>
+    <artwork type="message/http: msgtype=&#34;response&#34;"><![CDATA[
+HTTP/1.1 207 Multi-Status
+Content-Type: application/xml
+GET-Location: <http://example.com/collection/;members>; etag="123";
+              max-age=3600
+
+<multistatus xmlns="DAV":>
+  <response>
+    <href>/collection/</href>
+    <propstat>
+      <prop>
+        <resourcetype><collection/></resourcetype>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+  <response>
+    <href>/collection/member</href>
+    <propstat>
+      <prop>
+        <resourcetype/>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>
+]]></artwork>
+</figure>
+  <t>
+    The response provided the URL of the substitute resource, so when the
+    client wishes to refresh the collection information, it uses that URI.
+    The response contained the entity tag for the data being returned, so
+    it can make the request conditional:
+  </t>
+  <figure>
+    <preamble>&gt;&gt;Request</preamble>
+    <artwork type="message/http: msgtype=&#34;request&#34;"><![CDATA[
+GET /collection/;members HTTP/1.1 
+Host: example.com
+Accept: application/xml
+If-None-Match: "123"
+]]></artwork></figure>
+  <t>
+    The information did not change, so the server does not need to return
+    new data:
+  </t>
+  <figure>
+    <preamble>&gt;&gt;Response</preamble>
+    <artwork type="message/http: msgtype=&#34;response&#34;"><![CDATA[
+HTTP/1.1 304 Not Modified
+]]></artwork></figure>
+
+  <t>
+    Later on, the client tries again. This time, however, a second member
+    has been added:
+  </t>
+  <figure>
+    <preamble>&gt;&gt;Request</preamble>
+    <artwork type="message/http: msgtype=&#34;request&#34;"><![CDATA[
+GET /collection/;members HTTP/1.1 
+Host: example.com
+Accept: application/xml
+If-None-Match: "123"
+]]></artwork></figure>
+  <figure>
+    <preamble>&gt;&gt;Response</preamble>
+    <artwork type="message/http: msgtype=&#34;response&#34;"><![CDATA[
+HTTP/1.1 200 OK
+Content-Type: application/xml
+ETag: "124"
+
+<multistatus xmlns="DAV":>
+  <response>
+    <href>/collection/</href>
+    <propstat>
+      <prop>
+        <resourcetype><collection/></resourcetype>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+  <response>
+    <href>/collection/member</href>
+    <propstat>
+      <prop>
+        <resourcetype/>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+  <response>
+    <href>/collection/member2</href>
+    <propstat>
+      <prop>
+        <resourcetype/>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>
+]]></artwork></figure>
+
+  <t>
+    Finally, the collection has been removed by somebody else. The client
+    tries a refresh:
+  </t>
+  <figure>
+    <preamble>&gt;&gt;Request</preamble>
+    <artwork type="message/http: msgtype=&#34;request&#34;"><![CDATA[
+GET /collection/;members HTTP/1.1 
+Host: example.com
+Accept: application/xml
+If-None-Match: "124"
+]]></artwork></figure>
+  <figure>
+    <preamble>&gt;&gt;Response</preamble>
+    <artwork type="message/http: msgtype=&#34;response&#34;"><![CDATA[
+HTTP/1.1 404 Not Found
+]]></artwork></figure>
+  <t>
+    Note that it may be hard to compute entity tags for more complex
+    PROPFIND responses. For instance, most properties depend on the state
+    of the collection member, not the state of the collection itself, and 
+    thus the response will change even though the state of the collection
+    itself did not change.
+  </t>
+  <t>
+    This is why this extension leaves it to the server whether to return
+    a GET-Location at all, and if so, whether to return cache validators
+    along with it.
+  </t>
+  </section>
+
+  <section title="WebDAV Custom Properties">
+  <t>
+    Here, the client uses the WebDAV PROPFIND method (<xref target="RFC4918"/>, Section 9.1)
+    to obtain a custom property:
+  </t>
+  <figure>
+    <preamble>&gt;&gt;Request</preamble>
+    <artwork type="message/http: msgtype=&#34;request&#34;"><![CDATA[
+PROPFIND /collection/member HTTP/1.1 
+Host: example.com
+Depth: 0
+Content-Type: application/xml
+
+<propfind xmlns="DAV:">
+  <prop>
+    <title xmlns="http://ns.example.com/"/>
+  </prop>
+</propfind>
+]]></artwork></figure>
+  <figure>
+    <preamble>&gt;&gt;Response</preamble>
+    <artwork type="message/http: msgtype=&#34;response&#34;"><![CDATA[
+HTTP/1.1 207 Multi-Status
+Content-Type: application/xml
+GET-Location: </collection/member;prop=title>; etag="1"
+
+<multistatus xmlns="DAV":>
+  <response>
+    <href>/collection/member</href>
+    <propstat>
+      <prop>
+        <title xmlns="http://ns.example.com/"
+        >Document Title</title>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>
+]]></artwork>
+</figure>
+  <figure>
+    <preamble>&gt;&gt;Request</preamble>
+    <artwork type="message/http: msgtype=&#34;request&#34;"><![CDATA[
+GET /collection/member;prop=title HTTP/1.1 
+Host: example.com
+If-None-Match: "1"
+]]></artwork></figure>
+  <figure>
+    <preamble>&gt;&gt;Response</preamble>
+    <artwork type="message/http: msgtype=&#34;response&#34;"><![CDATA[
+HTTP/1.1 304 Not Modified
+]]></artwork></figure>
+  <t>
+    Later, the request is repeated after the title property indeed changed...:
+  </t>
+  <figure>
+    <preamble>&gt;&gt;Request</preamble>
+    <artwork type="message/http: msgtype=&#34;request&#34;"><![CDATA[
+GET /collection/member;prop=title HTTP/1.1 
+Host: example.com
+If-None-Match: "1"
+]]></artwork></figure>
+  <figure>
+    <preamble>&gt;&gt;Response</preamble>
+    <artwork type="message/http: msgtype=&#34;response&#34;"><![CDATA[
+HTTP/1.1 200 OK
+Content-Type: application/xml
+ETag: "2"
+
+<multistatus xmlns="DAV":>
+  <response>
+    <href>/collection/member</href>
+    <propstat>
+      <prop>
+        <title xmlns="http://ns.example.com/"
+        >New Document Title</title>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>
+]]></artwork></figure>
+  <t>
+    Although this example may look like every WebDAV property would need a 
+    separate entity tag, this is of course not the case. For instance, a 
+    server that stores all custom properties in a single place (like a properties
+    file) could use the same computation for the entity tag for all properties.
+    Also, it could implement resources representing multiple custom property
+    values the same way.
+  </t>
+  </section>
+
+  <section title="DeltaV Version History Report">
+  <t>
+    Here, the client uses the DeltaV DAV:version-tree report ("Versioning Extensions to WebDAV", <xref target="RFC3253"/>, Section 3.7)
+    to obtain the members of the version history of a version-controlled resource.
+  </t>
+  <figure>
+    <preamble>&gt;&gt;Request</preamble>
+    <artwork type="message/http: msgtype=&#34;request&#34;"><![CDATA[
+REPORT /collection/member HTTP/1.1 
+Host: example.com
+Depth: 0
+Content-Type: application/xml
+
+<version-tree xmlns="DAV:">
+  <prop>
+    <resourcetype/>
+  </prop>  
+</version-tree>
+]]></artwork></figure>
+  <figure>
+    <preamble>&gt;&gt;Response</preamble>
+    <artwork type="message/http: msgtype=&#34;response&#34;"><![CDATA[
+HTTP/1.1 207 Multi-Status
+Content-Type: application/xml
+GET-Location: </version-storage/12345/;justmembers>
+
+<multistatus xmlns="DAV":>
+  <response>
+    <href>/version-storage/12345/V1</href>
+    <propstat>
+      <prop>
+        <resourcetype><collection/></resourcetype>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+  <response>
+    <href>/version-storage/12345/V2</href>
+    <propstat>
+      <prop>
+        <resourcetype><collection/></resourcetype>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>
+]]></artwork></figure>
+<t>
+  Note that in this case, the substitute resource can be almost identical
+  to the one from the PROPFIND/Depth:1 example: the only difference being
+  that the report result does not contain a DAV:response element for the
+  collection itself.
+</t>
+</section>
+
+</section>
+
+<section title="Related HTTP features" anchor="related.http.features">
+<t>
+  This section discusses some related HTTP features and explains why 
+  the author feels that
+  they can't be used for the given use case.
+</t>
+
+<section title="Status 303">
+<t>
+  Section 10.3.4 of <xref target="RFC2616"/> defines the status code 303 (See Other):
+</t>
+<t><list>
+  <t>
+    The response to the request can be found under a different URI and
+    SHOULD be retrieved using a GET method on that resource. This method exists
+    primarily to allow the output of a POST-activated script to redirect the
+    user agent to a selected resource.
+    The new URI is not a substitute reference for the originally requested resource.
+    The 303 response MUST NOT be cached, but the response to the second (redirected)
+    request might be cacheable.
+  </t>
+</list></t>
+<t>
+  On first glance, it may look as if this addresses exactly the given use
+  case. However:
+  <list style="numbers">
+    <t>
+      It says:
+      "The new URI is not a substitute reference for the originally requested resource. The 303 response MUST NOT be cached, but the response to the second (redirected) request might be cacheable."
+      That is, the information about the alternate resource is not cacheable.
+    </t>
+    <t>
+      Servers returning a 303 status instead of the one expected by the client,
+      such as 207 Multistatus, would likely break existing clients.
+    </t>
+  </list>
+</t>
+</section>
+
+<section title="Content-Location Header">
+<t>
+  Section 14.14 of <xref target="RFC2616"/> states:
+</t>
+<t><list>
+  <t>
+    The Content-Location value is not a replacement for the original requested URI;
+    it is only a statement of the location of the resource corresponding to this
+    particular entity at the time of the request. (...)
+  </t>
+</list></t>
+<t>
+  However, the purpose of "GET-Location" is to enable the server to provide a
+  permanent replacement URI.
+</t>
+
+</section>
+
+<section title="Location header">
+<t>
+  Section 14.30 of <xref target="RFC2616"/> states:
+</t>
+<t><list>
+  <t>
+    The Location response-header field is used to redirect the recipient to a
+    location other than the Request-URI for completion of the request or
+    identification of a new resource.  (...)  
+  </t>
+</list></t>
+<t>
+  Neither of these cases ("redirect to a location for completion of the request" and
+  "identification of a new resource") matches the use case "GET-Location" covers.
+</t>
+</section>
+</section>
+
+
+<section title="Alternate Approaches">
+<section title="Link Relation">
+<t>
+  An alternative to introducing a new header would be to re-use an
+  existing header, such as the Link header defined in
+  Section 19.6.2 of <xref target="RFC2068"/>. Note that this
+  still would require registering a link relation.
+</t>
+<figure>
+<preamble>
+  The example from <xref target="webdav.collection.membership"/> would
+  then read like this:
+</preamble>
+<artwork type="example"><![CDATA[
+Link: </collection/;members>;
+      rel=getlocation; etag="123"; max-age=3600
+]]></artwork></figure>
+</section>
+
+<section title="Multistatus Body Extension">
+<t>
+  Observing that the whole proposal tries to deal with WebDAV related
+  shortcomings, it may make sense to constrain the solution to WebDAV
+  response bodies, thereby not having to introduce anything that would 
+  be visible outside WebDAV.
+</t>
+<t>
+  A very simple approach would be to embed the information in the DAV:multistatus
+  (<xref target="RFC4918"/>, Section 14.16) response body.
+</t>
+<figure>
+<preamble>
+  Re-using the example in <xref target="webdav.collection.membership"/>, this
+  could look like this:
+</preamble><artwork type="message/http: msgtype=&#34;response&#34;"><![CDATA[
+HTTP/1.1 207 Multi-Status
+Content-Type: application/xml
+
+<multistatus xmlns="DAV":>
+  <gl:get-location
+      xmlns:gl="http://purl.oclc.org/NET/webdav/mount/getlocation">
+    <href>/collection/;members</href>
+    <getetag>"123"</getetag>
+    <gl:max-age>3600</gl:max-age>
+  <gl:get-location
+  <response>
+    <href>/collection/</href>
+    <propstat>
+      <prop>
+        <resourcetype><collection/></resourcetype>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+  <response>
+    <href>/collection/member</href>
+    <propstat>
+      <prop>
+        <resourcetype/>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>
+]]></artwork></figure>
+</section>
+</section>
+
+
+
+<section title="Open Issues">
+
+<section title="Content Negotiation on GET-Location">
+<t>
+  Should it be possible to use Content Negotiation on the resource identified
+  by GET-Location? A use case could be a metadata provider that would
+  support different formats, such as WebDAV's multistatus format (MIME type
+  missing!), RDF, JSON, whatever.
+</t>
+<t>
+  This could be done using a location-extension specifying the Accept
+  header for the GET operation.
+</t>
+</section>
+
+<section title="Using URI Templates rather than URIs">
+<t>
+  Should we allow servers to return URI templates (<xref target="draft-gregorio-uritemplate"/>), so that clients can
+  compute substitute URLs for other requests as well?
+</t>
+<t>
+  For instance, this could be done by allowing a URI template instead of the
+  Simple-ref, and to return another template specifying how to derive
+  the template variable from the Request-URI:
+</t>
+  <figure>
+    <preamble>&gt;&gt;Request</preamble>
+    <artwork type="message/http: msgtype=&#34;request&#34;"><![CDATA[
+PROPFIND /documents/a/b HTTP/1.1 
+Host: example.com
+Depth: 0
+Content-Type: application/xml
+]]></artwork></figure>
+  <figure>
+    <preamble>&gt;&gt;Response</preamble>
+    <artwork type="message/http: msgtype=&#34;response&#34;"><![CDATA[
+HTTP/1.1 207 Multi-Status
+Content-Type: application/xml
+GET-Location: </metadata/{path};members>; path-template=</a/b/{path}>
+
+...
+]]></artwork>
+</figure>
+<t>
+  So in this case, the actual URI to be used would be &lt;http://example.com/metadata/a/b;members&gt;.
+</t>
+</section>
+
+<section title="Extensions">
+<t>
+  Do we need a registry for new location-directive values?
+</t>
+</section>
+
+</section>
+
+
+<section title="Change Log (to be removed by RFC Editor before publication)">
+<section title="Since draft-reschke-http-get-location-00">
+<t>
+  Add and resolve issues "non-get" and "status-codes".
+  Add issue "content-location".
+  Add "Acknowledgments" Section.
+  Update uri-template reference.
+  Discuss more alternative approaches: Link header, Multistatus body extension.
+</t>
+</section>
+</section>
+
+
+<section title="Resolved issues (to be removed by RFC Editor before publication)"><t>
+          Issues that were either rejected or resolved in this version of this
+          document.
+        </t><section title="status-codes"><t>
+        In Section 3:
+      </t><t>
+      Type: edit</t><t>julian.reschke@greenbytes.de (2007-07-31): 
+    Explain the relation between the status code GET-Location comes with,
+    and the status codes for GET requests on the substitute resource.
+  </t><t>Resolution (2008-03-14): 
+    Add clarification.
+  </t></section><section title="non-get"><t>
+        In Section 3:
+      </t><t>
+      Type: edit</t><t>julian.reschke@greenbytes.de (2007-08-05): 
+    Say something about non GET/HEAD requests to the substitute resource.
+  </t><t>Resolution (2008-03-14): 
+    Add clarification.
+  </t></section></section><section title="Open issues (to be removed by RFC Editor prior to publication)"><section title="edit"><t>
+      Type: edit</t><t>julian.reschke@greenbytes.de (2007-07-27): 
+    Umbrella issue for editorial fixes/enhancements.
+  </t></section><section title="content-location"><t>
+        In Section B.2:
+      </t><t>
+      Type: edit</t><t>julian.reschke@greenbytes.de (2008-03-14): </t><t>
+    </t><t>
+      In http://lists.w3.org/Archives/Public/ietf-http-wg/2007JulSep/0184.html,
+      Roy Fielding points out that the statement about Content-Location is
+      out-of context; and that Content-Location indeed should be used
+      for this use case.
+    </t><t>
+    </t><t>
+      In this case, other information defined in GET-Location would still
+      be missing, such as validatity and etag information (see
+      response in http://lists.w3.org/Archives/Public/ietf-http-wg/2007JulSep/0195.html).
+    </t><t>
+    </t><t>
+      So would it make sense to use Content-Location instead, and move the
+      optional fields defined in GET-Location somewhere else? Or would 
+      Content-Location alone be sufficient (which proper instructions how
+      to use it with methods like PROPFIND and REPORT)?
+    </t><t>
+  </t></section></section></back>
+  
+</rfc>

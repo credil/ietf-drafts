@@ -1,0 +1,881 @@
+<?xml version='1.0' encoding="UTF-8"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" >
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc toc="yes" ?>
+<?rfc tocindent="yes" ?>
+<?rfc tocdepth="2" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<rfc category="info" docName="draft-levine-mass-batv-01" ipr="full3978">
+   <front>
+      <title>Bounce Address Tag Validation (BATV)</title>
+      <author fullname="John Levine" initials="J." surname="Levine">
+         <organization>Taughannock Networks</organization>
+         <address>
+            <postal>
+               <street>PO Box 727</street>
+               <city>Trumansburg</city>
+               <code>14886</code>
+               <region>NY</region>
+            </postal>
+            <email>standards@taugh.com</email>
+         </address>
+      </author>
+      <author fullname="Dave Crocker" initials="D." surname="Crocker">
+         <organization>Brandenburg InternetWorking</organization>
+         <address>
+            <postal>
+               <street>675 Spruce Drive</street>
+               <city>Sunnyvale</city>
+               <region>CA</region>
+               <code>94086</code>
+               <country>USA</country>
+            </postal>
+            <phone>+1.408.246.8253</phone>
+            <email>dcrocker@brandenburg.com</email>
+         </address>
+      </author>
+      <author fullname="Sam Silberman" initials="S." surname="Silberman">
+         <organization>Openwave</organization>
+         <address>
+            <email>sam_silberman@openwave.com</email>
+         </address>
+      </author>
+      <author fullname="Tony Finch" initials="T." surname="Finch">
+         <organization>University of Cambridge</organization>
+         <address>
+            <postal>
+               <street/>
+               <city>Cambridge</city>
+               <code>CB2 1TN</code>
+               <country>UK</country>
+            </postal>
+            <email>dot@dotat.at</email>
+            <uri>http://dotat.at</uri>
+         </address>
+      </author>
+      <date day="1" month="March" year="2006"/>
+      <area>Applications / Email</area>
+      <workgroup>MARID</workgroup>
+      <keyword>email, e-mail, rfc2822, rfc 2822, rfc822, rfc 822, rfc2821, rfc
+         2821, rfc821, rfc 821, architecture, mta, user, delivery, relay, smtp,
+         submission, Internet, mailfrom, sender, return address, bounce</keyword>
+      <abstract>
+         <t>The envelope of Internet mail contains an RFC2821.MailFrom command,
+            which may supply an address to be used as the recipient of
+            transmission and delivery notices about the original message.
+            Existing Internet mail permits unauthorized use of addresses in the
+            MailFrom command, causing notices to be sent to unwitting and
+            unwilling recipients. Bounce Address Tag Validation (BATV) defines
+            an extensible mechanism for validating the MailFrom address. It also
+            defines an initial use of that mechanism which requires no
+            administrative overhead and no global implementation.</t>
+      </abstract>
+   </front>
+   <middle>
+      <section title="Introduction">
+         <t>The envelope for Internet Mail may contain an address that is
+            designated to receive transmission-related notifications. It is
+            specified in the RFC2821.MailFrom command. The field is set by the
+            RFC2822.Sender, acting as an agent of the message author specified
+            in RFC2822.From. However no portion of the MailFrom address is
+            required to have any similarity to any portion of the From or Sender
+            addresses, and valid usage scenarios do call for the MailFrom
+            address to have no visible relationship to the From or Sender values.</t>
+         <t>Further, existing Internet mail permits unauthorized use of
+            addresses in the MailFrom command, which results in having notices
+            sent to unwitting and unwilling recipients. Therefore, the challenge
+            is to distinguish legitimate uses from these unauthorized uses and
+            to do this with a mechanism that incurs modest administration,
+            operations and performance costs.</t>
+         <t>Bounce Address Tag Validation (BATV) defines a framework for
+            mechanisms that validate the value in this command. Multiple
+            validation methods are envisioned. So BATV defines a common
+            syntactic framework that enhances the local-part field of the
+            MailFrom address. An initial, specific validation scheme is also
+            defined; it requires no administrative overhead and no global implementation.</t>
+         <t>The &lt;local-part&gt; of an Internet mail address is a
+            globally opaque string. Hence, the specified modification to the
+            local-part can be deployed in a manner that is entirely transparent
+            to the public Internet mail service, except for mail system
+            components within the scope of the MailFrom domain, and then only
+            for components that process the MailFrom address local-part. The
+            result permits the MailFrom target domain to distinguish
+            notification message addresses that are valid from those that are
+            not. Enhancements would permit processing agents that are along the
+            original message's transfer path to determine whether the MailFrom
+            adress is likely to be valid. This assessment could aid in deciding
+            whether to send a bounce message, thereby reducing the Internet mail
+            infrastructure cost for transmitting notification messages that have
+            invalid uses of addresses. It might even be used to detect invalid
+            messages, thereby reducing Internet mail infrastructure cost for
+            original messages.<list style="hanging">
+               <t hangText="Terminology:"> Terminology conforms to <xref target="I-D.email-arch"/>
+               </t>
+               <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+                  NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and
+                  "OPTIONAL" in this document are to be interpreted as described
+                  in <xref target="RFC2119"/>
+               </t>
+            </list>
+         </t>
+      </section>
+      <section title="Model">
+         <t>BATV defines a method for tagging information to be included in the
+            &lt;local-part&gt; of the RFC2821.MailFrom address. This
+            permits encoding information that authenticates the MailFrom.
+            Because the information is placed in MailFrom, rather than in an
+            RFC2822 header, it sometimes is not as publicly visible as an
+            RFC2822 header. This might reduce concern that it will be re-used in
+            a form of replay attack, but it cannot eliminate it. In particular,
+            sending messages to some mailing lists or to recipients whose
+            computers are infected by viruses can greatly increase the exposure
+            of the MailFrom string. So the tagged information does need to be
+            robust against public disclosure. </t>
+         <section title="Meta-Syntax">
+            <t>BATV tagging is based on a meta-syntax that defines a
+               field-oriented structure for an address local-part. It permits
+               use of a variety of address authentication methods, while
+               supporting remote extraction of the core portion of the
+               local-part, without having to understand the semantics of any
+               particular scheme. <list style="hanging">
+                  <t hangText="NOTE: ">BATV is for the purpose of detecting
+                     invalid RFC2821.MailFrom addresses. Any BATV-related
+                     modifications that are made to the original MailFrom MUST
+                     preserve the result of returning valid bounces to the
+                     address originally specified in that MailFrom.</t>
+               </list>
+            </t>
+            <t>The meta-syntax for MailFrom local-part is defined in <xref
+               target="metasyn"/>. </t>
+         </section>
+         <section title="Tagging Schemes">
+            <t>BATV permits alternative schemes. To ensure interoperability
+               among independent participants, other specifications adopting the
+               meta-syntax conventions MUST define and register with IANA a
+               unique, case insensitive &lt;tag-type&gt; element, to
+               identify the specific mechanism that is being used for MailFrom
+                  validation.<list style="hanging">
+                  <t hangText="Private Tagging:  ">If MailFrom validity
+                     assessment is performed only within the scope of the domain
+                     referenced in the MailFrom address, then its semantic scope
+                     is private (closed), encompassing only that domain and the
+                     one that generated the validity information. To the rest of
+                     the Internet, the tag information is opaque, like a cookie. In
+                     these situations, the closed system is free to use any
+                     tagging scheme it deems helpful, although a standard format
+		     aids other systems that wish to avoid re-tagging addresses that
+		     are already tagged, or to strip off the tag for compatibility with
+		     legacy systems that key on the MailFrom address of incoming mail.
+		     A simple scheme for this
+                     is defined in <xref target="privsig"/>.</t>
+                  <t hangText="Public Tagging:  "> Using a public-key approach,
+                     for signing the MailFrom's local-part permits
+                     intermediaries which process the envelope to validate that
+                     address. For example, an intermediary that otherwise might
+                     create a bounce message would be able to decide that the
+                     MailFrom address use is not valid, so they might decide to
+                     terminate bounce processing. Such a scheme might use the
+                     BATV meta-syntax in the following way:<figure>
+                        <artwork><![CDATA[pub3=<loc-core>=<crypted>=<attributes>@example.com]]></artwork>
+                     </figure>
+                  </t>
+                  <t>It is significant that having the creator of a bounce be
+                     able to make this assessment, means that all of earlier
+                     intermediary MTAs also can. Hence, every MTA would be able
+                     to assess whether a message has an unauthorized RFC2821.MailFrom.</t>
+                  <t>Unfortunately, public key services have not yet gained wide
+                     adoption and there are multiple mechanisms already in
+                     service. Therefore, this specification is not able to
+                     provide a single method for public MailFrom validity checking.</t>
+               </list>
+            </t>
+         </section>
+         <section title="Beyond BATV">
+            <t>BATV defines a framework that retains the original local-part of
+               the MailFrom address, within the BATV-encoded form. This permits
+               external inspection of the original local-part, such as for
+               analyzing its use with respect to particular RFC2822.From
+               addresses. Enhancements that go beyond the open information of
+               BATV might replace the original local-part with some form of
+               translation. Examples of such schemes could include:<list style="hanging">
+                  <t hangText="Alias:  "> The original RFC2821.MailFrom
+                     local-part could be replaced with an alternative
+                     local-part. The meta-syntax provides a way of flagging the
+                     difference between the new local-part and the original.</t>
+                  <t hangText="Opaque Pointer:  "> This could be used to consult
+                     a database with records of mail sent and bounces received.</t>
+                  <t hangText="Challenge Response:  "> The receiver could make a
+                     DNS-query for instructions about processing the
+                     RFC2821.MailFrom bounce address.</t>
+               </list>
+            </t>
+         </section>
+         <section title="Operation">
+            <t>The basic methods for creating and interpreting BATV-encoded
+               MailFrom addresses are very simple.</t>
+            <section title="Tag Creation">
+               <t>The RFC2821.MailFrom address is specified by the
+                  RFC2822.Sender. This makes the MailFrom address an end-user
+                  string, created by the oMUA or MSA. However it is entirely
+                  reasonable to have an outbound MTA, under administrative
+                  control of the Sender's domain, perform the necessary signing.
+                  What is significant is that this requires a change to only two
+                  modules, one in the outbound sequence and one in the
+                  corresponding inbound sequence. The change is transparent to
+                  all other systems components that transmit the message.</t>
+               <t>
+                  <list style="hanging">
+                     <t hangText="NOTE:  ">If a MailFrom local-part already
+                        conforms to the meta-syntax then the string SHOULD be
+                        left unchanged, so as not to break forwarding. </t>
+                     <t hangText="NOTE:  ">An MTA MUST ONLY tag addresses in domains
+		     whose inbound MTAs can validate the tags.  In particular, addresses
+		     in forwarded mail should not be tagged, even if the original sender did not tag
+		     it. </t>
+                  </list>
+               </t>
+            </section>
+            <section title="Tag Interpretation:">
+               <t>Addresses that contain BATV tags can be interpreted for two
+                  different purposes: bounce address validation and bounce
+                  delivery. <list style="hanging">
+                     <t hangText="Address validation:  ">An MTA MAY validate a
+                        BATV-encoded MailFrom address. This requires the MTA to
+                        be able to process the specific BATV validation scheme
+                        that is specified by the &lt;tag-type&gt; field.
+                        If the address is determined to be invalid, the MTA
+                        SHOULD process the address as having a permanent
+                        failure, for example by returning a 550 response to the
+                        SMTP command containing the address.</t>
+                     <t>The MTA MAY also require that the use of the address is
+                        appropriate, for example that the message is a bounce as
+                        indicated by a null RFC2821.MailFrom; other
+                        heuristically determined contexts MAY also be
+                        appropriate, for example a MailFrom beginning with
+                        &quot;mailer-daemon@&quot;. Use of a BATV
+                        address in inappropriate contexts SHOULD cause a
+                        permanent failure as above.</t>
+                     <t hangText="Bounce delivery:  "> When an MTA within the
+                        specified address delivery domain's administration
+                        receives a delivery notification directed to a
+                        BATV-encoded address, the MTA SHOULD validate that
+                        address when that message has a null MailFrom. A
+                        receiving server MAY also perform heuristic selection of
+                        other incoming mail, such as ones that have a MailFrom
+                        starting with "mailer-daemon@". If it determines that
+                        the use is not valid, it MAY reject the message during
+                        the mail transfer connection, such as with SMTP; but
+                        more likely will simply discard the message.</t>
+                     <t>If the BATV address passes these checks the message
+                        SHOULD then be delivered to the original
+                        RFC2821.MailFrom address as specified by the
+                        RFC2822.Sender of the message that bounced. This
+                        original MailFrom address will be recovered as a
+                        side-effect of validating the BATV address.</t>
+                  </list>
+               </t>
+            </section>
+         </section>
+      </section>
+      <section anchor="metasyn" title="Local-Part Meta-Syntax">
+         <t>A meta-syntax for the &lt;local-part&gt; of an address
+            creates a public convention for partitioning an address' local-part
+            field (left-hand side) into sub-fields of attributes associated with
+            the &lt;addr-spec&gt; that was the original local-part. The
+            syntax used by BATV follows much of the framework defined in <xref target="RFC3191"/>.</t>
+         <t hangText="NOTE:  ">A standardized meta-syntax for local-part permits
+            attributes to be present in the address, without requiring that
+            public processing of the address have any understanding of the
+            attributes' semantics. The semantics of &lt;local-part&gt;
+            are strictly local to the domain administering the
+            &lt;local-part&gt; field. This separation between global
+            semantics, versus local, has been a powerful benefit to Internet
+            mail. It affords considerable operational flexibility. The
+            meta-syntax permits public information in an address to be richer,
+            while maintaining the local/global separation.</t>
+         <t>The generic element syntax for the structured fields defined for a
+            BATV &lt;local-part&gt; is: <figure>
+               <artwork><![CDATA[
+      local-part       = tag-type "=" tag-val "=" loc-core 
+
+      tag-type         = 1*( DIGIT / ALPHA / "-" )
+                         ; specific, registered validation scheme
+
+      loc-core         = {original local-part value}
+                  
+      tag-val          = 1*( DIGIT / ALPHA / "-" )
+                         ; the validation data
+            ]]></artwork>
+            </figure>
+         </t>
+      </section>
+      <section anchor="privsig" title="Simple Private Signature (prvs)">
+         <t>This scheme signs the original MailFrom by using a simple shared-key
+            to add a hash of the address and some time-based randomizing information.</t>
+         <section title="Syntax">
+            <t>This scheme is identified as:</t>
+            <figure>
+               <artwork><![CDATA[
+
+      tag-type       = "prvs"
+                        ; simple private signature
+                 
+      tag-val        =  K DDD SSSSSS
+                 
+      K              =  1DIGIT
+                        ; key number, to allow key rotation
+
+      DDD            =  3DIGIT
+                        ; day number, low three digits of 
+                        ; the number of days since 1970
+               		; when the address will expire
+                   
+      SSSSSS         =  6HEXDIG
+                        ; hex of the first three bytes of the
+                        ; SHA-1 HMAC of <hash-source> and a key
+      
+      hash-source    =  K DDD <orig-mailfrom>
+
+      orig-mailfrom  =  {original RFC2821.MailFrom address}
+             ]]></artwork>
+            </figure>
+         </section>
+         <section title="Operation">
+            <section title="Signature Creation">
+               <t>PRVS creates a package around an existing
+                  &lt;local-part&gt;, comprising the PRVS label and the signature hash on the
+                  left. The hash is
+                  extremely simple and not very robust, because the requirements
+                  for BATV do not entail strong protection. The mechanism
+                  provides very weak protection against replay, in order to keep
+                  the effort to create or validate the signature small.</t>
+            </section>
+            <section title="Signature Checking">
+               <t>Checking of private signatures is only performed within the
+                  domain specified in the MailFrom header. The first component
+                  that processes the MailFrom's local-part must be able to
+                  interpret the meta-syntax. It MAY also perform validation. </t>
+               <t>The scheme described here permits algorithmic validation. It
+                  does not require maintaining a database of information about
+                  recently sent messages.</t>
+               <t>The DDD part of the &lt;tag-val&gt; allows a domain to
+                  limit the lifetime of PRVS addresses to give very basic
+                  protection against replay attacks. If the expiry time has
+                  passed the address SHOULD be considered invalid even if the
+                  HMAC is OK. The address lifetime SHOULD be 7 days, to allow
+                  for long delivery delays before a bounce occurs.
+		  Since it is valid and often useful for a single message
+		  to provoke multiple bounces, it is specifically not a goal of BATV to prevent
+		    them.
+		    </t>
+            </section>
+         </section>
+      </section>
+      <section anchor="interop" title="Interoperability">
+         <t>BATV seeks to retrofit a standardized syntactic structure onto the
+            &lt;local-part&gt; of an RFC2821.MailFrom email address.
+            Although it is based on an existing, standard structure, it will be
+            used in new environments. Because this field has previously been
+            opaque to these environments, it is likely to create some usage
+            problems with some existing services. Problems are most likely in
+            some services that operate in the scope of the delivery stage of
+            processing, rather than in intermediaries between independent user
+            services. In particular serious problems are likely to be with
+            third-party services that constrain local-part beyond the Internet
+            standards. Hence they restrict interoperability, even without
+            concern for BATV.</t>
+         <t>As an example, such systems incorrectly identify the sender of the
+            message by using the MailFrom address, rather than the
+            RFC2822.Sender address. Examples are listed below. Further, they
+            require that this address be the same for all future postings from
+            the RFC2822.From address. Problems arise because messages authored
+            by a particular RFC2822.From address are like to vary the associated
+            MailFrom address over time, particularly when BATV encoding is used.</t>
+         <t>Such systems SHOULD fix the underlying problem, at a minimum by
+            using the RFC2822.Sender address to identify the sender. However,
+            note that a Internet mail does not require that the value of the
+            Sender address be constant for a From address, and there are many,
+            legitimate reasons that it varies.</t>
+         <t>Some systems MAY continue to require correlation between MailFrom
+            and From. For example the system might operate on the envelope
+            before the message data has been transmitted, so software might
+            strip off the meta-syntax to recover the &lt;loc-core&gt;
+            which can then be used as the MailFrom address's original
+            &lt;local-part&gt;. For such validation processing this
+            altered address MUST NOT be used for further mail-delivery
+            processing. Rather the MailFrom string MUST be preserved as it was received.</t>
+         <t>The benefit of a standardized meta-syntax for adding validation
+            attributes is that it permits such mechanisms to detect the
+            "attribute" portions of the local-part and extract only the core
+            portion, without having to understand any of the details of the attributes.</t>
+         <t>The known and likely set of problem third-parties are: <list style="hanging">
+               <t hangText="Greylisters:  ">A correct BATV implementation will
+                  only result in routine delays in this case. However the result
+                  of BATV tagging MUST be a constant local-part, for a given
+                  message, and not (say) created at delivery time such that each
+                  retry gets a different validation string, which would prevent
+                  it from ever getting through to a greylisting site.</t>
+               <t hangText="Mailing Lists:  ">BATV will cause problems with some
+                  mailing lists that identify posters by their bounce address.
+                  The list will not recognize the identical MailFrom addresses,
+                  because it will interpret the differing BATV attributes as
+                  part of the address. These services will either reject
+                  postings or pass them all to the moderator.</t>
+               <t hangText="Challenge-Response Systems:  ">The problem with
+                  these is similar to the that with mailing lists, but the
+                  challenged user will have to take special action for every
+                  message recipient that auto-sorts mail by bounce address.</t>
+               <t hangText="Sorting and Duplicate Detection:  ">Any system that
+                  sorts by bounce address (MailFrom) will interpret the
+                  addresses as different, even though they are not. This may
+                  include whitelisting services. </t>
+            </list>
+         </t>
+      </section>
+      <section title="Security Considerations">
+         <t>This entire document pertains to the security of email's
+            asynchronous error handling (bounce notification) mechanism, by
+            describing a way to detect valid and invalid bounce addresses. This
+            document does not directly provide a mechanism for authenticating
+            RFC2821.MailFrom addresses at intermediate. The ability to perform
+            validation across the entire transfer sequence is possible if a
+            standardized public key scheme is defined.</t>
+         <t>The PRVS scheme described here provides minimal protection of the
+            RFC2821.Mailfrom against forgery, with detection done at the target
+            (delivery) domain. The scheme does not attempt to protect against a
+            replay attack in which a valid, signed MailFrom is used but the
+            message contents are replaced. The same will be true for any other
+            BATV scheme that does not include some link with the message data;
+            however such protection is only reliable for the recipient of the
+            original message, because the integrity of the link will often be
+            broken when the original message data is mangled into the bounce.</t>
+         <t>There are two common forms of email address forgery: guessing (e.g.
+            attaching common &lt;local-part&gt;s to a domain) and
+            harvesting (e.g. from the web or usenet). Cryptographic BATV schemes
+            make guessing attacks unfeasibly difficult; however these are
+            relatively minor compared to replay attacks, which deserve closer attention.</t>
+         <t>MailFrom addresses are not usually exposed in the places from which
+            addresses are usually harvested. Many mailing list systems archive
+            messages sent to a list on the web; however they usually replace the
+            original MailFrom address with one that refers to the mailing list
+            manager. So this case is generally not a problem, although there are
+            exceptions. There are other instances of systems that archive email
+            publicly without altering the MailFrom address, such as bug tracking
+            systems; these are a problem.</t>
+         <t>A proportion of forgeries are caused by mass mailing viruses. Unlike
+            spammers, these have access to private email stores and are
+            therefore more likely to be able to find and replay BATV addresses.
+            For that matter, they can generate MailFrom addresses that are
+            entirely valid.</t>
+         <t>The PRVS scheme includes a modest protection against replay attacks,
+            by virtue of its using an expiry time, which prevents very old
+            addresses from being used by attackers. It does not prevent replay
+            attacks of young addresses.</t>
+      </section>
+   </middle>
+   <back>
+      <references title="References - Normative">
+         <reference anchor="RFC1035">
+            <front>
+               <title abbrev="Domain Implementation and Specification">Domain
+                  names - implementation and specification</title>
+               <author fullname="P. Mockapetris" initials="P." surname="Mockapetris">
+                  <organization>USC/ISI</organization>
+                  <address>
+                     <postal>
+                        <street>4676 Admiralty Way</street>
+                        <city>Marina del Rey</city>
+                        <region>CA</region>
+                        <code>90291</code>
+                        <country>US</country>
+                     </postal>
+                     <phone>+1 213 822 1511</phone>
+                  </address>
+               </author>
+               <date day="1" month="November" year="1987"/>
+            </front>
+            <seriesInfo name="STD" value="13"/>
+            <seriesInfo name="RFC" value="1035"/>
+         </reference>
+         <reference anchor="RFC0791">
+            <front>
+               <title abbrev="Internet Protocol">Internet Protocol</title>
+               <author fullname="Jon Postel" initials="J." surname="Postel">
+                  <organization>University of Southern California
+                     (USC)/Information Sciences Institute</organization>
+                  <address>
+                     <postal>
+                        <street>4676 Admiralty Way</street>
+                        <city>Marina del Rey</city>
+                        <region>CA</region>
+                        <code>90291</code>
+                        <country>US</country>
+                     </postal>
+                  </address>
+               </author>
+               <date day="1" month="September" year="1981"/>
+            </front>
+            <seriesInfo name="STD" value="5"/>
+            <seriesInfo name="RFC" value="791"/>
+         </reference>
+         <reference anchor="RFC1122">
+            <front>
+               <title>Requirements for Internet Hosts - Communication Layers</title>
+               <author fullname="Robert Braden" initials="R." surname="Braden">
+                  <organization>University of Southern California (USC)/
+                     Information Sciences Institute (ISI)</organization>
+                  <address>
+                     <postal>
+                        <street>4676 Admiralty Way</street>
+                        <city>Marina del Rey</city>
+                        <region>CA</region>
+                        <code>90292-6695</code>
+                        <country>US</country>
+                     </postal>
+                     <phone>+1 213 822 1511</phone>
+                     <email>Braden@ISI.EDU</email>
+                  </address>
+               </author>
+               <date month="October" year="1989"/>
+            </front>
+            <seriesInfo name="STD" value="3"/>
+            <seriesInfo name="RFC" value="1122"/>
+         </reference>
+         <reference anchor="RFC0822">
+            <front>
+               <title abbrev="Standard for ARPA Internet Text Messages">Standard
+                  for the format of ARPA Internet text messages</title>
+               <author fullname="David H. Crocker" initials="D.H." surname="Crocker">
+                  <organization>University of Delaware, Dept. of Electrical Engineering</organization>
+                  <address>
+                     <postal>
+                        <street/>
+                        <city>Newark</city>
+                        <region>DE</region>
+                        <code>19711</code>
+                        <country>US</country>
+                     </postal>
+                     <email>DCrocker@UDel-Relay</email>
+                  </address>
+               </author>
+               <date day="13" month="August" year="1982"/>
+            </front>
+            <seriesInfo name="STD" value="11"/>
+            <seriesInfo name="RFC" value="822"/>
+         </reference>
+         <reference anchor="RFC2822">
+            <front>
+               <title>Internet Message Format</title>
+               <author fullname="P. Resnick" initials="P." surname="Resnick">
+                  <organization/>
+               </author>
+               <date month="April" year="2001"/>
+            </front>
+            <seriesInfo name="RFC" value="2822"/>
+            <format octets="110695"
+               target="ftp://ftp.isi.edu/in-notes/rfc2822.txt" type="TXT"/>
+         </reference>
+         <reference anchor="RFC0821">
+            <front>
+               <title>Simple Mail Transfer Protocol</title>
+               <author fullname="Jonathan B. Postel" initials="J.B." surname="Postel">
+                  <organization>University of Southern California
+                     (USC)/Information Sciences Institute</organization>
+                  <address>
+                     <postal>
+                        <street>4676 Admiralty Way</street>
+                        <city>Marina del Rey</city>
+                        <region>CA</region>
+                        <code>90291</code>
+                        <country>US</country>
+                     </postal>
+                     <phone>+1 213 822 1511</phone>
+                  </address>
+               </author>
+               <date day="1" month="August" year="1982"/>
+            </front>
+            <seriesInfo name="STD" value="10"/>
+            <seriesInfo name="RFC" value="821"/>
+         </reference>
+         <reference anchor="RFC2821">
+            <front>
+               <title>Simple Mail Transfer Protocol</title>
+               <author fullname="J. Klensin" initials="J." surname="Klensin">
+                  <organization/>
+               </author>
+               <date month="April" year="2001"/>
+            </front>
+            <seriesInfo name="RFC" value="2821"/>
+            <format octets="192504"
+               target="ftp://ftp.isi.edu/in-notes/rfc2821.txt" type="TXT"/>
+         </reference>
+         <reference anchor="I-D.email-arch">
+            <front>
+               <title abbrev="MailArch">Internet Mail Architecture</title>
+               <author fullname="Dave Crocker" initials="D." surname="Crocker">
+                  <organization>Brandenburg InternetWorking</organization>
+                  <address>
+                     <postal>
+                        <street>675 Spruce Drive</street>
+                        <city>Sunnyvale</city>
+                        <region>CA</region>
+                        <code>94086</code>
+                        <country>USA</country>
+                     </postal>
+                     <phone>+1.408.246.8253</phone>
+                     <email>dcrocker@brandenburg.com</email>
+                  </address>
+               </author>
+               <date day="09" month="May" year="2004"/>
+               <area>Applications / Email</area>
+               <workgroup>MARID / SMTP</workgroup>
+               <keyword>email, e-mail, service, mime, rfc2822, rfc 2822, rfc822,
+                  rfc 822, rfc2821, rfc 2821, rfc821, rfc 821, architecture,
+                  mta, mua, msa, mda, user, delivery, relay, header, gateway agent</keyword>
+               <abstract>
+                  <t>Over its thirty year history, Internet mail has undergone
+                     significant changes in scale and complexity. The first
+                     standardized architecture for email specified a simple
+                     split between the user world and the transmission world, in
+                     the form of Mail User Agents (MUA) and Mail Transfer Agents
+                     (MTA). Over time each of these has divided into multiple,
+                     specialized modules. Public discussion and agreement about
+                     the nature of the changes to Internet mail has not kept
+                     pace, and abuses of the Internet mail service have brought
+                     these issues into stark relief. This draft offers
+                     clarifications and enhancements, to provide a more
+                     consistent base for community discussion of email service
+                     problems and proposed email service enhancements.</t>
+               </abstract>
+            </front>
+         </reference>
+         <reference anchor="RFC2119">
+            <front>
+               <title abbrev="RFC Key Words">Key words for use in RFCs to
+                  Indicate Requirement Levels</title>
+               <author fullname="Scott Bradner" initials="S." surname="Bradner">
+                  <organization>Harvard University</organization>
+                  <address>
+                     <postal>
+                        <street>1350 Mass. Ave.</street>
+                        <street>Cambridge</street>
+                        <street>MA 02138</street>
+                     </postal>
+                     <phone>- +1 617 495 3864</phone>
+                     <email>sob@harvard.edu</email>
+                  </address>
+               </author>
+               <date month="March" year="1997"/>
+               <area>General</area>
+               <abstract>
+                  <t> In many standards track documents several words are used
+                     to signify the requirements in the specification. These
+                     words are often capitalized. This document defines these
+                     words as they should be interpreted in IETF documents.
+                     Authors who follow these guidelines should incorporate this
+                     phrase near the beginning of their document:<list>
+                        <t> The key words &quot;MUST&quot;,
+                           &quot;MUST NOT&quot;,
+                           &quot;REQUIRED&quot;,
+                           &quot;SHALL&quot;, &quot;SHALL
+                           NOT&quot;, &quot;SHOULD&quot;,
+                           &quot;SHOULD NOT&quot;,
+                           &quot;RECOMMENDED&quot;,
+                           &quot;MAY&quot;, and
+                           &quot;OPTIONAL&quot; in this document are to
+                           be interpreted as described in RFC 2119.</t>
+                     </list>
+                  </t>
+                  <t> Note that the force of these words is modified by the
+                     requirement level of the document in which they are used. </t>
+               </abstract>
+            </front>
+            <seriesInfo name="BCP" value="14"/>
+            <seriesInfo name="RFC" value="2119"/>
+         </reference>
+      </references>
+      <references title="References - Informative">
+         <reference anchor="ID.domainkeys">
+            <front>
+               <title>Domain-based Email Authentication Using Public-Keys
+                  Advertised in the DNS (DomainKeys)</title>
+               <author>
+                  <organization>Yahoo! Inc.</organization>
+               </author>
+               <date month="May" year="2004"/>
+            </front>
+            <seriesInfo name="internet-draft" value="draft-delany-domainkeys-base-00.txt"/>
+         </reference>
+         <reference anchor="I-D.dns-nameauth">
+            <front>
+               <title abbrev="Name-Auth">Domain Name Association Authorization (DNAA)</title>
+               <author fullname="Dave Crocker" initials="D." surname="Crocker">
+                  <organization>Brandenburg InternetWorking</organization>
+                  <address>
+                     <postal>
+                        <street>675 Spruce Drive</street>
+                        <city>Sunnyvale</city>
+                        <region>CA</region>
+                        <code>94086</code>
+                        <country>USA</country>
+                     </postal>
+                     <phone>+1.408.246.8253</phone>
+                     <email>dcrocker@brandenburg.com</email>
+                  </address>
+               </author>
+               <date month="May" year="2004"/>
+               <area>Security / DNS</area>
+               <workgroup>MARID / DNSOP</workgroup>
+               <keyword>dns, srv, authorization, security, Internet</keyword>
+               <abstract>
+                  <t>Increased diversity and abuse of access, across the open
+                     Internet, calls for additional accountability and
+                     validation for sessions that do not have the benefit of
+                     prior, direct arrangement. One means for enabling this is
+                     by registration with a third-party service. This provides
+                     an independent path to information about a participant. The
+                     current specification defines example procedures for
+                     validating that a particular host is authorized to assert
+                     an association with a particular domain name</t>
+               </abstract>
+            </front>
+            <seriesInfo name="Internet-Draft" value="draft-crocker-marid-dns-nameauth-00"/>
+            <format
+               target="http://www.ietf.org/internet-drafts/draft-crocker-marid-dns-nameauth-00.txt" type="TXT"/>
+         </reference>
+         <reference anchor="I-D.dns-srvauth">
+            <front>
+               <title abbrev="SRV-Auth">Template for DNS SRV-Based Authorization</title>
+               <author fullname="Dave Crocker" initials="D." surname="Crocker">
+                  <organization>Brandenburg InternetWorking</organization>
+                  <address>
+                     <postal>
+                        <street>675 Spruce Drive</street>
+                        <city>Sunnyvale</city>
+                        <region>CA</region>
+                        <code>94086</code>
+                        <country>USA</country>
+                     </postal>
+                     <phone>+1.408.246.8253</phone>
+                     <email>dcrocker@brandenburg.com</email>
+                  </address>
+               </author>
+               <date month="May" year="2004"/>
+               <area>Security / DNS</area>
+               <workgroup>MARID / DNSOP</workgroup>
+               <keyword>dns, srv, authorization, security, Internet</keyword>
+               <abstract>
+                  <t>Increased diversity and abuse of access, across the open
+                     Internet, calls for additional accountability and
+                     validation for sessions that do not have the benefit of
+                     prior, direct arrangement. One means for enabling this is
+                     by registration with a third-party service. This provides
+                     an independent path to information about the participant.
+                     This specification defines a template for using a DNS SRV
+                     record to supply basic authorization information about the
+                     host associated with cited name.</t>
+               </abstract>
+            </front>
+            <seriesInfo name="Internet-Draft" value="draft-crocker-marid-dns-srvauth-00"/>
+            <format
+               target="http://www.ietf.org/internet-drafts/draft-crocker-marid-dns-srvauth-00.txt" type="TXT"/>
+         </reference>
+         <reference anchor="I-D.brand-drip">
+            <front>
+               <title>Designated Relays Inquiry Protocol (DRIP)</title>
+               <author fullname="Raymond Brand" initials="R" surname="Brand">
+                  <organization/>
+               </author>
+               <author fullname="Laurence  Sherzer" initials="L" surname="Sherzer">
+                  <organization/>
+               </author>
+               <date day="15" month="October" year="2003"/>
+            </front>
+            <seriesInfo name="Internet-Draft" value="draft-brand-drip-02"/>
+            <format
+               target="http://www.ietf.org/internet-drafts/draft-brand-drip-02.txt" type="TXT"/>
+         </reference>
+         <reference anchor="RFC3191">
+            <front>
+               <title>Minimal GSTN address format in Internet Mail</title>
+               <author fullname="C. Allocchio" initials="C." surname="Allocchio">
+                  <organization/>
+               </author>
+               <date month="October" year="2001"/>
+            </front>
+            <seriesInfo name="RFC" value="3191"/>
+            <format octets="24235"
+               target="ftp://ftp.isi.edu/in-notes/rfc3191.txt" type="TXT"/>
+         </reference>
+         <reference anchor="RFC2782">
+            <front>
+               <title abbrev="DNS SRV RR">A DNS RR for specifying the location
+                  of services (DNS SRV)</title>
+               <author fullname="Arnt Gulbrandsen" initials="A." surname="Gulbrandsen">
+                  <organization>Troll Tech</organization>
+                  <address>
+                     <postal>
+                        <street>Waldemar Thranes gate 98B</street>
+                        <city>Oslo</city>
+                        <region/>
+                        <code>N-0175</code>
+                        <country>NO</country>
+                     </postal>
+                     <phone>+47 22 806390</phone>
+                     <facsimile>+47 22 806380</facsimile>
+                     <email>arnt@troll.no</email>
+                  </address>
+               </author>
+               <author fullname="Paul Vixie" initials="P." surname="Vixie">
+                  <organization>Internet Software Consortium</organization>
+                  <address>
+                     <postal>
+                        <street>950 Charter Street</street>
+                        <city>Redwood City</city>
+                        <region>CA</region>
+                        <code>94063</code>
+                        <country>US</country>
+                     </postal>
+                     <phone>+1 650 779 7001</phone>
+                  </address>
+               </author>
+               <author fullname="Levon Esibov" initials="L." surname="Esibov">
+                  <organization>Microsoft Corporation</organization>
+                  <address>
+                     <postal>
+                        <street>One Microsoft Way</street>
+                        <city>Redmond</city>
+                        <region>WA</region>
+                        <code>98052</code>
+                        <country>US</country>
+                     </postal>
+                     <email>levone@microsoft.com</email>
+                  </address>
+               </author>
+               <date month="February" year="2000"/>
+               <abstract>
+                  <t>This document describes a DNS RR which specifies the
+                     location of the server(s) for a specific protocol and domain.</t>
+               </abstract>
+            </front>
+            <seriesInfo name="RFC" value="2782"/>
+         </reference>
+      </references>
+      <section title="Acknowledgements">
+         <t>This specification was greatly improved by the extensive
+            participation of John Leslie and Douglas Otis, in early design discussions.</t>
+      </section>
+      <section title="IANA Considerations">
+         <t>TBD.</t>
+      </section>
+   </back>
+</rfc>

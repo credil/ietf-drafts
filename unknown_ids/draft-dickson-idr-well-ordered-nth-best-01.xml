@@ -1,0 +1,486 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "D:/Program%20Files/XML%20Copy%20Editor/dtd/rfc2629.dtd" [
+  <!ENTITY rfc2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+  <!ENTITY rfc3345 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3345.xml'>
+  <!ENTITY rfc4271 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4271.xml'>
+  <!ENTITY rfc5004 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.5004.xml'>
+]>
+<?rfc compact="yes" ?>
+<rfc ipr="full3978" docName="draft-dickson-idr-well-ordered-nth-best-01">
+<?rfc toc='yes'?>
+<front>
+    <Creation month="July" year="2008" day="7" />
+    <creation month="July" year="2008" day="7" />
+    <created month="July" year="2008" day="7" />
+
+    <title abbrev="BGP Well-Ordered N-Best Paths">
+Enhanced BGP Capabilities for Exchanging Additional Nth-Best Paths
+</title>
+    <author initials="B.P." surname="Dickson" fullname="Brian Dickson">
+      <organization>
+Afilias Canada, Inc
+</organization>
+      <address>
+        <postal>
+          <street>
+4141 Yonge St,
+</street>
+          <street>
+Suite 204
+</street>
+          <city>
+North York
+</city>
+          <region>
+ON
+</region>
+          <code>
+M2P 2A8
+</code>
+          <country>
+Canada
+</country>
+        </postal>
+        <email>
+brian.peter.dickson@gmail.com
+</email>
+        <uri>
+www.afilias.info
+</uri>
+      </address>
+    </author>
+    <date month="July" year="2008"/>
+    <area>Routing</area>
+    <workgroup>idr</workgroup>
+    <keyword>
+IPv6
+</keyword>
+    <abstract>
+      <t>
+This Internet Draft describes an enhanced way to exchange prefix information, so as to permit multiple copies of a prefix, with different paths, to be announced and withdrawn.
+<vspace blankLines="1" />
+This negotiated capability facilitates faster local (inter-AS) and global (intra-AS) convergence, reduces path-hunting, improves route-reflector behaviour, including eliminating persistent oscillations.
+<vspace blankLines="1" />
+Additional prefix instances have a new wire format for updates and withdrawals, to control path selection.
+<vspace blankLines="1" />
+Benefits are seen both when deployed intra-AS, and on inter-AS peering.
+</t>
+    </abstract>
+    <note title="Author's Note">
+      <t>This Internet Draft is intended to result in this draft or a related draft(s) being placed on the Standards Track for idr.
+      <vspace blankLines="1" />
+      The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+      NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and
+      "OPTIONAL" in this document are to be interpreted as described in
+      <xref target="RFC2119" />.
+      <vspace blankLines="1"/>
+      Intended Status: Proposed Standard.
+</t>
+    </note>
+  </front>
+<middle>
+<section title="Background">
+<t>
+Even when all the best current practises are observed, operational problems may be experienced when running a BGP network.
+<vspace blankLines="1" />
+These include slow convergence due to "path-hunting" and <xref target="RFC3345">persistant oscillations</xref>.
+<vspace blankLines="1" />
+Standardization of MRAI timers helps path-hunting, and oscillations can be worked around with <xref target="RFC5004">RFC 5004</xref>.
+<vspace blankLines="1" />
+However, both of these RFCs identify the above issues as needing further work.
+</t>
+
+<section title="The Best Path Chaining and the Best Path Tree">
+<t>
+In a stable system of BGP speakers, for every given prefix, the selected best paths should form a spanning tree. At each node, the best path selected points further up the tree. The root of the tree is the destination, i.e. the originator of the prefix. The path from any leaf to the root forms a "chain" of best paths.
+<vspace blankLines="1" />
+There are any number of ways that path attributes may be modified over time, at arbitrary places in this tree. When this happens, individual segments of the tree may conceptually "stretch" or "shrink". These changes may have no effect on the overall set of choices of best path, or they may cause a cascade effect "below" that point in the tree, with nodes migrating to new locations in a new version of the tree.
+<vspace blankLines="1" />
+However, each node makes its choice of best path locally, and every time a node changes its selection of best path, that change is visible to its peers, and may in turn affect their own choice of best path.
+This propogation of changes is not instantaneous, and owing to the non-tree-like nature of the actual connectivity between nodes, can and does result in race conditions.
+<vspace blankLines="1" />
+Depending on connectivity, peering policy, and initial conditions, the behavior may border on that of systems best describe through chaos theory. The time to reach a stable state, while generally bounded, is often far from fast, not necessarily predictable, and not necessarily consistent.
+</t>
+</section> 
+<section title="The Withdrawal Problem">
+<t>
+Under normal circumstances, a change in attributes for a prefix will "flow" along the tree of best paths, without disrupting the structure of the tree itself signficantly. Even when a node selects a new best path (and thus re-attaches itself to the tree in a new location), it typically will continue to pass the new attributes along the branch of the tree for which it is the root.
+<vspace blankLines="1" />
+However, under certain circumstances, its choice of new best path, requires it to WITHDRAW the prefix from those peers, and effectively sever the branch. It is in the after-effects of this truncation that much of the path-hunting behavior gets triggered.
+<vspace blankLines="1" />
+When a withdrawal effectively severs a branch of the tree, all the nodes on the tree will need to find new paths to the root. The problem is, that it takes some time for them to learn this fact.
+<vspace blankLines="1" />
+In the mean time, the nodes in the severed branch may continue to use, and propogate, paths that are technically infeasible.
+<vspace blankLines="1" />
+The idea is to fast-track the flooding of the infeasibility of paths throughout all parts of the tree below a given link, so as to minimize the use of infeasible paths.
+</t>
+</section>
+<section title="The Uniqueness Property">
+<t>
+Currently, for each prefix, only one path for that prefix is ever announced from one peer to another (ignoring Route Reflectors).
+Because of this property, uniqueness, a withdrawal on a prefix does not require path information.
+This also means that a change of best path is accomplished via an update for a prefix with the new path information.
+<vspace blankLines="1" />
+If, however, more than one path for a given prefix were sent, then any attempt to withdraw a prefix+path would require some mechanism to distinguish between prefix instances.
+<vspace blankLines="1" />
+In an environment where multiple path announcments per prefix are possible, but only one "best" path per prefix is maintained, then two steps would be involved in changing the "best" path.
+In no particular order, that would be the withdrawal of the old prefix+path, and the announcement of the new prefix+path.
+</t>
+</section>
+</section>
+<section title="Proposed Changes">
+<t>
+What is being proposed is, maintaining a set of "N best" for each prefix, and sending ALL of these rather than just the "best" path.
+<vspace blankLines="1" />
+When any of the "N best" becomes infeasible, a withdrawal is sent. If a withdrawal is received, it receives special fast-track handling, taking advantage of the "N best" information. If any of the N best is affected by the withdrawal, it is immediately flooded to peers without doing a prefix BGP path comparison (since those results have already been pre-calculated).
+<vspace blankLines="1" />
+The supposition is that pruning all infeasible branches, while maintaining information on N best paths, allows for fast removal of all best paths which are dependent on infeasible paths, and fast reconvergence with pre-computed alternate paths. It is expected that the N-best mechanism should act as a stop-gap until, but not actually replace, full prefix path comparisons to generate a new set of "N best" paths.
+</t>
+<section title="USE_N_BEST Capability">
+<t>
+   The USE_N_BEST Capability is a new BGP capability [RFC2842].  The
+   Capability Code for this capability is specified in the IANA
+   Considerations section of this document. The Capability Length field
+   of this capability is variable. The Capability Value field consists
+   of zero or more of the tuples &lt;AFI, SAFI&gt; as follows:
+<figure anchor="USE_N_BEST"><artwork>
+               +------------------------------------------------+
+               | Address Family Identifier (2 octets)           |
+               +------------------------------------------------+
+               | Subsequent Address Family Identifier (1 octet) |
+               +------------------------------------------------+
+</artwork></figure>
+
+   The meaning and use of the fields are as follows:
+<list style="hanging">
+<t hangText="Address Family Identifier (AFI):">
+       
+
+          This field carries the identity of the Network Layer protocol
+          for which the BGP speaker intends to advertise multiple paths.
+          Presently defined values for this field are specified in
+          [IANA-AFI].
+</t>
+<t hangText="Subsequent Address Family Identifier (SAFI):">
+
+          This field provides additional information about the type of
+          the Network Layer Reachability Information carried in the
+          attribute. Presently defined values for this field are
+          specified in [IANA-SAFI].
+</t>
+</list>
+
+   When advertising the USE_N_BEST Capability to a peer, a BGP speaker
+   conveys to the peer that the speaker is capable of receiving multiple
+   paths as well as the single path from the peer for address families
+   that the speaker supports.
+
+   When a tuple &lt;AFI, SAFI&gt; is included in the capability, it indicates
+   that the BGP speaker intends to advertise multiple paths for the
+   &lt;AFI, SAFI&gt;.  If the USE_N_BEST Capability is also received from the
+   peer, the speaker would then follow the procedures for advertising
+   "Best N" paths to the peer for the specified &lt;AFI, SAFI&gt;.
+<vspace blankLines="1" />
+When advertising "Best N" paths:
+<list style="symbols">
+<t>Update messages MUST be in the new format <xref target="ID:draft-dickson-idr-add-paths-ordered"></xref>, and ADD_PATH_ORDERED must also be advertised</t>
+<t>For each prefix, at most one of each ordinal value, 1 through N, may be sent</t>
+<t>The sender is responsible for selecting its own path ordinals</t>
+<t>The sender is responsible for maintaining the sequence order per prefix</t>
+<t>As a result of withdrawals, the sequence sent might not start at 1, and might be sparse</t>
+</list>
+</t>
+</section>
+</section>
+<section title="Modifications to BGP Behavior">
+<section title="Changes to Path Selection Rules">
+<t>
+The path selection rules for BGP (section 9.1.2.2 of <xref target="RFC4271">BGP4</xref>) are changed as follows:
+
+<list style="symbols">
+<t>
+The following rule is a modification to step (c).
+<vspace blankLines="1" />
+It MAY only be needed when the node is acting as a Route Reflector.
+If a node is NOT a Route Reflector, a simplified modification (remove any paths NOT marked BEST) MAY be used.
+(This modification exists to resolve the Persistent Oscillation problem only.)
+<vspace blankLines="1" />
+The modification  to step (c) is:
+<vspace blankLines="1" />
+Step (c) is first performed INCLUDING paths NOT marked as BEST.
+<vspace blankLines="1" />
+If, at the end of the first attempt at step (c), no paths marked BEST remain, re-run step (c), this time EXCLUDING all paths NOT marked BEST.
+<vspace blankLines="1" />
+After this modified version of step (c), it should be observed (and asserted) that only paths marked BEST must remain.
+<vspace blankLines="1" />
+In other words, Step (c) MUST remove any non-BEST paths.
+</t>
+<t>The remainder of the usual BGP path selection rules are applied as normal
+</t>
+</list>
+
+The path selection rules for "Nth Best" path are as follows:
+<list style="symbols">
+<t>The already-selected (N-1) best paths are removed from the set of paths to compare
+</t>
+<t>The same rules are applied as for the "best" path (including the modification to step (c), above)
+</t>
+<t>The selected path is advertised (to any peers with whom Nth-best has been negotiated), with the ordinal value of N applied
+</t>
+</list>
+
+The prefix instances for consideration of Nth-best path are the REMAINDER of non-yet-selected instances.
+NB: Only the best (lowest received ordinal), not-yet-selected instance of any IN-RIB may be selected for the local (and out-RIB) Nth-best path.
+</t>
+</section>
+<section title="N Best - Basic Method">
+<t>
+Once the capabality for doing so has been negotiated between a pair of BGP speakers, each sends the best N paths for each prefix.
+The path information will include the additional ordinal value on the each Nth-best path.
+<vspace blankLines="1" />
+When the current "best" path is withdrawn, the withdrawal MAY be propogated without having to perform a full BGP prefix path selection.
+The current "second best" path in the local-RIB is promoted to "best". This is because the alternate candidates have already been evaluated and "second-best" has already been selected.
+<vspace blankLines="1" />
+Whenever an AS consists of a mesh of BGP speakers who have negotiated this capability, the withdrawal will propogate through the entire AS.
+This will either have no effect, or will cause a change in "best", which does not require non-local information in order to choose the new "best" path.
+<vspace blankLines="1" />
+The second-best path from a neighbor MUST ONLY be considered as a candidate for best path, when the previous best path from that neighbor is withdrawn. When this occurs, the path in question is promoted to "best" status.
+</t>
+</section>
+<section title="N Best - Route Reflector">
+<t>
+The N best are all reflected. The same mechanism is used for determining the best N per prefix.
+Updates must be reflected whenever the choice of any of the best N change.
+Withdrawals may be propogated immediately.
+</t>
+</section>
+<section title="N Best - Inter-AS Hybrid Method">
+<t>
+When a withdrawal of the current best path is received from a peer doing USE_N_BEST, and the rules for sending updates require that an update for this prefix be sent to a peer who does not support USE_N_BEST,
+the current second-best instance of the prefix is sent to that peer in an Update.
+The neighbor does not need the withdrawal, since the new path replaces the old path.
+</t>
+</section>
+<section title="IBGP vs EBGP">
+<t>
+The same rules apply for EBGP->EBGP, EBGP->IBGP, IBGP->EBGP, and IBGP->IBGP.
+If a particular peering has had USE_N_BEST negotiated, then any update for a particular prefix that results in new selection of any of the N best paths, the new selections (and possible withdrawal of old selections) is sent to the appropriate peers.
+</t>
+</section>
+</section>
+<section title="Implementation Guidelines">
+<t>
+In order to encourage effective implementation schemes, and to demonstrate some of the benefits of deployment, here are some suggestions for facilitating fast propogation of path changes, which are anticipated as improving behavior.
+This applies in particular to Path Hunting issues.
+<vspace blankLines="1" />
+<figure anchor="RIB semantics variation"><artwork>
+In-RIB-N (many) -> RIB-N -> out-RIB-N
+                    |   \
+                    v    `-> out-RIB (to non-Nth-best peers)
+                    RIB -> FIB
+                       
+                       
++----------+------+--------+---------+-----------------|
+|   PREFIX | UNIQ | IN-ORD | OUT-ORD | *PATH-info-ptr  |
++----------+------+--------+---------+-----------------|
+</artwork></figure>
+Where IN-ORD and OUT-ORD indicate the preference order (from BEST to Nth-BEST) of the sender, or ourselves, and UNIQ is chosen to uniquely identify the prefix; BGP Originator is used for UNIQ.
+IN-ORD are the values sent from a peer. OUT-ORD is non-zero for ONLY those prefixes selected for inclusion into the RIB-N.
+<vspace blankLines="1" />
+For example, if all external peers have NOT negotiated Nth-Best, those prefixes would have an ordinal value of 1. Each In-RIB-N would have at most one instance.
+And for each prefix, at most one In-RIB-N would be selected as best, and have its corresponding OUT-ORD set to 1.
+<vspace blankLines="1" />
+This forward-chaining allows for expedited processing of updates. We can immediately determine whether any given withdrawals need to be flooded to peers, and if so, what ordinal to use on the forwarded update.
+This flooding MAY be performed in parallel to normal BGP table update processing.
+<vspace blankLines="1" />
+For clarity, it should be pointed out that:
+<list style="symbols">
+<t>The process for the step RIB-N to RIB is "select prefixes with OUT-ORD == 1".</t>
+<t>The process for the step RIB-N to out-RIB is also "select prefixes with OUT-ORD == 1".</t>
+<t>The process for the step RIB-N to out-RIB-N is the same as ordinary RIB to out-RIB, except for preservation of Ordinal values.</t>
+</list>
+</t></section>
+<section title="Security Considerations">
+<t>
+No additional security considerations beyond those already present in BGP are introduced.
+</t>
+</section>
+<section title="IANA Considerations">
+<t>
+IANA will need to assign a new code point for BGP Capabilities for USE_N_BEST.
+</t>
+</section>
+<section title="Acknowledgements">
+<t>
+The author wishes to acknowledge the helpful guidance of Joe Abley, and Tony Li.
+The author thanks the following for feedback during the review and revision process: Joel M. Halpern, Tony Li.
+
+The author also wishes to acknowledge the insight gained from his Scottish Deerhound, Skylar, winning a Reserve Best-in-Show.
+(The selection method of "second best" comes from the Reserve system used at the group and best-in-show levels of dog shows).
+</t>
+</section>
+</middle>
+  <back>
+    <references title="Normative References">
+      &rfc3345;
+      &rfc4271;
+      &rfc5004;
+      <reference anchor="ID:draft-dickson-idr-add-paths-ordered">
+      <front>
+    <Creation month="July" year="2008" day="7" />
+    <creation month="July" year="2008" day="7" />
+    <created month="July" year="2008" day="7" />
+
+    <title abbrev="BGP Additional Paths - Ordered">
+Enhanced BGP Capabilities for Exchanging Second-Best Paths
+</title>
+    <author initials="B.P." surname="Dickson" fullname="Brian Dickson">
+      <organization>
+Afilias Canada, Inc
+</organization>
+      <address>
+        <postal>
+          <street>
+4141 Yonge St,
+</street>
+          <street>
+Suite 204
+</street>
+          <city>
+North York
+</city>
+          <region>
+ON
+</region>
+          <code>
+M2P 2A8
+</code>
+          <country>
+Canada
+</country>
+        </postal>
+        <email>
+brian.peter.dickson@gmail.com
+</email>
+        <uri>
+www.afilias.info
+</uri>
+      </address>
+    </author>
+    <date month="July" year="2008"/>
+    <area>Routing</area>
+    <workgroup>idr</workgroup>
+    <keyword>
+IPv6
+</keyword>
+    <abstract>
+      <t>
+This Internet Draft describes an enhanced format for encoding prefix information, to permit multiple copies of a prefix with different paths to be announced and withdrawn.
+<vspace blankLines="1" />
+Prefix instances using the new format include both unique identifiers, and ordinals to control path selection.
+<vspace blankLines="1" />
+Withdrawal of prefixes requires a slight modification to disambiguate prefix instances.
+</t>
+    </abstract>
+    <note title="Author's Note">
+      <t>This Internet Draft is intended to result in this draft or a related draft(s) being placed on the Standards Track for idr.
+      <vspace blankLines="1" />
+      The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+      NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and
+      "OPTIONAL" in this document are to be interpreted as described in
+      <xref target="RFC2119" />.
+      <vspace blankLines="1"/>
+      Intended Status: Proposed Standard.
+</t>
+    </note>
+      </front>
+      </reference>
+    </references>
+    <references title='Informative References'>
+    &rfc2119;
+    </references>
+    <section title="Path-Hunting Examples">
+    <t>
+   (These will be included in a subsequent version of this ID.)
+    </t>
+    </section>
+    <section title="Persistent Oscillation Examples">
+    <t>
+   Consider the example in <xref target="b1"></xref> where
+
+      o R1, R2, R3, R4, and R5 belong to one AS.
+      o R1 is a route reflector with R2 and R3 as its clients.
+      o R4 is a route reflector with R5 as its client.
+      o The IGP metrics are as listed.
+      o External paths (a), (b), and (c) are as described in <xref target="b2"></xref>.
+
+    
+    <figure anchor="b1">
+    <artwork>
++----+      1      +----+
+| R1 |-------------| R4 |
++----+             +----+
+ |  \                |
+ |   \               |
+3|    \ 2            | 6
+ |     \             |
+ |      \            |
++----+  +----+     +----+
+| R2 |  | R3 |     | R5 |
++----+  +----+     +----+
+ |        |          |
+(a)      (b)        (c)
+</artwork>
+</figure>
+
+<figure anchor="b2">
+<artwork>
+Path    AS_PATH MED
+ a       1 3    10
+ b       2 3     1
+ c       2 3     0
+</artwork>
+</figure>
+    
+    
+    With the addition of "Nth Best", and locally limiting N to 2, we have:
+<figure>
+<preamble>
+
+    R1 has the following:
+</preamble>
+<artwork>
+Path    AS_PATH MED IGP-metric
+ a       1 3    10   3 (received:best) (best)
+ b       2 3     1   2 (received:best)
+ c       2 3     0   7 (received:best) (second_best - not sent)
+</artwork>
+</figure>
+    
+<figure>
+<preamble>
+R4 has the following:
+</preamble>
+<artwork>
+Path    AS_PATH MED IGP-metric
+ a       1 3    10   4 (received:best) (best - not sent)
+ c       2 3     0   6 (received: best) (second_best)
+</artwork>
+</figure>
+<figure>
+<preamble>
+This results in R1 having:
+</preamble>
+<artwork>
+Path    AS_PATH MED IGP-metric
+ a       1 3    10   3 (received:best) (best)
+ b       2 3     1   2 (received:best)
+ c       2 3     0   7 (received:second_best) (second_best - not sent)
+ </artwork>
+</figure>
+By including N best (for N=2) in the best path calculation, the persistent oscillation problem is resolved.
+
+</t>
+</section>
+  </back>
+</rfc>

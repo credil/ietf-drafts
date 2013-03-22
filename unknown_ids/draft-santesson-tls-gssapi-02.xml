@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY RFC2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+
+    <!ENTITY RFC4120 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4120.xml'>
+
+    <!ENTITY RFC4121 PUBLIC '' 
+  'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4121.xml'>
+
+    <!ENTITY RFC4279 PUBLIC '' 
+  'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4279.xml'>
+
+    <!ENTITY RFC4401 PUBLIC '' 
+  'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4401.xml'>
+
+    <!ENTITY RFC2743 PUBLIC '' 
+  'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2743.xml'>
+
+    <!ENTITY RFC4346 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4346.xml'>
+
+    <!ENTITY RFC3546 PUBLIC '' 
+  'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3546.xml'>
+
+    <!ENTITY RFC4556 PUBLIC '' 
+  'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4556.xml'>
+
+    <!ENTITY RFC4178 PUBLIC '' 
+  'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4178.xml'>
+
+]>
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes"?>
+
+<rfc ipr='full3978' updates="4279" category="std" docName="draft-santesson-tls-gssapi-02">
+
+<front><title abbrev="FKA-TLS">Flexible Key Agreement for Transport Layer Security (FKA-TLS)</title>
+<author initials="L." surname="Zhu" fullname="Larry Zhu">
+<organization>Microsoft Corporation</organization>
+<address><postal>
+<street>One Microsoft Way</street>
+<city>Redmond</city>
+<region>WA</region>
+<code>98052</code>
+<country>US</country>
+</postal>
+<email>lzhu@microsoft.com</email></address>
+</author>
+
+<date year="2007"></date>
+
+<area>Security</area><workgroup>NETWORK WORKING GROUP</workgroup>
+
+<keyword>Internet-Draft</keyword>
+
+<abstract>
+
+<t> This document defines extensions to RFC 4279 to enable 
+dynamic key sharing in distributed environments. By using these extensions, the client
+and the server can use off-shelf libraries to exchange tokens and establish a shared secret,
+based on a Generic Security Service Application Program Interface (GSS-API) mechanism such as Kerberos as defined in RFC 4121, 
+and then proceed according to RFC 4279 to complete the authentication and provide data protection.</t>
+
+</abstract>
+
+</front><middle>
+            
+<section anchor="introduction" title="Introduction">
+
+    <t><xref target="RFC4279"/> defines Transport Layer Security (TLS) based on pre-shared keys (PSK). 
+ This assumes a pair-wise key sharing scheme that is less scalable and more costly to manage in comparison
+ with a trusted third party scheme such as Kerberos <xref target="RFC4120"/>. In addition,
+ off-shelf GSS-API libraries that allow dynamic key sharing are not currently accessible to TLS applications. For example, Kerberos <xref target="RFC4121"/> 
+ is a GSS-API mechanism that can establish a shared key between a client and a server based on either asymmetric keys <xref target="RFC4556"/> 
+  or symmetric keys <xref target="RFC4120"/>.</t>
+
+ <t>This document extends <xref target="RFC4279"/> to allow the client and the server establish a shared key on demand by using  off-shelf  GSS-API 
+ libraries, and then proceed according to RFC 4279.  
+ This is a modular approach to leverage Kerberos alike trust infrastructures in securing TLS connections.</t>
+
+</section>
+
+<section title="Conventions Used in This Document" toc="default">
+
+<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+    "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref
+        target="RFC2119" pageno="false" format="default"></xref>.</t>
+
+</section>
+
+<section anchor="defs" title="Protocol Definition" toc="default">
+
+<t> The GSS-API TLS extension is defined according to <xref target="RFC3546"/>. 
+The extension data carries GSS-API token within the TLS hello messages. </t>
+<figure>
+    <artwork>
+  enum {
+      GSS-API(TBD), (65535)
+  } ExtensionType;
+    </artwork>
+</figure>
+
+<t> Initially the client calls GSS_Init_sec_context() <xref target="RFC2743"/> to establish a security
+   context, it MUST set the
+   mutual_req_flag and identify the server by targ_name so that mutual authentication is performed in the
+   course of context establishment. If the mutual authentication is not available when the context is established successfully, 
+   the GSS-API security context MUST be discarded. The extension_data from the client 
+contains the output token of GSS_Init_sec_context(). If a GSS-API context cannot be established, the GSS-API TLS extension MUST NOT be
+included in the client hello message and it is a matter of local policy on
+the client whether to continue or reject the TLS authentication as if the 
+GSS-API TLS extension is not supported.</t>
+
+ <t>Upon receipt of the GSS-API  TLS extension from the client, and if the server supports the GSS-API TLS extension, the server calls GSS_Accept_sec_context() with
+ the client GSS-API output token in the client's extension data as the input token. If GSS_Accept_sec_context() returns
+a token successfully, the server responds with a GSS-API TLS extension and places the output token in the extension_data. If GSS_Accept_sec_context() fails,
+it is a matter of local policy on the server  whether to continue or reject the TLS authentication as if the 
+GSS-API TLS extension is not supported. </t>
+
+ <t>The server MUST NOT include a GSS-API TLS extension in the hello message if the cipher_suite in the ServerHello message is not a PSK ciphersuite
+ <xref target="RFC4279"/>.</t>
+
+ <t>If the server expects at least one more token to be accepted from the client in order to establish the security context, the additional GSS-API tokens
+ are carried in a new handshake message called the token-transfer message.</t>
+
+ <figure>
+     <artwork>
+       enum {
+          token_transfer(TBD), (255)
+      } HandshakeType;
+
+      struct {
+          HandshakeType msg_type;    /* handshake type */
+          uint24 length;             /* bytes in message */
+          select (HandshakeType) {
+              case token_transfer: /* NEW */      
+                    TokenTranfer;
+          } body;
+      } Handshake;
+
+       enum {
+          gss-api-token(1), (255)
+      } TokenTransferType;
+
+      struct {
+            TokenTransferType token_type; /* token type */
+            opaque token(0..2^16-1);
+      } TokenTranfer;
+     </artwork>
+ </figure>
+
+ <t> The TokenTranfer structure is filled out as follows:</t>
+<t><list style="symbols"><t>The token_type is gss-api-token.<vspace blankLines="1"/>
+</t> 
+<t>The token field contains the GSS-API context establishment tokens from the client and the server.</t></list></t>
+
+<t>The client calls GSS_Init_sec_context() with the token in the TokenTranfer stucture from the server as the input token,
+and then places the output token, if any, into the TokenTranfer message and sends the handshake message to the server. The server
+calls GSS_Accept_sec_context() with the token in the TokenTranfer structure from the client as the input token,
+and then places the output token, if any, into the TokenTranfer message and sends the handshake message to the client. This loop repeats
+until either the context fails to establish or the context is established successfully. To prevent an infinite loop,
+both the client and the server MUST have a policy to limit the maximum number of GSS-API context establishment calls for a given
+session. The recommended value is 5.
+If the GSS-API context fails to establish, it is a matter of local policy whether to continue or reject the TLS authentication as if the 
+GSS-API TLS extension is not supported.</t>
+
+<t>When the last GSS-API context establishment token is sent by the client or when the GSS-API context fails to establish on the client side and the local policy
+allows the TLS authentication to proceed as if the TLS GSS-API extension is not supported, 
+the client sends an empty TokenTransfer handshake message.</t>
+
+<t>If the GSS-API context fails to establish and local policy allows the TLS authentication continue as if the GSS-API TLS
+extension is not supported, the server MAY send another ServerHello message in order to choose a different cipher suite. The client then MUST expect the
+second ServerHello message from the server before the session is established. The second ServerHello message MUST differ from the first
+ServerHello message in the cipher_suite field and only in that field.</t>
+
+<t>If the client and the server establish a security context successfully, both the client and the server call GSS_Pseudo_random() <xref target="RFC4401"/> to 
+compute a sufficiently long shared secret with the same value based on the negotiated ciphersuite, 
+and then proceed according to <xref target="RFC4279"/> using this shared secret value as the "PSK". 
+Both psk_identity and psk_identity_hint are empty in the handshake messages when the
+shared key is established using a GSS-API mechanism as described in this document.</t>
+
+<t>The following text art summaries the protocol message flow.</t>
+<figure>
+    <artwork>
+      Client                                               Server
+
+      ClientHello                  --------
+                                                      ServerHello
+                                 ---------       TokenTransfer*
+                                     .
+                                     .
+                                     .
+      TokenTransfer*              ----------                                  
+                                                   
+
+                                         ----          ServerHello*
+                                                     Certificate*
+                                               ServerKeyExchange*
+                                              CertificateRequest*
+                                   --------      ServerHelloDone
+      Certificate*
+      ClientKeyExchange
+      CertificateVerify*
+      [ChangeCipherSpec]
+      Finished                     --------
+                                               [ChangeCipherSpec]
+                                   --------             Finished
+      Application Data             -------     Application Data
+         Fig. 1. Message flow for a full handshake
+
+      * Indicates optional or situation-dependent messages that are not
+        always sent.
+    </artwork>
+</figure>
+<t>There could be multiple TokenTransfer handshake messages, and the last
+TokenTranster message, if present, is always sent from the client to the server
+and it can carry an empty token.</t>
+</section>
+
+<section title="Choosing GSS-API Mechanisms">
+<t>If more than one GSS-API mechanism is shared between the client and the server, 
+it is RECOMMENDED to deploy a pseudo GSS-API mechanism such as <xref target="RFC4178"/> to choose
+a mutually preferred GSS-API mechanism.</t>
+
+<t>If the Kerberos client does not have access to the KDC but the server does, 
+<xref target="IAKERB"/> can be chosen to tunnel the Kerberos authentication exchange within
+the TLS handshake messages.</t>
+</section>
+
+<section anchor="securityconsideration" title="Security Considerations" toc="default">
+
+<t>When Kerberos as defined in <xref target="RFC4120"/> is used to establish the share key,
+it is vulnerable to offline dictionary attacks. The threat is mitigated by deploying kerberos FAST <xref target="KRB-FAST"/>.</t>
+</section>
+
+<section title="Acknowledgements">
+  <t>Stefan Santesson, Ari Medvinsky and Jeffery Altman helped editing the earlier revisions of this document.</t>
+  </section>
+
+<section title="IANA Considerations">
+
+    <t>A new handshake message token_transfer is defined according to <xref target="RFC4346"/> and
+    a new TLS extension called the GSS-API extension is defined according to <xref target="RFC3546"/>. The registry need to be updated to include
+    these new types.</t>
+    <t>This document defines the type of the transfer tokens in <xref target="defs"/>, a registry need to be setup and
+     the allocation policy is "Specification Required".</t>
+
+</section>
+
+</middle>
+
+<back>
+
+<references title="Normative References">&RFC2119;&RFC4346;&RFC2743;&RFC4401;&RFC4279;&RFC3546; &RFC4178;
+
+          <reference anchor="IAKERB">
+  <front>
+    <title>Initial and Pass Through Authentication Using Kerberos V5 and the GSS-API</title>
+    <author initials="L." surname="Zhu">
+      <organization></organization>
+    </author>
+    <date year="2007"/>
+  </front>
+  <seriesInfo name="internet-draft" value="draft-zhu-ws-kerb-03.txt"/>
+    </reference>
+</references>
+
+<references title="Informative References">
+    &RFC4120;&RFC4556;&RFC4121; 
+            <reference anchor="KRB-FAST">
+    <front>
+      <title>A Generalized Framework for Kerberos Pre-Authentication</title>
+      <author initials="L." surname="Zhu">
+        <organization></organization>
+      </author>
+      <author initials="S." surname="Hartman">
+        <organization></organization>
+      </author>
+      <date year="2007"/>
+    </front>
+    <seriesInfo name="internet-draft" value="draft-ietf-krb-wg-preauth-framework-06.txt"/>
+      </reference>
+</references>
+
+</back>
+</rfc>
+

@@ -1,0 +1,371 @@
+<?xml version="1.0"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc strict="no"?>
+
+<rfc ipr="trust200902" category="std" docName='draft-stein-pwe3-ethpwcong-00.txt'>
+
+<!ENTITY rfc2119 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+<!ENTITY rfc4385 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4385.xml'>
+<!ENTITY rfc4447 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4447.xml'>
+<!ENTITY rfc4619 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4619.xml'>
+<!ENTITY rfc4623 PUBLIC '' 'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4623.xml'>
+
+<front>
+<title abbrev="ethpwcong">Ethernet PW Congestion Handling Mechanisms</title>
+
+<author initials="Y(J)" surname="Stein" fullname="Yaakov (Jonathan) Stein">
+<organization>RAD Data Communications</organization>
+<address>
+     <postal>
+         <street>24 Raoul Wallenberg St., Bldg C</street>
+         <city>Tel Aviv</city>
+         <code>69719</code>
+         <country>ISRAEL</country>
+     </postal>
+     <phone>+972 3 645-5389</phone>
+     <email>yaakov_s@rad.com</email>
+</address>
+</author>
+
+
+<date day="1" month="July" year="2009" />
+
+<area>Internet</area>
+<workgroup>PWE3</workgroup>
+<keyword>pseudowire</keyword>
+<keyword>Ethernet</keyword>
+<keyword>congestion</keyword>
+<keyword>Internet-Draft</keyword>
+
+<abstract>
+ <t>
+  Mechanisms for handling congestion in Ethernet pseudowires are presented.
+  These mechanisms extend capabilities of the native service across the PSN,
+  and require use of the PWE3 control word.
+ </t>
+</abstract>
+
+ <note title="Requirements Language">
+  <t>
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",       
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this       
+   document are to be interpreted as described in 
+   <xref target="RFC2119">RFC 2119</xref>.
+  </t>     
+ </note> 
+
+</front>
+
+<middle>
+
+<section title="Introduction">
+
+ <t>
+  Ethernet PWs do not presently have mechanisms for handling AC congestion. 
+  When the egress AC becomes congested, the egress PE will receive
+  PAUSE (802.3x) frames or experiences back-pressure, denying it the capability of 
+  forwarding frames to the AC.
+  This will result in the egress PE's output buffers filling up 
+  and eventually Ethernet frames will need to be discarded.
+  Not only are such frames lost after precious PSN bandwidth has already been consumed,
+  they are also discarded without regard to importance, priority, or fairness.
+ </t>
+
+ <t>
+  If the Ethernet frames being transported are carrying TCP/IP traffic,
+  then TCP rate cut-back will limit the traffic volume to some extent.
+  However, the early discard that triggers the rate cut-back also
+  results in packet retransmission, adding additional Ethernet PW
+  traffic to be transported.
+  When the Ethernet frames are not carrying TCP/IP, 
+  but rather UDP/IP, or any other non-TCP/IP traffic that does not react 
+  to packet discard by cutting back the transmission rate,
+  the situation is potentially worse.
+ </t>
+
+ <t>
+  The native Ethernet service handles congestion by causing the sender to
+  stop sending frames. On full duplex links this is accomplished by
+  the congested receiver sending PAUSE frames. On half-duplex networks
+  this is accomplished by the congested receiver introducing back-pressure.
+  In either case the effect is that the sender stops forwarding frames
+  until the receiver is once again ready to process them,
+  thus eliminating congestion.
+ </t>
+
+ <t>
+  Ethernet PWs do not transport received congestion indications across the PSN, 
+  nor do they generate congestion indications when the egress PE
+  detects congestion. 
+ </t>
+
+ <t>
+  It is possible to rectify this lack of functionality
+  by adding indications in the PWE control word.
+  The arbitrariness of the packets discarded can be alleviated by
+  including a drop eligibility indication.  
+  The loss itself can be possibly avoided by mechanisms that explicit indicate
+  forward and backward congestion.
+  Such indications enable a PE to reflect the egress AC congestion status 
+  back towards the ingress AC, where steps can be taken to limit the ingress rate,
+  thus avoiding buffer overflow.
+ </t>
+
+</section>
+
+<section title="Control Word Format">
+
+ <t>
+  The mechanisms described herein are only available when the
+  Ethernet PW employs the PWE3 control word.
+  Thus, when congestion handling is support the control word 
+  MUST be included in the PW packet.  
+  The use of the control word is usually signaled using the PWE3 control protocol 
+  <xref target="RFC4447"/>.  
+  There is no need to additionally signal the use of the mechanisms described herein, 
+  as the default actions suffice.
+ </t>
+  
+  
+
+ <t>
+  The format of the control word is given in Figure 1
+  and has been chosen to be compatible with that of RFC 4619 
+  <xref target="RFC4619"/>.
+ </t>
+
+ <figure align="center">
+  <artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |0 0 0 0|F|B|D|R|FRG|  Length   | Sequence Number               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  </artwork>
+  <postamble>Figure 1. Control Word structure</postamble>
+ </figure>
+
+ <t>
+ <list style="hanging">     
+  <t hangText="Bits 0 to 3">  
+      In the above diagram, the first 4 bits MUST be set to 0.
+  </t>
+  <t hangText="F (bit 4)">  
+    Forward Explicit Congestion Notification (FECN) bit.
+  </t>
+  <t hangText="B (bit 5)">
+    Backward Explicit Congestion Notification (BECN) bit.
+  </t>
+  <t hangText="D (bit 6)">
+    Discard Eligibility Indication (DEI) bit.
+  </t>
+  <t hangText="R (bit 7)">
+    RESERVED bit.
+  </t>
+  <t hangText="FRG (bits 8 and 9)">
+   described in RFC 4623 <xref target="RFC4623"/>.
+  </t>
+  <t hangText="Length (bits 10 - 15)">
+   described in RFC 4385 <xref target="RFC4385"/>.
+  </t>
+  <t hangText="Sequence Number (bits 16 - 31)">
+   described in RFC 4385 <xref target="RFC4385"/> 
+   and service specific encapsulation documents.
+  </t>
+ </list>
+ </t>
+
+</section>
+
+<section title="Drop Eligibility Indication">
+
+ <t>
+  If drop eligibility is supported, then the ingress PE MUST set the 
+  Drop Eligibility Indicator (DEI) bit in the PWE3 control word,
+  and during congestion the egress PE MUST preferentially discard Ethernet frames
+  that arrived in PW packets with the DEI bit set.
+ </t>
+
+ <t>
+  When the ingress PE receives a Q-in-Q Ethernet frame from the AC, 
+  it MUST copy the DEI bit from the Ethernet frame
+  into the DEI bit in the PWE3 control word.
+ </t>
+
+ <t>
+  The ingress PE SHOULD perform the MEF bandwidth profile (token bucket) algorithm
+  <xref target="MEF10.1"/>.
+  Frames marked red MUST be discarded, and green and yellow frames MUST 
+  be encapsulated and forwarded.
+  For yellow frames the ingress PE MUST set the DEI bit in the PWE control word.
+ </t>
+
+ <t>
+  Intermediate network elements MUST NOT clear the DEI bit. 
+  Intermediate PW-aware network elements (e.g., S-PEs)
+  MAY set the DEI bit upon experiencing congestion,
+  if they run the MEF BW profile (token bucket) algorithm.
+ </t>
+
+ <t>
+  When the egress PE needs to discard an Ethernet frame,
+  it MUST discard packets with the DEI bit set before
+  discarding packets with the DEI bit cleared.
+ </t>
+
+ <t>
+  When the egress PE forwards Q-in-Q Ethernet frame to the AC, 
+  it MUST copy the DEI bit from the PWE control word
+  into the DEI bit in the Ethernet frame.
+ </t>
+
+
+</section>
+
+
+<section title="Explicit Congestion Notification">
+
+ <t>
+  If explicit congestion notification is supported, then the egress PE
+  MUST make the ingress PE aware of the congestion experienced,
+  and the ingress PE MAY make the egress PE aware of such congestion.
+
+  An ingress PE being informed of congestion by the egress PE
+  SHOULD take steps to alleviate this congestion.
+ </t>
+
+ <t>
+  If the egress PE receives PAUSE frames or detects Ethernet back-pressure
+  or detects that its AC-bound queues pass a preconfigured threshold,
+  then it MUST set the BECN bit in the PWE control word of
+  all PW packets set in the opposite direction towards the ingress PE.
+  If no packets are available for sending in the backward direction,
+  the egress PE MUST send dummy BECN PW packets towards the ingress PE
+  at a preconfigured rate (default is one per second).
+  These dummy BECN packets have their BECN bit set, their length field set to zero, 
+  but contain no data.
+ </t>
+
+
+ <t>
+  When the egress PE PAUSE timer expires, 
+  or it detects that back-pressure that had been applied has been removed,
+  or its AC-bound queues drop below a preconfigured threshold,
+  it MUST clear the BECN bit of all PW packets set towards the ingress PE.
+  If no packets are available for sending in the backward direction,
+  the egress PE MUST send three dummy BECN PW packets towards the ingress PE
+  at a preconfigured rate (default is one per second).
+  These dummy BECN packets have their BECN bit cleared, their length field set to zero, 
+  but contain no data. 
+ </t>
+ 
+ <t>
+  Intermediate network elements MUST NOT clear the BECN bit. 
+  Intermediate PW-aware network elements (e.g., S-PEs)
+  upon experiencing congestion 
+  MAY set the BECN bit on packets forwarded in the opposite direction.
+ </t>
+
+ <t>
+  When the ingress PE receives packets with the BECN bit set (including dummy BECN packets).
+  it SHOULD perform one of the following operations to ameliorate the situation.
+ </t>
+
+ <t>
+  It SHOULD send PAUSE packets or apply backpressure
+  towards the ingress AC.
+ </t>
+
+ <t>
+  If its Ethernet interface does not support PAUSE or back-pressure,
+  it SHOULD apply the MEF bandwidth profile algorithm to frames
+  received from the AC before sending them towards the PSN.
+ </t>
+
+ <t>
+  If the ingress PE has admission control functionality,
+  it SHOULD refuse further connections with traffic that would be forwarded
+  to the egress PE, and MAY withdraw low priority connections.
+ </t>
+
+ <t>
+  If the ingress PE detects that its output queues pass a preconfigured threshold, 
+  then it SHOULD send PAUSE frames or apply back-pressure to the AC.
+  It SHOULD also set the FECN bit in the PWE control word of
+  all PW packets set towards the egress PE, 
+  in order to inform the egress PE to expect delays.
+ </t>
+
+ <t>
+  Intermediate network elements MUST NOT clear the FECN bit. 
+  Intermediate PW-aware network elements (e.g., S-PEs)
+  MAY set the FECN bit upon experiencing congestion in the forward direction.
+ </t>
+
+ <t>
+  If packets with FECN set have been send, then when the ingress PE sees that its 
+  PSN-bound queues drop below a preconfigured threshold,
+  it MUST clear the FECN bit of all PW packets sent towards the egress PE.
+  If no packets are available for sending in the forward direction,
+  the ingress PE MUST send three dummy FECN PW packets towards the egress PE
+  at a preconfigured rate (default is one per second).
+  These dummy BECN packets have their FECN bit cleared, their length field set to zero, 
+  but contain no data. 
+ </t> 
+
+</section>
+
+<section title="Security Considerations" >
+
+ <t>
+  The congestion handling mechanisms introduced here
+  do not introduce significant security considerations above those present 
+  for PWs that do not use these mechanisms.
+  For example, a denial of service attack based on forcing the ingress PE to 
+  slow down would require the ability to inject otherwise valid PW packets.
+  A malicious entity that has attained that level
+  has already breached the fundamental security of the PW infrastructure.
+ </t>
+
+</section>
+
+<section title="IANA Considerations" >
+     
+ <t>
+   This document requires no IANA actions.
+ </t>
+
+</section>
+
+
+</middle>
+
+
+<back>
+
+<references title="Normative References">
+   &rfc2119; 
+   &rfc4385; 
+   &rfc4623;
+ <reference anchor='MEF10.1'>
+  <front>
+    <title>MEF Technical Specification MEF 10.1 - Ethernet Service Attributes Phase 2</title>
+    <author><organization/><address/></author>
+    <date month='November' year='2006' />
+  </front>
+  <seriesInfo name='Metro Ethernet Forum' value='MEF 10.1' />
+ </reference>
+        
+</references>  
+
+<references title="Informative References">
+   &rfc4447;
+   &rfc4619;
+</references>  
+  
+</back>
+
+</rfc>

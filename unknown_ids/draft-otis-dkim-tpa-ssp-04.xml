@@ -1,0 +1,731 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<?xml-stylesheet type='text/xsl'
+                href='http://xml.resource.org/authoring/rfc2629.xslt' ?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc compact="yes" ?>
+<?rfc subcompact="yes" ?>
+<?rfc toc="yes" ?>
+<?rfc tocindent="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc iprnotified="yes" ?>
+<?rfc autobreaks="no"?>
+<?rfc strict="yes" ?>
+
+<rfc category="std" docName="draft-otis-dkim-tpa-ssp-04" ipr="full3978">
+  <front>
+    <title abbrev="TPA-label">DKIM Third-Party Authorization for Sender Signer Practices</title>
+
+    <author fullname="Douglas Otis" initials="D." surname="Otis">
+      <organization>Trend Micro, NSSG</organization>
+      <address>
+        <postal>
+          <street>10101 N. De Anza Blvd</street>
+          <city>Cupertino</city>
+          <region>CA</region>
+          <code>95014</code>
+          <country>USA</country>
+        </postal>
+        <phone>+1.408.257-1500</phone>
+        <email>doug_otis@trendmicro.com</email>
+      </address>
+    </author>
+
+    <date month="March" year="2008"/>
+    <area>Internet Area</area>
+    <workgroup>DKIM Working Group</workgroup>
+    <keyword>TPA-label</keyword>
+    <keyword>Draft</keyword>
+
+    <abstract>
+      <t>TPA-label is a DNS-based prefix mechanism for DKIM policy records as a means to authorize
+        Third-Party domains. This mechanism allows first-party domains to autonomously authorize a
+        range of third-party domains in a scalable, individual DNS transaction. This authorization
+        extends the scope of DKIM policy assertions to supplant more difficult to administer
+        mechanisms. Alternatives for facilitating third-party authorizations currently necessitate
+        the coordination between two or more domains by setting up selector/key DNS records, DNS
+        zone delegations, or the regular exchange of public/private keys.</t>
+
+      <t>Checking DKIM policies may occur when a From header email-address is not within the domain
+        of a valid DKIM signature. When a Third-Party signature is found, TPA-labels offer an
+        efficient means for email address domains to authorize specific third-party signing domains.
+        The scope of the authorization may separately assert identity authentication for From and
+        Sender and Resent-* headers for email-addresses within the authorizing domain. Identity
+        authentication can be asserted by the scope of the authorization, even when signed by a
+        Third-Party domain. In addition, the RFC2821.MailFrom domain can authorize domains for
+        controlling DSNs.<vspace blankLines="1"/></t>
+    </abstract>
+
+    <note title="Requirements Language">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+        "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in
+          <xref target="RFC2119"/>.</t>
+    </note>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>This document describes how any email-address domain publishing DKIM policy records such as
+        those defined in <xref target="I-D.ietf-dkim-ssp"/> can also autonomously authorize <xref
+          target="RFC4871"/> signing by specific third-party domains. Recommended or suggested
+        actions for DKIM receivers are not included, and are considered "out-of-scope" for this
+        document. The receiver is assumed to better understand their environment's impact upon the
+        performance of DKIM signatures and how results are utilized within their domain.</t>
+
+      <t>TPA-labels authorize signing domains to permit compliance with DKIM policies. TPA-label
+        authorized domains are to be considered equivalent to the authorizing domain for the
+        application of DKIM policies. This mechanism eliminates the complex coordination of
+        selector/key DNS records, DNS delegation, or exchanges of public/private keys between two or
+        more domains otherwise required to facilitate desired authorizations.</t>
+
+      <t>Trust is an essential requisite before the DKIM signature header field's 'i=' semantics or
+        the TPA-label policy record's "-i" suffix scope assertions provide valuable advisory
+        information. This advisory information regarding "on-behalf-of" identity authentication
+        enables safer message annotations to better ensure trusted identities can be recognized.</t>
+
+      <t>TPA-labeled policy records also convey which third-party domains are authoritative.
+        Although third-party domains are unable to utilize DKIM signature's 'i=' semantics to assert
+        which identifiers on whose behalf a signature was added, the related identity can be
+        constrained by the policy record's 'g=' parameter and by permitted header fields specified
+        by the policy scope parameter. Policy scoping in this manner enables control over the
+        recognition of trusted identities, as well as indicating when a message source may require
+        added scrutiny.</t>
+    </section>
+    <section title="Envelope Authorizations">
+      <t>DKIM is fully independent of the SMTP Client and the <xref target="RFC2821"/>.MailFrom
+        email-address. Depending upon the normal policy assertions, allowing the <xref
+          target="RFC2821"/>.MailFrom email-address to authorize signing domains and assert policies
+        may prevent Delivery Status Notifications (DSNs) from being sent when the domain is not
+        authorized. Conversely, authorization may ensure DSNs are not dropped when the signing
+        domain is authorized. The application of TPA-labels at the MailFrom domain represents an
+        entirely optional strategy which may or may not prove either effective or practical. The
+        MailFrom scope is offered only for experimentation.<vspace blankLines="100"/></t>
+    </section>
+
+    <section title="Evaluating Signing Domains">
+      <t>Regulatory agencies are unable to control Internet abuse by curtailing access. Unlike IPv4
+        addresses, there is virtually no limit on the number of domain-names available. Registrar
+        pricing of domain-names need to remain uniform. Otherwise, fees based upon the intrinsic
+        value of a name could cause name holders to become extortion targets. High initial costs for
+        domain-names are also unlikely to represent a deterrent, largely due to high levels of
+        payment fraud. Driven by market forces, registrars also offer the sampling of domain names
+        (domain tasting) to generate additional revenue.</t>
+
+      <t>In addition, DKIM can not directly identify the domain transmitting the message, and can
+        not prevent abusive message replay. Abusive message replay may prove indistinguishable from
+        bulk mailings of various types. Since abuse may not be controlled by the signing domain,
+        message acceptance will likely remain largely dependent upon the reputation of the SMTP
+        client's IP address. Abuse reporting facilitated by DKIM signatures should therefore first
+        select signing domains that correspond with domains administering the SMTP Client publicly
+        transmitting the message. A correspondence between SMTP Client and the DKIM signing domain
+        can be retained by using TPA-label authorizations.</t>
+
+      <t>The receiver's domain evaluation process will confront many domains with unknown
+        reputations. New domains are constantly being introduced where registrars are unable to
+        prevent bad actors from controlling either a new or previously held domain names. The
+        receiver may seek to limit the DKIM verification process, since acquiring policy records or
+        DKIM keys may inadvertently leak valuable information that benefit bad actors. Processing
+        all DKIM signatures may also inundate a receiver's limited resources. As a result,
+        validating DKIM signatures and obtaining policy resource records might become limited to
+        known trustworthy domains. Signing domains authorized with TPA-labels by domains having good
+        reputations provide a means to safely extend a limited verification resources.</t>
+    </section>
+
+    <section title="Authorization Scope">
+      <t>An Authorization effort without using TPA-labels will likely involve sharing details
+        between the domain owner, and one or more email and DNS providers. Since there are many ways
+        in which authorizations can be accomplished, it is unlikely there will be consistent or
+        standardized formats for exchanging the necessary information. In addition, in the case of
+        security breaches, the wrong party might be held accountable for content never seen nor
+        logged by them. The TPA-label authorization scheme clarifies who signed the message and on
+        whose behalf, while permitting greater control by the authorizing domain.</t>
+
+      <t>TPA-labeled policy records replace domain delegations, selector/key record mirroring, or
+        key exchanges. Significant amounts of detail is associated with selector/key records. These
+        details include user limitations, suitable services, key resource record's Time-To-Live,
+        revocation and update procedures, and how the DKIM Signature header field's 'i=' semantics
+        are to be applied. The TPA-labeled policy records allow authorizing domains an improved
+        ability to limit the scope of their authorizations and associated identities.</t>
+
+      <t>When a signing domain differs from that of a domain within the header email-address,
+        TPA-labeled policy records can safely extend compliance where the action of only the
+        email-address domain is required. In addition, just as a DKIM signature can assert an
+        email-address has been authenticated via the "i" construct, a signing domain that only signs
+        authenticated email-addresses from the authorizing domain can be denoted by the "-i" suffix
+        on the scope assertion within the corresponding TPA-labeled policy record. A TPA-labeled
+        policy record returning a scope with an "-i" suffix indicates the domain assures that
+        email-addresses identities from the authorizing domain have been authenticated. This
+        assertion remains valid even when signing domains and the email-address domains differ.</t>
+
+      <t>Without the "-i" suffix on the scope assertion within the TPA-labeled policy record, the
+        authorized domain is designated as providing only acceptable signatures. The same would be
+        true for a DKIM signature lacking the "i" parameter. While offering only valid signatures
+        will not ensure all possible spoofing is prevented, messages signed in this manner should
+        not receive annotations indicating authenticated identities either.</t>
+
+      <t>Choosing not to implement identity authentication may represent an economical means to
+        administer domains employing DKIM signatures. Authorizing domains to play the role of only
+        providing acceptable signatures may be suitable for non-critical messages, where the goal
+        might be to improve delivery acceptance.</t>
+    </section>
+
+    <section title="TPA-labeled Policy Assertions">
+      <t>Syntax descriptions use the form described in Augmented BNF for Syntax Specifications <xref
+          target="RFC4234"/>. The "base32" function is defined in <xref target="RFC4648"/> and the
+        "sha-1" hash function is defined in <xref target="FIPS.180-2.2002"/>. The TPA-labeled policy
+        records follow the tag-value syntax described in section 4.2.1 of <xref
+          target="I-D.ietf-dkim-ssp"/> and section 3.2 of <xref target="RFC4871"/>. Unrecognized
+        tags and tags with illegal values MUST be ignored. In the ABNF below, the WSP token is
+        inherited from <xref target="RFC2822"/>. The ALPHA and DIGIT tokens are imported from <xref
+          target="RFC4234"/>. The function "lcase" converts upper-case ALPHA characters to
+        lower-case. The function "sha-1" returns a hash that is converted to a base32 character set.
+        The terminating period is not included in domain-name conversions. In addition, a newline
+        character (0x0A) is appended to the end of the string to match a command line generation of
+        SHA1 values. The tags used in TPA-labeled policy records are as follows:</t>
+      <figure title="">
+        <artwork name="" type="" height="" width="" xml:space="preserve">
+  asterisk = %x2A ; "*"
+  dash = %x2D ; "-"
+  dot = %x2E ; "."
+  underscore = %x5F ; "_"
+  ANY = asterisk dot ; "*."
+  dns-char = ALPHA / DIGIT / dash
+  id-prefix = ALPHA / DIGIT
+  label = id-prefix [*61dns-char id-prefix]
+  sldn = label dot label
+  base-char = (dns-char / underscore)
+  domain = *(label dot) sldn
+  tpa-label = base32( sha-1( lcase(signing-domain))) 
+    </artwork>
+      </figure>
+      <texttable title="TPA-label Policy Tags">
+        <ttcol align="center">Tag</ttcol>
+        <ttcol align="left">Function</ttcol>
+        <c>scope=</c>
+        <c>Authorization Scope List (as-list)</c>
+        <!--  -->
+        <c>tpa=</c>
+        <c>Authorized Domains List (ad-list)</c>
+        <!--  -->
+        <c>g=</c>
+        <c>Local-part restriction</c>
+        <!--  -->
+      </texttable>
+
+      <texttable title="TPA-label Policy Scope Values">
+        <ttcol align="left" width="10%">Scope Values</ttcol>
+        <ttcol align="left">Field or Parameter</ttcol>
+        <ttcol align="left" width="20%">Identity Authenticated</ttcol>
+        <c>F</c>
+        <c>From (Author) Header</c>
+        <c>No</c>
+        <!--  -->
+        <c>F-i</c>
+        <c>From (Author) Header</c>
+        <c>Yes</c>
+        <!--  -->
+        <c>O</c>
+        <c>Other than From (Author) Headers</c>
+        <c>No</c>
+        <!--  -->
+        <c>O-i</c>
+        <c>Other than From (Author) Headers</c>
+        <c>Yes</c>
+        <!--  -->
+        <c>M</c>
+        <c>MailFrom</c>
+        <c>No</c>
+        <!--  -->
+        <c>M-i</c>
+        <c>MailFrom</c>
+        <c>Yes</c>
+        <!--  -->
+        <c>NO-TPA</c>
+        <c>All</c>
+        <c>No</c>
+        <!--  -->
+      </texttable>
+
+      <t>The receiver obtains the TPA-labeled policy record for the email-address domain using a DNS
+        query for an IN class TXT resource record. The tpa-label is created by processing the domain
+        found within the signature's "d=" parameter (does not include the trailing period). The
+        tpa-label would be placed below the normal policy records, for example
+        "._adsp.domainkey.&lt;email-address domain&gt;". These labels would then be used to
+        access the TPA-labeled policy TXT records. Character-strings contained within the TXT
+        resource record are concatenated into forming a single string. A character-string is a
+        single length octet followed by that number of characters treated as binary information. As
+        an example, a TPA-labeled policy record may be located at these domains:<list>
+          <t/>
+          <t>&lt;tpa-label&gt;._adsp._domainkey.&lt;email-address domain&gt;.</t>
+        </list>
+        <vspace blankLines="1"/></t>
+    </section>
+
+    <section title="Scope">
+      <t>scope= Authorization Scope List (Optional). This tag defines a list of scoping assertions
+        for various email-address locations within the message.</t>
+      <t>
+        <list>
+          <t>scope = "F" / "F-i" / "O" / "O-i" / "M" / "M-i" / "NO-TPA"</t>
+          <t>as-list = "scope" [WSP] "=" [WSP] scope 0*([WSP] ":" [WSP] scope)</t>
+        </list>
+      </t>
+
+      <section title="From Originator Header Field">
+        <t>The "F" or "F-i" scope asserts that messages carrying the email-address domain within the
+          From header field are authorized to be signed by the tpa listed domain. When the "-i"
+          suffix is included, it can be assumed identities for the scoped header have been
+            authenticated.<vspace blankLines="1"/></t>
+      </section>
+
+      <section title="MailFrom Parameter">
+        <t>This "M" or "M-i" scope asserts that messages carrying the email-address domain within
+          the MailFrom parameter are authorized to be signed by the authorized domain. When the "-i"
+          suffix is included, it can be assumed identities for the MailFrom have been
+            authenticated.<vspace blankLines="1"/></t>
+      </section>
+
+      <section title="Other than From Originating Header Fields">
+        <t>The "O" or "O-i" scope asserts that messages carrying the email-address domain within the
+          Sender or Resent-* header fields are authorized to be signed by the authorized domain.
+          When the "-i" suffix is included, it can be assumed identities for the scoped header have
+          been authenticated.<vspace blankLines="1"/></t>
+      </section>
+      <section title="NO-TPA">
+        <t>The "NO-TPA" scope asserts that domain does not publish TPA-labeled policy
+            records.<vspace blankLines="1"/></t>
+      </section>
+    </section>
+
+    <section title="Authorized Signing Domain">
+      <t>tpa= Authorized Signing Domain list (Optional). This tag repeats all or portions of the
+        domain encoded within the tpa-label. This option ensures proper handling of possible hash
+        collisions. When a domain is prefixed with the "*." ANY label, then all subdomains of this
+        domain are to be considered included within the list.</t>
+      <t>
+        <list>
+          <t>ad = [ANY] domain</t>
+          <t>ad-list = "tpa" [WSP] "=" [WSP] ad 0*([WSP] ":" [WSP] ad)</t>
+          <t>
+            <vspace blankLines="1"/>
+          </t>
+        </list>
+      </t>
+    </section>
+    <section title="Use of TPA-labeled Policy">
+      <t>Use of TPA-labeled policy is subsequent to the discovery of the policy record specified by
+          <xref target="I-D.ietf-dkim-ssp"/>. Only when an acceptable First-Party signature was not
+        discovered, and the normal policy record contains the "scope" tag then:</t>
+      <t>
+        <list>
+          <t>When one or more valid Third-Party Signatures are present in the message, and a scope
+            tag exists within the normal policy record, and the scope tag does not contain "NO-TPA",
+              then:<list style="symbols">
+
+              <t>When a TPA-labeled policy record within the From header domain has a scope tag of
+                "F" or "F-i" and the email-address domain within the From headers is within the
+                authorizing domain, then the message is considered signed with an Author's Domain
+                Acceptable Third-Party Signature. When the scope tag within the TPA-labeled policy
+                record is "F-i", then email-addresses within the authorizing domain can be
+                considered to have been authenticated.</t>
+
+              <t>When a TPA-labeled poliy record within the From header domain has a scope tag of
+                "O" or "O-i" and the email-address domain within the Sender, or Resent-* headers are
+                within the authorizing domain, then the message is considered signed with an
+                Author's Domain Acceptable Third-Party Signature. When the scope tag within the
+                TPA-labeled policy record is "O-i", then email-addresses within the authorizing
+                domain can be considered to have been authenticated when included within the
+                signature's hash.</t>
+
+              <t>When no TPA-labeled policy record is found or published, and a valid Third-party
+                signature is acceptable to the verifier, then the message is considered signed by a
+                Verifier Acceptable Third-Party Signature.</t>
+            </list></t>
+        </list>
+      </t>
+    </section>
+    <section title="Restricted Local-part">
+      <t>The "g=" tag provides a means for an authorizing domain to restrict authorization for
+        local-parts appearing within the scoped headers.</t>
+
+      <t>g= Granularity of the TPA authorization (plain-text; OPTIONAL, default is "*"). This value
+        MUST match the Local-part of the From header email-address. A single optional "*" character
+        matches a sequence of zero or more arbitrary characters ("wildcarding"). An email with a
+        From address local-part that does not match the value of this tag constitutes a failed TPA
+        authorization. The intent of this tag is to constrain which email-addresses the domain can
+        legitimately be authorized to sign. Wildcarding allows matching for addresses such as
+        "user+*" or "*-offer". An empty "g=" value never matches any addresses.</t>
+      <t>
+        <list>
+          <t>ABNF: tpa-g-tag = %x67 [WSP] "=" [WSP] tpa-tag-lpart </t>
+          <t>tpa-g-tag-lpart = [dot-atom-text] ["*" [dot-atom-text] ]</t>
+        </list>
+      </t>
+    </section>
+    <section anchor="IANA" title="IANA Considerations">
+      <t>Unless a registry is established for DKIM policy record tags, there are no IANA
+        requirements in this draft.</t>
+      <t>Note to RFC Editor: this section may be removed on publication as an RFC and no request is
+        desired or registration is not considered practical.</t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>This draft extends signing policies related to <xref target="RFC4871"/>. Security
+        considerations in the Sender Signing Practices are mostly related to attempts on the part of
+        malicious senders to represent themselves as other senders, often in an attempt to defraud
+        either the recipient or the Alleged Originator. Additional security considerations regarding
+        Sender Signing Practices may be found in the DKIM threat analysis <xref target="RFC4686"/>.</t>
+      <t>The use of the SHA-1 hash algorithm does not represent a security concern. The hash simply
+        ensures a deterministic domain-name size is achieved. Unexpected collisions can be detected
+        and handled by using the extended TPA-label "tpa=" option.<vspace blankLines="100"/></t>
+    </section>
+
+    <section anchor="Acknowledgements" title="Acknowledgements">
+      <t>Frank Ellermann and Wietse Venema.<vspace blankLines="5"/></t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.I-D.ietf-dkim-ssp" ?>
+      <?rfc include="reference.RFC.2119" ?>
+      <?rfc include="reference.RFC.2821" ?>
+      <?rfc include="reference.RFC.2822" ?>
+      <?rfc include="reference.RFC.4234" ?>
+      <?rfc include="reference.RFC.4648" ?>
+      <?rfc include="reference.RFC.4871" ?>
+      <?rfc include="reference.FIPS.180-2.2002" ?>
+    </references>
+
+    <references title="Informative References">
+      <?rfc include="reference.RFC.4686" ?>
+    </references>
+
+    <section title="Change Log">
+      <t>Changes to 00 version:<list style="symbols">
+          <t>Removed the term policy.</t>
+          <t>Corrected _domainkey vs _domainkeys label.</t>
+          <t>Corrected appendix SSP a= vs d= tag.</t>
+          <t>Added additional scopes in appendix example.</t>
+        </list></t>
+      <t>Changes to 01 version:<list style="symbols">
+          <t>Modified abstract and introduction.</t>
+          <t>Removed The Signing Domain Section.</t>
+          <t>Added Evaluating Signing Domains section.</t>
+          <t>Added Authorized Scope section.</t>
+          <t>Changed SSP-TPA "s=" tag from to "scope=".</t>
+          <t>Expanded scope to include an identity ("-i") instead of "strict".</t>
+          <t>Changed SSP-TPA "a=" tag from to "tpa=".</t>
+          <t>Added Modification to Sender Signing Practices Check Procedures.</t>
+        </list></t>
+      <t>Changes to 02 version:<list style="symbols">
+          <t>Modified FWS to WSP.</t>
+          <t>Introduced "Discardable" assertion for DSN filtering.</t>
+          <t>Updated the policy label.</t>
+          <t>Modified statements regarding Domain Tasting.</t>
+        </list></t>
+      <t>Changes to 03 version:<list style="symbols">
+          <t>Inclusion of tpa-label utility.</t>
+          <t>Generalized relationships with policy records for better stability.</t>
+          <t>Changed example label text to uppercase to conform with RFC4648</t>
+          <t>Defined SHA-1 domain name hash as including a newline character.</t>
+          <t>Allows third-party domains to be considered authoritative for identities.</t>
+        </list><vspace blankLines="100"/></t>
+    </section>
+
+    <section title="DNS Example of TPA-label policy record placement" toc="default">
+      <figure title="">
+        <artwork name="" type="" height="" width="" xml:space="preserve">
+####          
+# Policies for Example.com email domain using both example.com, isp.com,
+# and example.com.isp.com as signing domains.
+####
+
+#### 2822.From authorization for TP domains ####
+                                _adsp._domainkey.example.com.  IN TXT 
+    "dkim=all; scope=F-i:O:M;"
+
+## "isp.com" tpa-label ##
+_HGSSD3SNMI6635J5743VDJHAJKMPMFIF._adsp._domainkey.example.com.  IN TXT
+    "tpa=isp.com; scope=F;"
+
+#### 2822.From/Originator/MailFrom authorization for TP domains ####
+
+## "example.com.isp.com" tpa-label ##
+_ZZHFFXWCFI7RPDDQDIGYHPBTAA7VWITU._adsp._domainkey.example.com.  IN TXT
+    "tpa=*.isp.com; scope=F-i:O:M; "
+        </artwork>
+      </figure>
+      <t>
+        <vspace blankLines="100"/>
+      </t>
+    </section>
+    <section title="C code for label generation">
+      <t>The following utility can be compiled as tpa-label.c using the following:</t>
+      <t>gcc -lcrypto tpa-label.c -o tpa-label</t>
+      <figure title="">
+        <artwork name="" type="" height="" width="" xml:space="preserve">
+/*  tpa-label generation utility 
+ *  Copyright (C) The IETF Trust &amp; Douglas Otis (2008).
+ *  Mountain View, CA
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;ctype.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;openssl/sha.h&gt;
+
+/*
+ * Copyright (C) The IETF Trust &amp; Douglas Otis (2008).
+ * Redistributions of source code must retain the above copyright
+ * notice and the following disclaimer.
+ *
+ * This document is subject to the rights, licenses and restrictions
+ * contained in BCP 78, and except as set forth therein, the authors
+ * retain all their rights.
+ * This document and the information contained herein are provided on an
+ * "AS IS" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS
+ * OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY, THE IETF TRUST AND
+ * THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF
+ * THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED
+ * WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+ */
+
+#define TPA_LABEL_VERSION   100
+#define MAX_DOMAIN_NAME     512
+#define MAX_FILE_NAME       1024
+                                
+static char base32[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+static char sign_on[] =
+ {"%s v%d.%02d Copyright (C) The IETF Trust &amp; Douglas Otis (2008)\n"};
+char err_cmd[] =\
+ "ERR: Command error with [%s]\n";
+char use_txt[]=\
+ "Usage: tpa-label [-i domain_input_file] [-o label_output_file][-v]\n";
+char help_txt[]=\
+"The options are as follows:\n"\
+"-i  domain name input. Defaults to stdin. Removes trailing '.'\n"\
+"-o  tpa-label output.  Defaults to stdout.\n"\
+"-v  Specifies Verbose Mode.\n\n";
+
+static void usage(void);
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+
+static void
+usage(void)
+{
+    (void) fprintf(stderr, "\n%s%s", use_txt, help_txt);
+    exit(1);
+}
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+
+int 
+main (int argc, char * argv[])
+{
+    int  ret_val, in_mode, out_mode, verbose, done, i, j, k;
+    char ch;
+    unsigned long len;
+    unsigned long long b_5;
+    char in_fn[MAX_FILE_NAME], out_fn[MAX_FILE_NAME];
+    unsigned char in_buf[MAX_DOMAIN_NAME + 2];
+    unsigned char sha_res[20], tpa_label[33];
+    FILE *in_file, *out_file;
+
+    ret_val = in_mode = out_mode = verbose = done = 0;
+    len = 0;
+
+    while ((ch = getopt(argc, argv, "i:o:v")) != -1)
+    {
+        switch (ch) 
+        {
+            case 'i':
+                in_mode = 1;          /* input from file */
+                (void) strncpy(in_fn, optarg, sizeof(in_fn));
+                in_fn[sizeof(in_fn) - 1] = '\0';
+                break;
+            case 'o':
+                 out_mode = 1;         /* out to time */
+                 (void) strncpy(out_fn, optarg, sizeof(out_fn));
+                 out_fn[sizeof(out_fn) - 1] = '\0';
+                 break;
+            case 'v':
+                 verbose = 1;
+                 break;
+            case '?':
+            default:
+                (void) usage();
+                break;
+        }
+    };
+
+    if (in_mode)
+    {
+        if ((in_file = fopen(in_fn, "r")) == NULL)
+        {
+            (void) fprintf(stderr,
+                           "ERR: Error opening [%s] input file.\n",
+                           in_fn);
+            exit(2);
+        }
+    }
+    else
+    {
+        in_file = stdin;
+    }
+
+    if (out_mode)
+    {
+        if ((out_file = fopen(out_fn, "w")) == NULL)
+        {
+            (void) fprintf(stderr, 
+                           "ERR: Error opening [%s] output file.\n",
+                           out_fn);
+            exit(3);
+        }
+    }
+    else
+    {
+        out_file = stdout;
+    }
+
+    if (out_mode &amp;&amp; verbose)
+    {
+        (void) printf(sign_on, "tpa-label utility",
+                      TPA_LABEL_VERSION / 100,
+                      TPA_LABEL_VERSION % 100);
+    }
+
+    for (i = 0; i &lt; MAX_DOMAIN_NAME &amp;&amp; !done; i++)
+    {
+        if ((ch = fgetc(in_file)) == EOF)
+        {
+            ch = 0;
+        }
+        else  if (ch == '\n' || ch == '\r')
+        {
+            ch = 0;
+        }
+
+        in_buf[i] = tolower(ch);
+
+        if (ch == 0) 
+        {
+            len = i;         /* string length */
+            done = 1;     
+        }
+    }
+
+    if (!done)
+    {
+        (void) fprintf(stderr, "ERR: Domain name too long.\n");
+        exit (4);
+    }
+
+    if (len &amp;&amp; in_buf[len - 1] == '.')    /* remove any trailing "." */
+    {
+        len--;
+        in_buf[len] = 0;     /* replace trailing "." with 0 */
+    }
+
+    in_buf[len++] = '\n';    /* newline simulates commmand-line use */
+    in_buf[len] = 0;         /* terminate string */  
+                                
+    if (len &lt; 2)
+    {
+        (void) 
+        fprintf(stderr,
+                "ERR: Domain name [%s] too short with %d length.\n",
+                in_buf,
+                len);
+        exit (5);
+    }
+
+    SHA1(in_buf, len, sha_res);
+
+    if (verbose)
+    {
+        printf("Normalized Domain = [%s] %d, SHA-1 = ", in_buf, len);
+
+        for (i = 0; i &lt; 20; i++)
+        {
+            printf("%02X", sha_res[i]);
+        }
+        printf("\nTPA-Label: 5 bit intervals left to right.\n");
+    }
+
+    /* process sha-1 results 4 times by 40 bits 0 to 160 */
+
+    for (i = 0, j = 0; i &lt; 4 ; i++)         
+    {
+        b_5 =  (unsigned long long) sha_res[(i * 5)] &lt;&lt; 32;
+        b_5 |= (unsigned long long) sha_res[(i * 5) + 1] &lt;&lt; 24;
+        b_5 |= (unsigned long long) sha_res[(i * 5) + 2] &lt;&lt; 16;
+        b_5 |= (unsigned long long) sha_res[(i * 5) + 3] &lt;&lt; 8;
+        b_5 |= (unsigned long long) sha_res[(i * 5) + 4];
+ 
+        if (verbose)
+        {
+            printf(" {%010llX}-&gt;", b_5);
+        }
+
+        for (k = 35; k &gt;= 0; k-= 5, j++)    /* convert 40 bits (5x8) */
+        {
+            tpa_label[j] = base32[(b_5 &gt;&gt; k) &amp; 0x1F];
+
+            if (verbose)
+            {
+                 printf(" %02X:%c", 
+                        (unsigned int)(b_5 &gt;&gt; k) &amp; 0x1F,
+                        tpa_label[j]);
+            }
+        }
+        if (verbose)
+        {
+            printf ("\n");
+        }
+    }
+    if (verbose)
+    {
+        printf("\n");
+    }
+
+    tpa_label[j] = 0;   /* terminate label string */
+    fprintf(out_file, "_%s", tpa_label);
+    printf("\n");
+
+    /* close */
+    if (out_mode)
+    {
+        if (fclose (out_file) != 0)
+        {
+            (void) fprintf(stderr,
+                           "ERR: Unable to close %s output file.\n",
+                           out_fn);
+            ret_val = 6;
+        }
+    }
+    if (in_mode)
+    {
+        if (fclose (in_file) != 0)
+        {
+            (void) fprintf(stderr,
+                           "ERR: Unable to close %s input file.\n",
+                           in_fn);
+             ret_val = 7;
+        }
+    }
+    return (ret_val);
+}
+        </artwork>
+      </figure>
+    </section>
+  </back>
+</rfc>

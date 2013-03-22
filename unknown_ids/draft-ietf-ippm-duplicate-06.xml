@@ -1,0 +1,613 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2330 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2330.xml'>
+]>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2680 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2680.xml'>
+]>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc3432 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3432.xml'>
+]>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc4148 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4148.xml'>
+]>
+<rfc category="std" ipr="full3978" docName="draft-ietf-ippm-duplicate-06.txt">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+
+<front>
+ <title abbrev="Packet Duplication Metric">
+ A One-Way Packet Duplication Metric
+ </title>
+
+ <author initials='H.U' surname="Uijterwaal" fullname='Henk Uijterwaal'>
+  <organization>RIPE NCC</organization>
+  <address>
+   <postal>
+    <street>Singel 258</street>
+    <city>1016 AB Amsterdam</city>
+    <country>The Netherlands</country>
+   </postal>
+   <phone>+31 20 535 4444</phone>
+   <email>henk@ripe.net</email>
+  </address>
+ </author>
+ <date month="December" year="2008"/>
+ <abstract>
+   <t>When a packet is sent from one host to the other, one normally expects 
+   that exactly one copy of the packet that was sent arrives at the destination.
+   It is, however, possible that a packet is either lost or that multiple copies
+   arrive.
+   </t>
+   <t>In earlier work a metric for packet loss has been defined.
+     This
+   metric quantifies the case where a packet that is sent, does not arrive at
+   its destination within a reasonable time.
+   In this memo, a metric for another case is defined: 
+   a packet is sent, but multiple copies arrive.  The document also 
+   discusses streams and methods to summarize the results of streams.
+   </t>
+ </abstract>
+</front>
+
+<middle>
+ <section title="Introduction">
+
+  <t> This document defines a metric for one-way packet duplication across
+   Internet paths. It builds on the IPPM Framework document
+   <xref target="RFC2330" />; the reader is assumed to be familiar with
+   that document.
+  </t>
+
+  <t> This document follows the same structure as the document
+  for one-way Packet Loss <xref target="RFC2680" />; the reader is assumed
+  to be familiar with that document as well.   
+  </t>
+
+  <t> The structure of this memo is as follows:
+    <list style="symbols">
+     <t> First, a singleton metric, called
+         Type-P-one-way-packet-arrival-count,
+         is introduced to measure the number of arriving packets for each packet
+         sent.
+         </t>
+     <t> Then, a singleton metric, called
+         Type-P-one-way-packet-duplication, is defined to describe
+         a single instance of packet duplication.</t>
+     <t> Next, this singleton metric is used to define samples,  
+         Type-P-one-way-Packet-Duplication-Poisson-Stream and
+         Type-P-one-way-Packet-Duplication-Periodic-Stream.  These are 
+         introduced to measure duplication in a series of packets sent
+         with either Poisson-distributed <xref target="RFC2680" /> or
+         periodic <xref target="RFC3432" />
+         intervals between the packets.
+         </t>
+     <t> Finally, statistics that summarize the properties of these samples
+         are introduced.
+         </t>
+    </list>
+  </t>
+        
+  <section title="Requirements notation">
+   <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", 
+    "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this 
+    document are to be interpreted as described in <xref target="RFC2119" />.
+   </t>
+   <t>
+    Although RFC 2119 was written with protocols in mind, the key words
+    are used in this document for similar reasons.  They are used to
+    ensure the results of measurements from two different implementations
+    are comparable, and to note instances when an implementation could
+    perturb the network.
+   </t>
+  </section>
+
+  <section title="Motivation">
+   <t>When a packet is sent from one host to the other, one normally expects 
+   that exactly one copy of the packet that was sent arrives at the destination.
+   It is, however, possible that a packet is either lost or that multiple copies
+   arrive.  </t>
+   <t>In earlier work a metric for packet loss has been defined
+    <xref target="RFC2680" />.    This
+   metric distinguishes between cases where the packet arrives and where
+   the packet does not arrive within a reasonable time.  In this memo, 
+   a metric for a third outcome is defined: a single packet is sent
+    but multiple copies arrive.
+   </t>
+   <t> As this document describes a case similar to the one discussed in
+    <xref target="RFC2680" />, all considerations from that document on
+    timing and accuracy apply.
+   </t>
+  </section>
+ </section>
+
+ <section title="A Singleton Definition for one-way packet arrival count">
+  <section title="Metric Name">
+   <t>Type-P-one-way-packet-arrival-count</t>
+  </section>
+
+  <section title="Metrics Parameters">
+   <t>
+    <list style="symbols">
+     <t> Src, the IP address of a host</t>
+     <t> Dst, the IP address of a host</t>
+     <t> T, the wire time of a packet at the source</t>
+     <t> T0, the maximum waiting time for a packet to arrive at the 
+         destination.</t>
+    </list>
+   </t>
+  </section>
+
+  <section title="Metric Units">
+   <t> An integer number</t>
+  </section>
+
+  <section title="Definition">
+   <t> Two packets are considered identical if and only if:</t>
+    <t>
+     <list style="symbols">
+      <t> Both contain identical information fields.  The recipient thus could
+          take either packet and use the data in an application.  The other packet 
+          does not contain any additional information.</t> 
+      <t> Both packets appear to have been sent by one and the same host, to 
+          one and the same destination.  Host are identified by their IP addresses.</t>
+      <t> Both contain valid, but not necessarily identical IP header fields.</t>
+    </list>
+   </t>
+   <t>
+    The recipient thus could 
+    take either packet and use it in an application, the other 
+    copy does not contain any additional information.
+   </t>
+   <t> The value of a Type-P-one-way-packet-arrival-count is a positive
+    integer number indicating the number of (uncorrupted and identical) copies 
+    received by dst in the interval [T, T+T0] for a packet sent by src at
+    time T.
+   </t>
+   <t> If a packet is sent, but it is lost or does not arrive in the interval
+    [T, T+T0], then the metric is undefined.  Applications MAY report an
+    "impossible" value (for example, -1) to indicate this condition instead
+    of undefined.  </t>
+   <t> If a packet is fragmented during transport and if, for whatever reason,
+    re-assembly does not occur, then the packet will be deemed lost.  It is
+    thus not included in the 
+     Type-P-one-way-packet-arrival-count.
+   </t>
+  </section>
+
+  <section title="Discussion">
+   <t> This metric counts the number of packets arriving for each packet
+    sent.  The time-out value T0 SHOULD be set to a value when the 
+    application could potentially still use the packet and would not discard
+    it automatically.
+   </t>
+   <t> The IP headers do not necessarily have to be identical.  This can happen,
+    for example, if two packets take a different route resulting in a different
+    TTL.
+   </t>
+   <t>
+    If this metrics is used in parallel with the Packet Loss Metric
+    <xref target="RFC2680" />, the value of T0 should be the same for 
+    both cases in order to keep the results comparable.
+   </t>
+   <t> The metric only counts packets that are not corrupted during 
+    transmission and may have been resent automatically by lower layers or
+    intermediate devices.  Packets that were corrupted during transmission
+    but nevertheless still arrived at dst are not counted.  
+   </t>
+   <t> Clocks do have to be synchronized between src and dst such that it is possible 
+    to uniquely and accurately determine the interval [T, T+T0] at both sides.
+   </t>
+   <t> If this metric is used in an active measurement system,  the system MUST NOT
+    send multiple packets with identical information fields, in order to avoid that all 
+    packets will be declared duplicates.  This metric can be used inside a passive 
+    measurement system as well, using packets generated by another source.  However, 
+    if the source can send two identical packets within the interval [T, T+T0], this
+    will be incorrectly labelled as a duplicate, resulting in a false positive.  It 
+    is up to the implementor to estimate  if this scenario is likely to happen and 
+    the rate of false positives is acceptable. 
+   </t>
+   <t>
+    In IPv4, "information fields" refers to all data following the IPv4 header.
+    The equivalent of this in IPv6 is all information following the IPv6 header
+    and the hop-by-hop options header. 
+   </t>
+    
+  </section>
+
+  <section title="Methodology">
+   <t>
+    The basic technique to measure this metrics follows the methodology described
+    in <xref target="RFC2680" />, section 2.6, with one exception.
+   </t>
+   <t> 
+    <xref target="RFC2680" /> does not specify that the receiving host should be able
+    to receive multiple copies of a single packet, as it only needs one copy
+    to determine the metrics.  Implementations for this metric should obviously
+    be capable to receive multiple copies.
+   </t>
+  </section>
+  <section title="Errors and uncertainties">
+   <t>
+    Refer to section 2.7 of <xref target="RFC2680" />
+   </t>
+  </section>
+  <section title="Reporting the metric">
+   <t>
+    Refer to section 2.8 of <xref target="RFC2680" /> 
+   </t>
+  </section>
+ </section>
+ 
+
+ <section title="A Singleton Definition for one-way packet duplication">
+  <section title="Metric Name">
+   <t>Type-P-one-way-packet-duplication</t>
+  </section>
+
+  <section title="Metrics Parameters">
+   <t>
+    <list style="symbols">
+     <t> Src, the IP address of a host</t>
+     <t> Dst, the IP address of a host</t>
+     <t> T, the wire time of a packet at the source</t>
+     <t> T0, the maximum waiting time for a packet to arrive at the 
+         destination.</t>
+    </list>
+   </t>
+  </section>
+
+  <section title="Metric Units">
+   <t> An integer number.</t>
+  </section>
+
+  <section title="Definition">
+   <t> The value of a Type-P-one-way-packet-duplication is a positive
+    integer number indicating the number of (uncorrupted and identical) 
+    additional copies of an individual packet 
+    received by dst in the interval [T, T+T0] sent by src at
+    time T.
+   </t>
+   <t> If a packet is sent and only one copy arrives in the interval [T, T+T0],
+    then the metric is 0.  If no copy arrives in this interval,  
+    then the metric is undefined.  Applications MAY report an
+    "impossible" value (for example, -1) to indicate this condition.  </t>
+  </section>
+
+  <section title="Discussion">
+   <figure>
+    <preamble> This metric is equal to </preamble>
+     <artwork><![CDATA[
+      Type-P-one-way-packet-arrival-count - 1
+     ]]></artwork>
+   </figure>
+   <t> This metric is expected to be used for applications that need to know
+    duplication for an individual packet.  All considerations regarding methodology,
+    errors and reporting from the previous section apply.
+   </t>
+  </section>
+</section>
+ 
+<section title="Definition for samples for one-way Packet Duplication">
+ <section title="Poisson Streams">
+  <section title="Metric Name">
+   <t>Type-P-one-way-Packet-Duplication-Poisson-Stream</t>
+  </section>
+  <section title="Metric Parameters">
+   <t>
+    <list style="symbols">
+     <t> Src, the IP address of a host</t>
+     <t> Dst, the IP address of a host</t>
+     <t> Ts, a time</t>
+     <t> Tf, a time. Ts and Tf specify the time interval when packets can be
+         sent for this stream.  </t>
+     <t> T0, the maximum waiting time for a packet to arrive at the 
+         destination.</t>
+     <t> lambda, a rate in reciprocal seconds</t>
+    </list>
+   </t>
+  </section>
+  <section title="Metric Units">
+   <t> A sequence of pairs; the elements of each pair are:
+    <list style="symbols">
+     <t> T, a time </t>
+     <t> Type-P-one-way-packet-arrival-count for the packet sent at T.</t>
+    </list>
+   </t>
+  </section>
+  <section title="Definition">
+   <t> Given Ts, Tf and lambda, we compute a pseudo-random Poisson 
+    process beginning at or before Ts, with average rate lambda and
+    ending at or after Tf.  Those time values greater than or equal to
+    Ts, and less than or equal to Tf are then selected.  At each 
+    of the times in this process, we obtain the value of
+    Type-P-one-way-packet-arrival-count. The value of the sample is the
+    sequence made up of the resulting {time, duplication} pairs.  If
+    there are no such pairs, the sequence is of length zero and the 
+    sample is said to be empty. 
+   </t>
+  </section>
+
+  <section title="Methodology">
+   <t>
+    Refer to <xref target="RFC2680" />, section 3.6.
+   </t>
+  </section>
+  <section title="Errors and uncertainties">
+   <t>
+    Refer to <xref target="RFC2680" />, section 3.7.
+   </t>
+  </section>
+  <section title="Reporting the metric">
+   <t>
+    Refer to <xref target="RFC2680" />, section 3.8.
+   </t>
+  </section>
+ </section>
+ <section title="Periodic Streams">
+  <section title="Metric Name">
+   <t>Type-P-one-way-Packet-Duplication-Periodic-Stream</t>
+  </section>
+  <section title="Metric Parameters">
+   <t>
+    <list style="symbols">
+     <t> Src, the IP address of a host</t>
+     <t> Dst, the IP address of a host</t>
+     <t> Ts, a time</t>
+     <t> Tf, a time. Ts and Tf specify the time interval when packets can be
+         sent for this stream.  </t>
+     <t> T0, the maximum waiting time for a packet to arrive at the 
+         destination.</t>
+     <t> lambda, a rate in reciprocal seconds</t>
+    </list>
+   </t>
+  </section>
+  <section title="Metric Units">
+   <t> A sequence of pairs; the elements of each pair are:
+    <list style="symbols">
+     <t> T, a time </t>
+     <t> Type-P-one-way-packet-arrival-count for the packet sent at T.</t>
+    </list>
+   </t>
+  </section>
+  <section title="Definition">
+   <t> At time Ts, we start sending packets with a constant rate lambda, until 
+    time Tf.  For each packet sent, we obtain the value of
+    Type-P-one-way-packet-arrival-count. The value of the sample is the
+    sequence made up of the resulting {time, duplication} pairs.  If
+    there are no such pairs, the sequence is of length zero and the 
+    sample is said to be empty. 
+   </t>
+  </section>
+
+  <section title="Methodology">
+   <t>
+    Refer to <xref target="RFC3432" />, section 4.5.
+   </t>
+  </section>
+  <section title="Errors and uncertainties">
+   <t>
+    Refer to <xref target="RFC3432" />, section 4.6.
+   </t>
+  </section>
+  <section title="Reporting the metric">
+   <t>
+    Refer to <xref target="RFC3432" />, section 4.7.
+   </t>
+  </section>
+
+</section>
+   
+ </section>
+
+ <section title="Some statistics definitions for one-way Duplication">
+  <t> Note: the statistics described in this section can be used for both
+         Type-P-one-way-Packet-Duplication-Poisson-Stream and
+         Type-P-one-way-Packet-Duplication-Periodic-Stream. 
+     The application SHOULD report which sample was used as input.
+  </t> 
+
+  <section title="Type-P-one-way-packet-duplication-fraction">
+   <t>This statistic gives the fraction of additional
+    packets that arrived in a stream.
+   </t>
+   <t>Given a Type-P-one-way-Packet-Duplication-Poisson-Stream, one first
+    removes all values of Type-P-one-way-Packet-Duplication which are
+    undefined.  For the remaining pairs in the stream, one calculates:
+    (Sum Type-P-one-Way-packet-arrival-count/Number of pairs left) - 1
+    (In other words, (number of packets received)/(number of packets sent
+    and not lost).) 
+   </t>
+   <t>
+    The number can be expressed as a percentage.  
+   </t>
+   <t> Note: this statistic is the equivalent of the Y.1540 IPDR
+    <xref target="Y1540" />
+   </t>
+  </section>
+
+  <section title="Type-P-one-way-replicated-packet-rate">
+   <t>This statistic gives the fraction of packets that
+    was duplicated (one or more times) in a stream. 
+   </t>
+   <t>Given a Type-P-one-way-Packet-Duplication-Poisson-Stream, one first
+    removes all values of Type-P-one-way-packet-arrival-count which are
+    undefined.  For the remaining pairs in the stream, one counts the 
+    number of pairs with Type-P-one-Way-packet-arrival-count greater than
+    1.  Then one calculates the fraction of packets that meet this 
+    criterion as a fraction of the total.  (In other words: 
+     (number of duplicated packets)/(number of packets sent
+     and not lost).).
+   </t>
+   <t>
+    The number can be expressed as a percentage.  
+   </t>
+   <t> Note: this statistic is the equivalent of the Y.1540 RIPR
+    <xref target="Y1540" />
+   </t>
+  </section>
+
+  <section title="Examples">
+   <figure>
+    <preamble>Consider a stream of 4 packets, sent as:</preamble>
+     <artwork><![CDATA[
+      (1, 2, 3, 4)
+     ]]></artwork>
+   </figure>
+   <t>and arriving as:
+    <list style="symbols">
+     <t> Case 1: (1, 2, 3, 4)</t>
+     <t> Case 2: (1, 1, 2, 2, 3, 3, 4, 4)</t>
+     <t> Case 3: (1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4)</t>
+     <t> Case 4: (1, 1, 1, 2, 3, 3, 3, 4)</t>
+    </list> 
+   </t>
+   <t>
+    Case 1: No packets are duplicated in a stream and both  
+    the Type-P-one-way-packet-duplication-fraction and
+    the type-P-one-way-packet-replicated-packet-rate are 0. 
+   </t>
+   <t>
+    Case 2: Every packet is duplicated once and the
+    Type-P-one-way-packet-duplication-fraction is 100%.
+    The type-P-one-way-replicated-packet-rate is 100% too.
+   </t>
+   <t> 
+    Case 3: Every packet is duplicated twice, so the 
+    Type-P-one-way-packet-duplication-fraction is 200%.
+    The type-P-one-way-replicated-packet-rate is still 100%. 
+   </t>
+   <t> Case 4: Half the packets are duplicated twice and the 
+    other half are not duplicated.
+    The Type-P-one-way-packet-duplication-fraction is again 100% and
+    this number does not show the difference with case 2.  However, the
+    type-P-one-way-packet-replicated-packet-rate is 50% in this case and 100%
+    in case 2. 
+   </t>
+   <t>
+    However, 
+    the type-P-one-way-packet-duplication-rate will not show the difference
+    between case 2 and 3.  For this, one has
+    to look at the Type-P-one-way-packet-duplication-fraction.
+   </t>
+   <t>
+    Finally, note that the order in which the packets arrived, do not affect
+    the results.  For example, these variations of case 2:
+    <list style="symbols">
+     <t> Case 2a: (1, 1, 2, 2, 3, 3, 4, 4)</t>
+     <t> Case 2b: (1, 2, 3, 4, 1, 2, 3, 4)</t>
+     <t> Case 2c: (1, 2, 3, 4, 4, 3, 2, 1)</t>
+    </list>
+    (as well as any other permutation) all yield the same results for
+    Type-P-one-way-packet-duplication-fraction and 
+    the type-P-one-way-replicated-packet-rate.  
+   </t>
+
+  </section>
+ </section>
+
+ <section title="Security Considerations">
+  <t>
+   Conducting Internet measurements raises both security and privacy
+   concerns.  This memo does not specify an implementation of the
+   metrics, so it does not directly affect the security of the Internet
+   nor of applications which run on the Internet.  However,
+   implementations of these metrics must be mindful of security and
+   privacy concerns.
+  </t>
+  <t>
+   There are two types of security concerns: potential harm caused by
+   the measurements, and potential harm to the measurements.  The
+   measurements could cause harm because they are active, and inject
+   packets into the network.  The measurement parameters MUST be
+   carefully selected so that the measurements inject trivial amounts of
+   additional traffic into the networks they measure.  If they inject
+   "too much" traffic, they can skew the results of the measurement, and
+   in extreme cases cause congestion and denial of service.
+  </t>
+  <t>
+   The measurements themselves could be harmed by routers giving
+   measurement traffic a different priority than "normal" traffic, or by
+   an attacker injecting artificial measurement traffic.  If routers can
+   recognize measurement traffic and treat it separately, the
+   measurements will not reflect actual user traffic.  If an attacker
+   injects artificial traffic that is accepted as legitimate, the loss
+   rate will be artificially lowered.  Therefore, the measurement
+   methodologies SHOULD include appropriate techniques to reduce the
+   probability measurement traffic can be distinguished from "normal"
+   traffic.  Authentication techniques, such as digital signatures, may
+   be used where appropriate to guard against injected traffic attacks.
+  </t>
+  <t>
+   The privacy concerns of network measurement are limited by the active
+   measurements described in this memo.  Unlike passive measurements,
+   there can be no release of existing user data.
+  </t>
+ </section>
+
+ <section title="IANA Considerations">
+  <t>IANA is asked to add this metrics to the IANA IP Performance Metrics (IPPM)
+     Metrics Registry, see <xref target="RFC4148" />.  This section 
+     can be removed after this has been done and upon publication as a RFC.</t>
+ </section>
+
+ <section title="Acknowledgements">
+  <t> The idea to write this draft came up in a meeting with Al Morton,
+      Stanislav Shalunov, Emile Stephan and the author, on the IPPM reporting draft.
+  </t>
+  <t> This document
+      relies heavily on <xref target="RFC2680" /> and the author likes to
+      thank the authors of that document for writing it.
+  </t>
+  <t> Finally, thanks are due to Lars Eggert,
+      Al Morton, Martin Swany and Matt Zekauskas 
+      for their comments.
+  </t>
+ </section>
+</middle>
+
+<back>
+ <references title="Normative References">
+  &rfc2119;
+  &rfc2680;
+ </references>
+
+ <references title="Informative References">
+  &rfc2330;
+  &rfc3432;
+  &rfc4148;
+  <reference anchor="Y1540">
+   <front>
+    <title>Y.1540
+ITU-T Recommendation Y.1540 (2007), Internet protocol data communication service  IP packet transfer and availability performance parameters.
+    </title>
+    <author>
+     <organization></organization>
+    </author>  
+     <date year="2007" />
+   </front>
+  </reference>
+ </references>
+
+</back>
+
+
+
+
+</rfc>

@@ -1,0 +1,408 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSPY v5 rel. 3 U (http://www.xmlspy.com)
+     by Daniel M Kohn (private) -->
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+
+<!-- zzzz next line -->
+<rfc category="bcp" ipr="trust200811" docName="draft-xu-va-tunnels-gre-00.txt">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="no" ?>
+<?rfc compact="yes" ?>
+
+    <front>
+		<title abbrev="VA GRE Tunnels">GRE and IP-in-IP Tunnels for Virtual Aggregation</title>
+
+	        <author initials ='X' surname ='Xu' fullname='Xiaohu Xu'>
+            <organization abbrev="Huawei">Huawei Technologies</organization>
+            <address>
+                <postal>
+<street>
+No.3 Xinxi Rd., Shang-Di Information Industry Base, Hai-Dian District
+</street>
+                    <city>Beijing</city>
+                    <region>Beijing</region>
+                    <code>100085</code>
+                    <country>P.R.China</country>
+                </postal>
+                <phone>+86 10 82836073</phone>
+                <email>xuxh@huawei.com</email>
+            </address>
+        </author>
+ 
+
+	    <author initials ='P' surname ='Francis' fullname='Paul Francis'>
+            <organization abbrev="MPI-SWS">Max Planck Institute for Software Systems</organization>
+            <address>
+                <postal>
+                    <street>Gottlieb-Daimler-Strasse</street>
+                    <city>Kaiserslautern</city>
+		    <!-- <region>NY</region> -->
+                    <code>67633</code>
+                    <country>Germany</country>
+                </postal>
+		<phone>+49 631 930 39600</phone>
+                <email>francis@mpi-sws.org</email>
+            </address>
+        </author>
+	
+	<!-- zzzz set date zzzz -->
+	<date day="11" month="February" year="2009"/>
+
+        <abstract>
+		<t> 
+The document "FIB Suppression with Virtual Aggregation" 
+<xref target="I-D.francis-intra-va"></xref>
+describes how
+FIB size may be reduced.  
+The latest revision of that draft
+refers generically to tunnels, 
+and leaves it to other documents to define the usage and
+signaling methods for specific tunnel types.  This document provides
+those definitions for GRE and IP-in-IP tunnels.
+</t>
+        </abstract>
+
+    </front>
+
+    <middle>
+
+        <section title="Introduction">
+<t>
+This document specifies how to use and signal the tunnels
+required by
+<xref target="I-D.francis-intra-va"></xref>,
+"FIB Suppression with Virtual Aggregation", for GRE and IP-in-IP .
+This document adopts the terminology of
+<xref target="I-D.francis-intra-va"></xref>.
+This document covers the behavior for both VA routers and
+legacy routers.
+</t>
+
+
+	<section title="Requirements notation">
+            <t>The key words "must", "must NOT", "REQUIRED", "SHALL",
+            "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+            and "OPTIONAL" in this document are to be interpreted as
+	    described in 
+	    <xref target="RFC2119"/>.
+    </t>
+        </section>
+
+        </section>
+
+
+<section anchor="sec-req" title="Tunneling Requirements">
+<t>
+According to <xref target="I-D.francis-intra-va"></xref>,
+VA has the following tunnel-related requirements.  The requirement
+numbers here (R1 - R5) are cited by <xref target="I-D.francis-intra-va"></xref>.
+<t><list style="hanging">
+<t hangText="R1:  ">
+Legacy routers and APRs must be able to detunnel packets addressed to
+themselves at their BGP NEXT_HOP address.
+They must be able to signal the tunnel
+information needed by other routers to initiate these tunneled packets.
+</t>
+<t hangText="R2:  ">
+Border VA routers must be able to detunnel packets targeted to neighboring
+remote ASBRs.  They must be able to forward these packets to the targeted
+remote ASBR without doing a FIB lookup.
+They must be able to signal the tunnel
+information needed by other routers to initiate these tunneled packets.
+</t>
+<t hangText="R3:  ">
+VA routers must be able to initiate tunneled packets targeted
+to any BGP NEXT_HOP address
+(i.e. those for APRs, legacy routers, or remote ASBRs).
+</t>
+<t hangText="R4:  ">
+Legacy routers may optionally be able to initiate tunneled packets targeted
+to any BGP NEXT_HOP address
+(i.e. those for APRs, legacy routers, or remote ASBRs).
+The GRE and IP-in-IP tunnels defined in this document do not have this capability.
+</t>
+<t hangText="R5:  ">
+All routers must be able to forward all tunneled packets.
+</t>
+</list></t>
+</t>
+</section> <!-- "sec-req" -->
+
+<section anchor="sec-spec" title="Tunneling Specification for GRE and IP-in-IP ">
+<t>
+This documents distinguishes between the terms
+"tunnel endpoint", and "tunnel target".  The tunnel endpoint is the
+router that detunnels the packet (i.e. strips out the outer header
+and forwards the no-longer-tunneled packet).  The tunnel target,
+on the other hand, is the BGP NEXT_HOP to which the packet is
+going.  This distinction manifests itself in the case of requirement R2.
+That is, a local ASBR (border router) is a VA router, and it advertises
+a BGP NEXT_HOP of its neighbor remote ASBR.  Here, the tunnel endpoint
+is the local ASBR, and the tunnel target is the remote ASBR.
+</t>
+<t>
+The IP address of the outer header for GRE and IP-in-IP tunnels is 
+always addressed to the tunnel endpoint.  If the tunnel endpoint and
+the tunnel target are the same router (as with the case in requirement
+R1), then the tunnel type may be GRE or IP-in-IP.  If the former, then
+the Key field may or may not be used.
+</t>
+<t>
+If the tunnel endpoint and the tunnel target are different routers
+(as is the case in requirement R2), then GRE must be used.  Further,
+the Key field is set to a value that identifies the tunnel target
+to the tunnel endpoint.
+For example, suppose a local ASBR with address 1.1.1.1 has two
+remote ASBR neighbors, with addresses 2.2.2.2 and 3.3.3.3 respectively.
+The local ASBR would assign two GRE Key values, one for each remote
+ASBR neighbor.  All GRE packets would arrive at 1.1.1.1 (the tunnel
+endpoint), which would then look at the Key value to determine whether
+to forward the packet to 2.2.2.2 or 3.3.3.3.
+Note that no FIB lookup is necessary.
+</t>
+
+<section anchor="sec-sig" title="Signaling GRE and IP-in-IP tunnels">
+<t>
+To signal the information necessary for routers to initiate tunneled
+packets (i.e. requirement R3), two BGP attributes are used.  The first
+attribute serves to indicate that the router advertising the attribute
+can receive tunneled packets, and additionally conveys 
+the tunnel endpoint address.
+The Address Specific BGP Extended Communities Attribute
+for IPv4 and IPv6
+is used for this purpose
+(<xref target="RFC4360"></xref> and
+<xref target="I-D.ietf-l3vpn-v6-ext-communities"></xref> respectively).
+</t>
+<t>
+The other BGP attribute is used when the tunnel type is GRE, and
+is used to convey the GRE Key value and other GRE parameters.
+For this purpose, the Tunnel Encapsulation Attribute
+(TEncap-Attribute) defined in
+<xref target="I-D.ietf-softwire-encaps-safi"></xref>
+is used.
+</t>
+
+<section anchor="sec-syntax" title="Syntax of the Address Specific BGP Extended Communities Attribute">
+<t>
+The value of the
+high-order octet for the IPv4 type field is 0x41 as defined in
+<xref target="RFC4360"></xref> and
+for the IPv6 type field it is 0x40 as defined in
+<xref target="I-D.ietf-l3vpn-v6-ext-communities"></xref>.
+The attribute is non-transitive across ASes.
+The value of the low-order octet for the type field (i.e. the Sub-Type)
+is (TBD by IANA) for IPv4 and (TBD by IANA) for IPv6.
+</t>
+<t>
+The Global Administrator field is set to the Tunnel Endpoint Address.
+If the Global Administrator field is set to all zeros, then the
+Tunnel Endpoint Address is the same as the BGP NEXT_HOP address.
+</t>
+<t>
+The Local Administrator field is set to zero and ignored upon receipt.
+</t>
+<t>
+If the Tunnel Attribute (TEncap-Attribute) defined in
+<xref target="I-D.ietf-softwire-encaps-safi"></xref>
+is not present, then the encapsulation type is assumed to be IP-in-IP.
+If the encapsulation type is GRE, then the TEncap-Attribute must
+be present.  It defines the parameters associated with the tunnel
+as specified in <xref target="I-D.ietf-softwire-encaps-safi"></xref>.
+</t>
+</section> <!-- "sec-syntax" -->
+
+
+<section anchor="sec-usage" title="Usage of the Address Specific BGP Extended Communities Attribute">
+<t>
+Legacy routers are configured to detunnel IP-in-IP tunnels addressed
+to them.
+They must be programmed to attach the
+Address Specific BGP Extended Communities Attribute
+to all iBGP updates.
+The Global Administrator field must be set to either
+all zeros, or to the address used as the BGP NEXT_HOP address.
+If it is set to all zeros, then the Tunnel Endpoint Address is assumed
+to be the same as the BGP NEXT_HOP address.
+This satisfies requirement R1 for legacy routers.
+</t>
+<t>
+VA routers must include an 
+Address Specific BGP Extended Communities Attribute in all iBGP updates.
+In all cases where the BGP NEXT_HOP is set to the remote ASBR, the
+Global Administrator field must be an address of the VA router itself,
+GRE must be used, and the TEncap-Attribute must be included.
+The GRE Key field must be set to a value unique for that remote ASBR.
+If the Key value for a given remote ASBR is modified, then both the
+old and new Key values must identify the remote ASBR in received packets
+until the new iBGP updates are fully disseminated.
+This satisfies requirement R2.
+</t>
+<t>
+If the VA router is an APR, then for tunnels associated with the
+VP route, where the BGP NEXT_HOP is that of the VA router itself,
+GRE may or may not be used.
+If it is used, then the APR must have a way to distinguish tunnels
+targeted at itself from tunnels targeted to a neighbor remote ASBR.
+This can be done either by assigning a unique Key value 
+(i.e. one not assigned to a remote ASBR), or by using no Key field at all.
+This satisfies requirement R1 for VA routers.
+</t>
+<t>
+All VA routers must use the tunnels described in the 
+tunnel attributes to forward packets to resolved BGP NEXT_HOPs
+(requirement R3).
+</t>
+</section> <!-- "sec-usage" -->
+</section> <!-- "sec-sig" -->
+</section> <!-- "sec-spec" -->
+
+
+<section anchor="sec-iana" title="IANA Considerations">
+<t>
+There are no IANA considerations.
+</t>
+</section>
+
+<section anchor="sec-consider" title="Security Considerations">
+<t>
+There are no new security considerations beyond those already described
+in <xref target="I-D.francis-intra-va"></xref>.
+</t>
+
+</section>
+
+<!--
+<section anchor="sec-ack" title="Acknowledgements">
+<t>
+The authors would like to acknowledge the efforts of Xinyang Zhang
+and Jia Wang, who worked on CRIO (Core Router Integrated Overlay), an
+early inter-domain variant of FIB suppression, and the efforts of Hitesh Ballani
+and Tuan Cao, who worked on the configuration-only variant of VA
+that works with legacy routers.
+We would also like to thank Hitesh and Tuan, as well as Scott Brim,
+Daniel Ginsburg, Robert Raszuk, and Rajiv Asati for their helpful comments.
+In particular, Daniel's comments significantly simplified the spec
+(eliminating the need for a new External Communities Attribute), and
+Robert suggested Edge Suppression.
+</t>
+</section> <!-- "sec-ack" -->
+-->
+
+    </middle>
+
+    <back>
+
+	    <references title='Normative References'>&rfc2119;
+
+
+
+
+<reference anchor='I-D.francis-intra-va'>
+<front>
+<title>FIB Suppression with Virtual Aggregation</title>
+
+<author initials='P' surname='Francis' fullname='Paul Francis'>
+    <organization />
+</author>
+
+<author initials='X' surname='Xu' fullname='Xiaohu Xu'>
+    <organization />
+</author>
+
+<author initials='H' surname='Ballani' fullname='Hitesh Ballani'>
+    <organization />
+</author>
+
+<date month='February' day='11' year='2009' />
+
+<abstract><t> 
+The continued growth in the Default Free Routing Table (DFRT) stresses the global routing system in a number of ways.  One of the most costly stresses is FIB size:  ISPs often must upgrade router hardware simply because the FIB has run out of space, and router vendors must design routers that have adequate FIB.  FIB suppression is an approach to relieving stress on the FIB by NOT loading selected RIB entries into the FIB.  Virtual Aggregation (VA) allows ISPs to shrink the FIBs of any and all routers, easily by an order of magnitude with negligible increase in path length and load.  FIB suppression deployed autonomously by an ISP (cooperation between ISPs is not required), and can co-exist with legacy routers in the ISP.
+</t></abstract>
+
+</front>
+
+<seriesInfo name='Internet-Draft' value='draft-francis-intra-va-00' />
+<format type='TXT'
+        target='http://www.ietf.org/internet-drafts/draft-francis-intra-va-00.txt' />
+</reference>
+
+
+<reference anchor='I-D.ietf-softwire-encaps-safi'>
+<front>
+<title>BGP Encapsulation SAFI and BGP Tunnel Encapsulation Attribute</title>
+
+<author initials='P' surname='Mohapatra' fullname='Pradosh  Mohapatra'>
+    <organization />
+</author>
+
+<author initials='E' surname='Rosen' fullname='Eric Rosen'>
+    <organization />
+</author>
+
+<date month='June' day='4' year='2008' />
+
+<abstract><t>In certain situations, transporting a packet from one Border Gateway Protocol (BGP) speaker to another, the BGP next hop, requires that the packet be encapsulated by the first BGP speaker and decapsulated by the second. To support these situations, there needs to be some agreement between the two BGP speakers with regard to the "encapsulation information", i.e., the format of the encapsulation header as well as the contents of various fields of the header.  The encapsulation information need not be signaled for all encapsulation types. In the cases where the signaling is required (such as Layer Two Tunneling Protocol - Version 3 (L2TPv3), Generic Routing Encapsulation (GRE) with key), this draft specifies a method by which BGP speakers can signal encapsulation information to each other. The signaling is done by sending BGP updates using the "Encapsulation Subsequent Address Family Identifier (SAFI)" and IPv4 or IPv6 Address Family Identifier (AFI). In the cases where no encapsulation information needs to be signaled (such as GRE without key), this draft specifies a BGP extended community that can be attached to BGP UPDATE messages that carry payload prefixes to indicate the encapsulation protocol type to be used.</t></abstract>
+
+</front>
+
+<seriesInfo name='Internet-Draft' value='draft-ietf-softwire-encaps-safi-03' />
+<format type='TXT'
+        target='http://www.ietf.org/internet-drafts/draft-ietf-softwire-encaps-safi-03.txt' />
+</reference>
+
+
+<reference anchor='RFC4360'>
+
+<front>
+<title>BGP Extended Communities Attribute</title>
+<author initials='S.' surname='Sangli' fullname='S. Sangli'>
+<organization /></author>
+<author initials='D.' surname='Tappan' fullname='D. Tappan'>
+<organization /></author>
+<author initials='Y.' surname='Rekhter' fullname='Y. Rekhter'>
+<organization /></author>
+<date year='2006' month='February' />
+<abstract>
+<t>This document describes the "extended community" BGP-4 attribute.  This attribute provides a mechanism for labeling information carried in BGP-4.  These labels can be used to control the distribution of this information, or for other applications. [STANDARDS TRACK]</t></abstract></front>
+
+<seriesInfo name='RFC' value='4360' />
+<format type='TXT' octets='24145' target='ftp://ftp.isi.edu/in-notes/rfc4360.txt' />
+</reference>
+
+
+<reference anchor='I-D.ietf-l3vpn-v6-ext-communities'>
+<front>
+<title>IPv6 Address Specific BGP Extended Communities Attribute</title>
+
+<author initials='Y' surname='Rekhter' fullname='Yakov Rekhter'>
+    <organization />
+</author>
+
+<date month='December' day='10' year='2008' />
+
+<abstract><t>Current specifications of BGP Extended Communities [BGP-EXTCOMM] support IPv4 Address Specific Extended Community, but do not support IPv6 Address Specific Extended Community. The lack of IPv6 Address Specific Extended Community may be a problem when an application uses IPv4 Address Specific Extended Community, and one wants to use this application in a pure IPv6 environment. This document defines a new BGP attribute, IPv6 Address Specific Extended Community that addresses this problem. The IPv6 Address Specific Extended Community is similar to the IPv4 Address Specific Extended Community, except that it carries an IPv6 address rather than an IPv4 address.</t></abstract>
+
+</front>
+
+<seriesInfo name='Internet-Draft' value='draft-ietf-l3vpn-v6-ext-communities-01' />
+<format type='TXT'
+        target='http://www.ietf.org/internet-drafts/draft-ietf-l3vpn-v6-ext-communities-01.txt' />
+</reference>
+
+  </references>
+	    
+
+    </back>
+
+</rfc>

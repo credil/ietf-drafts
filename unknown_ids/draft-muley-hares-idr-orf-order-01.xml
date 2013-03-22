@@ -1,0 +1,623 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<rfc ipr="full3978" docName="draft-muley-hares-idr-orf-order-01">
+   <front>
+    <title abbrev="Group-ORF">Group Co-operative Route Filtering capability for BGP-4 </title>
+    <author fullname="Susan Hares" initials="S." surname="Hares">
+      <organization>Green Hills Software</organization>
+      <address>
+        <postal>
+          <street>825 Victors Way</street>
+          <city>Ann Arbor</city>
+          <region>MI</region>
+          <code>48108</code>
+        </postal>
+        <phone>+1-734-222-1610</phone>
+        <email>shares@ghs.com</email>
+      </address>
+      </author>
+      <author fullname="Praveen Muley" initials="P." surname="Muley">
+      <organization>Alcatel</organization>
+      <address>
+        <postal>
+          <street>701, E. Middle Field Rd</street>
+          <city>Mountain View</city>
+          <region> CA </region>
+          <code>94043</code>
+        </postal>
+        <phone>+1-650-623-2622</phone>
+        <email>Praveen.Muley@alcatel.com</email>
+      </address>
+      </author>
+      <author fullname="Keyur Patel" initials="K." surname="Patel">
+      <organization>Cisco Systems</organization>
+      <address>
+        <postal>
+          <street></street>
+          <city></city>
+          <region></region>
+          <code></code>
+        </postal>
+        <phone></phone>
+        <email>keyupate@cisco.com</email>
+      </address>
+      </author>
+      <author fullname="Benson Schliesser" initials="B." surname="Schliesser">
+      <organization>Saavis Communications</organization>
+      <address>
+        <postal>
+          <street>1 Savvis Parkway</street>
+          <city>Town and Country</city>
+          <region>MO</region>
+          <code>63017</code>
+        </postal>
+        <phone>+1-314-628-7036</phone>
+        <email>bensons@savvis.net</email>
+      </address>
+      </author>
+    <date month="February" year="2008"/>
+    <area>Operations</area>
+    <workgroup>IDR</workgroup>
+    <keyword>I-D</keyword>
+    <keyword>Internet-Draft</keyword>
+    <keyword>BGP</keyword>
+    <keyword>ORF </keyword>
+
+<abstract>
+<t>
+Currently BGP-4 is capable of carrying multiple (Outbound Route Filters)
+ORFs entries for a given "AFI/SAFI".  Each ORF provides a filter that a
+route whose NLRI matches AFI/SAFI, must pass through to be transmitted
+in the BGP Update message.  Efficient processing of ORF filters may require
+ordering of individual ORFs in certain sequence and grouping of ORFs that
+should be applied together. The grouping functionality also provides the
+support for logical OR operation between the grouped ORFs.
+</t>
+<t>
+This group ORF provides an ORF type that specifies that ordering and
+grouping. The route set that passes set of ORFs running in a "Group ORF"
+will pass the same ORFs sent in normal ORFs.
+    </t>
+   </abstract>
+  </front>
+
+  <middle>
+    <section title="Definitions">
+      <section title="Conventions used in this document">
+        <t>
+          The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+          "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and
+          "OPTIONAL" in this document are to be interpreted as described
+          in <xref target="RFC2119">RFC2119</xref>.
+        </t>
+      </section>
+    </section>
+
+    <section title="Introduction">
+      <t>
+Currently it is not uncommon for a BGP speaker to receive set of ORFs from
+an ORF capable BGP peer. Each ORF provides a filter that a route must pass
+through to be transmitted in the BGP update message.  Today's operational
+ procedure for cooperative route filtering provides the AFI/SAFI as the
+ only context. ORF by definition in its current form have logical OR within
+ ORF entries and logical AND within the ORF types. Efficient processing and
+ expression of filters for ORF may require ordering of ORFs filters and
+ ORF entries in certain sequence. Efficient processing entails both BGP
+ processing and quick processing of the ORF generated from User policies.
+ </t>
+ <t>
+This document defines GROUP ORF, a new BGP-4 ORF type that allows BGP to
+send to its peer a group of set of ordered ORF filters.  Group ORF provides
+a context for filtering rules that need to be interpreted together further
+ within that context AFI/SAFI. The grouping functionality also provides the
+ support for logical OR operation between grouped ORFs.
+ </t>
+<t>
+Today ORF entries of same ORF type have logical OR functionality only,
+which limits the flexibility of defining an efficient ORF with less grammar
+description. Group ORF capability will help in defining the relational
+ meaning within the ORF entries as well.
+ </t>
+ <t>One example of this is the use of ORFs to efficiently handle complex
+ORF policies applied per VPN per peer, in BGP/MPLS VPN deployment
+as defined in: <xref target="RFC4364">RFC4364</xref>.</t>
+ </section>
+  <section title="Past Contriburos">
+      <t>
+      The authors want to acknowledge the contributions of Luyuan Fang and Nabil Bitar. 
+      </t>
+    </section>
+
+<section title="Group ORF Type">
+<t>
+ The group ORF type allows a set of ORF entries of different ORF types
+and ORF entries within the type, to be grouped, and ordered in the
+BGP ROUTE-REFRESH message  <xref target="RFC2918">RFC2918</xref>.
+The Group ORF provides group cooperative route filtering.
+</t>
+<t>
+Conceptually a Group ORF consist of multiple different types of ORF
+entries as defined in <xref target="bgp-orf"> [BGP-ORF]</xref>,
+<xref target="aspath-orf"> [ASPATH-ORF]</xref> and
+<xref target="prefix-orf">[prefix-ORF]</xref>. Each such ORF type,
+will have ordered ORF entries, with an operation of logical OR or logical
+AND defined with each other.
+</t>
+</section>
+
+<section title=" Group ORF Encoding">
+ <t>
+ The value of the ORF-Type for Group ORF is [TBD].
+</t>
+<t>
+Conceptually the Route Refresh message carrying Group ORF can be viewed as below.
+</t>
+  <figure title="ORF byte layout ">
+      <artwork>
+      +--------------------------------------------------+
+      | Address Family Identifier (2 octets)             |
+      +--------------------------------------------------+
+      | Reserved (1 octet)                               |
+      +--------------------------------------------------+
+      | Subsequent Address Family Identifier (1 octet)   |
+      +--------------------------------------------------+
+      | When-to-refresh (1 octet)                        |
+      +--------------------------------------------------+
+      |  ORF Type (1 octet) (Group)                      |
+      +--------------------------------------------------+
+      |  ORF Group Flags                                 |
+      +--------------------------------------------------+
+      | Length of ORFs (2 octets)                        |
+      +--------------------------------------------------+
+      | First ORF entry (variable) (Group)               |
+      +--------------------------------------------------+
+      | Second ORF entry (variable)  (Group)             |
+      +--------------------------------------------------+
+         .........
+      +--------------------------------------------------+
+      | N-th ORF entry (variable)                        |
+      +--------------------------------------------------+
+    </artwork>
+    </figure>	
+    <figure title="Group ORF byte layout">
+      <artwork>
+      Each Group ORF entry will be encoded as follows.
+
+      +--------------------------------------------------+
+      | ORF Group id (1 octet)                           |
+      +--------------------------------------------------+
+      | ORF Type (1 octet)    [Group]                    |
+      +--------------------------------------------------+
+      | ORF Action (1 octet)                             |
+      +--------------------------------------------------+
+      | ORF FLags (1 octet)                              |
+      | Length of ORFs (2 octets)                        |
+      +--------------------------------------------------+
+      | First ORF entry (variable)                       |
+      +--------------------------------------------------+
+      | Second ORF entry (variable)                      |
+      +--------------------------------------------------+
+         .........
+      +--------------------------------------------------+
+      | N-th ORF entry (variable)                        |
+      +--------------------------------------------------+
+      | ORF Type (1 octet)                               |
+      +--------------------------------------------------+
+      | Length of ORFs (2 octets)                        |
+      +--------------------------------------------------+
+      | First ORF entry (variable)                       |
+      +--------------------------------------------------+
+      | Second ORF entry (variable)                      |
+      +--------------------------------------------------+
+        .........
+       </artwork>
+       </figure>
+       <t>ORF Action: </t>
+       <t>Byte that indicates operation of "AND and OR" function
+       within the full Group ORF.</t> 
+       <t>Value 000  Use AND or OR specified in Group ORF.
+       OR between GROUP IDs.</t> 
+       <t>Value 001  Always AND between attributes in Flag Byte </t>
+       <t> Always ORed between same Route-map's different sequences. </t>
+       <t></t> 
+       <t>ORF FLAG:</t>
+       <t></t> 
+       <t> Value 0000 0001   Route-Map</t>
+       <t> Value 0000 0002   Access Control List </t>
+       <t> Value 1000 0000   Ignore ORF Action BIT </t>
+ </section>
+ <section title="ORF Entry Encoding">
+<t>
+As specified in the <xref target="bgp-orf"> [BGP-ORF]</xref>
+the ORF entry definition has common part
+and type specific part. The encoding of common part of the ORF entries
+on Group ORF capability negotiation as defined below.
+</t>
+  <figure title="Group ORF Entry Byte">
+      <artwork>
+
+          +---------------------------------+
+          |   Action (2 bit)                |
+          +---------------------------------+
+          |  Match (1 bit)                  |
+          +---------------------------------+
+          |  AND/OR (1 bit)                 |
+          +---------------------------------+
+          |   Reserved (4 bits)             |
+          +---------------------------------+
+          |   Type specific part (variable)  |
+          +---------------------------------+
+        </artwork>
+       </figure>
+<t>
+The new AND/OR is a one bit field additional to the definition specified
+in <xref target="bgp-orf">[BGP-ORF]</xref>. The value of this field is
+0 for expression of logical OR and 1 for logical AND with the next
+ORF entry. The ORF entries grammar expression
+for logical OR followed by logical AND ORF entries will be for
+the over all the group of such and-ed ORF entries. This field in the
+last entry of the ORF type will be ignored.
+</t>
+ </section>
+<section title="Group Cooperative route filtering capability ">
+<t>
+A BGP speaker that is willing to receive Group ORF entries from its peer, or
+a BGP speaker that would like to send ORF entries to its peer advertises this
+to the peer by using the Cooperative Route Filtering Capability, as described below.
+</t>
+<t>
+The Group ORF Capability is a new BGP capability
+</t>
+   <t><xref target="bgp-cap">[BGP-CAP]</xref> defined as follows
+   <list>
+    <t>Capability code: X [IANA consideration]</t>
+   <t>Capability length: variable </t>
+  <t>Capability value: one or more of the entries as defined for ORF
+   entries in the <xref target="bgp-orf">[BGP-ORF]</xref>.
+   </t>
+ </list>
+ </t>
+ <t>
+The use of ORF entry in Group ORF will depend upon the send/receive value of
+the ORF type in capability negotiation
+</t>
+ </section>
+ <section title=" Operation ">
+<t>
+In addition to operational procedures defined in <xref target="bgp-orf">[BGP-ORF]
+</xref>  several additional operational rules needs to be followed.
+</t>
+<t>
+The Group ORF Group-ID allows a tag for a group of ORFs.  If multiple
+instances of a Group ORF with the same Group-ID exist within a
+Route Refresh Message, the additional group information is appended to the
+set of previously received ORFs with the same Group-ID. The complete list of
+ORFs within the Group will be included in the "and-ing" process for that Group.
+</t>
+<t>
+When processing multiple Group ORFs into a filter, the Group ORFs will be
+applied in ascending order of the Group ID.
+</t>
+<t>
+When the BGP speaker receives multiple ORFs within a Group ORF entry, the
+order of the ORFs is preserved and applied as per first ORF entry match rule.
+</t>
+<t>For each Group ORF, a BGP speaker will pass the set of candidate NLRIs
+(routes) through each ORF that is a member of the Group, and-ing the results
+(and-ing of PERMIT and DENY results in DENY). If a Group ORF would result in
+a PERMIT for a given NLRI, it is advertised to the peer and it is removed from
+the list of candidate NLRIs. If a Group ORF would result in a DENY for a
+given NLRI, it is not advertised to the peer and it is removed from the list
+of candidate NLRIs. The remaining list of candidate NLRIs are then filtered
+through the next Group ORF.
+</t>
+<t>This process is repeated until the candidate
+NRLIs have been filtered through all Group ORFs. The remaining candidate
+NLRIs are then filtered through any non-Group ORFs that might exist.
+While processing the ORF entries in the ORF type the result of ORF entry
+match with AND/OR bit set will be and-ed  with the subsequent ORF
+entry match. The ORF entry with AND/OR bit is set to 0 will OR the match
+result with subsequent entry match result. Rest of the procedure for
+treatment of NLRI remains same as described in the
+<xref target="bgp-orf">[BGP-ORF] </xref>.
+</t>
+<t>
+To remove a group ORF then all the ORF entries in the Group ORF will have the
+action component as REMOVE.
+</t>
+<t>The Group ORF MUST always have higher preference than non-Group ORFs,
+and will be processed first.
+</t>
+<t>
+Note: Group ORF are independent of ORF preference and configuration to occur
+without concern for order of transmission. Individual ORF type preference
+within the Group ORF will occur based on configuration policy.
+</t>
+</section>
+ <section title="Deployment Scenarios">
+ <t>
+Following are few deployment examples where Group ORF helps in filtering
+and offering flexibility in ORF expression.
+</t>
+<t> Scenario 1 </t>
+<t>
+An example of group ORF could be in the IPVPN case is where multiple
+BGP communities <xref target="bgp-com"> [BGP-COM} </xref>
+and/or extended communities need to be considered together for
+ a given VPN in the filtering rules although all IPVPN routes belong to
+ the same AFI/SAFI.
+ </t>
+ <t>Consider the case where there are two VPNs, red and yellow, have routes
+ belonging to sites tagged by community attributes that express city
+ locations. The Red VPN wants or needs  to get routes from certain site
+ locations but not others. Similarly, the yellow VPN wants or needs to get
+ sites from certain location not others. For the purpose of ease
+ in manageability, it would be desired to affiliate the community attribute
+ value with the city location only. That is the red VPN and yellow VPN
+ routes will carry the same city community value when these routes reside
+ in same city. </t>
+ <t>If cooperative route filtering is used without group ORF, it
+ will not be possible to express the ORFs when the the two VPNs have different
+ rules whereby different city routes need to be imported to another city for
+ the two VPNs. This is because of the ORing operation within the same ORF type
+ and ANDing operation across ORF types.
+ </t>
+ <t> To illustrate further consider the
+ following example where routers in the red VPN in city 4 needs to get the
+routes from city 1 only and not from city 2 and 3. On the other hand, the
+routers in the yellow VPN in city 4 needs to get routes from city 2 but not
+city 3 and city 1. In current procedures for cooperative route filtering
+without group ORF, the only way to express that for ORF from the routers
+hosting VPN sites in city 4 is:
+<list>
+  <t>AFI/SAFI = IPVPN</t>
+  <t>Extended ORF Type = Target Extended Community
+    <list>
+	    <t>Permit Red</t>
+	    <t>Permit Yellow</t>
+    </list> 
+     </t>
+    <t>ORF Type = Community
+	   <list>
+     <t>Permit City1</t>
+	   <t>Permit City2</t>
+    </list> 
+    </t>
+  </list>
+  </t>
+  <t>
+  Based on this ORF routes tagged with Red and City2 will be permitted
+  and routes tagged with Yellow and City1 will be permitted although
+  these are not deired routes and will need to be filtered out by a local
+  policy on the routers in City4.
+  </t>
+  <t>
+  If group ORF was available, the ORF policy can be more flexibly expressed in
+  the following manner:
+
+  <list>
+  <t>AFI/SAFI = IPVPN</t>
+  <t> Group 1 (implicitly Red VPN)
+	 <list>
+     <t>Extended ORF Type = Target Extended Community
+       <list>
+        <t>Permit Red </t>
+       </list>
+       </t>
+     <t>ORF Type = Community
+       <list>
+        <t> Permit City1</t>
+       </list>
+       </t>
+     </list>
+  </t>
+  <t>Group 2 (implicitly Yellow VPN)
+	 <list>
+     <t>Extended ORF Type = Target Extended Community
+      <list>
+       <t> Permit Yellow </t>
+      </list>
+      </t>
+     <t>ORF Type = Community
+       <list>
+        <t> Permit City2 </t>
+       </list>
+       </t>
+   </list>
+   </t>
+  </list>
+  </t>
+  <t>
+Thus Group 1 provides a context for the red VPN and Group 2 provides a
+context for the yellow VPN. Only routes that are tagged with Red target
+extended community attributes and City1 community or routes tagged with
+Yellow target community attributes and City2 community will be permitted
+to be advertised to the BGP client that sent this ORF, achieving the desired
+result.
+</t>
+<t>
+It may be argued that in this simple case, the problem could be addressed
+with existing ORF capabilities by simply tagging the Red and City 1 routes
+with a new extended community tag (Red_City1) and the routes with the Yellow
+and City2 tags with a new target extended community tag (Yellow_City2) and
+including these in the ORF. However, this can get complicated as the number
+of combinations of BGP extended communities
+<xref target="RFC4360">RFC4360</xref> and communities increases. Having
+group ORF capability offers the needed flexibility.
+</t>
+
+<t> It is also true that the same result can be achieved by defining
+local policies on the routers but the tradeoff as in any ORF case is
+between the work done at a client and that done at the route reflector
+when used in topology.
+</t>
+<t> Scenario 2 </t>
+<t>
+An example Group ORF in the global routing context can be where a BGP speaker
+wants to learn certain more specific NLRIs only if they traverse certain
+AS path. Otherwise routes which are less specific than /25. A Group ORF
+will look like as defined below where X,Y,Z are the more specific NLRIs
+to be learnt only if it learn it from AS1.
+</t>
+<t>
+ <list>
+  <t>AFI/SAFI = IPV4 </t>
+  <t>Group 1
+   <list>
+    <t> ORF Type = Prefix
+      <list>
+       <t>Permit X </t>
+       <t>Permit Y </t>
+       <t>Permit Z </t>
+      </list>
+      </t>
+    <t> ORF Type = ASpath
+      <list>
+        <t>Permit  AS1 </t>
+      </list>
+      </t>
+    </list>
+    </t>
+   <t> Group 2
+   <list>
+     <t>ORF Type = Prefix
+     <list>
+       <t>Deny  prefix( */25) or longer </t>
+     </list>
+     </t>
+   </list>
+   </t>
+   <t> Group 3 
+      <list>
+        <t>ORF Type = Prefix
+         <list>
+           <t>Permit prefix(*)</t>
+         </list>
+         </t>
+      </list>
+      </t>
+  </list>
+  </t>
+ <t>
+Although its possible to achieve the above mentioned application by
+making use of route policies, use of Group ORF helps in simplifying
+the configuration.
+</t>
+</section>
+<section title="Security Considerations">
+
+  <t>
+  This extension to BGP does not change the underlying security issues.
+</t>
+ </section>
+   <section title="IANA Considerations">
+<t> IANA will need to assign the value of the ORF-Type for Group ORF.</t>
+  </section>
+  </middle>
+  <back>
+    <references>
+       <reference anchor="RFC2119"   target="ftp://ftp.isi.edu/in-notes/rfc2119">
+        <front>
+          <title>Key words for use in RFCs to Indicate Requirement Levels</title>
+          <author initials="S." surname="Bradner" fullname="Bradner, S.">
+          <organization> Harvard</organization> </author>
+          <date month="March" year="1997" />
+        </front>
+      </reference>
+      <reference anchor="RFC4364"    target="http://www.ietf.org/rfc/rfc4364.txt">
+        <front>
+          <title>BGP/MPLS VPN</title>
+          <author fullname="Eric Rosen"> <organization> Cisco</organization>
+          </author>
+          <author fullname="Yakov Rekhter"> <organization> Juniper </organization> 
+          </author>
+          <date month="February" year="2006" />
+        </front>   
+      </reference>
+      <reference anchor="bgp-cap"       target="http://www.ietf.org/rfc/rfc3392.txt">
+        <front>
+          <title> Capabilities Advertisement with BGP-4</title>
+          <author fullname="Ravi Chandra"> <organization> Cisco</organization> 
+          </author>
+          <author fullname="John Scudder"> <organization> Cisco </organization>
+          </author>
+          <date month="November" year="2002"/>
+        </front>
+      </reference>
+      <reference anchor="bgp-com"
+        target="ftp://ftp.isi.edu/rfc/rfc-1997">
+        <front>
+          <title>BGP/MPLS VPN</title>
+          <author fullname="Ravi Chandra"> <organization> Cisco</organization></author>
+          <author fullname="Paul Traiana"> <organization> Cisco</organization></author>
+          <author fullname="Tony Li"> <organization> Cisco</organization> </author>
+          <date month="August" year="1996" />
+        </front>
+      </reference>
+     <reference anchor="RFC4360"
+         target="http://www.ietf.org/rfc/rfc4360.txt">
+     	<front>
+	      <title>BGP Extended Communities Attribute</title>
+	         <author fullname="Srihari R. Sangli"><organization>Cisco </organization> </author>
+	         <author fullname="Daniel Tappan"><organization> Cisco</organization></author>
+	         <author fullname="Yakov Rekhter"><organization> Juniper</organization></author>
+	       <date month="July" year="2006" />
+       </front>
+      </reference>
+     <reference anchor="RFC2918" 
+       target="http://www.ietf.org/rfc/rfc2918">
+        <front>
+         <title>Route Refresh Capability for BGP-4</title>
+	        <author fullname="Enke Chen" > <organization> Cisco</organization></author>
+	        <date month="Septebmer" year="2000" />
+  	    </front>
+      </reference>
+      <reference anchor="bgp-orf"
+        target="http://www.ietf.org/internet-drafts/draft-ietf-idr-route-filter-15.txt">
+        <front>
+          <title>"Cooperative Router Filtering for BGP-4" </title>
+          <author initials="S." surname="Sangli"> <organization> Cisco </organization> </author>
+          <author fullname="Enke Chen" > <organization> Cisco</organization></author>
+          <date month="July" year="2005" />
+        </front>
+      </reference>
+      <reference anchor="prefix-orf"
+        target="http://www.ietf.org/internet-drafts/draft-ietf-idr-bgp-prefix-orf-04.txt">
+        <front>
+          <title>"Address Prefix Based Outbound Route Filter for BGP-4" </title>
+          <author initials="S." surname="Sangli"> <organization> Cisco</organization> </author>
+          <author fullname="Enke Chen"> <organization> Cisco</organization> </author>
+          <date month="March" year="2005" />
+        </front>
+      </reference>
+            <reference anchor="aspath-orf"
+        target="http://www.ietf.org/internet-drafts/draft-ietf-idr-aspath-orf-09.txt">
+        <front>
+          <title>"Aspath Based Outbound Route Filter for BGP-4" </title>
+          <author initials="S." surname="Hares"> 
+          <organization> Green Hills Software</organization></author>
+          <author initials="K."  surname="Patel"> <organization> Cisco</organization></author>
+          <date month="August" year="2007" />
+        </front>
+      </reference>
+   </references>
+  </back>
+</rfc>
+<!-- Keep this comment at the end of the file
+Local variables:
+mode: xml
+sgml-omittag:nil
+sgml-shorttag:nil
+sgml-namecase-general:nil
+sgml-general-insert-case:lower
+sgml-minimize-attributes:nil
+sgml-always-quote-attributes:t
+sgml-indent-step:2
+sgml-indent-data:t
+sgml-parent-document:nil
+sgml-exposed-tags:nil
+sgml-local-catalogs:nil
+sgml-local-ecat-files:nil
+End:
+-->

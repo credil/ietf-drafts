@@ -1,0 +1,678 @@
+<?xml version="1.0" encoding="us-ascii"?>
+<!DOCTYPE rfc SYSTEM 'rfc2629.dtd'>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+
+<rfc ipr="full3978" category="std">
+
+  <front>
+    <title abbrev="Partial Publication">Publication of
+    Partial Presence Information</title>
+   
+    <author fullname="Aki Niemi" surname="Niemi" initials="A.">
+      <organization>Nokia</organization>
+      <address>
+        <postal>
+          <street>P.O. Box 407</street>
+          <city>NOKIA GROUP, FIN 00045</city>
+          <country>Finland</country>
+        </postal>
+        <phone>+358 71 8008000</phone>
+        <email>aki.niemi@nokia.com</email>
+      </address>
+    </author>
+    <author fullname="Mikko Lonnfors" surname="Lonnfors"
+    initials="M.A">
+      <organization>Nokia</organization>
+      <address>
+        <postal>
+          <street>Itamerenkatu 11-13</street>
+          <city>Helsinki</city>
+          <country>Finland</country>
+        </postal>
+        <phone>+358 71 8008000</phone>
+        <email>mikko.lonnfors@nokia.com</email>
+      </address>
+    </author>
+    <author fullname="Eva Leppanen" surname="Leppanen" initials="E.">
+     <organization>Individual</organization>
+      <address>
+        <postal>
+          <street></street>
+          <city>Lempaala</city>
+          <country>Finland</country>
+        </postal>
+        <!--phone>+358 7180 77066</phone-->
+        <email>eva.leppanen@saunalahti.fi</email>
+      </address>
+    </author>
+    <date year="2008" month="February" />
+    <area>Real-time Applications and Infrastructure Area</area>
+    <workgroup>SIMPLE WG</workgroup>
+    <abstract>
+
+      <t>The Session Initiation Protocol (SIP) Extension for Event State
+      Publication describes a mechanism with which a presence user
+      agent is able to publish presence information to a presence
+      agent. Using the Presence Information Data Format (PIDF),
+      each presence publication contains full state, regardless of how
+      much of that information has actually changed since the previous
+      update. As a consequence, updating a sizeable presence document
+      with small changes bears a considerable overhead and is therefore
+      inefficient. Especially with low bandwidth and high latency
+      links, this can constitue a considerable burden to the
+      system. This memo defines a solution that aids in reducing the
+      impact of those constraints and increases transport efficiency
+      by introducing a mechanism that allows for publication of
+      partial presence information.</t>
+
+    </abstract>
+  </front>
+  <middle>
+    <section title="Introduction" anchor="introduction">
+
+      <t><xref target="RFC3903">Session Initiation
+      Protocol (SIP) Extension for Event State Publication</xref>
+      allows Presence User Agents ('PUA') to publish presence
+      information of a user ('presentity'). The Presence Agent ('PA')
+      collects publications from one or several presence user agents,
+      and generates the composite event state of the presentity.</t>
+
+      <t>The baseline format for presence information is defined in
+      the <xref target="RFC3863">Presence Information Data Format
+      (PIDF)</xref> and is by default used in presence
+      publication. The PIDF uses <xref target="W3C.REC-xml">Extensible
+      Markup Language (XML)</xref>, and groups data into elements
+      called tuples. In addition, <xref target="RFC4479" />, 
+      <xref target="RFC4480" />, 
+      <xref target="RFC4481" />,
+      <xref target="RFC4482" /> and <xref
+      target="I-D.ietf-simple-prescaps-ext" /> define extension
+      elements that provide various additional features to PIDF.</t>
+
+      <t>Presence publication by default uses the PIDF document
+      format, and each publication contains full state regardless of
+      how much of the presence information has actually changed since
+      the previous update. As a consequence, updating a sizeable
+      presence document especially with small changes bears a
+      considerable overhead and is therefore inefficient. Publication
+      of information over low bandwidth and high latency links further
+      exacerbates this inefficiency.</t>
+
+      <t>This memo specifies a mechanism with which the PUA is after
+      an initial full state publication able to publish only those
+      parts of the presence document that have changed since the
+      previous update. This is accomplished using the <xref
+      target="I-D.ietf-simple-partial-pidf-format">partial PIDF
+      </xref> document format to communicate a set of
+      presence document changes to the PA, who then applies the
+      changes in sequence to its version of the presence document.</t> 
+
+      <t>This memo is structured in the following way: <xref
+      target="overall-operation" /> gives an overview of the partial
+      publication mechanism; <xref target="clientserver" /> includes
+      the detailed specification; <xref
+      target="Security-Considerations" /> includes discussion of
+      security considerations; and <xref target="Examples" /> includes
+      examples of partial publication.</t>
+    
+    </section>
+    <section title="Definitions and Document Conventions"
+    anchor="Conventions">
+
+      <t>In this document, the key words "MUST", "MUST NOT",
+      "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+      "RECOMMENDED", "MAY", and "OPTIONAL" are to be interpreted as
+      described in RFC 2119, BCP 14 <xref target="RFC2119" />, and indicate
+      requirement levels for compliant implementations.</t>
+      
+      <t>This document makes use of the vocabulary defined in <xref
+      target="RFC2778">the Model for Presence and Instant
+      Messaging</xref>, <xref target="RFC3903">the Event State
+      Publication Extension to SIP</xref>, and <xref
+      target="I-D.ietf-simple-partial-pidf-format">the PIDF Extension for
+      Partial Presence</xref>.</t>
+
+    </section>
+    <section title="Overall Operation" anchor="overall-operation">
+
+      <t>This section introduces the baseline functionality for
+      presence publication, and gives an overview of the
+      partial publication mechanism. This section is informational in
+      nature. It does not contain any normative statements.</t>
+
+      <section title="Presence Publication"
+      anchor="Publish-operation">
+
+	<t>Event state publication is specified in <xref
+	target="RFC3903" />.</t> 
+
+        <t>The publication of presence information consists of a
+        presence user agent sending a SIP PUBLISH request
+        <xref target="RFC3903" /> targeted to the address-of-record of
+        the presentity, and serviced by a presence agent or
+        compositor. The body of the PUBLISH request carries full event
+        state in the form of a presence document.</t>
+ 
+        <t>The compositor processes the PUBLISH request and stores the
+        presence information. It also assigns an entity-tag that is
+        used to identify the publication. This entity-tag is returned
+        to the PUA in the response to the PUBLISH request.</t>
+
+	<t>The PUA uses the entity-tag in the following PUBLISH
+	request for identifying the publication that the request is
+	meant to refresh, modify or remove. Presence information is
+	stored in an initial publication, and maintained using the
+	refreshing and modifying publications. Presence information
+	disappears either by expilicitly removing it or when it meets
+	its expiration time.</t>
+      
+      </section>
+      
+      <section title="Partial Presence Publication"
+      anchor="Partial-Operation">
+	
+	<t>The partial publication mechanism enables the PUA to update
+	only parts of its presence information, namely those sections
+	of the presence document that have changed. The initial
+	publication always carries full state. However, successive
+	modifying publications to this initial presence state can
+	communicate state deltas, i.e., one or more changes to the
+	presence information since the previous update. Versioning of
+	these partial publications is necessary to guarantee that the
+	changes are applied in the correct
+	order. The <xref target="RFC3903">PUBLISH method</xref>
+	already accomplishes this using entity-tags and conditional
+	requests, which guarantee correct ordering of publication
+	updates.</t>
+	
+	<t><list style="empty">
+	  <t>Note that
+	  the <xref target="I-D.ietf-simple-partial-pidf-format">partial
+	  PIDF format</xref> contains the 'version' attribute that
+	  could be used for versioning as well. However, we chose not
+	  to introduce an additional versioning mechanism to partial
+	  publish, since that would only add ambiguity and a potential
+	  undefined error case if the two versioning mechanisms were
+	  to somehow contradict.</t>
+	  </list></t>
+
+	<t>To initialize its publication of presence information, the
+	PUA first publishes a full state initial publication. The
+	consequent modifying publications can carry either state
+	deltas or full state.  Both initial and modifying partial
+	presence publications are accomplished using the
+	'application/pidf-diff+xml' content type
+	<xref target="I-D.ietf-simple-partial-pidf-format" />, with
+	the former using the &lt;pidf-full&gt; root element, and the
+	latter using the &lt;pidf-diff&gt; or &lt;pidf-full&gt; root
+	elements, respectively.</t>
+
+        <t>While the &lt;pidf-full&gt; encapsulates a regular PIDF
+        document, the &lt;pidf-diff&gt; can contain one or more
+        operations for adding new elements or attributes (&lt;add&gt;
+        elements), replacing elements or attributes whose content has
+        changed (&lt;replace&gt; elements), or indications of removal
+        of certain elements or attributes (&lt;remove&gt;
+        elements). The PUA is free to decide the granularity by which
+        changes in presence information are communicated to the
+        composer. It may very well happen that there are enough
+        changes to be communicated that it is more efficient to send a
+        full state publication instead of a set of state
+        deltas.</t>
+
+	<t>When the presence compositor receives a partial publication
+	it applies the included patch operations in sequence. The
+	resulting changed (or patched) presence document is then
+	submitted to the composition logic in the same manner as with
+	a full state presence publication. Similarly, any changes to
+	the publication expiration apply to the full, patched presence
+	publication. In other words, there is no possibility to roll
+	back to an earlier version, except by submitting a full state
+	publication.</t>
+      
+      </section>
+    </section>
+    
+    <section title="Client and Server Operation"
+    anchor="clientserver">
+      
+      <t>Unless otherwise specified in this document, the presence
+      user agent and presence agent behavior are as defined in <xref
+      target="RFC3903" />.</t>
+      
+      <section title="Content-type for Partial Publications"
+      anchor="content-type">
+        
+	<t>The entities supporting the partial publication extension
+	described in this document MUST support the
+	'application/pidf-diff+xml' content type defined in <xref
+	target="I-D.ietf-simple-partial-pidf-format">the partial PIDF
+	format</xref>, in addition to the baseline
+	'application/pidf+xml' content type defined in <xref
+	target="RFC3863" />.</t>
+
+	<t>Listing the partial PIDF content type in the Accept 
+	header field of a SIP response is an explicit indication of 
+	support for the partial publication mechanism. The PUA can learn server 
+	support either as a result of an explicit query, i.e., in a response to 
+	an OPTIONS request; or by trial-and-error, i.e., after an 415 
+	error response is returned to an attempted partial publication.</t>
+      	
+      </section>
+      
+      <section title="Generation of Partial Publications"
+      anchor="publish">
+      
+	<t>Whenever a PUA decides to begin publication of partial presence
+	information, it first needs to make an initial
+	publication. This intial publication always carries full
+	state. After the initial publication, presence information can
+	be updated using modifying publications; the modifications can carry
+	state deltas as well as full state. Finally, the publication can
+	be terminated by explicit removal, or by expiration.</t>
+	
+	<t>Both the initial and 
+	modifying publications make use of the 
+	<xref target="I-D.ietf-simple-partial-pidf-format">partial
+	presence document format</xref>, and all follow the normal rules for 
+	creating publications, as defined in 
+	<xref target="RFC3903">RFC 3903</xref>, Section 4.</t>
+
+	<t>If the initial PUBLISH request returns a 415 (Unsupported
+	Media Type), it means that the compositor did not understand
+	the partial publication format. In this case, the PUA MUST
+	follow normal precedures for handling a 400-class response, as
+	specified in Section 8.1.3.5 of <xref target="RFC3261" />. 
+	Specifically, the PUA SHOULD retry the publication using the default 
+	PIDF content type, namely 'application/pidf+xml'. In
+	addition, to find out a priori whether a specific presence
+	compositor supports partial presence publication, the PUA MAY
+	use the OPTIONS method, as described in <xref target="RFC3261"
+	/>.</t>
+
+	<t>To construct a full-state publication, the PUA uses the
+	following process:
+
+	<list style="symbols">
+	  <t>The Content-Type header field in the PUBLISH request MUST
+	  be set to the value 'application/pidf-diff+xml'.</t>
+	  
+	  <t>The document in the body of the request is populated
+	  with a &lt;pidf-full&gt; root element that includes the
+	  'entity' attribute set to identify the presentity.</t>
+
+	  <t>Under the &lt;pidf-full&gt; root element exists all of 
+	  the children of a <xref target="RFC3863">PIDF</xref> &lt;presence&gt; 
+	  element. This document 
+	  contains the full state of which the PUA is aware,
+	  and MAY include elements from any extension namespace.</t>
+
+	</list></t>
+
+	<t>To construct a partial publication the following
+	process is followed:
+
+	<list style="symbols">
+          <t>The Content-Type header field in the PUBLISH request MUST
+          be set to the value 'application/pidf-diff+xml'</t>
+
+          <t>The document in the body of the request is populated
+          with a &lt;pidf-diff&gt; root element that includes the
+          'entity' attribute identifying the presentity.</t>
+
+          <t>Under the &lt;pidf-diff&gt; root element exists a set of patch operations
+          that communicate the changes to the presentity's presence
+          information. These operations MUST be constructed in
+          sequence, and as defined in <xref
+          target="I-D.ietf-simple-partial-pidf-format">the partial
+          PIDF format</xref>.</t>
+
+        </list></t>
+
+	<t>The PUA is free to decide the granularity by which changes
+	in the presentity's presence information are communicated to
+	the presence compositor. In order to reduce unnecessary
+	network traffic, the PUA SHOULD batch several patch operations
+	in a single PUBLISH request.
+
+	<list style="empty">
+	  <t>A reasonable granularity might be to batch state changes
+	  resulting from related UI events together in a single
+	  PUBLISH request. For example, when the user sets their
+	  status to "Away",  several things including freetext notes,
+	  service availability, and activities might change as a
+	  result.</t>
+	</list></t>
+
+	<t>If the size of the delta state becomes more than the size
+	of the full state, the PUA SHOULD instead send a modifying publication
+	carrying full state, unless this size comparison is not possible.
+	
+	<list style="empty">
+	  <t>To an implementation that generates state deltas directly out of 
+	  its internal events, it may not be trivial to determine the size of 
+	  the corresponding full state.
+	  </t>
+	  </list></t> 
+	        
+      </section>
+      
+      <section title="Processing of Partial Publications"
+      anchor="server">
+
+	<t>For each resource, the compositor maintains a record for
+	each of the publications. These are indexed using the
+	entity-tag of the publications.</t>
+	
+	<t>Processing of publications generally follows the guidelines
+	set in <xref target="RFC3903" />. In addition, processing
+	PUBLISH requests that contain 'application/pidf-diff+xml'
+	require some extra processing that is dependant on whether the
+	request contains full or partial state.</t>
+
+	<section title="Processing &lt;pidf-full&gt;">
+
+	  <t>If the value of the Content-Type header field is
+	  'application/pidf-diff+xml', and the document therein
+	  contains a &lt;pidf-full&gt; root element, the publication contains
+	  full presence information, and the next
+	  step applies:
+	  
+	  <list style="symbols">
+
+	  <t>The compositor MUST take the received presence
+	  document under the &lt;pidf-full&gt; as the local presence
+	  document, replacing any previous publications.</t>
+
+	  </list></t>
+
+	  <t>If any errors are encountered before the entire
+	  publication is completely processed, the compositor MUST
+	  reject the request with a 500 (Server Internal Error)
+	  response, and revert back to its original, locally stored
+	  presence information.</t>
+
+	</section>
+
+	<section title="Processing &lt;pidf-diff&gt;">
+
+	  <t>If the value of the Content-Type header field is
+	  'application/pidf-diff+xml', and the document in the body
+	  contains a &lt;pidf-diff&gt; root element, the publication
+	  contains partial presence information (state delta), and the
+	  next steps apply:
+
+	  <list style="symbols">
+
+	    <t>If the publication containing the
+	    &lt;pidf-diff&gt; root element is a modifying publication 
+	    (i.e., contains an If-Match header field with a valid entity-tag), 
+	    the compositor MUST apply the included patch operations in 
+	    sequence against its locally stored presence document.</t>
+	    
+	    <t>Else, the publication is an initial publication, for which only
+	    &lt;pidf-full&gt; is allowed. Therefore the publication MUST be 
+	    rejected with an appropriate error response, such as a 400 
+	    (Invalid Partial Publication).</t>
+
+	  </list></t>
+
+	  <t>If a publication carrying partial presence information
+	  expires without the PUA refreshing it, the compositor MUST
+	  clear the entire, full state publication. 
+
+	  <list style="empty">
+	    <t>This means that the compositor does not keep a record
+	    of the applied patches, and consequently (unlike some versioning
+	    systems), the compositor does not roll back to an earlier
+	    version if a particular partial publication were to expire.</t>
+	  </list></t>
+
+	  <t>If the compositor encounters errors while processing the
+	  'application/pidf-diff+xml' document, it MUST reject the
+	  request with a 400 (Bad Request) response. In addition, the
+	  compositor MAY include diagnostics information in the body
+	  of the response, using an appropriate error condition
+	  element defined in Section 5.1. of
+	  <xref target="I-D.ietf-simple-xml-patch-ops" />.</t>
+
+	  <t>If any other errors are encountered before the entire partial
+	  publication is completely processed, including all of the
+	  patch operations in the 'application/pidf-diff+xml' body, the
+	  compositor MUST reject the request with a 500 (Server
+	  Internal Error) response, and revert back to its original,
+	  locally stored presence information.</t>
+
+	</section>
+      </section>
+    </section>
+    
+    <section title="Security Considerations"
+    anchor="Security-Considerations">
+      
+      <t>This specification relies on protocol behavior defined in
+      <xref target="RFC3903" />. General event state
+      publication related security considerations are extensively
+      discussed in that specification and all the
+      identified security considerations apply to this document in
+      entirety. In addition, this specification adds no new security
+      considerations.</t>
+      
+    </section>
+
+    <section title="Examples" anchor="Examples">
+
+      <t>The following <xref target="example-flow">message flow</xref>
+      shows an example of a presence system that applies the partial
+      publication mechanism.</t>
+
+      <t>First, the PUA sends an initial publication that contains
+      full state. In return, it receives a 200 OK response containing
+      an entity-tag. This entity-tag serves as a reference with which
+      the initial full state can be updated using partial publications
+      containing state deltas.</t>
+
+      <t>Then at some point the resource state changes, and the PUA
+      assembles these changes into a set of patch operations. It then
+      sends a modifying publication containing the patch operations,
+      using the entity-tag as a reference to the publication against
+      which the patches are to be applied. The compositor
+      applies the received patch operations to its local presence
+      document in sequence, and returns a 200 OK which includes a new
+      entity-tag.</t>
+
+      <figure title="Partial Publication Message Flow"
+	      anchor="example-flow">
+
+	<artwork>
+                                          Presence Agent /
+                  PUA                        Compositor
+                   | (M1) PUBLISH                |
+                   |----------------------------&gt;|
+                   | (M2) 200 OK                 |
+                   |&lt;----------------------------|
+                   |                             |
+                   |                             |
+                   |                             |
+                   | (M3) PUBLISH                |
+                   |----------------------------&gt;|
+                   | (M4) 200 OK                 |   
+                   |&lt;----------------------------|
+                   |                             |
+                  _|_                           _|_
+	</artwork>
+      </figure>
+
+      <t>Message details:</t>
+
+      <figure>
+	<preamble>(M1): PUA -> Compositor</preamble>
+	<artwork><![CDATA[
+      PUBLISH sip:resource@example.com SIP/2.0
+      ...
+      Event: presence
+      Expires: 3600
+      Content-Type: application/pidf-diff+xml
+      Content-Length: 1457
+
+      <?xml version="1.0" encoding="UTF-8"?>
+      <p:pidf-full xmlns="urn:ietf:params:xml:ns:pidf"
+             xmlns:p="urn:ietf:params:xml:ns:pidf-diff"
+             xmlns:r="urn:ietf:params:xml:ns:pidf:rpid"
+             xmlns:c="urn:ietf:params:xml:ns:pidf:caps"
+             entity="pres:someone@example.com">
+
+       <tuple id="sg89ae">
+        <status>
+         <basic>open</basic>
+         <r:relationship>assistant</r:relationship>
+        </status>
+        <c:servcaps>
+         <c:audio>true</c:audio>
+         <c:video>false</c:video>
+         <c:message>true</c:message>
+        </c:servcaps>
+        <contact priority="0.8">tel:09012345678</contact>
+       </tuple>
+
+       <tuple id="cg231jcr">
+        <status>
+         <basic>open</basic>
+        </status>
+        <contact priority="1.0">im:pep@example.com</contact>
+       </tuple>
+
+       <tuple id="r1230d">
+        <status>
+         <basic>closed</basic>
+         <r:activity>meeting</r:activity>
+        </status>
+        <r:homepage>http://example.com/~pep/</r:homepage>
+        <r:icon>http://example.com/~pep/icon.gif</r:icon>
+        <r:card>http://example.com/~pep/card.vcd</r:card>
+        <contact priority="0.9">sip:pep@example.com</contact>
+       </tuple>
+
+       <note xml:lang="en">Full state presence document</note>
+
+       <r:person>
+        <r:status>
+         <r:activities>
+          <r:on-the-phone/>
+          <r:busy/>
+         </r:activities>
+        </r:status>
+       </r:person>
+
+       <r:device id="urn:esn:600b40c7">
+        <r:status>
+         <c:devcaps>
+          <c:mobility>
+           <c:supported>
+            <c:mobile/>
+           </c:supported>
+          </c:mobility>
+         </c:devcaps>
+        </r:status>
+       </r:device>
+
+      </p:pidf-full>
+	]]></artwork>
+      </figure>
+
+      <figure>
+	<preamble>(M2): Compositor -> PUA</preamble>
+	<artwork>
+      SIP/2.0 200 OK
+      ...
+      SIP-ETag: 61763862389729
+      Expires: 3600
+      Content-Length: 0
+	</artwork>
+      </figure>
+
+      <figure>
+	<preamble>(M3): PUA -> Compositor</preamble>
+	<artwork><![CDATA[
+      PUBLISH sip:resource@example.com SIP/2.0
+      ...
+      Event: presence
+      SIP-If-Match: 61763862389729
+      Expires: 3600
+      Content-Type: application/pidf-diff+xml
+      Content-Length: 778
+
+      <?xml version="1.0" encoding="UTF-8"?>
+      <p:pidf-diff xmlns="urn:ietf:params:xml:ns:pidf"
+                   xmlns:p="urn:ietf:params:xml:ns:pidf-diff"
+                   xmlns:r="urn:ietf:params:xml:ns:pidf:rpid"
+                   entity="pres:someone@example.com">
+
+       <p:add sel="presence/note" pos="before"><tuple id="ert4773">
+        <status>
+         <basic>open</basic>
+        </status>
+        <contact priority="0.4">mailto:pep@example.com</contact>
+        <note xml:lang="en">This is a new tuple inserted
+              between the last tuple and note element</note>
+       </tuple>
+
+       </p:add>
+       <p:replace sel="*/tuple[@id='r1230d']/status/basic/text()"
+        >open</p:replace>
+
+       <p:remove sel="*/r:person/r:status/r:activities/r:busy"/>
+
+       <p:replace sel="*/tuple[@id='cg231jcr']/contact/@priority"
+        >0.7</p:replace>
+
+      </p:pidf-diff>
+]]>
+	</artwork>
+      </figure>
+
+      <figure>
+	<preamble>(M4): Compositor -> PUA</preamble>
+	<artwork>
+      SIP/2.0 200 OK
+      ...
+      SIP-ETag: 18764920981476
+      Expires: 3600
+      Content-Length: 0
+	</artwork>
+      </figure>
+    </section>
+    
+    <section title="Acknowledgements" anchor="Acknowledgements">
+      
+      <t>The authors would like to thank Atle Monrad, Christian
+      Schmidt, George Foti, Fridy Sharon-Fridman and Avshalom Houri
+      for review comments.</t>
+    
+    </section>
+
+  </middle>
+  <back>
+    <references title="Normative references">
+      <?rfc include="reference.RFC.2119" ?>
+      <?rfc include="reference.RFC.3903" ?>
+      <?rfc include="reference.RFC.3863" ?>
+      <?rfc include="reference.RFC.3261" ?>
+      <?rfc include="reference.I-D.ietf-simple-partial-pidf-format" ?>
+      <?rfc include="reference.I-D.ietf-simple-xml-patch-ops" ?>
+
+    </references>
+    <references title="Informative references">
+      <?rfc include="reference.RFC.2778" ?>
+      <?rfc include="reference.RFC.4479" ?>
+      <?rfc include="reference.RFC.4480" ?>
+      <?rfc include="reference.RFC.4481" ?>
+      <?rfc include="reference.RFC.4482" ?>
+      <?rfc include="reference.I-D.ietf-simple-prescaps-ext" ?>
+      <?rfc include="reference.W3C.REC-xml" ?>
+    </references>
+  </back>
+</rfc>

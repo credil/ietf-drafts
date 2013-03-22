@@ -1,0 +1,324 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc tocompact="yes"?>
+<?rfc tocdepth="3"?>
+<?rfc tocindent="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc comments="yes"?>
+<?rfc inline="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<rfc category="exp" docName="draft-irtf-dtnrg-cbhe-02" ipr="trust200902">
+  <front>
+    <title abbrev="CBHE">Compressed Bundle Header Encoding (CBHE)</title>
+
+    <author fullname="Scott Burleigh" initials="S" surname="Burleigh">
+      <organization>Jet Propulsion Laboratory, California Institute of
+      Technology</organization>
+
+      <address>
+        <postal>
+          <street>4800 Oak Grove Drive, m/s 301-490</street>
+
+          <city>Pasadena</city>
+
+          <region>CA</region>
+
+          <code>91109</code>
+
+          <country>USA</country>
+        </postal>
+
+        <email>Scott.C.Burleigh@jpl.nasa.gov</email>
+
+        <phone>+1 818 393 3353</phone>
+      </address>
+    </author>
+
+    <date day="9" month="April" year="2009" />
+
+    <abstract>
+      <t>This document describes a convention by which Delay-Tolerant
+      Networking (DTN) Bundle Protocol (BP) "convergence-layer" adapters may
+      represent endpoint identifiers in a compressed manner within the primary
+      blocks of bundles, provided those endpoint identifiers conform to the
+      structure prescribed by this convention.</t>
+
+      <t>CBHE compression is a convergence-layer adaptation. It is opaque to
+      bundle processing. It therefore has no impact on the interoperability of
+      different Bundle Protocol implementations, but instead affects only the
+      interoperability of different convergence layer adaptation
+      implementations.</t>
+    </abstract>
+
+    <note title="Requirements Language">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119">RFC 2119</xref>.</t>
+    </note>
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t>This document describes a convention by which Delay-Tolerant
+      Networking (DTN) Bundle Protocol (BP) <xref target="RFC5050"></xref>
+      "convergence-layer adapters may represent endpoint identifiers in a
+      compressed manner within the primary blocks of bundles, provided those
+      endpoint identifiers conform to the structure prescribed by this
+      convention.</t>
+
+      <t>Each DTN bundle's primary block contains at least the following four
+      BP endpoint identifiers (EIDs), of which any two, any three, or even all
+      four may be lexically identical: the endpoint identifiers of the source,
+      the destination, the report-to endpoint, and the current custodian. Each
+      EID is a Uniform Record Identifier (URI) as defined by <xref
+      target="RFC3986"></xref>.</t>
+
+      <t>A degree of block compression is provided by the design of the
+      primary block: the scheme names and scheme-specific parts of the four
+      endpoints' IDs &ndash; up to eight NULL-terminated strings &ndash; are
+      concatenated at the end of the block in a variable-length character
+      array called a "dictionary", enabling each EID to be represented by a
+      pair of integers indicating the offsets (within the dictionary) of the
+      EID's scheme name and scheme-specific part. Duplicate strings may be
+      omitted from the dictionary, so the actual number of concatenated
+      NULL-terminated strings in the dictionary may be less than eight and two
+      or more of the scheme name or scheme-specific part offsets in the block
+      may have the same value. Moreover, the eight offsets in the primary
+      block are encoded as self-delimiting numeric values (SDNVs), which
+      shrink to fit the encoded values; when the total length of the
+      dictionary is less than 127 bytes, all eight offsets can be encoded into
+      just eight bytes.</t>
+
+      <t>However, these strategems do not prevent the scheme names and
+      scheme-specific parts themselves from being lengthy strings of ASCII
+      text. It is therefore still possible for the length of a bundle's
+      primary header to be a very large fraction of the total length of the
+      bundle when the bundle's payload is relatively small, as is anticipated
+      for a number of DTN applications such as space flight operations.</t>
+
+      <t>The Compressed Bundle Header Encoding (CBHE) convention was developed
+      to improve DTN transmission efficiency for such applications by further
+      reducing the number of bytes used by convergence-layer adapters to
+      express EIDs in the primary blocks of bundles.</t>
+    </section>
+
+    <section title="Compression convention">
+      <section title="Constraints">
+        <t>Compressed Bundle Header Encoding (CBHE) is possible only when all
+        endpoint IDs in the primary block of a given bundle are
+        "CBHE-conformant". Two forms of endpoint ID are CBHE-conformant: (a)
+        the null endpoint ID "dtn:none" and (b) any endpoint ID formed within
+        the "dtn" scheme whose namespace-specific string (NSS) is of the form
+        NODE_NUMBER.SERVICE_NUMBER.</t>
+
+        <t>The EIDs formed within any number of different namespaces within
+        the "dtn" scheme may be CBHE-conformant. However, CBHE compression is
+        possible between a pair of convergence-layer adapters only when each
+        one is configured to figured to compress only EIDs formed within a
+        single namespace <spanx style="strong">and</spanx> that designated
+        namespace is the same for both adapters.</t>
+
+        <t>The node number is a positive integer that notionally identifies a
+        BP node. In a spacecraft flight operations context, for example,
+        spacecraft identifier might be used as node number. However, methods
+        for assigning node numbers to BP nodes are beyond the scope of this
+        document; in particular, no requirement or guarantee of a one-to-one
+        mapping between node numbers and BP nodes may be inferred.</t>
+
+        <t>Node number must be an integer in the range 1 to (2^64 - 1). Node
+        number zero is reserved for representation of the null endpoint ID in
+        the compressed form described later in this specification;
+        decompressing a compressed null EID MUST always yield the standard
+        null endpoint ID URI "dtn:none". Negative integers and integers larger
+        than (2^64 - 1) cannot be compressed into the SDNVs that are used for
+        representation of endpoint ID references in the primary blocks of
+        bundles and therefore could not be compressed as described later.</t>
+
+        <t>The service number is a non-negative integer that notionally
+        functions as a de-multiplexing token. When the protocol encapsulated
+        within BP has its own de-multiplexing identifiers, the service number
+        may function in a manner similar to that of the protocol number in an
+        IP packet, characterizing the bundle payload; alternatively, the
+        service number may function in a manner similar to that of the port
+        number in a UDP datagram. Service numbers enable inbound bundles'
+        application data units to be de-multiplexed to instances of
+        application functionality that are designed to process them, so that
+        effective communication relationships can be developed between bundle
+        producers and consumers.</t>
+
+        <t>Service number must not be negative or exceed (2^64 - 1) for the
+        same reason that node number must not do so.</t>
+
+        <t>For example, "dtn::ipn:9.37" would be a CBHE-conformant endpoint
+        ID.</t>
+
+        <t>Conversion of a CBHE-conformant EID to and from a tuple of two
+        integers is therefore straightforward. This ease of conversion enables
+        an array of integers to serve the same function as a dictionary of EID
+        ASCII strings.</t>
+
+        <t>Note, however, that CBHE decompression cannot faithfully recreate
+        the dictionary of a compressed primary block from an array of integers
+        unless the order of the endpoint ID reference strings in the
+        dictionary of the original, uncompressed block is known. (The bundle
+        protocol specification does not require that the strings in the
+        dictionary appear in any particular order and does not require that
+        redundant strings be omitted from the dictionary.) Therefore, a
+        further precondition to CBHE compression is that the endpoint ID
+        reference strings in the dictionary of the bundle to be compressed
+        must be exactly as follows, in this order and without addition:</t>
+
+        <t><list style="numbers">
+            <t>The scheme name of the destination endpoint ID.</t>
+
+            <t>The scheme-specific part of the destination endpoint ID.</t>
+
+            <t>The scheme name of the source endpoint ID, if and only if
+            different from any prior string in the dictionary.</t>
+
+            <t>The scheme-specific part of the source endpoint ID, if and only
+            if different from any prior string in the dictionary.</t>
+
+            <t>The scheme name of the report-to endpoint ID, if and only if
+            different from any prior string in the dictionary.</t>
+
+            <t>The scheme-specific part of the report-to endpoint ID, if and
+            only if different from any prior string in the dictionary.</t>
+
+            <t>The scheme name of the current custodian endpoint ID, if and
+            only if different from any prior string in the dictionary.</t>
+
+            <t>The scheme-specific part of the current custodian endpoint ID,
+            if and only if different from any prior string in the
+            dictionary.</t>
+          </list></t>
+
+        <t>Note: this constraint implies that a bundle which includes any
+        extension blocks containing EID references to endpoint IDs other than
+        the block's destination, source, report-to, and current custodian
+        cannot be CBHE-compressed.</t>
+      </section>
+
+      <section title="Method">
+        <t>When the constraints summarized above are met, the CBHE block
+        compression method can be applied by the convergence layer adapter at
+        the time the bundle is transmitted via a convergence-layer protocol.
+        In a CBHE-compressed primary block, the eight SDNVs that normally
+        contain EIDs' offsets within the dictionary are instead used to
+        contain the eight integer values listed below, in the order shown:</t>
+
+        <t><list style="numbers">
+            <t>The node number of the destination endpoint ID, or zero if the
+            destination endpoint is the null endpoint.</t>
+
+            <t>The service number of the destination endpoint ID, or zero if
+            the destination endpoint is the null endpoint.</t>
+
+            <t>The node number of the source endpoint ID, or zero if the
+            source endpoint is the null endpoint.</t>
+
+            <t>The service number of the source endpoint ID, or zero if the
+            source endpoint is the null endpoint.</t>
+
+            <t>The node number of the report-to endpoint ID, or zero if the
+            report-to endpoint is the null endpoint.</t>
+
+            <t>The service number of the report-to endpoint ID, or zero if the
+            report-to endpoint is the null endpoint.</t>
+
+            <t>The node number of the current custodian endpoint ID, or zero
+            if the current custodian endpoint is the null endpoint.</t>
+
+            <t>The service number of the current custodian endpoint ID, or
+            zero if the current custodian endpoint is the null endpoint.</t>
+          </list>Further, the dictionary is omitted from the primary block and
+        the primary block's dictionary length is set to zero.</t>
+
+        <t>Upon reception the receiving convergence-layer adaptation
+        de-compresses the block by simply reversing the process so that the
+        bundle presented to the bundle protocol agent has the standard form
+        (i.e., the dictionary is reconstituted).</t>
+      </section>
+    </section>
+
+    <section title="Specification">
+      <t>CBHE compression is a convergence-layer adaptation. It is opaque to
+      bundle processing. It therefore has no impact on the interoperability of
+      different Bundle Protocol implementations, but instead affects only the
+      interoperability of different convergence layer adaptation
+      implementations.</t>
+
+      <t>Bundle Protocol convergence-layer adapters that conform to the CBHE
+      specification must implement the following procedures.</t>
+
+      <section title="Transmission">
+        <t>When and only when required by the bundle protocol agent to
+        transmit to some CBHE-conformant convergence-layer adapter a bundle
+        whose primary block's endpoint IDs satisfy the constraints identified
+        in section 2.1 above, the convergence layer adapter may encode the
+        primary block of the bundle in accordance with the CBHE compression
+        convention described in section 2.2 above.</t>
+      </section>
+
+      <section title="Reception">
+        <t>Upon receiving a bundle whose dictionary length is zero (and only
+        in this circumstance), a CBHE-conformant convergence layer adapter
+        MUST decode the primary block of the bundle in accordance with the
+        CBHE compression convention described in section 2.2 above before
+        delivering it to the bundle protocol agent.</t>
+
+        <t>Note that when a non-CBHE-conformant convergence layer adapter
+        receives a bundle whose dictionary length is zero, it has no choice
+        but to pass it to the bundle agent without modification. In this case
+        the bundle agent will be unable to dispatch the received bundle,
+        because it will be unable to determine the destination endpoint. The
+        behavior of the bundle agent in this circumstance is an implementation
+        matter.</t>
+      </section>
+    </section>
+
+    <section anchor="IANA" title="IANA Considerations">
+      <t>This document has no IANA considerations.</t>
+    </section>
+
+    <section anchor="Security" title="Security Considerations">
+      <t>The Bundle Security Protocol may under some conditions insert
+      additional endpoint ID strings into the dictionary of a bundle and
+      reference those strings in BSP blocks. Because a bundle which includes
+      any extension blocks containing EID references to endpoint IDs other
+      than the block's destination, source, report-to, and current custodian
+      cannot be CBHE-compressed, bundles cannot be compressed under those
+      conditions.</t>
+
+      <t>Specifically, the specification detailed above implies that a bundle
+      cannot be CBHE-compressed when the security source endpoint for the
+      Bundle Authentication Block (BAB) is noted in the dictionary (typically
+      because there is no other way for the receiving bundle protocol agent to
+      determine the security source endpoint), when the security destination
+      endpoint for the BAB is noted in the dictionary (in the rare case that
+      the receiving endpoint is not the security destination endpoint), when
+      the security source endpoint for the Payload Integrity Block (PIB),
+      Payload Confidentiality Block (PCB), or Extension Security Block (ESB)
+      is not the source endpoint, or when the security destination endpoint
+      for the PIB, PCB, or ESB is not the destination endpoint.</t>
+
+      <t>These caveats aside, CBHE introduces no new security considerations
+      beyond those discussed in the DTN Bundle Protocol and Bundle Security
+      Protocol specifications.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.RFC.2119"?>
+
+      <?rfc include="reference.RFC.3986"?>
+
+      <?rfc include="reference.RFC.5050"?>
+    </references>
+  </back>
+</rfc>

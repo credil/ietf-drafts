@@ -1,0 +1,682 @@
+<?xml version="1.0"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+
+<?rfc toc="yes"?>
+
+<rfc ipr='full3978' docName='draft-barre-shim6-impl-00'>
+  <front>
+    <title>Shim6 Implementation Report : LinShim6</title>
+
+    <author initials="S." surname="Barré" fullname="Sébastien Barré">
+      <organization abbrev="UCL">Université catholique de Louvain
+      </organization>
+      <address>
+	<postal>
+	  <street>Place Ste Barbe, 2</street>
+	  <city>Louvain-la-Neuve</city> <code>1348</code>
+	  <country>BE</country>
+	</postal>
+	<email>sebastien.barre@uclouvain.be</email>
+	<uri>http://inl.info.ucl.ac.be/sbarre</uri>
+      </address>      
+    </author>
+
+    <author initials="O." surname="Bonaventure" 
+	    fullname="Olivier Bonaventure">
+      <organization abbrev="UCL">Université catholique de Louvain
+      </organization>
+      <address>
+	<postal>
+	  <street>Place Ste Barbe, 2</street>
+	  <city>Louvain-la-Neuve</city> <code>1348</code>
+	  <country>BE</country>
+	</postal>
+	<uri>http://inl.info.ucl.ac.be/obo</uri>
+      </address>
+    </author>
+    
+    <date month="February" year="2008" />
+
+    <abstract>
+      <t> LinShim6 is an implementation of the Shim6 and REAP protocols, 
+	on the Linux platform. This draft provides a brief description of 
+	the architecture and describes the current state of our 
+	implementation. 
+	For each feature of the protocols, its level of support is described.
+	Protocol conformance is evaluated against <xref target="refs.shim6"/>
+	and <xref target="refs.reap"/>.
+      </t>
+    </abstract>   
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <t> LinShim6 has been developped from scratch at UCL (Belgium), and it 
+	is available at 
+        <eref target="http://inl.info.ucl.ac.be/LinShim6"/>. It has been used
+	to evaluate the performance of REAP path exploration 
+	<xref target="refs.sigcomm"/>.
+	The architecture has been thought to be
+	well integrated, easy to use and efficient. We define a heuristic that
+	tries to avoid starting a Shim6 negotiation when the corresponding
+	overhead would be too high. LinShim6 supports the base Shim6 protocol
+	(negotiation and address rewriting) as well as failure detection
+	and recovery. In terms of security, CGA support has been added recently
+	(most of the code for the
+	CGA module comes from the 
+	<eref target="http://www.docomolabs-usa.com/lab_opensource.html"> 
+	  DoCoMo SEND project </eref>)
+	and HBA will be supported soon as well.</t>
+      
+      <t>Some features have not yet a real application and are not supported 
+	for
+	this reason. They will be added as soon as a need for them arises. 
+	This
+	is the case for the Forked Instance Identifier that is only useful if 
+	a socket API is implemented (such as the API defined in 
+	<xref target="refs.api"/>). The Locator Preference Option or the
+	Keepalive Timeout option may only be used if the corresponding 
+	tuning capability is provided, either by the user or by an automated 
+	technique. </t>
+
+      <t>Other features are just absent for time reasons, and were omitted 
+	because they did not seem essential for a correct working of the 
+	protocol. Thus we still have in the TODO list features like
+	locator list updates, Handling of ICMP error messages or context
+	recovery.	
+      </t>
+	
+      <t>In this document we use the terminology defined in section 2 of 
+	<xref target="refs.shim6"/>. </t>
+
+
+    </section>
+
+    <section title="General architecture">
+      <t>The LinShim6 implementation is made of a kernel patch and a user space 
+      daemon. The kernel patch adds support for shim6 negotiation trigger, 
+      address rewriting and Failure detection. The daemon is responsible
+      for managing the whole Shim6 control plane (negotiation, 
+      path exploration). The kernel communicates with the user space 
+      daemon through the Netlink interface <xref target="refs.rfc3549"/>.
+      </t>
+      <section title="Kernel patch">
+	<t>The negotiation trigger makes use of the NF_IP6_LOCAL_IN and 
+	  NF_IP6_LOCAL_OUT netfilter hooks to listen to the packets 
+	  travelling through the networking stack. A Shim6 negotiation is 
+	  triggered when either 2 KB of data have been seen for a given 
+	  address pair or the flow exists for one minute.
+	</t>
+	
+	<t>Address rewriting is implemented as an extension to the XFRM
+	  framework, originally designed for IPsec <xref target="refs.ipsec"/>.
+	  The XFRM framework allows for dynamically adding a new sublayer in
+	  the Networking stack for some flows, according to a policy. Examples 
+	  of already defined sublayers are the AH sublayer 
+	  (Authentication Header) or the ESP sublayer (Encapsulating Security 
+	  Payload). We define a new Shim6 sublayer. The policies responsible for
+	  directing packets to this new module are communicated from the daemon
+	  to the kernel, through Netlink, when a change in the locators is 
+	  needed or a new Shim6 context is created. For outgoing packets, the
+	  policy has the form of a matching rule with the ULIDs. For Incoming 
+	  packets that do not have the Shim6 extension header the same kind of
+	  matching rule is used. We also defined a matching rule based on the 
+	  context tag, to be able to demultiplex tagged incoming packets.
+	</t>
+
+	<t>Failure detection is performed inside the kernel for efficiency 
+	  reasons : A timer must be started or stopped for each incoming of
+	  outgoing packets. We thus maintain a small REAP state in the XFRM 
+	  states that stores the failure detection timers, and notifies the 
+	  daemon when a keepalive must be sent or an exploration is to be
+	  started.
+	</t>
+      </section>
+      
+      <section title="LinShim6 daemon">
+	<t>The daemon is made of an infinite loop that listens to three kinds 
+	  of 
+	  events. First, Shim6 and REAP control messages are received through 
+	  a raw socket.
+	  Second, Netlink messages provide information from the kernel, for 
+	  example if a context must be created, a keepalive must be sent or 
+	  an exploration must be started. Finally, messages can be received 
+	  through a pipe where the other threads may write commands. Four
+	  threads are currently defined :
+	  <list style="symbols">
+	    <t>XFRM : Listens to the XFRM events from the kernel. 
+	      Currently only the state expiry event is used. It is
+	      generated when a kernel context has seen no traffic during
+	      more than 10 minutes. The result is that the daemon deletes 
+	      the corresponding association.</t>
+	    <t>Timer : It maitains a timer queue and wakes up when any timer
+	      expires. It the asks the main thread to run the corresponding
+	      handling function.</t>
+	    <t>Information server : A simple telnet server that provides a
+	      convenient interface to the daemon.</t>
+	    <t>Main thread : Maintains all the critical states.</t>
+	  </list>
+	</t>
+      </section>
+      <t>A more extensive description can be found in <xref target="refs.ring"/>
+	or in the pdf documentation provided with the LinShim6 package.
+      </t>
+      
+    </section>
+
+    <section title="RFC 2119 evaluation">
+      <t>In this section we detail the conformance of the LinShim6 
+	implementation in terms of the RFC2119 <xref target="refs.rfc2119"/>
+	terminology. Note that if a MUST is followed by "FEATURE NOT SUPPORTED",
+	this means that the MUST has sense only if the feature exists. That 
+	is, the implementation is still conformant but does not implement the
+	particular feature.</t>
+      <section title="Checks common to all control messages">
+	<t>A host MUST silently discard any received control message that does
+	  not statisfy all of the following validity checks :
+	  <list style="symbols">
+	    <t>The Shim header length field is verified against the length of 
+	      the IPv6 packet to make sure that the shim message doesn't claim 
+	      to end past the end of the IPv6 packet. : YES 
+	      (Checked in the kernel)</t>
+	    <t>the checksum is correct : YES (Checked in the kernel)</t>  
+	    <t>Neither the
+	      IPv6 destination field nor the IPv6 source field is a multicast
+	      address nor the unspecified address : YES 
+	      (Checked in the kernel)</t>
+	  </list>
+	</t>
+	    
+      </section>
+      <section title="I1 Message">
+	<list style="symbols">
+	  <t>The Reserved1 field MUST be ignored on receipt: YES</t>
+	  <t>The R field MUST be ignored on receipt: YES</t>
+	  <t>When another instance of an existent
+            context with the same ULID pair is being created, a
+            Forked Instance Identifier option MUST be included to
+            distinguish this new instance from the existent one :
+	    FEATURE NOT SUPPORTED (LinShim6 never maintains 
+	    two instances of a context with the same ULID pair, because this
+	    would happen only if a socket API were implemented)</t>
+	  <t>The I1 message MUST include the ULID pair : YES (always in the 
+	    IPv6 header since the ULID option is not supported)</t>
+	  <t>A host MUST silently discard any received I1 message that does
+	    not statisfy all of the following validity checks : 
+	    <list style="symbols">
+	      <t>Hdr Ext Len field at least 1 : YES </t>
+	      <t>If the ULID pair option is present, the host verifies that
+		the locator of the Initiator is included in Ls(peer) : 
+		FEATURE NO SUPPORTED (ULID pair option)</t>
+	    </list>
+	  </t>
+	</list>
+      </section>
+      <section title="R1 Message">
+	<list style="symbols">
+	  <t>The Reserved1 field MUST be ignored on receipt: YES</t>
+	  <t>The Reserved2 field MUST be ignored on receipt: YES</t>
+	  <t>The Responder Validator Option MUST be included : YES</t>	 
+	  <t>A host MUST silently discard any received R1 message that does
+	    not statisfy all of the following validity checks : 
+	    <list style="symbols">
+	      <t>Hdr Ext Len field at least 1 : YES </t>
+	      <t>the host
+		looks for an existing context which matches the Initiator 
+		Nonce and where the locators are contained in Ls(peer) and 
+		Ls(local), respectively.  If no such context is found, then 
+		the R1 message is
+		silently discarded : YES</t>
+	      <t>If the context found using the above rules is not in I1-SENT
+		state, the R1 message is silently discarded : YES</t>
+	    </list>
+	  </t>
+
+	</list>
+      </section>
+      <section title="I2 Message">
+	<list style="symbols">
+	  <t>The Reserved1 field MUST be ignored on receipt: YES</t>
+	  <t>The R field MUST be ignored on receipt: YES</t>
+	  <t>The Reserved2 field MUST be ignored on receipt: YES</t>
+	  <t>The Responder Validator Option MUST be included : YES</t>
+	  <t>The Responder Validator Option MUST be generated
+            copying the Responder Validator option received in the
+            R1 message : YES</t>
+	  <t>When the IPv6 source and destination addresses in the
+            IPv6 header do not match the ULID pair, this option
+            MUST be included : FEATURE NOT SUPPORTED (Makes sense in case of 
+	    recovery from a lost context, which is not yet supported)</t>
+	  <t>When another instance of an existent
+            context with the same ULID pair is being created, a
+            Forked Instance Identifier option MUST be included to
+            distinguish this new instance from the existent one :
+	    FEATURE NOT SUPPORTED (LinShim6 never maintains 
+	    two instances of a context with the same ULID pair)</t>
+	  <t>When the Locator List Option
+            is sent, the necessary HBA/CGA information for
+            verifying the locator list MUST also be included : YES 
+	    (Only CGAs are used currently)</t>
+	  <t>The CGA PDS option MUST be included when the locator list is 
+	    included : YES.</t>
+	  <t>The CGA Signature option MUST be included when some of the
+	    locators in the list use CGA (and not HBA) for verification : YES
+	    (All locators use CGA currently)</t>
+	  <t> If the initiator does not receive an R2 message after I2_TIMEOUT 
+	    time after sending an I2 message it MAY retransmit the I2 message, 
+	    using binary exponential backoff and randomized timers : YES</t>
+	  <t>In the case that the
+	    initiator decides not to retransmit I2 messages or in the case that
+	    the initiator still does not recieve an R2 message after
+	    retransmitting I2 messages I2_RETRIES_MAX times, the initiator 
+	    SHOULD	    
+	    fall back to retransmitting the I1 message : YES</t>
+	  <t>A host MUST silently discard any received I2 message that does
+	    not statisfy all of the following validity checks : 
+	    <list style="symbols">
+	      <t>Hdr Ext Len field at least 2 : YES </t>
+	      <t>The responder nonce is a recent one. Nonces that are no older
+		than VALIDATOR_MIN_LIFETIME SHOULD be considered recent : YES
+	      </t>
+	      <t>the Responder Validator option matches
+		the validator the host would have computed for the ULID, 
+		locators,
+		responder nonce, initiator nonce and FII : YES</t>
+	      <t> If a CGA Parameter Data Structure (PDS) is included in the 
+		message, then the host MUST verify if the actual PDS contained 
+		in the message corresponds to the ULID(peer) : YES</t>
+	      <t>If the state is I1-SENT, then the host verifies if the source
+		locator is included in Ls(peer) or, it is included in the 
+		Locator
+		List contained in the I2 message and the HBA/CGA verification 
+		for
+		this specific locator is successful: YES</t>
+	    </list>
+	  </t>
+	  <t>If a host is in I1-SENT state, receives an I2 message and all
+	    the above checks are successful, then it MUST send a R2 message 
+	    back : YES </t>	  
+	</list>
+      </section>
+      <section title="R2 Message">
+	<list style="symbols">
+	  <t>The Reserved1 field MUST be ignored on receipt: YES</t>
+	  <t>The R field MUST be ignored on receipt: YES</t>
+	  <t>When the Locator List Option
+            is sent, the necessary HBA/CGA information for
+            verifying the locator list MUST also be included : YES 
+	    (Only CGAs are used currently)</t>	  
+	  <t>Before an R2 message is sent, the host MUST look for a possible
+	    context confusion : YES (this is verified at I2/R2 reception)</t>
+	  <t>A host MUST silently discard any received R2 message that does
+	    not statisfy all of the following validity checks : 
+	    <list style="symbols">
+	      <t>Hdr Ext Len field at least 1 : YES </t>
+	      <t>the host
+		looks for an existing context which matches the Initiator 
+		Nonce and where the locators are contained in Ls(peer) and 
+		Ls(local), respectively.  If no such context is found, then 
+		the R2 message is
+		silently dropped : YES</t>
+	      <t> If state is I1-SENT, I2-SENT or I2BIS-SENT and a CGA 
+		Parameter Data Structure (PDS) is included in the 
+		message, then the host MUST verify if the actual PDS contained 
+		in the message corresponds to the ULID(peer) : YES</t>
+	    </list>
+	  </t>
+	  <t> Before the host completes the R2 processing it MUST look for a
+	    possible context confusion : YES</t>
+
+	</list>
+      </section>
+      <section title="R1bis, I2bis, Update Request and Update Acknowledgement">
+	<t>Those messages are not supported yet. They are never sent, and are 
+	  ignored on receipt.</t>
+	<list style="symbols">
+	  
+	</list>
+      </section>
+      <section title="Keepalive and Probe Messages">
+	<list style="symbols">
+	  <t>The Type field must be 66 for a keepalive, 67 for a probe : YES 
+	  </t>
+	  <t>The Reserved1 and Reserved2 fields
+	    MUST be ignored on receipt : YES</t>
+	  <t>The R bit MUST be ignored on receipt : YES</t>
+	  <t>A keepalive MAY contain options : NO (no option is currently 
+	    defined)</t>
+	  <t>The first set of sent probe fields of a probe message
+	    pertains to the
+	    currently sent probe message and MUST be present : YES</t>
+	  <t>This value SHOULD be generated using a random number generator
+	    that is known to have good randomness properties as outlined in
+	    RFC 4086 : YES (we rely on the random() function, with a seed taken 
+	    from /dev/random when the daemon starts)</t>
+	  <t>If
+	    the host is using a non-default Send Timeout value, it SHOULD
+	    communicate this value as a Keepalive Timeout value to the 
+	    peer : NO</t>
+	  <t>When sending a Probe message, the State field MUST be set
+	    to a value that matches the conceptual state of the sender after
+	    sending the Probe : YES</t>
+	</list>
+      </section>
+      <section title="Keepalive Timeout Option">
+	<t>This option is not supported yet</t>
+      </section>
+      <section title="Error messages">
+	<t>Those messages are optional and are not supported yet.</t>
+      </section>
+      <section title="Message Options">
+	<list style="symbols">
+	  <t>The length field MUST NOT include the padding : YES</t>
+	  <t>Any added padding bytes MUST be zeroed by the sender : YES</t>
+	  <t>The values of the padding bytes SHOULD NOT be checked by the 
+	    receiver : YES</t>
+	  <t>If C=1 and the option is not recognized by the receiver,
+	    then the host SHOULD send back a Shim6 error message 
+	    with Error Code=1, with the Pointer referencing the first octet
+	    in the Option Type field.: NO (because the error messages are not
+	    yet supported)</t>
+	  <t>If C=1 and the option is not recognized by the receiver,
+	    then the rest of the message MUST NOT be processed : YES</t>
+	  <t>Locator Preferences : Any element definition of length greater 
+	    than 3 MUST be defined so that the first three bytes agree the 
+	    definition given in the draft : YES (we do not define longer 
+	    element fields).</t>
+	  <t>The Reserved2 field of the ULID pair option MUST be ignored on 
+	    receipt : FEATURE NOT SUPPORTED (ULID pair option support not
+	    implemented).</t>
+	  <t>If the verification method in the Locator List option is not
+	    supported by the host, or if the verification method is not
+	    consistent with the CGA Parameter Data Structure, then the host 
+	    MUST ignore the
+	    Locator List and the message in which it is contained : YES</t>
+	  <t>If the verification method in the Locator List option is not
+	    supported by the host, or if the verification method is not
+	    consistent with the CGA Parameter Data Structure, then the host 
+	    SHOULD generate a Shim6 Error message with Error Code=2, with the 
+	    Pointer referencing the octet in the Verification method that was
+	    found inconsistent. : NO</t>
+	</list>
+      </section>
+      <section title="Payload data">
+	<list style="symbols">
+	  <t>The insertion of the Shim6 extension header in payload packets 
+	    MUST NOT cause any recalculation of the ULP
+	    checksums : YES</t>
+	  <t>When receiving a packet with a context tag that does not match any
+	    context, the receiver SHOULD generate a R1bis message : NO (Because
+	    context recovery is not supported yet)</t>
+	  <t>If payload data is received with a context tag that matches with 
+	    a context in state I2-SENT or I2BIS-SENT, the host resp. sends 
+	    back a I2 or I2bis and proceeds to process the message : NO (We 
+	    currently only process the message if the state is ESTABLISHED)</t>
+	</list>
+      </section>
+      <section title="General requirements of the Shim6 draft">
+	<list style="symbols">
+	  <t>The I1, I2 and I2bis messages MUST contain the ULID pair, either
+	    in the IPv6 header or in a ULID pair option : YES (During 
+	    negotiation the locators are always the identifiers, thus the 
+	    ULID pair option is not needed.)</t>
+	  <t>The context tag MUST be unique for each context : YES</t>
+	  <t>At least 30 bits of the context tag MUST be populated by random or 
+	    pseudo-random bits : YES (all 47 bits are pseudo-random)</t>
+	  <t>The host SHOULD randomly cycle through the unstructured tag name 
+	    space : YES (we rely on the random() function, with a seed taken 
+	    from /dev/random when the daemon starts)</t>
+	  <t>The HBA/CGA
+	    verification SHOULD be performed by the host before the host
+	    acknowledges the new locator, by sending an Update Acknowledgement
+	    message, or an R2 message. : YES (Currently HBA and the Update
+	    Acknowledgement are not implemented, but we check the CGAs before
+	    sending the R2) </t>
+	  <t>Before a host can use a locator (different from the ULID) as the
+	    destination locator it MUST perform the HBA/CGA verification if this
+	    was not performed before upon the reception of the locator set. :
+	    YES (Checked upon reception)</t>
+	  <t> Before a host can use a locator (different from the ULID) as the
+	    destination locator, it MUST verify that the ULID is indeed present 
+	    at that locator.  This verification is performed by doing a return-
+	    routability test as part of the Probe sub-protocol : YES</t>
+	  <t>I2, I2bis and R2 messages MUST include a sufficiently large set of
+	    locators in a Locator List option that the peer can determine 
+	    whether
+	    or not two contexts have the same host as the peer by comparing if
+	    there is any common locators in Ls(peer) : YES 
+	    (currently we send the
+	    whole set of available locators, since may change later when the 
+	    socket API will be implemented)</t>
+	  <t>In case of context confusion detection 
+	    (<xref target="refs.shim6"/>),
+	    the old context which used the context tag MUST be removed : YES</t>
+	  <t>An implementation MAY re-create a context to replace the one that
+	    was removed because of confusion detection : NO (it is not
+	    automatically re-created, but it can be negotiated again if the ULP 
+	    sends a sufficient
+	    amount of traffic for the heuristic to trigger a context 
+	    establishment)</t>
+	  <t>It is RECOMMENDED that hosts do not tear down the context
+	    when they know that there is some upper layer protocol that might 
+	    use
+	    the context : YES (We delete a context when no traffic has been 
+	    seen 
+	    during 10 minutes, the implementation is not yet aware of ULP 
+	    opened 
+	    sockets, however)</t>
+	  <t>The minimum acceptable key length for public keys used in the 
+	    generation of CGAs SHOULD be 1024 bits : YES</t>
+	  <t>in case that IPsec is implemented as
+	    Bump-In-The-Wire (BITW), either the shim MUST be disabled, or the
+	    shim MUST also be implemented as Bump-In-The-Wire, in order to
+	    satisfy the requirement that IPsec is layered above the shim : 
+	    CONFIGURABLE (It
+	    is up to the user to disable Shim6 if he wants to use a BITW IPsec
+	    device)
+	  </t>
+	</list>
+      </section>
+      <section title="General requirements of the REAP draft">
+	<list style="symbols">
+	  <t>Available addresses are discovered and monitored through mechanisms
+	    outside the scope of SHIM6.SHIM6 implementations MUST be able to
+	    employ information provided by IPv6 Neighbor Discovery,
+	    Address Autoconfiguration, and DHCP 
+	    (when DHCP is
+	    implemented).  This information includes the availability of a new
+	    address and status changes of existing addresses (such as when an
+	    address becomes invalid) : PARTIAL SUPPORT (Address discovery is 
+	    performed using all mechanisms available in the kernel, but they are
+	    not yet monitored later)</t>
+	  <t> Locally operational addresses are discovered and monitored through
+	    mechanisms outside the SHIM6 protocol.SHIM6 implementations MUST be
+	    able to employ information provided from Neighbor Unreachability
+	    Detection : NO</t>
+	  <t> Locally operational addresses are discovered and monitored
+	    through
+	    mechanisms outside the SHIM6 protocol. Implementations MAY also 
+	    employ additional,
+	    link layer specific mechanisms : NO</t>
+	  <t>SHIM6 implementations MUST support the discovery of operational
+	    address pairs through the use of explicit rechability tests and
+	    Forced Bidirectional Communication (FBD), described later in this
+	    specification : YES</t>
+	  <t>In addition, implementations MAY employ the following
+	    additional mechanisms:
+	    <list style="symbols">
+	      <t>Positive feedback from upper layer protocols : NO</t>
+	      <t>Negative feedback from upper layer protocols : NO</t>
+	      <t>ICMP error messages : NO</t>	     
+	    </list>
+	  </t>
+	  <t>After the reception of a data packet from the peer, 
+	    REAP keepalive	
+	    packets SHOULD continue to be sent at the Keepalive Interval
+	    until either a data packet in the SHIM6 context has been sent
+	    to the peer or the Keepalive Timeout expires : YES</t>
+	  <t>Upon changing to a new address pair, the network path traversed 
+	    most
+	    likely has changed, thus the ULP SHOULD be informed : NO</t>
+	  <t>Out of the set of possible candidate address pairs, nodes SHOULD
+	    attempt to test through all of them until an operational pair is
+	    found, and retrying the process as is necessary : YES</t>
+	  <t>All nodes
+	    MUST perform the exploration process sequentially and with 
+	    exponential 
+	    back-off : YES</t>
+	  <t>The externally observable behaviour of an
+	    implementation MUST conform to the REAP state machine : YES</t>
+	  <t>Unprotected
+	    indications from other parts of the protocol stack SHOULD NOT be 
+	    taken as a proof of connectivity 
+	    problems. : YES</t>
+	</list>
+      </section>
+    </section>
+    <section title="Protocol conformance by feature" anchor="sec.features">
+      In the following list we make a division of the Shim6 specification into
+      several features, in order to easily identify which of them are supported
+      and which are not.
+      <list style="symbols">
+	<t>Context forking : No (Only useful if an API exists)</t>
+	<t>Context recovery : Not yet</t>
+	<t>Locator preferences option : Not yet</t>
+	<t>Locator list updates : Not yet</t>
+	<t>Cryptographically Generated Addresses : YES</t>	
+	<t>Hash Based Addresses : Not yet</t>
+	<t>Failure detection and recovery : YES</t>
+	<t>Context confusion detection (<xref target="refs.shim6"/>
+	  sec. 7.6): YES</t>
+	<t>Handling of ICMP error messages : Not yet </t>
+	<t>Keepalive Timeout Option : Not yet</t>
+      </list>
+    </section>
+    <section title="Conclusion and further work">
+      <t>This draft describes the current state of the LinShim6 implementation.
+	It uses a heuristic to decide whether to trigger a Shim6 negotiation, 
+	and it is able to monitor the state of the communication thanks to the 
+	REAP state machine. It has been shown to successfully support the switch
+	to an alternative locator pair, and it supports the minimal 
+	security checks and
+	features given in the specifications 
+	(only HBA addresses are not yet supproted).
+	LinShim6 is a work in progress and is still being improved. We aim at 
+	finally providing the complete set of features.
+	In the near future we will work on HBA support, context recovery, 
+	locator
+	list updates and error messages. Other missing features seem to have
+	a lower priority and are let for later.
+      </t>
+    </section>
+  </middle>
+  <section title = "Acknowledgments" anchor = "sec.ack">
+    Sébastien Barré is supported by a grant from FRIA (Fonds
+    pour la Formation à la Recherche dans l’Industrie et
+    dans l’Agriculture, rue d’Egmont 5 - 1000 Bruxelles,
+    Belgium).
+    
+  </section>
+  <back>
+    <references>
+      
+      <reference anchor="refs.shim6">
+	<front>
+	  <title>Shim6: Level 3 Multihoming Shim Protocol for IPv6</title>
+	  <author initials="M." surname="Bagnulo"/>
+	  <author initials="E." surname="Nordmark"/> 
+	  <date> month="Oct" year="2007"</date>
+	</front>	
+	<seriesInfo name="Internet-Draft" 
+		    value="draft-ietf-shim6-proto-09"/>
+      </reference>
+
+      <reference anchor="refs.reap">
+	<front>
+	  <title>Failure Detection and Locator Pair Exploration Protocol for 
+	    IPv6 Multihoming</title>
+	  <author initials="J." surname="Arkko" fullname="J.arkko"/>
+	  <author initials="I." surname="van Beijnum" 
+		  fullname="I. van Beijnum"/>
+	  <date> month="Jan" year="2008"</date>
+	</front>	
+	<seriesInfo name="Internet-Draft" 
+		    value="draft-ietf-shim6-failure-detection-10"/>
+      </reference>
+
+      <reference anchor="refs.rfc2119">
+	<front>
+	  <title>Key words for use in RFCs to Indicate Requirement Levels
+	  </title>
+	  <author initials="S." surname="Bradner"/>
+	  <date> month="Mar" year="1997"</date>
+	</front>
+	<seriesInfo name="RFC" value="2119"/>
+      </reference>
+      
+      <reference anchor="refs.rfc3549">
+	<front>
+	  <title>Linux Netlink as an IP Services Protocol</title>
+	  <author initials="J." surname="Salim" />
+	  <author initials="H." surname="Khosravi" />
+	  <author initials="A." surname=" Kleen" />
+	  <author initials="A." surname=" Kuznetsov" />
+	  <date> month="Jul" year="2003"</date>
+	</front>
+	<seriesInfo name="RFC" value="3549"/>
+      </reference>
+      
+      <reference anchor="refs.ipsec">
+	<front>
+	  <title>USAGI IPv6 IPsec development for Linux</title>
+	  <author initials="M." surname="Kanda" />
+	  <author initials="K." surname="Miyazawa" />
+	  <author initials="H." surname="Esaki" />
+	  <date> month="Jan" year="2004"</date>
+	</front>
+	<seriesInfo name ="in" value ="International Symposium on Applications
+				       and the Internet"/>
+	<seriesInfo name="" value="pp. 159-163"/>
+      </reference>
+
+      <reference anchor="refs.ring">
+	<front>
+	  <title>Implementing SHIM6 using the Linux XFRM framework</title>
+	  <author initials="S." surname="Barré" />
+	  <author initials="O." surname="Bonaventure"/>
+	  <date> month="Dec" year="2007" </date>
+	</front>
+	<seriesInfo name="in" value="Routing In Next Generation workshop,
+				     Madrid, Spain"/>
+      </reference>
+
+     <reference anchor="refs.api">
+	<front>
+	  <title>Socket Application Program Interface (API) for Multihoming 
+	    Shim</title>
+	  <author initials="M." surname="Komu" /> 
+	  <author initials="M." surname="Bagnulo" />
+	  <author initials="K." surname="Slavov"/> 
+	  <author initials="S." surname="Sugimoto"/> 
+
+	  <date> month="Jul" year="2007"</date>
+	</front>	
+	<seriesInfo name="Internet-Draft" 
+		    value="draft-ietf-shim6-multihome-shim-api-03"/>
+     </reference>
+
+     <reference anchor="refs.sigcomm">
+       <front>
+	 <title>Improved Path Exploration in shim6-based Multihoming</title>
+	 <author initials="S." surname="Barré" />
+	 <author initials="O." surname="Bonaventure"/>
+	 <date> month="Aug" year="2007" </date>
+       </front>
+       <seriesInfo name="in" value='SIGCOMM 2007 Workshop "IPv6 and the Future of the Internet", Kyoto, Japan'/>
+     </reference>
+
+      
+    </references>
+  </back>
+</rfc>

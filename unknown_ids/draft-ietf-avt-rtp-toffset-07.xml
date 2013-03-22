@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSPY v5 rel. 3 U (http://www.xmlspy.com)
+     by Daniel M Kohn (private) -->
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC '' 
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+]>
+
+<rfc category="std" ipr="full3978" docName="draft-ietf-avt-rtp-toffset-07.txt">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+
+    <front>
+        <title abbrev="RTP Transmission Offsets">Transmission Time offsets in RTP streams</title>
+        <author initials='D.S.' surname="Singer" fullname='David Singer'>
+			<organization>Apple Computer Inc.</organization>
+			<address>
+			<postal>
+				<street>1 Infinite Loop</street>
+				<city>Cupertino</city> <region>CA</region> <code>95014</code>
+				<country>US</country>
+			</postal>
+			<phone>+1 408 996 1010</phone>
+			<email>singer@apple.com</email>
+			</address>
+		</author>
+		<author initials='H.D.' surname="Desineni" fullname='Harikishan Desineni'>
+			<organization>Qualcomm</organization>
+			<address>
+				<postal>
+				  <street>5775 Morehouse Drive</street>
+				  <city>San Diego</city> <region>CA</region>
+				  <code>92121</code>
+				  <country>US</country>
+				</postal>
+			<phone>+1 858 845 8996</phone>
+			<email>hd@qualcomm.com</email>
+			</address>
+		</author>
+
+
+        <date month="March" year="2008"/>
+		<area>Transport</area>
+		<workgroup>AVT</workgroup>
+		<keyword>RFC</keyword>
+		<keyword>Request for Comments</keyword>
+		<keyword>I-D</keyword>
+		<keyword>Internet-Draft</keyword>
+		<keyword>XML</keyword>
+		<keyword>Extensible Markup Language</keyword>
+        <abstract><t>This document describes a method to inform RTP clients when RTP packets are transmitted at a time other than their 'nominal' transmission time. It also provides a mechanism to provide improved inter-arrival jitter reports from the clients, that take into account the reported transmission times.</t></abstract>
+    </front>
+
+    <middle>
+        <section title="Introduction">
+        
+<t>
+In the RTP specification <xref target="RFC3550"/> network jitter calculations are based on the presumption that packets are transmitted essentially in accordance with their RTP timestamps.  This must be true, of course, on average over longer time intervals, as the client is playing the packets out according to those timestamps.  However, for individual packets, this may under some circumstances not be true:</t>
+		<t><list style="symbols">
+			<t>When the data rate of the stream is bursty, such as with video where I-frames may be significantly larger than P or B frames, traffic smoothing may need to be applied to maintain an appropriate data rate.</t>
+			<t>In video which has forward decode dependencies, frames may need to be transmitted in decoding order (the sequence number order) but with, of course, presentation timestamps. Under these circumstances the transmission time of a frame sent early in sequence does not correspond to its RTP timestamp.</t>
+			<t>When re-transmissions are sent, the re-transmitted packet clearly has a different actual transmission time from the original, even though they share the same timestamp.</t>
+		</list></t>
+<t>Under some circumstances it can help the receiver, or intermediate network elements, to know the actual transmission time of the packet. This RTP header extension element allows the communication of this information.</t>
+<t>The RTP specification does not define a transmission timestamp, and nor does this specification.  This specification merely provides information on the relationship between the relative transmission times and relative RTP timestamps. </t>
+<t>This specification allows the transmitter to indicate to the receiver any known variation between the spacing of transmission times and the spacing of RTP timestamps; any unreported variation introduced at or after the point of measurement of the transmission time will be treated as network jitter by the receiver.  The definition of the point where the transmission time is measured or defined is left to the transmitter, though it should, of course, be consistent from packet to packet.</t>
+<t>This information can also be of use to report the inter-arrival jitter caused by the network, excluding that introduced by the source.  A new RTCP packet is defined to enable this reporting.</t>
+
+</section>
+
+        <section title="Requirements notation">
+            <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+            "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+            and "OPTIONAL" in this document are to be interpreted as
+            described in <xref target="RFC2119"/>.</t>
+        </section>
+        
+
+
+<section title="Transmission offset">
+<t>Classically a pair of RTP packets with timestamps S2 and S1 are transmitted with a time interval between them of (S2 - S1).  This specification permits sending an offset value O in each packet, O1 and O2.  One characteristic of these offsets is that the original transmission interval can be deduced to be (S2 + O2) - (S1 + O1).</t>
+<t>More precisely, the offset is defined as follows (with the function RtoN converting from RTP to NTP times, and NtoR doing the reverse):</t>
+<t><list style="symbols">
+<t>Take an RTP stream that has a recent RTCP sender report relating RTP timestamp S0 to NTP timestamp N0;</t>
+<t>consider a packet sent after that with RTP timestamp S1.  Nominally this is sent at N1 = (N0 + RtoN(S1 - S0));</t>
+<t>If it was actually sent at a different time, Na, then the offset value O1 is O1 = NtoR(Na - N1).</t>
+</list></t>
+<t>The transmission time is signalled to the receiver in-band using The IETF Generic RTP header extension <xref target="hdrext"/>.  The payload of this extension (the transmitted value) is a 24-bit signed integer.  When added to the RTP timestamp of the packet, it represents the “effective” RTP transmission time of the packet, on the RTP timescale.  The reported transmission time T1 of a packet with timestamp S1 and an offset of O1, from the above equations, is T1 = S1+O1 (though of course the transmission time values only have meaning when two or more are compared).</t>
+<figure>
+<preamble>The form of the transmission offset extension block is as follows:</preamble>
+<artwork>
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |  ID   | len=2 |              transmission offset              |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ 
+</artwork></figure>
+<t>The length field takes the value 2 to indicate that 3 bytes follow.</t>
+<t>The sign of the offset value depends greatly on the choice of the initial mapping of RTP to NTP times. In general, without scanning a stream entirely it is not possible to ensure that this mapping would keep all the offsets positive;  therefore this specification allows negative values.</t>
+<t>Imagine a stream with the following timestamps and sizes in bytes:</t>
+<figure><artwork>
+200   2kb
+300   4kb
+400   2kb
+500   12kb
+600   ...effective end of stream
+</artwork></figure>
+<t>This has 20KB spread over 400 time units, i.e. on average 1 kb per 20 time-units.  We traffic-smooth this, and establish that given a transmission time of x for the first packet, we would transmit the following packets at the given intervals later:</t>
+<figure><artwork>
+x + 000  2kb
+x + 040  4kb
+x + 120  2kb
+x + 160  12kb
+x + 400 ...effective end of stream
+</artwork></figure>
+<t>The choice of x is esssentially arbitrary:  only relative values of timestamps matter.  Now, let's say I claim on the first packet that it went out *at* its RTP timestamp, i.e. with an offset of 0, i.e. x is 200.   Then the offset values are</t>
+<figure><artwork>
+0
+-60
+-80
+-140
+</artwork></figure>
+<t>This is because in this case, I traffic-smooth this because conceptually I think of sending the small packets 'early'.  But since only the relative values are significant, it is just as valid to say x is 400, whereupon the offset values are</t>
+<figure><artwork>
+200
+140
+120
+60
+</artwork></figure>
+
+<t>In a stream where this extension is not in effect (i.e. not declared or negotiated), the actual transmission offset is therefore unknown. However, when the extension is in effect for the stream, it MAY be omitted in those packets for which the offset is 0 (zero); that is, packets sent at their nominal time do not need this extension tagging. Therefore the implied transmission time of an un-tagged RTP packet depends on whether the extension is in effect for the stream (and therefore the transmission offset is 0) or not (whereupon the transmission offset is unknown).</t>
+<t>The jitter calculations performed by an RTP client MUST NOT use these transmission offsets. In general, the sender (or intermediate network elements doing RTP analysis) cannot always know whether the offsets have been taken into account or not, and for consistency therefore, the jitter calculation should continue to operate on the 'raw' reception times. However, see the section on extended jitter reports, below.</t>
+
+<t>There are no extension attributes defined for this extension.</t>
+
+<t>It is structurally possible to have more than one extension of the same type in a packet. However, this extension is only defined for the source to report, and intermediate network nodes that are not the source of the RTP session MUST NOT add this extension (whether or not it was previously present) and MUST NOT alter the existing transmission offset value in a packet, if the extension is already present.</t>
+
+<t>(Of course, it is clear that network elements that terminate an RTP flow, and are the source for a new RTP flow, can add a transmission offset extension header to the RTP packets of the new flow, if desired.)</t> 
+
+</section>
+
+<section title="Extended Jitter Reports">
+<t>The inter arrival jitter computed as defined in Sec 6.4.1 of RFC3550 provides inter-arrival jitter reports which include any source-introduced jitter (transmission time offsets).  If it is desired to indicate the actual network jitter, excluding the source-introduced jitter, the new RTCP packet type defined here may be used. </t>
+
+<figure>
+<preamble>It has the following form:</preamble>
+<artwork>
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+hdr |V=2|P|    RC   |   PT=IJ=195   |             length            |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                      interarrival jitter                      |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    .                                                               .
+    .                                                               .
+    .                                                               .
+    |                      interarrival jitter                      |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</artwork></figure>
+
+<t>If present, this RTCP packet must be placed after a receiver report (inside a compound RTCP packet), and MUST have the same value for RC as the receiver report. The content is exactly that number of interarrival jitter calculations, calculated using the same formula as for sender and receiver reports, but taking into account the transmission offsets for the streams (if any);  that is, using the values T1=S1+O1, T2 etc. as defined above, instead of S1, S2 etc.. (If no transmission offset information is given for a stream, then the value of interarrival jitter in this packet and in the receiver report will be identical).</t> 
+<t>Precisely, the replacement equation for the equation in the RTP specification is, where Rj is the most recent arrival time:</t>
+<figure><artwork>
+D(i,j) = (Rj - Ri) - ((Sj + Oj) - (Si + Oi)) 
+       = (Rj - (Sj + Oj)) - (Ri - (Si + Oi))
+</artwork></figure>
+</section>
+
+<section title="Signaling (setup) information">
+<t>The URI for declaring this header extension in an extmap attribute is “urn:ietf:params:rtp-hdrext:toffset”. There is no additional setup information needed for this extension (no extensionattributes).</t> 
+</section>
+
+
+        <section title="Security Considerations">
+        <t>The given transmission offsets are only informative and it is hard to see security considerations from associating them with media streams.</t>
+        </section>
+        
+        <section title="IANA Considerations">
+        <t>The RTCP packet type used for the adjusted interarrival jitter needs to be registered, in accordance with section 15 of <xref target="RFC3550"/>.  The abbreviation is "IJ", the full name is "Extended inter-arrival jitter report", the suggested value is 195, and the specification is this document.</t>
+  <t>The name toffset needs to be registered into the rtp-hdrext section of the urn:ietf: namespace, referring to RFCxxxx.</t>      
+        </section>
+
+        <section title="RFC Editor Considerations">
+        <t>The reference to an Internet Draft needs to be updated to the RFC when it is published (which should be before this draft).</t>
+        <t>RFCxxxx in the IANA considerations needs to be updated with the number of this RFC.</t>
+        </section>
+        
+        <section title="Acknowledgments">
+        <t>Ron Frederick, Colin Perkins, and Steve Casner all contributed substantially to this document, and their help and contributions helped turn an idea into a specification.</t>
+        </section>
+        
+    </middle>
+
+    <back><references title='Normative References'>
+    	&rfc2119;
+		<reference anchor="RFC3550">
+		<front>
+		<title>RTP: A Transport Protocol for Real-Time Applications</title>
+		<author initials="H." surname="Schulzrinne">
+			<organization>Columbia University</organization></author>
+		<author initials="S." surname="Casner">
+			<organization>Packet Design</organization></author>
+		<author initials="R." surname="Frederick">
+			<organization>Blue Coat Systems Inc.</organization></author>
+		<author initials="V." surname="Jacobson">
+			<organization>Packet Design</organization></author>
+		<date month="July" year="2003" />
+		</front>
+		<seriesInfo name="RFC" value="3550" />
+		<seriesInfo name="STD" value="0064" />
+		
+		</reference>
+		
+		<reference anchor="hdrext">
+		<front>
+		<title>A general mechanism for RTP Header Extensions</title>
+		<author initials="D." surname="Singer">
+			<organization>Apple Computer</organization></author>
+		<date month="October" year="2006" />
+		</front>
+		<seriesInfo name="ID" value="draft-ietf-avt-rtp-hdrext-08" />
+		
+		</reference>
+		
+
+	</references>
+    </back>
+
+</rfc>

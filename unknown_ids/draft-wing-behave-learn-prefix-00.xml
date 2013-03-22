@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY rfc2119 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+]>
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes" ?>
+<?rfc rfcprocack="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc subcompact="no" ?>
+<?rfc sortrefs="yes" ?>
+<?rfc colonspace='yes' ?>
+<?rfc tocindent='yes' ?>
+<rfc category="info" docName="draft-wing-behave-learn-prefix-00"
+     ipr="full3978">
+  <front>
+    <title abbrev="Learning the AFT's Prefix">Learning the Address Family Translator's IPv6 Prefix</title>
+
+    <author fullname="Dan Wing" initials="D." surname="Wing">
+      <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+
+      <address>
+        <postal>
+          <street>170 West Tasman Drive</street>
+
+          <city>San Jose</city>
+
+          <region>CA</region>
+
+          <code>95134</code>
+
+          <country>USA</country>
+        </postal>
+
+        <email>dwing@cisco.com</email>
+      </address>
+    </author>
+
+    <date year="2008" />
+
+    <workgroup>BEHAVE Working Group</workgroup>
+
+    <abstract>
+      <t>In some IPv6/IPv4 translation scenarios it is necessary for
+      an IPv6 host to know the IPv6 prefix used by its address family
+      translator.  In some of the IPv6/IPv4 translation proposals, the
+      prefix is not fixed; that is, the prefix is chosen by the
+      network operator.  This specification provides several methods
+      to learn the prefix and its length.</t> </abstract> </front>
+
+
+  <middle>
+
+    <section title="Terminology">
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in <xref
+      target="RFC2119"></xref>.</t>
+
+      <t>AFT: Address Family Translator.  A device that translates between
+IP address families.</t>
+
+<t>DNS64: The function of synthesizing an AAAA response from an A record.</t>
+    </section>
+
+    <section anchor="introduction" title="Introduction">
+     <t>Several variations of Address Family Translators (AFT) have 
+been proposed for IPv6/IPv6 coexistence.  All of these operate by
+synthesizing DNS AAAA responses for hosts that do not have AAAA
+records -- this is generally called "DNS64" (also "DNS rewriting" 
+or "DNS-ALG").  The DNS64 function,
+when used in conjunction with an AFT, allows a IPv6-only host to 
+access IPv4-only hosts.  This access, for the most part, is 
+transparent to the IPv6 host -- to much the same degree that
+today's widely-deployed NATs are transparent to IPv4 hosts.  But, like 
+with today's NATs, there are applications which do not work with
+AFT or do not work with DNS64, and require IPv6 hosts to implement
+additional functionality.</t>
+
+
+      <t>So far, one application has been identified which requires an
+      IPv6 host to know the IPv6 prefix used by its address family
+      translator (AFT): A DNSSEC security-aware stub resolver needs to securly
+obtain the IPv6 prefix.  It uses this prefix to generate its own
+synthesized AAAA response from the un-translated A record <xref
+target="Sullivan-email"></xref>, or to validate a synthesized AAAA
+response by removing the IPv6 prefix <xref
+target="Wing-email"></xref>.</t> 
+</section>
+
+    <section title="Learning IPv6 Prefix and Length">
+      <t>Both the IPv6 prefix and the prefix length need to be learned
+      This can be done using DNS or DHCP, as described in the following
+      sections.</t>
+
+    <section title="Using DNS to Learn IPv6 Prefix and Length">
+
+<t>In order for an IPv6 host to determine if a NAT64 is present on its
+network, it sends a DNS query.  Because a host doesn't always know its
+network's default domain name, the procedure described below provides
+a way for the host to learn it in order to authorize that network's
+address family translator:
+</t>
+
+<t>
+<list style="numbers">
+<t>Send a DNS AAAA query for "_aft_prefix", without a domain
+name.  If this does not return an IPv6 address it means a
+address family translator is not present and processing
+MUST stop.</t>
+
+<t>If validation of the returned IPv6 prefix is necessary, then:
+
+<list style="format %c.">
+<t>Send a DNS PTR query for that IPv6 address.  This returns
+a fully-qualified hostname.</t>
+<t>Verify the full-qualified hostname is on the host's configured
+list of authorized translators.</t>
+<t>Send a DNS AAAA query for that hostname.</t>
+<t>Verify the AAAA response matches the IPv6 address obtained in step 1.</t>
+<t>Perform DNSSEC validation of the AAAA response.</t>
+<t>Send a DNS TXT query for the fully-qualfied name to learn the
+number of bits of the prefix (e.g., a 48 bit prefix would return the
+string "48").</t> 
+<t>Perform DNSSEC validation of the TXT response.</t>
+</list></t>
+
+<t>If validation of this information is not necessary, then:
+<list style="format %c.">
+<t>Send a DNS TXT query for "_aft_prefix", without the domain
+name, to learn the number of bits of the prefix.</t>
+</list></t>
+
+</list>
+</t>
+
+
+<t><list style="empty"><t>Note: The DNS server being queried is the
+DNS64.  The DNS64 performs the AAAA synthesis function, which means
+the DNS64 is already aware of the prefix of the address
+family translator and the prefix length.  Thus, is it already
+capable of returning information about the network's AFT.</t>
+</list></t>
+
+<t><list style="empty"><t>Discussion:  without a domain name, it
+is unavoidable that root nameservers will see this query.  Need
+to think about ways to reduce the effect of those queries (e.g.,
+make them authoritative and return all 0's which will get cached,
+query with Recursion Desired = 0).
+</t>
+</list></t>
+
+
+
+</section>
+
+<section title="Using DHCP to Learn IPv6 Prefix and Length">
+<t>A new DHCP option, OPTION_AFT_PREFIX, is defined.  It contains
+the IPv6 prefix and its length.</t>
+
+<figure anchor="dhcp-option"
+                  title="OPTION_AFT_PREFIX">
+            <preamble></preamble>
+
+            <artwork align="center"><![CDATA[
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|       OPTION_AFT_PREFIX       |         option-length         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| prefix-length |                                               |
++-+-+-+-+-+-+-+-+          IPv6 prefix                          |
+|                        (up to 16 octets)                      |
+|                                                               |
+|                                                               |
+|                                                               |
+|               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|               |
++-+-+-+-+-+-+-+-+
+
+    option-code:      OPTION_AFT_PREFIX (TBD)
+
+    option-length:    17
+
+    prefix-length:    Length for this prefix in bits
+
+    IPv6-prefix:      An IPv6 prefix]]></artwork>
+          </figure>
+<t>In order to conserve space, it is RECOMMENDED that only the 
+significant bits of the IPv6 prefix be sent in the DHCP option.</t>
+
+
+<t>If the host implements a security-aware DNSSEC validator, it must
+validate and authorize that translator.  To do this, it issues a
+ipv6.arpa PTR query on the IPv6 address learned via DHCPv6.  This returns a
+name.  The host then issues a AAAA query using that name, and DNSSEC
+validates the response.  If the query validates, and the AAAA response
+contains an IPv6 address that matches the AFT-PREFIX learned from
+DHCPv6, and the host's administrator has authorized use of that AFT
+translator name, DNSSEC can use that prefix.  Details of DNSSEC
+operation in conjunction with AFT are in [draft to
+be written providing DNSSEC details].</t> </section> </section>
+
+
+    <section anchor="security_considerations" title="Security Considerations">
+      <t>After learning the IPv6 prefix of its translator by following the
+      procedures in this specification, the IPv6 host will utilize this
+      information for subsequent actions (e.g., sending a packet to it, or
+      using that information to synthesize DNS records or to perform DNSSEC
+      validation). If an attacker provides a fraudulent IPv6 to the IPv6 host,
+      the attacker can become on-path for traffic to/from that IPv6 host and
+      preform passive or active eavesdropping or traffic analysis.
+To protect against this attack, it is RECOMMENDED that IPv6 hosts be
+      configured with the names of authorized translators and
+      RECOMMENDED that IPv6 hosts uses DNSSEC to validate that name
+matches the IPv6 prefix learned via DNS or DHCPv6.</t>
+    </section>
+
+    <section anchor="iana" title="IANA Considerations">
+      <t>A new DHCPv6 option, OPTION_AFT_PREFIX, needs to be assigned
+      by IANA.</t>
+<t>The name "_aft_translator" should be reserved by IANA for this
+    purpose.</t> </section>
+
+<section title="Acknowledgements">
+<t>This draft was fostered by discussion on the 46translation mailing
+list and at the v4v6 Interim in Montreal.  Special thanks to Iljitsch
+van Beijnum, Andrew Sullivan, Marcelo Bagnulo Braun, Fred Baker, and
+Xing Li for their comments and dialog.</t>
+<t>Thanks to Ralph Droms for his help with DHCPv6.  Thanks to
+John Schnizlein for improving the DNS learning algorithm.</t>
+</section>
+
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      &rfc2119;
+    </references>
+
+    <references title="Informative References">
+
+      <reference anchor="Sullivan-email"
+                 target="https://www.employees.org/mailman/private/46translation/2008-October/000028.html">
+        <front>
+          <title>DNSSEC Current Thinking</title>
+
+          <author fullname="Andrew Sullivan" initials="A." surname="Sullivan">
+            <organization></organization>
+          </author>
+
+          <date month="October" year="2008"></date>
+        </front>
+      </reference>
+
+      <reference anchor="Wing-email"
+                 target="https://www.employees.org/mailman/private/46translation/2008-October/000031.html">
+        <front>
+          <title>DNSSEC, approach 2</title>
+
+          <author fullname="Dan Wing" initials="D." surname="Wing">
+            <organization></organization>
+          </author>
+
+          <date month="October" year="2008"></date>
+        </front>
+
+      </reference>
+
+</references>
+
+  </back>
+</rfc>

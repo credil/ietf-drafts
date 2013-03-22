@@ -1,0 +1,579 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+<?rfc toc="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc compact="yes"?>
+<rfc category="info" docName="draft-ietf-sidr-roa-validation-01.txt"
+     ipr="full3978">
+  <front>
+    <title abbrev="Route Validation">Validation of Route Origination in BGP
+    using the Resource Certificate PKI</title>
+
+    <author fullname="Geoff Huston" initials="G." surname="Huston">
+      <organization abbrev="APNIC">Asia Pacific Network Information
+      Centre</organization>
+      <address>
+        <email>gih@apnic.net</email>
+      </address>
+    </author>
+
+    <author fullname="George Michaelson" initials="G." surname="Michaelson">
+      <organization abbrev="APNIC">Asia Pacific Network Information
+      Centre</organization>
+      <address>
+        <email>ggm@apnic.net</email>
+      </address>
+    </author>
+
+    <date year="2008" />
+
+    <area>Routing</area>
+    <workgroup>Secure Inter-Domain Routing (SIDR)</workgroup>
+
+    <abstract>
+      <t>This document defines an application of the Resource Public
+      Key Infrastructure to validate the origination of routes
+      advertised in the Border Gateway Protocol. The proposed
+      application is intended to fit within the requirements for
+      adding security to inter-domain routing, including the ability
+      to support incremental and piecemeal deployment, and does not
+      require any changes to the specification of BGP.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section anchor="intro" title="Introduction">
+      <t>This document defines an application of the Resource Public
+      Key Infrastructure (RPKI) to validate the origination of routes
+      advertised in the Border Gateway Protocol (BGP) <xref
+      target="RFC4271"/>.</t>
+
+      <t>The RPKI is based on Resource Certificates. Resource
+      Certificates are X.509 certificates that conform to the PKIX
+      profile <xref target="RFC5280"/>, and to the extensions
+      for IP addresses and AS identifiers <xref
+      target="RFC3779"/>. A Resource Certificate describes an
+      action by an issuer that binds a list of IP address blocks and
+      Autonomous System (AS) numbers to the Subject of a certificate,
+      identified by the unique association of the Subject's private
+      key with the public key contained in the Resource
+      Certificate. The PKI is structured such that each current
+      Resource Certificate matches a current resource allocation or
+      assignment. This is described in <xref
+      target="I-D.ietf-sidr-arch"/>.</t>
+
+      <t>Route Origin Authorizations (ROAs) are digitally signed
+      objects that bind an address to an AS number, signed by the
+      address holder. A ROA provides a means of verifying that an IP
+      address block holder has authorized an AS to originate route
+      objects in the inter-domain routing environment for that address
+      block. ROAs are described in <xref
+      target="I-D.ietf-sidr-roa-format"/>.</t>
+
+      <t>Bogon Origin Attestations (BOAs) are digitally signed objects
+      that describe a collection of address prefixes and AS numbers
+      that are not authorised by the right-of-use holder to be
+      advertised in the inter-domain routing system <xref
+      target="I-D.ietf-sidr-boa"/>.</t>
+
+      <t>This document describes how ROA and BOA validation outcomes
+      can be used in the BGP route selection process, and how the
+      proposed application of ROAs and BOAs are intended to fit within
+      the requirements for adding security to inter-domain routing
+      <xref target="ID.ietf-rpsec-bgpsecrec"/>, including the
+      ability to support incremental and piecemeal deployment. This
+      proposed application does not require any changes to the
+      specification of BGP protocol elements. The application may be
+      used as part of BGP's local route selection algorithm <xref
+      target="RFC4271"/>.</t>
+    </section>
+
+    <section anchor="Outcomes"
+             title="Validation Outcomes of a BGP Route Object">
+      <t>A BGP Route Object is an address prefix and a set of attributes. In
+      terms of ROA and BOA validation the prefix value and the origin AS are
+      used in the validation operation.</t>
+
+      <t>If the route object is an aggregate and the AS Path contains an AS
+      Set, then the origin AS is considered to be the AS described as the
+      AGGREGATOR <xref target="RFC4271"/> of the route object.</t>
+
+      <t>ROA validation is described in <xref
+      target="I-D.ietf-sidr-roa-format"/>, and the outcome of the
+      validation operation is that the ROA is valid in the context of the
+      RPKI, or validation has failed.</t>
+
+      <t>BOA validation is described in <xref
+      target="I-D.ietf-sidr-boa"/>, and the outcome of the validation
+      operation is that the BOA is valid in the context of the RPKI, or
+      validation has failed.</t>
+
+      <t>There appears to be two means of matching a route object to a ROA:
+      decoupled and linked.</t>
+
+      <section title="Decoupled Validation">
+        <t>The decoupled approach is where the ROAs are managed and
+        distributed independently of the operation of the routing protocol and
+        a local BGP speaker has access to a local cache of the complete set of
+        ROAs and the RPKI data set when performing a validation operation.</t>
+
+        <t>In this case the BGP route object does not refer to a specific ROA.
+        The relying party to match a route object to one or more candidate
+        valid ROAs and BOAs in order to determine the appropriate local
+        actions to perform on the route object.</t>
+
+        <t>The relying party selects the set of ROAs where the address prefix
+        in the route object either exactly matches an ROAIPAddress (matching
+        both the address prefix value and the prefix length), or where the
+        route object spans a block of addresses that is included in the span
+        described by the ROA's address prefix value and length and where the
+        route object's prefix length is less than the ROA's prefix length and
+        greater then or equal to the ROA's corresponding maxLength
+        attribute.</t>
+
+        <t>The following outcomes are possible using the defined ROA
+        validation procedure for each ROA in this set:</t>
+
+        <t><list style="hanging"> 
+
+          <t hangText="Exact Match:"><vspace />A valid ROA exists,
+          where the address prefix in the route object exactly matches
+          a prefix listed in the ROA, or the ROA contains a covering
+          aggregate and the prefix length of the route object is
+          smaller than or equal to the ROA's associated maxLength
+          attribute, and the origin AS in the route object matches the
+          origin AS listed in the ROA.<vspace blankLines="1" /></t>
+
+          <t hangText="Covering Match:"><vspace />A valid ROA exists,
+          where an address prefix in the ROA is a covering aggregate
+          of the prefix in the route object, and the prefix length of
+          the route object is greater than the ROA's associated
+          maxLength attribute, and the origin AS in the route object
+          matches the AS listed in the ROA.<vspace blankLines="1"
+          /></t>
+
+          <t hangText="Exact Mismatch:"><vspace />A valid ROA exists
+          where the address prefix in the route object exactly matches
+          a prefix listed in the ROA, or the ROA contains a covering
+          aggregate and the prefix length of the route object is
+          smaller than or equal to the ROA's associated maxLength
+          attribute, and the origin AS of the route object does not
+          match the AS listed in the ROA.<vspace blankLines="1" /></t>
+
+          <t hangText="Covering Mismatch:"><vspace />A valid ROA
+          exists where an address prefix in the ROA is a covering
+          aggregate of the prefix in the route object, the prefix
+          length of the route object is greater than the ROA's
+          associated maxLength attribute, and the origin AS of the
+          route object does not match the AS listed in the ROA.<vspace
+          blankLines="1" /></t>
+
+          <t hangText="No ROA:"><vspace />There are no Exact Matches,
+          Covering Matches, no Exact Mismatches or Covering Mismatches
+          in the RPKI repository.</t> </list></t>
+
+        <t>The ROA to be used for the validation function is selected
+        from the set of ROAs in the order given above. In other words
+        an Exact Match is preferred over a Covering Match, which, in
+        turn, is preferred over an Exact Mismatch which is preferred
+        over a Covering Mismatch.</t>
+
+        <t>The set of BOAs that are used for the validation function
+        are composed of the set of valid BOAs where the origin AS of
+        the route object matches an AS described in a BOA, or where an
+        address prefix in a valid BOA that is an exact match or a
+        covering aggregate of the route object. In the case that the
+        validation outcome using ROAs is one of Exact Mismatch,
+        Covering Mismatch or No ROA, then the validation outcome of
+        the BOA changes the overall validation result to "Bogon".<vspace blankLines="1" />        
+
+<list style="hanging">
+          <t hangText="Bogon:"><vspace />A valid BOA exists where an
+          address prefix in the BOA is a an exact match for the prefix
+          in the route object, or is a covering aggregate of the
+          prefix in the route object, or an AS in the BOA matches the
+          originating AS in the BOA. In addition, there is no valid
+          ROA that is an Exact Match or a Covering Match with the
+          route object. <vspace blankLines="1" /></t>
+        </list></t>
+      </section>
+
+      <section title="Linked Validation">
+        <t>The linked approach requires the route object to reference a ROA
+        either by inclusion of the ROA as an attribute of the route object, or
+        inclusion of a identity field in an attribute of the route object as a
+        means of identifying a particular ROA.</t>
+
+        <t>If the ROA can be located is valid within the context of
+        the RPKI then the route object can be compared against the
+        ROA, as per the previous section, giving one of five possible
+        results: Exact Match, Covering Match, Exact Mismatch, Covering
+        Mismatch, and No Match, which is defined as: <vspace blankLines="1" />
+        <list style="hanging"> 
+          <t hangText="No Match:"><vspace />The valid ROA does not
+          comtain any address prefix that exactly matches the address
+          prefix in the route object, or is a covering aggregate of
+          the address prefix in the route object.</t>
+        </list></t>
+
+        <t>In the case of a Mismatch or a No Match condition, the
+        relying party should check for the presence of valid BOAs
+        where the origin AS of the route object matches an AS
+        described in a BOA, or where an address prefix in a valid BOA
+        that is an exact match or a covering aggregate of the route
+        object. If a valid BOA can be found that matches either of
+        these conditions that the overall route object validation of a
+        route object with a linked ROA is changed to "Bogon".
+</t>
+      </section>
+    </section>
+
+    <section anchor="Selection"
+             title="Applying Validation Outcomes to BGP Route
+             Selection">
+
+      <t>Within the framework of the abstract model of BGP operation,
+      a received prefix announcement from a peer is compared to all
+      announcements for this prefix received from other peers and a
+      route selection procedure is used to select the "best" route
+      object from this candidate set which is then used locally by
+      placing it in the loc-RIB, and is announced to peers as the
+      local "best" route.</t>
+
+      <t>It is proposed here that the validation outcome be used as
+      part of the determination of the local degree of preference as
+      defined in section 9.1.1 of the BGP specification <xref
+      target="RFC4271"/>.</t>
+
+      <t>In the case of partial deployment of ROAs there are a very
+      limited set of circumstances where the outcome of ROA validation
+      can be used as grounds to reject all consideration of the route
+      object as an invalid advertisement. While the presence of a
+      valid ROA that matches the advertisement is a strong indication
+      that an advertisement matches the authority provided by the
+      prefix holder to advertise the prefix into the routing system,
+      the absence of a ROA or the invalidity of a covering ROA does
+      not provide a conclusive indication that the advertisement has
+      been undertaken without the address holder's permission, unless
+      the object is described in a BOA.</t>
+
+      <t>In the case of a partial deployment scenario of RPKI route
+      attestation objects, where some address prefixes and AS numbers
+      are described in ROAs or BOAs and others are not, then the
+      relative ranking of validation outcomes from the highest (most
+      preferred) to the lowest (least preferred) degree of preference
+      are proposed to be as specified int he following list. The exact
+      values to apply to a Local Preference setting are left as a
+      matter of local policy and local configuration.</t>
+
+      <t><list style="numbers"> 
+
+        <t>Exact Match<vspace blankLines="1" />The prefix has been
+        allocated and is routeable, and that the prefix right-of-use
+        holder has authorized the originating AS to originate
+        precisely this announcement.<vspace blankLines="1" /></t>
+
+        <t>Covering Match<vspace blankLines="1" />This is slightly
+        less preferred because it is possible that the address holder
+        of the aggregate has allocated the prefix in question to a
+        different party. It is also possible that the originating AS
+        is using more specific advertisements as part of a traffic
+        engineering scenario.  <vspace blankLines="1" /></t>
+
+        <t>No ROA<vspace blankLines="1" />In the case of partial
+        deployment of ROAs, the absence of validation credentials is a
+        neutral outcome, in that there is no grounds to increase or
+        decrease the relative degree of preference for the route
+        object.<vspace blankLines="1" /></t>
+
+        <t>Covering Mismatch<vspace blankLines="1" />A Covering
+        Mismatch is considered to be less preferable than a neutral
+        position in that the address holder of a covering aggregate
+        has indicated an originating AS that is not the originating AS
+        of this announcement.  On the other hand it may be the case
+        that this prefix has been validly allocated to another party
+        who has not generated a ROA for this prefix even through the
+        announcement is valid.<vspace blankLines="1" /></t>
+
+        <t>Exact Mismatch<vspace blankLines="1" />Here the exact match
+        prefix holder has validly provided an authority for
+        origination by an AS that is not the AS that is originating
+        this announcement. This would appear to be a bogus
+        announcement by inference.<vspace blankLines="1" /></t>
+
+        <t>No Match<vspace blankLines="1" />Here the route object has
+        referenced a ROA that is not valid, or does not include an
+        address prefix that matcehs the route object, or the
+        referenced ROA could not be located. This could be an attempt
+        to create a false route object and use an invalid ROA.<vspace
+        blankLines="1" /></t>
+
+        <t>Bogon<vspace blankLines="1" />Here the right-of-use holder
+        of the AS or address prefix has explicitly tagged the address
+        prefix or the AS as a "bogon". This implies that the
+        announcement has been made without the appropriate authority,
+        and the local preference of the route object should be ranked
+        at a level commensurate with rejecting the route object.</t>
+      </list></t>
+
+      <t>In the case of comprehensive deployment of RPKI route
+      attestion objects the absence of a specific ROA origination
+      authority for the route object should render it as an unusable
+      for routing. In this case the local preference setting for the
+      route object is as follows:</t>
+
+      <t><list style="numbers"> 
+
+        <t>Exact Match<vspace blankLines="1" />The prefix has been
+        allocated and is routeable, and that the prefix right-of-use
+        holder has authorized the originating AS to originate
+        precisely this announcement.<vspace blankLines="1" /></t>
+
+        <t>Covering Match, No ROA, Covering Mismatch, Exact Mismatch,
+        No Match<vspace blankLines="1" />The local preference of the
+        route object should be ranked at a level of least preferred,
+        due to the constraints noted in the following section.<vspace blankLines="1" /></t>
+
+        <t>Bogon<vspace blankLines="1" />Here the right-of-use holder
+        of the AS or address prefix has explicitly tagged the address
+        prefix or the AS as a "bogon". This implies that the
+        announcement has been made without the appropriate authority,
+        and the local preference of the route object should be ranked
+        at a level commensurate with rejecting the route object.</t>
+      </list></t>
+
+
+      <section anchor="Rejection"
+               title="Validation Outcomes and Rejection of BGP Route
+               Objects">
+
+        <t>In the case of comprehensive deployment of ROAs, the use of
+        a validation outcome other than an Exact Match as sufficient
+        grounds to reject a route object should be undertaken with
+        care.</t>
+
+        <t>The consideration here is one of potential circularity of
+        dependence. If the authoritative publication point of the
+        repository of ROAs or any certificates used in relation to an
+        address prefix is stored at a location that lies within the
+        address prefix described in a ROA, then the repository can
+        only be accessed once a route for the prefix has been accepted
+        by the local routing domain. It is also noted that the
+        propagation time of RPKI objects may be different to the
+        propagation time of route objects in BGP, and that route
+        objects may be received before the relying party's local
+        repository cache picks up the associated ROAs and recognises
+        them as valid within the RPKI.</t>
+
+        <t>For these reasons it is proposed that, even in the case of
+        comprehensive deployment of ROAs, a missing ROA or a mismatch
+        should not be considered as sufficient grounds to reject a
+        route advertisement outright. Alternate approaches may involve
+        the use of a local timer to accept the route for an interim
+        period of time until there is an acceptable level of assurance
+        that all reasonable efforts to local a valid ROA have been
+        undertaken.</t>
+
+      </section>
+
+    </section>
+
+    <section anchor="Issues" title="Further Considerations">
+
+      <t>This document provides a description of how ROAs and BOAs
+      could be used by a BGP speaker.</t>
+
+      <t>It is noted that the proposed procedure requires no changes
+      to the operation of BGP.</t>
+
+      <t>It is also noted that the decoupled and linked approach are
+      not mutually exclusive, and the same procedure can be applied to
+      route objects that contain an explicit pointer to the associated
+      ROA and route objects where the local BGP speaker has to create
+      a set of candidate ROAs that could be applied to a route
+      object. However, there are a number of considerations about this
+      approach to origination validation that are not specified
+      here.</t>
+
+      <t>These considerations include:<vspace blankLines="1" /> <list
+          style="symbols">
+
+          <t>It is not specified when validation of an advertised
+          prefix should be performed by a BGP speaker. Is is
+          considered to be a matter of local policy whether it is
+          considered to be strictly necessary to perform validation at
+          a point prior to loading the object into the Adj-RIB-In
+          structure, or once the object has been loaded into
+          Adj-RIB-In, or at a later time that is determined by a local
+          configuration setting. It is also not specified whether
+          origination validation should be performed each time a route
+          object is updated by a peer even when the origin AS has not
+          altered.<vspace blankLines="1" /></t>
+
+          <t>The lifetime of a validation outcome is not specified
+          here. This specifically refers to the time period during
+          which the original validation outcome can be still applied,
+          and the time when the routing object be revalidated. It is a
+          matter of local policy setting as to whether a validation
+          outcome be regarded as valid until the route object is
+          withdrawn or further updated, or whether validation of a
+          route object should occur at more frequent intervals?
+          <vspace blankLines="1" /></t>
+
+          <t>It is a matter of local policy as to whther there are
+          circumstances that would allow a route object to be removed
+          from further consideration in route selection upon a
+          validation failure, similar to the actions of Route Flap
+          Damping.<vspace blankLines="1" /></t>
+
+          <t>It is a matter of local configuration as to whther ROA
+          validation is performed on a per-AS basis rather than a
+          per-BGP speaker, and the appropriate BGP mechanisms to
+          support such a per-AS iBGP route validation service are not
+          considered here.<vspace blankLines="1" /></t>
+
+        </list></t>
+    </section>
+
+    <section title="Security Considerations">
+      <t>This approach to orgination validation does not allow for
+      'deterministic' validation in terms of the ability of a BGP
+      speker to accept or reject an advertised route object outright,
+      given that there remains some issues of potential circularity of
+      dependence and time lags between the propagation of information
+      in the routing system and propagation of information in the RPKI.</t>
+
+      <t>There are also issues of the most appropirate interpretation
+      of outcomes where validation of the authenticity of the route
+      object has not been possible in the context of partial adoption
+      of the RPKI, where the absense of validation information does
+      not necessarily constitute sufficient grounds to interpret the
+      route object as an invalidly originated object.</t>
+
+      <t>The consequence of these considerations is that while the use
+      of ROAs can increase the confidence in the validity of
+      origination of route objects that match a valid ROA, ROAs cannot
+      perform the opposite, namely the rejection of route objects that
+      cannot be validated by ROAs.  To assist in the case of rejecting
+      some forms of route objects that cannot be explicitly validated,
+      the BOA has been used as a means of explicit rejection of
+      certain classes route objects. The implication is that
+      publishers in the RPKI should publish both ROAs and BOAs in
+      order to provide the greatest level of information that will
+      allow relying parties to make appropriate choices in terms of
+      route preference selection.</t>
+    </section>
+
+    <section title="IANA Considerations">
+      <t>[There are no IANA considerations in this document.]</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <reference anchor="I-D.ietf-sidr-arch">
+        <front>
+          <title>An Infrastructure to Support Secure Internet Routing</title>
+
+          <author fullname="M. Lepinski" initials="M" surname="Lepinski">
+            <organization>BBN Technologies</organization>
+          </author>
+
+          <author fullname="S. Kent" initials="S" surname="Kent">
+            <organization>BBN Technologies</organization>
+          </author>
+
+          <author fullname="R. Barnes" initials="R" surname="Barnes">
+            <organization>BBN Technologies</organization>
+          </author>
+
+          <date day="25" month="February" year="2008" />
+        </front>
+
+        <seriesInfo name="Internet-Draft" value="draft-ietf-sidr-arch" />
+
+        <format target="http://draft-ietf-sidr-arch.potaroo.net" type="TXT" />
+      </reference>
+
+      <reference anchor="I-D.ietf-sidr-roa-format">
+        <front>
+          <title>An Infrastructure to Support Secure Internet Routing</title>
+
+          <author fullname="M. Lepinski" initials="M" surname="Lepinski">
+            <organization>BBN Technologies</organization>
+          </author>
+
+          <author fullname="S. Kent" initials="S" surname="Kent">
+            <organization>BBN Technologies</organization>
+          </author>
+
+          <author fullname="D. Kong" initials="D" surname="Kong">
+            <organization>BBN Technologies</organization>
+          </author>
+
+          <date day="7" month="July" year="2008" />
+        </front>
+
+        <seriesInfo name="Internet-Draft" value="draft-ietf-sidr-roa-format" />
+
+        <format target="http://draft-ietf-sidr-roa-format.potaroo.net"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="I-D.ietf-sidr-boa">
+        <front>
+          <title>Profile for Bogon Origin Attestations (BOAs)</title>
+
+          <author fullname="G. Huston" initials="G" surname="Huston">
+            <organization>APNIC</organization>
+          </author>
+
+          <author fullname="T. Manderson" initials="T" surname="Manderson">
+            <organization>APNIC</organization>
+          </author>
+
+          <author fullname="G. Michaelson" initials="G" surname="Michaelson">
+            <organization>APNIC</organization>
+          </author>
+
+          <date day="7" month="August" year="2008" />
+        </front>
+
+        <seriesInfo name="Internet-Draft" value="draft-ietf-sidr-bogons" />
+
+        <format target="http://draft-ietf-sidr-roa-bogons.potaroo.net"
+                type="TXT" />
+      </reference>
+
+      <reference anchor="ID.ietf-rpsec-bgpsecrec">
+        <front>
+          <title>BGP Security Requirements</title>
+
+          <author fullname="B. Christian" initials="B" surname="Christian">
+            <organization>BBN Technologies</organization>
+          </author>
+
+          <author fullname="T. Tauber" initials="T" surname="Tauber">
+            <organization>BBN Technologies</organization>
+          </author>
+
+          <date day="19" month="November" year="2007" />
+        </front>
+
+        <seriesInfo name="EXPIRED Internet-Draft"
+                    value="draft-ietf-sidr-roa-format" />
+
+        <format target="http://draft-ietf-sidr-roa-format.potaroo.net"
+                type="TXT" />
+      </reference>
+
+      <?rfc include='./rfcs/bibxml/reference.RFC.3779.xml'?>
+
+      <?rfc include='./rfcs/bibxml/reference.RFC.4271.xml'?>
+
+      <?rfc include='./rfcs/bibxml/reference.RFC.5280.xml'?>
+    </references>
+  </back>
+</rfc>
